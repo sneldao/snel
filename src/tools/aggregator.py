@@ -4,6 +4,8 @@ import httpx
 from eth_typing import HexAddress, HexStr
 from pydantic import BaseModel, Field
 
+from ..logger import logger
+
 QUICKNODE_ENDPOINT = os.environ["QUICKNODE_ENDPOINT"]
 
 
@@ -48,6 +50,9 @@ async def get_quote(
         tries += 1
         try:
             async with httpx.AsyncClient() as client:
+                logger.debug(
+                    f"GET QUOTE: {token_in}, {token_out}, {amount}, {slippage}, {chain_id}, {recipient}"
+                )
                 response = await client.post(
                     url,
                     json={
@@ -68,7 +73,7 @@ async def get_quote(
                     raise Exception("Internal Server Error")
                 return data
         except Exception as e:
-            print("ERROR GETTING QUOTE", e)
+            logger.error("ERROR GETTING QUOTE", e)
 
     raise ValueError("Failed to get quote.  Most likely an API Limit")
 

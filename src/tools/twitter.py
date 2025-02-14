@@ -3,6 +3,10 @@ from typing import Optional
 
 import httpx
 
+from ..logger import logger
+
+USER_ID_CACHE: dict[str, int] = {}
+
 
 async def get_user_id(username: str) -> Optional[int]:
     """Convert a Twitter/X username to a user ID.
@@ -15,6 +19,9 @@ async def get_user_id(username: str) -> Optional[int]:
     """
     # Remove @ if present
     username = username.lstrip("@")
+
+    if username in USER_ID_CACHE:
+        return USER_ID_CACHE[username]
 
     # Twitter API v2 endpoint
     url = f"https://api.twitter.com/2/users/by/username/{username}"
@@ -31,6 +38,9 @@ async def get_user_id(username: str) -> Optional[int]:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
-            return int(data["data"]["id"])
-        except (httpx.HTTPError, KeyError, ValueError):
+            user_id = int(data["data"]["id"])
+            USER_ID_CACHE[username] = user_id
+            return user_id
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.error(str(e))
             return None

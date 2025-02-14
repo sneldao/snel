@@ -34,9 +34,12 @@ I included the commands in the format, but you could pretty easily modify this.
 > Overview of the general project layout
 
     .
+    |-- interfaces/              # Interfaces for twitter and executor to generalize the implementation
+    |-- llms/                    # LLM for classification and handling commands/questions
+    |-- prompts/                 # Prompts for the LLM
     ├── tools/                   # Tools that the LLM can use
-    ├── llm.py                   # The Model's declaration
-    ├── prompt.py                # The prompt for the LLM
+    ├── utils/                   # Utility functions
+    ├── __main__.py              # The main file to run the project
 
 ---
 
