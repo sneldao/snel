@@ -25,7 +25,7 @@ async def run(
             logger.info("CLASSIFICATION: %s", classification)
 
             if classification == "commands":
-                commands = await get_commands(tweet.content, executor)
+                commands = await get_commands(tweet, executor)
                 logger.info("COMMANDS: %s", commands)
                 for command in commands.requests:
                     await executor.execute_command(

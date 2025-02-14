@@ -8,6 +8,8 @@ from ..tools import get_quote, get_token_address_tool
 
 
 class ExecutorMock(ExecutorT):
+    username_to_address: dict[str, str] = {}
+
     def __init__(self, user_manager: UserManagerT):
         self.user_manager = user_manager
 
@@ -101,3 +103,13 @@ class ExecutorMock(ExecutorT):
                 "value": str(int(amount)),
             }
         )
+
+    async def get_user_address_helper(
+        self,
+        username: Annotated[str, Doc("The username to get the address for")],
+    ) -> str:
+        """Get the address for a username"""
+        if not self.username_to_address.get(username):
+            address = await self.user_manager.get_user_address(username)
+            self.username_to_address[username] = address
+        return self.username_to_address[username]

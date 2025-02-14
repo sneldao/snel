@@ -61,12 +61,12 @@ As you can see, the command execution converts the command given by the user int
         "tokenOut": "BNKR",
         "tokenInAddress": "0x4200000000000000000000000000000000000006",
         "tokenOutAddress": "0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b",
-        "amountIn": 3748884706799727,
-        "amountOut": 4.614046833008393e+22,
+        "amountIn": 3708919739531472,
+        "amountOut": 4.492617197965086e+22,
         "slippage": 0.01,
-        "sender": "@0xDeployer",
+        "sender": "0xDeployer",
         "senderAddress": "0xE8c408c5838b3734a39CcE7e645B4E88F093779b",
-        "recipient": "@0xDeployer",
+        "recipient": "0xDeployer",
         "recipientAddress": "0xE8c408c5838b3734a39CcE7e645B4E88F093779b"
       }
     },
@@ -77,10 +77,10 @@ As you can see, the command execution converts the command given by the user int
         "tokenOut": "TN100x",
         "tokenInAddress": "0x22aF33FE49fD1Fa80c7149773dDe5890D3c76F3b",
         "tokenOutAddress": "0x5B5dee44552546ECEA05EDeA01DCD7Be7aa6144A",
-        "amountIn": 2.3070234165041963e+22,
-        "amountOut": 9.21597118888983e+21,
+        "amountIn": 2.246308598982543e+22,
+        "amountOut": 8.045563001833731e+21,
         "slippage": 0.01,
-        "sender": "@0xDeployer",
+        "sender": "0xDeployer",
         "senderAddress": "0xE8c408c5838b3734a39CcE7e645B4E88F093779b",
         "recipient": "@696_eth",
         "recipientAddress": "0x1A1C8B53Fdd72f7c98293005452A890ccdDBd052"
@@ -94,7 +94,7 @@ As you can see, the command execution converts the command given by the user int
         "amount": 100000000000000,
         "recipient": "@696_eth",
         "recipientAddress": "0x1A1C8B53Fdd72f7c98293005452A890ccdDBd052",
-        "sender": "@0xDeployer",
+        "sender": "0xDeployer",
         "senderAddress": "0xE8c408c5838b3734a39CcE7e645B4E88F093779b"
       }
     }

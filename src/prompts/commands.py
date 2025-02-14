@@ -52,37 +52,49 @@ If the user says "buy me $10 of $BNKR", this means they want to convert the $10 
 
 A user can give multiple commands in a single message.
 
-So if @user said:
-buy me $25 of $TOKENA
-Swap half to $TOKENB
-then transfer that amount to @MYFRIEND
-and 0.01 ETH for gas
+so if the command is:
+{
+    "caller": "@user",
+    "content": "buy me $25 of $TOKENA.  Swap half to $TOKENB then transfer that amount to @MYFRIEND and 0.01 ETH for gas"
+}
 
-You should return calculate what $10 in ETH is first.
+You know that the sender is "@user" because that is the name provided as the speaker.  sender will ALWAYS be the caller.
+
+You should calculate what $10 in ETH is first.
 
 Then you would be able to swap to ETH and send to @user.  Then you could swap from @user half of the amount
 and have the recipient be @MYFRIEND.  Then you could transfer the ETH to @MYFRIEND.
 
 so your tool calls would be:
 
+caller = "@user"
 gas_amount = convert_decimal_eth_to_eth("0.01")
 converted_eth_amount_in = convert_dollar_amount_to_eth("$25")
 first_swap = get_swap_output_tool(
     token_in="ETH",
     token_out="TOKENA",
     amount=converted_eth_amount_in,
-    recipient="@USER",
+    recipient=caller,
+    recipientAddress=convert_to_address(caller),
+    sender=caller,
+    senderAddress=convert_to_address(caller),
 )
 second_swap = get_swap_output_tool(
     token_in="TOKENA",
     token_out="TOKENB",
     amount=first_swap["amountOut"] / 2,
     recipient="@MYFRIEND",
+    recipientAddress=convert_to_address("@MYFRIEND"),
+    sender=caller,
+    senderAddress=convert_to_address(caller),
 )
 transfer = make_transfer_command(
     token="ETH",
     amount=convert_decimal_eth_to_eth(gas_amount),
     recipient="@MYFRIEND",
+    recipientAddress=convert_to_address("@MYFRIEND"),
+    sender=caller,
+    senderAddress=convert_to_address(caller),
 )
 
 This would have an output like:

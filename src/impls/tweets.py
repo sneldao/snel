@@ -11,13 +11,15 @@ class TwitterMock(TwitterT):
 @696_eth
  along with 0.0001 ETH for gas""",
                 creator_id=1414021381298089984,
-                creator_name="0xDeployer",
+                creator_name="@0xDeployer",
             ),
             Tweet(
                 id=1684298214198108160,
-                content="What is the meaning of bitcoin?",
-                creator_id=6,
-                creator_name="jack",
+                content="""Why do you continue to ignore bitcoin and lightning?
+
+what "crypto" is a better money transmission protocol and why?""",
+                creator_id=12,
+                creator_name="@jack",
             ),
         ]
 
