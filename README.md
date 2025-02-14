@@ -34,9 +34,13 @@ I included the commands in the format, but you could pretty easily modify this.
 > Overview of the general project layout
 
     .
+    |-- interfaces/              # Interfaces for twitter and executor to generalize the implementation
+    |-- impls/                   # Implementations of the interfaces
+    |-- llms/                    # LLM for classification and handling commands/questions
+    |-- prompts/                 # Prompts for the LLM
     ├── tools/                   # Tools that the LLM can use
-    ├── llm.py                   # The Model's declaration
-    ├── prompt.py                # The prompt for the LLM
+    ├── utils/                   # Utility functions
+    ├── __main__.py              # The main file to run the project
 
 ---
 
@@ -101,4 +105,11 @@ As you can see, the command execution converts the command given by the user int
 
 ## Next Steps
 
-As an exercise to the reader, you can execute the command JSON once it has been created by the LLM output.  I have an example of how you can do this for a swap and transfer in the `src/utils` file.
+In order to run this, you just need to implement the three main interfaces:
+  - `TwitterT`
+  - `ExecutorT`
+  - `ContextT`
+
+I have an example of how you can do this for a swap and transfer in the `src/impls` file.  These mock the twitter interactions for the most part, but you could easily adapt them to your own needs.
+
+As an exercise to the reader, you can execute the command JSON once it has been created by the LLM output.  I have an example of how you can do this for a swap and transfer in the `src/utils` file, and have methods that just print the command's execution in the `src/impls/executor.py` file.

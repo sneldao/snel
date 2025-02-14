@@ -6,6 +6,7 @@ from eth_typeshed.chainlink.eth_usd_feed import ChainlinkPriceOracle, ETHUSDPric
 from eth_typing import ChecksumAddress
 from typing_extensions import Doc
 
+from ..logger import logger
 from .aggregator import get_quote
 from .simulacrum import get_user_address
 from .symbol_to_address import get_token_for_symbol
@@ -62,7 +63,7 @@ async def get_swap_output_tool(
     create a swap, and return the token in, token out, amount and dex aggregator that would be used to make the swap
     """
 
-    print(
+    logger.debug(
         f"TOOL CALL: GET SWAP OUTPUT ({token_in}, {token_out}, {amount}, {slippage}, {chain_id}, {recipient})"
     )
 
@@ -82,7 +83,7 @@ async def get_swap_output_tool(
     else:
         best_quote = quotes
 
-    print(best_quote)
+    logger.debug(best_quote)
     return json.dumps(
         {
             "amountOut": str(int(best_quote["amountOut"])),
@@ -107,7 +108,7 @@ async def make_transfer_command(
 
     token_address = await get_token_address_tool(token)
 
-    print(
+    logger.info(
         f"TOOL CALL: MAKE TRANSFER COMMAND ({token}, {amount}, {sender}, {recipient})"
     )
 
@@ -155,7 +156,7 @@ async def convert_dollar_amount_to_eth(
     convert a dollar amount to ETH
     """
 
-    print(f"TOOL CALL: CONVERT DOLLAR AMOUNT TO ETH ({amount})")
+    logger.info(f"TOOL CALL: CONVERT DOLLAR AMOUNT TO ETH ({amount})")
 
     eth_price = await get_eth_price()
     dollar_amount = float(amount.strip("$"))

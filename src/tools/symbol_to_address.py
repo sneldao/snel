@@ -2,6 +2,8 @@ import os
 
 import httpx
 
+from ..logger import logger
+
 
 async def get_token_for_symbol(symbol: str) -> str:
     headers = {
@@ -28,6 +30,6 @@ async def get_token_for_symbol(symbol: str) -> str:
                 data = response.json()
                 return data[0]["address"]
         except Exception as e:
-            print("ERROR GETTING TOKEN FOR SYMBOL", e)
+            logger.error("ERROR GETTING TOKEN FOR SYMBOL", e)
 
     raise ValueError("Failed to get token for symbol.  Most likely an API Limit")

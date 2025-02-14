@@ -4,8 +4,9 @@ from emp_agents import AgentBase
 from emp_agents.providers import OpenAIModelType, OpenAIProvider
 from pydantic import BaseModel, Field
 
-from .prompt import PROMPT
-from .tools import (
+from ..interfaces import ExecutorT, SwapArgs, TransferArgs
+from ..prompts import COMMANDS_PROMPT
+from ..tools import (
     convert_decimal_eth_to_eth,
     convert_dollar_amount_to_eth,
     get_swap_output_tool,
@@ -13,7 +14,7 @@ from .tools import (
 )
 
 swap_agent = AgentBase(
-    prompt=PROMPT,
+    prompt=COMMANDS_PROMPT,
     provider=OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     ),
@@ -24,30 +25,6 @@ swap_agent = AgentBase(
         convert_decimal_eth_to_eth,
     ],
 )
-
-
-class SwapArgs(BaseModel):
-    tokenIn: str
-    tokenOut: str
-    tokenInAddress: str
-    tokenOutAddress: str
-    amountIn: int
-    amountOut: int
-    slippage: float
-    sender: str
-    senderAddress: str
-    recipient: str
-    recipientAddress: str
-
-
-class TransferArgs(BaseModel):
-    token: str
-    token_address: str
-    amount: int
-    recipient: str
-    recipientAddress: str
-    sender: str
-    senderAddress: str
 
 
 class CommandRequest(BaseModel):
@@ -61,6 +38,19 @@ class CommandRequests(BaseModel):
     requests: list[CommandRequest]
 
 
-async def get_commands(user_request: str) -> str:
+async def get_commands(user_request: str, executor: ExecutorT) -> CommandRequests:
+    swap_agent = AgentBase(
+        prompt=COMMANDS_PROMPT,
+        provider=OpenAIProvider(
+            default_model=OpenAIModelType.gpt4o,
+        ),
+        tools=[
+            executor.get_swap_output_tool,
+            executor.make_transfer_command,
+            convert_dollar_amount_to_eth,
+            convert_decimal_eth_to_eth,
+        ],
+    )
     response = await swap_agent.answer(user_request, response_format=CommandRequests)
-    return response
+    print("response", response)
+    return CommandRequests.model_validate_json(response)
