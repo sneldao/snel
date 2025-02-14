@@ -86,3 +86,10 @@ class ExecutorT(ABC):
         recipient: Annotated[str, Doc("The recipient of the transfer")],
     ) -> str:
         """Create a transfer command, returning the output that would be used to make the transfer"""
+
+    @abstractmethod
+    async def get_user_address_helper(
+        self,
+        username: Annotated[str, Doc("The username to get the address for")],
+    ) -> str:
+        """Get the address for a username"""

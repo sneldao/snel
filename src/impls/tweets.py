@@ -16,7 +16,7 @@ class TwitterMock(TwitterT):
             Tweet(
                 id=1684298214198108160,
                 content="What is the meaning of bitcoin?",
-                creator_id=6,
+                creator_id=12,
                 creator_name="jack",
             ),
         ]
