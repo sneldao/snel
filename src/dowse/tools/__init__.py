@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from eth_rpc.utils import to_checksum
@@ -7,24 +8,25 @@ from typing_extensions import Doc
 
 from dowse.exceptions import TokenNotFoundError
 
+from .address import is_address
 from .best_route.kyber import get_quote as get_kyber_quote
 from .simulacrum import get_user_address, get_user_address_helper
 from .symbol_to_address import get_token_address
 from .twitter import get_user_id
 
-
-def is_address(address: str) -> bool:
-    return len(address) == 42 and address.startswith("0x")
+logger = logging.getLogger("dowse")
 
 
 async def get_token_address_tool(
     symbol_or_token_address: Annotated[
         str, Doc("The symbol of the token to get the address for")
     ],
-) -> ChecksumAddress:
+) -> ChecksumAddress | str:
     """
     Get the address for a given token symbol
     """
+
+    logger.debug("Tool Call: get_token_address (%s)", symbol_or_token_address)
 
     symbol_or_token_address = symbol_or_token_address.lstrip("$")
 
@@ -59,14 +61,14 @@ async def convert_dollar_amount_to_eth(
 ) -> str:
     """
     Given a dollar amount, converts it to the corresponding amount in ETH.  For example, you could provide "$100"
-    and it will return 0.0376
+    and it will strip the "$" and return an amount of ETH
     """
-
     eth_price = await get_eth_price()
     dollar_amount = float(amount.strip("$"))
 
     result = str(round(dollar_amount / eth_price, 4))
 
+    logger.debug("Tool Call: convert_dollar_amount_to_eth (%s) -> %s", amount, result)
     return result
 
 
@@ -74,7 +76,9 @@ def convert_decimal_eth_to_wei(amount: str) -> str:
     """
     convert a decimal ETH amount to a string ETH amount
     """
-    return str(int(float(amount) * 1e18))
+    result = str(int(float(amount) * 1e18))
+    logger.debug("Tool Call: convert_decimal_eth_to_wei (%s) -> %s", amount, result)
+    return result
 
 
 __all__ = [

@@ -5,7 +5,8 @@ from dowse.interfaces.executor import Executor
 from dowse.models import Tweet
 
 from ...tools import CommandRequest, Tools
-from ..preprocessor import FormattedCommand, token_processor
+from ..preprocessor import FormattedCommand, ProcessTokens
+from .examples import EXAMPLES
 
 
 class CommandsList(BaseModel):
@@ -17,6 +18,9 @@ BasicTwitterCommands = Executor[Tweet, FormattedCommand, CommandsList](
     provider=OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     ),
-    preprocessors=[token_processor],
+    preprocessors=[
+        ProcessTokens(),
+    ],
     tools=Tools.tools(),
+    examples=EXAMPLES,
 )

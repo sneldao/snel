@@ -3,6 +3,7 @@ import pytest
 from dowse.impls.basic.llms import BasicTwitterCommands as parser
 from dowse.models import Tweet
 from dowse.models.commands import SwapArgs, TransferArgs
+from dowse.tools import convert_dollar_amount_to_eth
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -26,8 +27,9 @@ async def test_transfer():
     assert command.args.token_address == "0x4200000000000000000000000000000000000006"
 
     # NOTE: if ETH price moves a lot (up or down) this will fail
-    assert command.args.amount > 1e15
-    assert command.args.amount < 1e16
+    eth_amount = float(await convert_dollar_amount_to_eth("10"))
+    assert command.args.amount > eth_amount * 0.97 * 1e18
+    assert command.args.amount < eth_amount * 1.03 * 1e18
 
     assert command.args.sender == "@ethereum"
     assert command.args.recipient == "@VitalikButerin"
@@ -43,8 +45,6 @@ async def test_swap():
             creator_name="@ethereum",
         ),
     )
-
-    print("commands:", commands)
 
     assert len(commands.content.commands) == 1
     command = commands.content.commands[0]

@@ -1,9 +1,10 @@
+import logging
 import os
 from typing import Optional
 
 import httpx
 
-from ..logger import logger
+logger = logging.getLogger("dowse")
 
 USER_ID_CACHE: dict[str, int] = {}
 

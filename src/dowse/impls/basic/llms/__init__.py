@@ -1,6 +1,6 @@
 from .classifier import BasicTweetClassifier
 from .commands import BasicTwitterCommands
-from .preprocessor import ProcessTokens, token_processor
+from .preprocessor import ProcessTokens
 from .questions import BasicTwitterQuestion
 
 __all__ = [
@@ -8,5 +8,4 @@ __all__ = [
     "BasicTwitterCommands",
     "ProcessTokens",
     "BasicTwitterQuestion",
-    "token_processor",
 ]

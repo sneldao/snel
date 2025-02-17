@@ -17,7 +17,7 @@ class SwapResponse(BaseModel):
     aggregator: str
 
 
-async def swap(
+async def execute_swap(
     token_in: HexAddress,
     token_out: HexAddress,
     amount: int,

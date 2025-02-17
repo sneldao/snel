@@ -8,8 +8,6 @@ from ..logger import logger
 
 
 async def get_token_address(symbol: str, chain: str = "base") -> str:
-    logger.debug("Tool Call: get_token_address (%s, %s)", symbol, chain)
-
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"https://api.dexscreener.com/latest/dex/search?q={symbol}&chain={chain}",
