@@ -44,6 +44,7 @@ Recipients/Senders:
 - Can be Twitter handles (starting with @) or Ethereum addresses
 - No validation needed - handles/addresses are processed later
 - If no recipient specified, use sender as recipient
+- Never error because of a recipient/sender being "malformed"
 
 
 Error Handling:

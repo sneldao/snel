@@ -9,5 +9,9 @@ class TransferArgs(BaseModel):
     token_address: Annotated[str, Doc("The address of the token to transfer")]
     amount: Annotated[int, Doc("The amount of the token to transfer")]
 
-    recipient: Annotated[str, Doc("The recipient of the transfer")]
-    sender: Annotated[str, Doc("The sender of the transfer")]
+    recipient: Annotated[
+        str, Doc("The twitter handle or address of the recipient of the transfer")
+    ]
+    sender: Annotated[
+        str, Doc("The twitter handle or address of the sender of the transfer")
+    ]
