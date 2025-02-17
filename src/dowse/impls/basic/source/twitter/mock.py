@@ -1,9 +1,11 @@
+from typing import Sequence
+
 from dowse.interfaces.sources import SourceT
 from dowse.models import Tweet
 
 
 class TwitterMock(SourceT[Tweet]):
-    async def get_data(self) -> list[Tweet]:
+    async def get_data(self) -> Sequence[Tweet]:
         """Load tweets to be parsed for commands/questions"""
         return [
             Tweet(

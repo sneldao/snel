@@ -46,7 +46,8 @@ EXAMPLES = [
             {
                 "commands": [
                     {"command": "swap", "args": {"token_in_address": "0x4200000000000000000000000000000006", "token_out_address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "amount_in": "3000000000000000", "amount_out": "1394601928424631358765", "recipient": "@user"}},
-                ]
+                ],
+                "error_message": None,
             }
             """,
         ),
@@ -112,7 +113,8 @@ EXAMPLES = [
                 "commands": [
                     {"command": "swap", "args": {"token_in_address": "0x4200000000000000000000000000000006", "token_out_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount_in": "3000000000000000", "amount_out": "1394601928424631358765", "recipient": "@user"}},
                     {"command": "transfer", "args": {"token_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount": "697300964212315679382", "sender": "@user", "recipient": "@myfriend"}}
-                ]
+                ],
+                "error_message": None,
             }
             """,
         ),
@@ -160,7 +162,8 @@ EXAMPLES = [
             {
                 "commands": [
                     {"command": "transfer", "args": {"token_address": "0x4200000000000000000000000000000000000006", "amount": "3000000000000000", "sender": "@user", "recipient": "@myfriend"}}
-                ]
+                ],
+                "error_message": None,
             }
             """,
         ),

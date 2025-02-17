@@ -1,7 +1,7 @@
 import logging
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from dowse.exceptions import PreprocessorError
 from dowse.models.message import AgentMessage
@@ -17,7 +17,7 @@ logger = logging.getLogger("dowse")
 
 
 class PreProcess(ExampleLoader, PromptLoader, Generic[T, U]):
-    preprocessors: list[Processor]
+    preprocessors: list[Processor] = Field(default_factory=list)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

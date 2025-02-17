@@ -13,5 +13,5 @@ class SwapArgs(BaseModel):
     amount_out: Annotated[int, Doc("The amount of tokens to receive")]
     slippage: Annotated[float, Doc("The slippage tolerance")]
 
-    sender: Annotated[str, Doc("The sender of the transaction")]
-    recipient: Annotated[str, Doc("The recipient of the transaction")]
+    sender: Annotated[str, Doc("The twitter handle or address of the sender")]
+    recipient: Annotated[str, Doc("The twitter handle or address of the recipient")]

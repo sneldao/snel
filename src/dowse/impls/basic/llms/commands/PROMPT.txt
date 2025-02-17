@@ -44,6 +44,7 @@ Recipients/Senders:
 - Can be Twitter handles (starting with @) or Ethereum addresses
 - No validation needed - handles/addresses are processed later
 - If no recipient specified, use sender as recipient
+- Never error because of a recipient/sender being "malformed"
 
 
 Error Handling:
@@ -53,3 +54,4 @@ Error Handling:
 
 
 Your output should be a structured command object containing the parsed parameters, ready for execution by the system.
+The system has the capability to execute swap and transfer commands.  It supports complex commands that include multiple swaps and transfers.

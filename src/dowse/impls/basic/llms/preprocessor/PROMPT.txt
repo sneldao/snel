@@ -1,31 +1,37 @@
-Given a command, add cashtags in front of all the token symbols, then lookup the token address for each symbol and add it in parenthesis after the symbol.
-Convert all dollar amounts to ETH using the convert_dollar_amount_to_eth tool
+Transform the input command by:
+1. Converting dollar amounts to ETH using convert_dollar_amount_to_eth
+2. Adding $ prefix to token symbols
+3. Adding token addresses in parentheses after symbols
 
-Use your tools to get the token address for each symbol.
+Tools available:
+- get_token_address_tool: Looks up token address for a symbol
+- convert_dollar_amount_to_eth: Converts USD amount to ETH amount
 
-`get_token_address_tool` will get your the token address for a symbol, it will return an error if the symbol is not found.
-`convert_dollar_amount_to_eth` will convert a dollar amount to an ETH amount.
+Important notes:
+- Always fetch fresh ETH price for each conversion
+- Always use address 0x4200000000000000000000000000000000000006 for ETH
+- Always add $ prefix to token symbols
 
-Fetch the ETH price each time you convert a dollar amount to an ETH amount, the price changes frequently.  It's not an error if you requested it for a previous request, just fetch it again.
+Example transformation:
+Input: "swap $300 for cbBTC"
+Steps:
+1. Get cbBTC address via get_token_address_tool
+2. Convert $300 to ETH via convert_dollar_amount_to_eth
+3. Format as: "swap 0.1010 ETH (0x4200000000000000000000000000000000000006) for $cbBTC (0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf)"
 
-If a user provides a request like "swap $300 for cbBTC", you should:
-    - call get_token_address("cbBTC") to get the token address
-    - call convert_dollar_amount_to_eth("300") to convert the dollar amount to an ETH amount
-    - use these values to update the request text to "swap 0.1010 ETH (0x4200000000000000000000000000000000000006) for $cbBTC (0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf)"
-    - return the response object:
-```
+Response format:
 {
     "error_message": null,
     "content": {
         "caller": "@user",
-        "user_request": "swap 0.1069 ETH (0x4200000000000000000000000000000000000006) for $cbBTC (0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf)"
+        "user_request": "<transformed_request>"
     }
 }
-```
 
-If there is an error, such as the token_address not being found, content should be null.  Explain in really specific detail why you failed, and what steps you took to confirm that it failed.
+If there's an error (e.g., token not found):
+- Set content to null
+- Include error message
 
-Always add (0x4200000000000000000000000000000000000006) after ETH.  Make sure to convert EThereum, ETH or eth to "ETH (0x4200000000000000000000000000000000000006)"
-Always add a $ symbol in front of all the token symbols.
-
-If the user says "$10 of ETH", that is acceptable.  Convert the $10 to ETH using the convert_dollar_amount_to_eth tool, and then update the request to say "{convert_dollar_amount_to_eth("10")} ETH (0x4200000000000000000000000000000000000006)"
+Special cases:
+- "$X of ETH" -> Convert to "Y ETH (0x4200000000000000000000000000000000000006)"
+- Normalize "Ethereum"/"eth" to "ETH (0x4200000000000000000000000000000000000006)"
