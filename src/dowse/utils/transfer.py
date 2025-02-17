@@ -5,7 +5,7 @@ from eth_typeshed.erc20 import TransferRequest
 from eth_typing import HexAddress, HexStr
 
 
-async def transfer(
+async def transfer_erc20(
     token_address: HexAddress,
     amount: int,
     recipient: HexAddress,
@@ -18,4 +18,13 @@ async def transfer(
             amount=primitives.uint256(amount),
         )
     ).execute(wallet)
+    return tx_hash
+
+
+async def transfer_eth(
+    amount: int,
+    recipient: HexAddress,
+    wallet: PrivateKeyWallet,
+) -> HexStr:
+    tx_hash = await wallet.transfer(recipient, amount)
     return tx_hash

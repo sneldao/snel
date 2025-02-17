@@ -2,7 +2,7 @@ import asyncio
 import logging
 import sys
 import time
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 
 from pydantic import BaseModel, Field
 
@@ -15,12 +15,12 @@ from dowse.models.message import AgentMessage
 
 logger = logging.getLogger("dowse")
 
-T = TypeVar("T")
-U = TypeVar("U")
+T = TypeVar("T", bound=BaseModel)
+U = TypeVar("U", bound=BaseModel)
 Classifications = TypeVar("Classifications")
 
 
-class Pipeline(BaseModel, Generic[T, Classifications]):
+class Pipeline(BaseModel, Generic[T, U, Classifications]):
     """
     A pipeline is a sequence of preprocessors, a classifier, and a mapping of classifications to handlers.
 
@@ -38,20 +38,21 @@ class Pipeline(BaseModel, Generic[T, Classifications]):
 
     async def run_processors(self, input_: T) -> AgentMessage[U]:
         if not self.processors:
-            return AgentMessage(content=input_, error_message=None)
+            content = cast(U, input_)
+            return AgentMessage(content=content, error_message=None)
 
         for processor in self.processors:
-            input_ = await processor.format(input_)
-            if input_.is_error:
-                raise PreprocessorError(input_.error_message)
-
-        return input_
+            input_ = await processor.format(input_)  # type: ignore[assignment]
+            if input_.is_error:  # type: ignore[attr-defined]
+                raise PreprocessorError(input_.error_message)  # type: ignore[attr-defined]
+        return input_  # type: ignore[return-value]
 
     async def process(self, input_: T) -> AgentMessage:
         processed_input = await self.run_processors(input_)
 
         logger.debug("Processed input: %s", processed_input)
 
+        assert processed_input.content is not None
         classification = await self.classifier.classify(processed_input.content)
 
         logger.debug("Classified as: %s", classification)

@@ -53,3 +53,4 @@ Error Handling:
 
 
 Your output should be a structured command object containing the parsed parameters, ready for execution by the system.
+The system has the capability to execute swap and transfer commands.  It supports complex commands that include multiple swaps and transfers.
