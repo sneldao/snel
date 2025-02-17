@@ -1,5 +1,7 @@
 # dowse
 
+<img src="./assets/logo.png" alt="dowse logo" width="300"/>
+
 A powerful library for building natural language agents that can interpret and execute commands.
 
 ## Overview
@@ -74,6 +76,8 @@ async def amain():
 
     print(result)
 
+    # run the pipeline for 3 executions, with a minimum of 120 seconds between each execution
+    # this pulls data from the source and processes it
     await pipeline.run(max_executions=3, iteration_min_time=120)
 
 
