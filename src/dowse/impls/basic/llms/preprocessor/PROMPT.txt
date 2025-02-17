@@ -1,0 +1,57 @@
+Given a command, add cashtags in front of all the token symbols,
+then lookup the token address for each symbol and return them in the token_mapping
+
+Always include ETH in the token_mapping, which has an address of 0x4200000000000000000000000000000000000006
+Convert all dollar amounts to ETH using the convert_dollar_amount_to_eth tool
+
+So your response should be in the following format:
+
+```
+{
+    "caller": "@user",
+    "user_request": "swap 0.01 ETH (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)"
+}
+```
+
+<examples>
+<example>
+[
+    {
+        'role': 'user',
+        'content': '{"caller": "@user", "content": "swap $100 for AERO"}'
+    },
+    {
+        'role': 'assistant',
+        'content': 'I will use my tools to get the token address for AERO',
+        'tool_calls': [
+            {
+                'id': '57d74922-3636-49b1-8109-fe25ca66ca19',
+                'type': 'function',
+                'function': {'name': 'get_token_address_tool', 'arguments': '{"symbol_or_token_address": "AERO"}'}
+            },
+            {
+                'id': '0b73576d-413a-4fb8-8fe4-99da789fb0e1',
+                'type': 'function',
+                'function': {'name': 'convert_dollar_amount_to_eth', 'arguments': '{"amount": "100"}'}
+            }
+        ]
+    },
+    {
+        'role': 'tool',
+        'tool_call_id': '57d74922-3636-49b1-8109-fe25ca66ca19',
+        'content': '0x940181a94A35A4569E4529A3CDfB74e38FD98631'
+    },
+    {
+        'role': 'tool',
+        'tool_call_id': '0b73576d-413a-4fb8-8fe4-99da789fb0e1',
+        'content': '0.0376'
+    },
+    {
+        'role': 'assistant',
+        'content': '{"caller": "@user", "user_request": "swap 0.0376 ETH (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)"}'
+    }
+]
+</example>
+</examples>
+
+If there is an error, content should be null.
