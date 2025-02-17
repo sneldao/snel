@@ -1,7 +1,7 @@
 import pytest
 
 from dowse.impls.basic.llms.preprocessor import token_processor
-from dowse.interfaces import Tweet
+from dowse.models import Tweet
 from dowse.tools import convert_dollar_amount_to_eth
 
 

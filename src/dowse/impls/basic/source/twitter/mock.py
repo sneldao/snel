@@ -1,8 +1,8 @@
-from dowse.interfaces import Tweet
-from dowse.interfaces.sources.twitter import TwitterSourceT
+from dowse.interfaces.sources import SourceT
+from dowse.models import Tweet
 
 
-class TwitterMock(TwitterSourceT):
+class TwitterMock(SourceT[Tweet]):
     async def get_data(self) -> list[Tweet]:
         """Load tweets to be parsed for commands/questions"""
         return [

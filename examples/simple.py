@@ -66,7 +66,6 @@ class BreakfastJokeTopic(BaseModel):
 
 
 JokeTopicAdder = Processor[ProcessedFood, BreakfastJokeTopic](
-    tools=[],
     prompt=(
         "Update the JSON so the joke topic involves the hashbrowns losing a bet at the racetrack"
     ),
@@ -89,7 +88,7 @@ DinnerExecutor = Executor[ProcessedFood, ProcessedFood, str](
 
 
 async def amain():
-    pipeline = Pipeline[Literal["breakfast", "lunch", "dinner"]](
+    pipeline = Pipeline[Food, Literal["breakfast", "lunch", "dinner"]](
         classifier=FoodClassifier,
         preprocessors=[
             GetIngredients(),

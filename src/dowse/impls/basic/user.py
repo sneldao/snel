@@ -1,7 +1,7 @@
 from eth_typing import HexAddress
 
-from ...interfaces import UserManagerT
-from ...tools import get_user_address_helper
+from dowse.interfaces import UserManagerT
+from dowse.tools import get_user_address_helper
 
 
 class BasicUserManager(UserManagerT):

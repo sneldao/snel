@@ -1,7 +1,7 @@
 import pytest
 
 from dowse.impls.basic.llms import BasicTwitterCommands as parser
-from dowse.interfaces import Tweet
+from dowse.models import Tweet
 from dowse.models.commands import SwapArgs, TransferArgs
 
 

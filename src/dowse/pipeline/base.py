@@ -20,7 +20,7 @@ U = TypeVar("U")
 Classifications = TypeVar("Classifications")
 
 
-class Pipeline(BaseModel, Generic[Classifications]):
+class Pipeline(BaseModel, Generic[T, Classifications]):
     """
     A pipeline is a sequence of preprocessors, a classifier, and a mapping of classifications to handlers.
 
@@ -34,7 +34,7 @@ class Pipeline(BaseModel, Generic[Classifications]):
     processors: list[Processor] = Field(default_factory=list)
     classifier: Classifier[U, Classifications]
     handlers: dict[Classifications, Executor]
-    source: SourceT | None = None
+    source: SourceT[T] | None = None
 
     async def run_processors(self, input_: T) -> AgentMessage[U]:
         if not self.processors:

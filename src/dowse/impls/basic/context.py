@@ -1,6 +1,6 @@
 import httpx
 
-from ...interfaces import ContextT
+from dowse.interfaces import ContextT
 
 
 class BasicContextHelper(ContextT):

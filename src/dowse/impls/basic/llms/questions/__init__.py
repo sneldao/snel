@@ -2,7 +2,7 @@ from emp_agents.providers import OpenAIModelType, OpenAIProvider
 from pydantic import BaseModel
 
 from dowse.interfaces.executor import Executor
-from dowse.interfaces.sources.twitter import Tweet
+from dowse.models import Tweet
 
 
 class Response(BaseModel):

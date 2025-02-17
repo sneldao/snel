@@ -23,6 +23,10 @@ class ClassifierResponse(BaseModel, Generic[T]):
 
 
 class Classifier(ABC, PromptLoader, Generic[InputType, Classifications]):
+    prompt: str = (
+        "classify the input into the response_format.  Respond with the classification and nothing else."
+    )
+
     provider: Provider = OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     )
@@ -34,13 +38,14 @@ class Classifier(ABC, PromptLoader, Generic[InputType, Classifications]):
 
         stack = inspect.stack()
 
-        caller_frame = None
+        caller_frame: inspect.FrameInfo | None = None
         for frame_info in stack:
             filename = frame_info.filename
             if "pydantic" not in filename and filename != __file__:
                 caller_frame = frame_info
                 break
 
+        assert caller_frame is not None
         self._path = Path(caller_frame.filename).parent
 
         prompt_path = self._path / "PROMPT.txt"
@@ -60,7 +65,7 @@ class Classifier(ABC, PromptLoader, Generic[InputType, Classifications]):
     ) -> Classifications:
         (_, classifications) = type(self).__pydantic_generic_metadata__["args"]
 
-        classification_type = get_args(get_args(Literal[*classifications])[0])[0]
+        classification_type = get_args(get_args(Literal[*classifications])[0])[0]  # type: ignore
 
         response_type = ClassifierResponse[classification_type]
         response_type.__name__ = "ClassifierResponse"
