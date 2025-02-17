@@ -1,14 +1,13 @@
 import asyncio
+import json
 import logging
-from typing import Literal
+from typing import Callable, Literal
 
 from pydantic import BaseModel
 
 from dowse import Pipeline, logger
 from dowse.impls.basic.effects import Printer
-from dowse.interfaces.executor import Executor
-from dowse.interfaces.llms.classifier import Classifier
-from dowse.interfaces.sources import SourceT
+from dowse.interfaces import Classifier, Executor, Processor, SourceT
 
 logger.setLevel(logging.DEBUG)
 
@@ -34,15 +33,57 @@ class FoodSource(SourceT[Food]):
         ]
 
 
-BreakfastExecutor = Executor[Food, str, str](
-    prompt="Write a joke about the breakfast food the user tells you",
+def get_ingredients_tool(food: str) -> str:
+    # all tools should return a string
+
+    if food == "hashbrowns":
+        return json.dumps(["potatoes", "onions", "salt", "pepper"])
+    elif food == "meatloaf":
+        return json.dumps(["beef", "onions", "bread crumbs", "eggs"])
+    elif food == "BLT":
+        return json.dumps(["bacon", "lettuce", "tomato", "bread"])
+    return "[]"
+
+
+class ProcessedFood(BaseModel):
+    name: str
+    ingredients: list[str]
+
+
+class GetIngredients(Processor[Food, ProcessedFood]):
+    tools: list[Callable] = [
+        get_ingredients_tool,
+    ]
+
+    async def to_string(self, command: Food) -> str:
+        return command.model_dump_json()
+
+
+class BreakfastJokeTopic(BaseModel):
+    name: str
+    ingredients: list[str]
+    joke_topic: str
+
+
+JokeTopicAdder = Processor[ProcessedFood, BreakfastJokeTopic](
+    tools=[],
+    prompt=(
+        "Update the JSON so the joke topic involves the hashbrowns losing a bet at the racetrack"
+    ),
 )
 
-LunchExecutor = Executor[Food, str, str](
+
+# we specify the input type, the processed type, and the output type
+BreakfastExecutor = Executor[ProcessedFood, BreakfastJokeTopic, str](
+    prompt="Write a joke about the breakfast food the user tells you",
+    preprocessors=[JokeTopicAdder],
+)
+
+LunchExecutor = Executor[ProcessedFood, ProcessedFood, str](
     prompt="Say something really serious, but mention the lunch food the user tells you.  Less than 100 words.",
 )
 
-DinnerExecutor = Executor[Food, str, str](
+DinnerExecutor = Executor[ProcessedFood, ProcessedFood, str](
     prompt="Say something really sad, but mention the dinner food the user tells you.  Less than 100 words.",
 )
 
@@ -50,8 +91,10 @@ DinnerExecutor = Executor[Food, str, str](
 async def amain():
     pipeline = Pipeline[Literal["breakfast", "lunch", "dinner"]](
         classifier=FoodClassifier,
+        preprocessors=[
+            GetIngredients(),
+        ],
         handlers={
-            # You can provide effects to be executed after the command is parsed using the >> operator
             "breakfast": BreakfastExecutor >> Printer(prefix="BREAKFAST"),
             "lunch": LunchExecutor >> Printer(prefix="LUNCH"),
             "dinner": DinnerExecutor >> Printer(prefix="DINNER"),
