@@ -6,18 +6,21 @@ from typing import Literal
 from eth_rpc import set_alchemy_key
 
 from dowse import Pipeline, logger
-from dowse.impls.basic.effects.printer import Printer
-from dowse.impls.basic.llms import BasicTweetClassifier
-from dowse.impls.basic.llms.commands import BasicTwitterCommands
-from dowse.impls.basic.llms.questions import BasicTwitterQuestion
-from dowse.impls.basic.source import TwitterMock
+from dowse.impls.basic import (
+    BasicTweetClassifier,
+    BasicTwitterCommands,
+    BasicTwitterQuestion,
+    Printer,
+    TwitterMock,
+)
+from dowse.models import Tweet
 
 logger.setLevel(logging.DEBUG)
 set_alchemy_key(os.environ["ALCHEMY_KEY"])
 
 
 async def amain():
-    pipeline = Pipeline[Literal["commands", "question"]](
+    pipeline = Pipeline[Tweet, Literal["commands", "question"]](
         classifier=BasicTweetClassifier,
         handlers={
             # You can provide effects to be executed after the command is parsed using the >> operator

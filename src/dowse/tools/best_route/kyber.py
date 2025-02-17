@@ -23,7 +23,7 @@ async def get_quote(
     token_in: HexAddress,
     token_out: HexAddress,
     amount: int,
-    chain_id: int = 8453,
+    chain_id: Literal[1, 8453, 42161, 10, 137, 43114] = 8453,
 ) -> Quote:
     chain = get_chain_from_chain_id(chain_id)
     if token_in.lower() == "eth":
@@ -58,13 +58,17 @@ async def get_quote(
 
 
 def get_chain_from_chain_id(
-    chain_id: int,
+    chain_id: Literal[1, 8453, 42161, 10, 137, 43114],
 ) -> Literal["ethereum", "base", "arbitrum", "optimism", "polygon", "avalanche"]:
-    mapping = {
+    mapping: dict[
+        int,
+        Literal["ethereum", "base", "arbitrum", "optimism", "polygon", "avalanche"],
+    ] = {
         8453: "base",
-        84532: "arbitrum",
+        42161: "arbitrum",
         10: "optimism",
         137: "polygon",
         43114: "avalanche",
+        1: "ethereum",
     }
     return mapping[chain_id]

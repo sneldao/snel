@@ -1,17 +1,14 @@
 import json
 from typing import Annotated, Callable, Literal, cast
 
+from eth_rpc.utils import to_checksum
 from pydantic import BaseModel, Field
 from typing_extensions import Doc
 
 from dowse.interfaces import UserManagerT
 from dowse.logger import logger
 from dowse.models.commands import SwapArgs, TransferArgs
-from dowse.tools import (
-    convert_decimal_eth_to_wei,
-    convert_dollar_amount_to_eth,
-    get_token_address_tool,
-)
+from dowse.tools import convert_decimal_eth_to_wei, get_token_address_tool
 from dowse.tools.best_route.kyber import Quote
 from dowse.tools.best_route.kyber import get_quote as get_kyber_quote
 
@@ -37,7 +34,7 @@ class CommandTools(BaseModel):
             transfer_args = cast(TransferArgs, command.args)
             await self.execute_transfer(transfer_args)
 
-    async def get_swap_output_tool(
+    async def make_swap_command(
         self,
         token_in: Annotated[
             str,
@@ -58,10 +55,10 @@ class CommandTools(BaseModel):
         ],
         chain_id: Annotated[int, Doc("The chain id")] = 8453,
     ) -> str:
-        """Gets the swap output command as a string"""
+        """Convert the swap arguments to the structured syntax for a swap"""
         slippage = 1
         logger.debug(
-            "Tool Call: get_swap_output_tool (%s, %s, %s, %s, %s, %s)",
+            "Tool Call: make_swap_command (%s, %s, %s, %s, %s, %s)",
             token_in,
             token_out,
             amount,
@@ -73,9 +70,10 @@ class CommandTools(BaseModel):
         input_token = await get_token_address_tool(token_in)
         output_token = await get_token_address_tool(token_out)
 
+        chain_id = cast(Literal[1, 8453, 42161, 10, 137, 43114], chain_id)
         quote: Quote = await get_kyber_quote(
-            token_in=input_token,
-            token_out=output_token,
+            token_in=to_checksum(input_token),
+            token_out=to_checksum(output_token),
             amount=amount,
             chain_id=chain_id,
         )
@@ -134,10 +132,8 @@ class CommandTools(BaseModel):
 
     def tools(self) -> list[Callable]:
         return [
-            convert_dollar_amount_to_eth,
             convert_decimal_eth_to_wei,
-            get_token_address_tool,
-            self.get_swap_output_tool,
+            self.make_swap_command,
             self.make_transfer_command,
         ]
 

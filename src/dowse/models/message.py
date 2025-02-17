@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -20,10 +20,3 @@ class AgentMessage(BaseModel, Generic[T]):
     @property
     def is_error(self) -> bool:
         return self.error_message is not None
-
-    if not TYPE_CHECKING:
-
-        def __getattr__(self, item: str) -> Any:
-            if item == "__name__":
-                return "AgentMessage"
-            return super().__getattr__(item)
