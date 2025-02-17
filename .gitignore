@@ -44,3 +44,4 @@ poetry.lock
 local_settings.py
 
 .mypy_cache/
+scratch.py
