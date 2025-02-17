@@ -1,6 +1,6 @@
 # dowse
 
-<img src="./assets/logo.png" alt="dowse logo" width="300"/>
+<img src="https://raw.githubusercontent.com/empyrealapp/dowse/main/assets/logo.png" alt="dowse logo" width="300"/>
 
 A powerful library for building natural language agents that can interpret and execute commands.
 
