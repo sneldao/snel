@@ -5,6 +5,7 @@ from typing import Any, Callable, Generic, TypeVar
 
 from emp_agents import AgentBase, GenericTool
 from emp_agents.models import Provider
+from emp_agents.providers import OpenAIModelType, OpenAIProvider
 from pydantic import BaseModel, Field, PrivateAttr
 
 from dowse.exceptions import PreprocessorError
@@ -17,12 +18,14 @@ from .prompt_loader import PromptLoader
 logger = logging.getLogger("dowse")
 
 T = TypeVar("T", bound=BaseModel)
-U = TypeVar("U", bound=AgentMessage)
-OutputType = TypeVar("OutputType", bound=AgentMessage)
+U = TypeVar("U")
+OutputType = TypeVar("OutputType")
 
 
 class Executor(ABC, PreProcess[T, U], PromptLoader, Generic[T, U, OutputType]):
-    provider: Provider
+    provider: Provider = Field(
+        default_factory=lambda: OpenAIProvider(default_model=OpenAIModelType.gpt4o)
+    )
     preprocessors: list[Processor] = Field(default_factory=list)
     tools: list[Callable | GenericTool] = Field(default_factory=list)
     effects: list[Effect[T, OutputType]] = Field(default_factory=list)
