@@ -20,7 +20,7 @@ set_alchemy_key(os.environ["ALCHEMY_KEY"])
 
 
 async def amain():
-    pipeline = Pipeline[Tweet, Tweet, Literal["commands", "question", "not_talking"]](
+    pipeline = Pipeline[Tweet, Tweet, Literal["commands", "question"]](
         classifier=BasicTweetClassifier,
         handlers={
             # You can provide effects to be executed after the command is parsed using the >> operator
