@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Callable, Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 from emp_agents import AgentBase
 from emp_agents.models import Provider
@@ -32,7 +32,7 @@ class Processor(PromptLoader, ABC, Generic[T, U]):
         command_string = await self.to_string(command)
         return await self._format(command_string)
 
-    async def _format(self, command: T) -> AgentMessage[U]:
+    async def _format(self, command: str) -> AgentMessage[U]:
         agent = AgentBase(
             prompt=self.prompt,
             provider=self.provider,

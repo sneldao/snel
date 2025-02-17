@@ -126,12 +126,10 @@ class CommandTools(BaseModel):
 
     async def execute_swap(self, command: SwapArgs) -> None:
         """Execute a swap"""
-        print("SWAPPING")
         raise NotImplementedError("Swap not implemented")
 
     async def execute_transfer(self, command: TransferArgs) -> None:
         """Execute a transfer"""
-        print("TRANSFERRING")
         raise NotImplementedError("Transfer not implemented")
 
     def tools(self) -> list[Callable]:

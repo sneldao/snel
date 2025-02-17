@@ -1,7 +1,6 @@
 import logging
 from abc import ABC
-from asyncio import iscoroutinefunction
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Awaitable, Callable, Generic, TypeVar
 
 from emp_agents import AgentBase, GenericTool
 from emp_agents.models import Provider
@@ -46,7 +45,7 @@ class Executor(ABC, PreProcess[T, U], PromptLoader, Generic[T, U, OutputType]):
         """
         for effect in self.effects:
             maybe_coro = effect.execute(input_, output)
-            if iscoroutinefunction(maybe_coro):
+            if isinstance(maybe_coro, Awaitable):
                 await maybe_coro
 
     async def execute(
@@ -56,6 +55,12 @@ class Executor(ABC, PreProcess[T, U], PromptLoader, Generic[T, U, OutputType]):
         response_format_type = self._extract_response_format()
         response_format = AgentMessage[response_format_type]
         response_format.__name__ = "AgentMessage"
+
+        if response_format_type is None:
+            return response_format(
+                content=None,
+                error_message="",
+            )
 
         try:
             processed_input = await self.run_preprocessors(input_)

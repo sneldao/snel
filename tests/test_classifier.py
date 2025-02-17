@@ -1,7 +1,7 @@
 import pytest
 
 from dowse.impls.basic.llms import BasicTweetClassifier as classifier
-from dowse.interfaces import Tweet
+from dowse.models import Tweet
 
 
 @pytest.mark.asyncio(loop_scope="session")

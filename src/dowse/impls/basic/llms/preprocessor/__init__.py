@@ -5,7 +5,7 @@ from typing import Callable
 from pydantic import BaseModel
 
 from dowse.interfaces.processor.base import Processor
-from dowse.interfaces.sources.twitter import Tweet
+from dowse.models import Tweet
 from dowse.tools import convert_dollar_amount_to_eth, get_token_address_tool
 
 
