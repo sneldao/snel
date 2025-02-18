@@ -6,7 +6,7 @@ from dowse.models.commands import SwapArgs, TransferArgs
 from dowse.tools import convert_dollar_amount_to_eth
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_transfer():
     commands = await parser.execute(
         Tweet(
@@ -63,7 +63,7 @@ async def test_swap():
     assert command_args.recipient == "@ethereum"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_swap_error():
     commands = await parser.execute(
         Tweet(
@@ -79,7 +79,7 @@ async def test_swap_error():
     assert "XJAJKF" in error_reason
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_swap_error_2():
     commands = await parser.execute(
         Tweet(
