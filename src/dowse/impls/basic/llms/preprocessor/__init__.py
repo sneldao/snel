@@ -9,6 +9,7 @@ from dowse.tools import (
     convert_token_amount_to_wei,
     get_token_address_tool,
 )
+from dowse.tools.wei import convert_decimal_eth_to_wei
 
 
 class FormattedCommand(BaseModel):
@@ -21,4 +22,5 @@ class ProcessTokens(Processor[Tweet, FormattedCommand]):
         get_token_address_tool,
         convert_dollar_amount_to_eth,
         convert_token_amount_to_wei,
+        convert_decimal_eth_to_wei,
     ]

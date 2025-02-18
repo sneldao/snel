@@ -4,7 +4,7 @@ from emp_agents.models import AssistantMessage, ToolCall, ToolMessage, UserMessa
 
 EXAMPLES = [
     [
-        UserMessage(content='{"caller": "@user", "content": "swap $100 for AERO"}'),
+        UserMessage(content='{"caller": "@user", "content": "swap $123.13 for AERO"}'),
         AssistantMessage(
             content="I will use my tools to get the token address for AERO",
             tool_calls=[
@@ -21,7 +21,7 @@ EXAMPLES = [
                     type="function",
                     function=ToolCall.Function(
                         name="convert_dollar_amount_to_eth",
-                        arguments='{"amount": "123123.1231"}',
+                        arguments='{"amount": "$123.13"}',
                     ),
                 ),
             ],
@@ -31,10 +31,11 @@ EXAMPLES = [
             content="0x940181a94A35A4569E4529A3CDfB74e38FD98631",
         ),
         ToolMessage(
-            tool_call_id="0b73576d-413a-4fb8-8fe4-99da789fb0e1", content="2.9649"
+            tool_call_id="0b73576d-413a-4fb8-8fe4-99da789fb0e1",
+            content="46200000000000000 ETH",
         ),
         AssistantMessage(
-            content='{"content": {"caller": "@user", "user_request": "swap 123123.1231 ETH (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)", "error_message": null}}'
+            content='{"content": {"caller": "@user", "user_request": "swap 46200000000000000 ETH (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)", "error_message": null}}'
         ),
         UserMessage(
             content="Ok Great, now lets ignore these values but use this as the general structure of how the processing should go",

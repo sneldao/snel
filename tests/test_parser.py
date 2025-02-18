@@ -27,7 +27,7 @@ async def test_transfer():
     assert command.args.token_address == "0x4200000000000000000000000000000000000006"
 
     # NOTE: if ETH price moves a lot (up or down) this will fail
-    eth_amount = float(await convert_dollar_amount_to_eth("10"))
+    eth_amount = float((await convert_dollar_amount_to_eth("10")).split(" ")[0])
     assert command.args.amount > eth_amount * 0.97
     assert command.args.amount < eth_amount * 1.03
 

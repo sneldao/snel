@@ -8,7 +8,7 @@ from typing_extensions import Doc
 from dowse.interfaces import UserManagerT
 from dowse.logger import logger
 from dowse.models.commands import SwapArgs, TransferArgs
-from dowse.tools import convert_decimal_eth_to_wei, get_token_address_tool
+from dowse.tools import convert_decimal_eth_to_wei
 from dowse.tools.best_route.kyber import Quote
 from dowse.tools.best_route.kyber import get_quote as get_kyber_quote
 
@@ -34,16 +34,53 @@ class CommandTools(BaseModel):
             transfer_args = cast(TransferArgs, command.args)
             await self.execute_transfer(transfer_args)
 
-    async def make_swap_command(
-        self,
-        token_in: Annotated[
-            str,
-            Doc(
-                "The token to swap from.  Must be a token symbol, token address, or ETH."
-            ),
+    @staticmethod
+    def get_percentage(
+        amount: Annotated[int, Doc("The amount to get the percentage of")],
+        percentage: Annotated[float, Doc("The percentage to get")],
+    ) -> str:
+        """Given an amount and a percentage, returns the amount of the percentage"""
+        response = str(int(amount * percentage / 100))
+        logger.debug(
+            "Tool Result: get_percentage (%s, %s) -> %s", amount, percentage, response
+        )
+        return response
+
+    @staticmethod
+    async def get_amount_out_tool(
+        token_in_address: Annotated[
+            str, Doc("The token to swap from.  Must be a token address.")
         ],
-        token_out: Annotated[
-            str, Doc("The token to swap to.  Must be a token symbol or ETH")
+        token_out_address: Annotated[
+            str, Doc("The token to swap to.  Must be a token address.")
+        ],
+        amount: Annotated[int, Doc("The amount to swap")],
+    ) -> str:
+        """Given a token in and a swap amount, returns the amount out"""
+        quote: Quote = await get_kyber_quote(
+            token_in=to_checksum(token_in_address),
+            token_out=to_checksum(token_out_address),
+            amount=amount,
+            chain_id=8453,
+        )
+        amount_out = str(int(quote.amount_out))
+        logger.debug(
+            "Tool Call: get_amount_out_tool (%s, %s, %s) -> %s",
+            token_in_address,
+            token_out_address,
+            amount,
+            amount_out,
+        )
+        return amount_out
+
+    @staticmethod
+    async def make_swap_command(
+        token_in_address: Annotated[
+            str,
+            Doc("The token to swap from.  Must be a token address."),
+        ],
+        token_out_address: Annotated[
+            str, Doc("The token to swap to.  Must be a token address.")
         ],
         amount: Annotated[int, Doc("The amount to swap")],
         recipient: Annotated[
@@ -59,21 +96,18 @@ class CommandTools(BaseModel):
         slippage = 1
         logger.debug(
             "Tool Call: make_swap_command (%s, %s, %s, %s, %s, %s)",
-            token_in,
-            token_out,
+            token_in_address,
+            token_out_address,
             amount,
             slippage,
             chain_id,
             recipient,
         )
 
-        input_token = await get_token_address_tool(token_in)
-        output_token = await get_token_address_tool(token_out)
-
         chain_id = cast(Literal[1, 8453, 42161, 10, 137, 43114], chain_id)
         quote: Quote = await get_kyber_quote(
-            token_in=to_checksum(input_token),
-            token_out=to_checksum(output_token),
+            token_in=to_checksum(token_in_address),
+            token_out=to_checksum(token_out_address),
             amount=amount,
             chain_id=chain_id,
         )
@@ -82,29 +116,25 @@ class CommandTools(BaseModel):
             {
                 "amount_out": str(int(quote.amount_out)),
                 "aggregator": quote.aggregator,
-                "input_token_symbol": token_in,
-                "input_token_address": input_token,
-                "output_token_symbol": token_out,
-                "output_token_address": output_token,
+                "input_token_address": token_in_address,
+                "output_token_address": token_out_address,
             }
         )
 
+    @staticmethod
     async def make_transfer_command(
-        self,
-        token: Annotated[str, Doc("The token to transfer")],
+        token_address: Annotated[str, Doc("The token address to transfer")],
         amount: Annotated[int, Doc("The amount to transfer")],
         sender: Annotated[str, Doc("The sender of the transfer")],
         recipient: Annotated[str, Doc("The recipient of the transfer")],
     ) -> str:
         """Create a transfer command, returning the output that would be used to make the transfer"""
         logger.debug(
-            f"Tool Call: make_transfer_command ({token}, {amount}, {sender}, {recipient})"
+            f"Tool Call: make_transfer_command ({token_address}, {amount}, {sender}, {recipient})"
         )
 
-        token_address = await get_token_address_tool(token)
         return json.dumps(
             {
-                "token_symbol": token,
                 "token_address": token_address,
                 "sender": sender,
                 "recipient": recipient,

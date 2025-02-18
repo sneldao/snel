@@ -1,6 +1,6 @@
 [project]
 name = "dowse"
-version = "0.1.2"
+version = "0.1.2post1"
 description = ""
 authors = [
     {name = "johnny-emp",email = "johnny@empyrealsdk.com"}

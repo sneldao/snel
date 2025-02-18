@@ -21,6 +21,9 @@ BasicTwitterCommands = Executor[Tweet, FormattedCommand, CommandsList](
     preprocessors=[
         ProcessTokens(),
     ],
-    tools=Tools.tools(),
+    tools=[
+        Tools.get_amount_out_tool,
+        Tools.get_percentage,
+    ],
     examples=EXAMPLES,
 )

@@ -16,24 +16,15 @@ EXAMPLES = [
                     id="c4649732-4cc9-47e4-bc48-88224566686b",
                     type="function",
                     function=ToolCall.Function(
-                        name="make_swap_command",
-                        arguments='{"token_in": "0x4200000000000000000000000000000006", "token_out": "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "amount": "10000000000000000", "recipient": "@jack"}',
+                        name="get_amount_out_tool",
+                        arguments='{"token_in_address": "0x4200000000000000000000000000000006", "token_out_address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "amount": "10000000000000000"}',
                     ),
                 )
             ],
         ),
         ToolMessage(
             tool_call_id="c4649732-4cc9-47e4-bc48-88224566686b",
-            content=json.dumps(
-                {
-                    "amount_out": "1394601928424631358765",
-                    "aggregator": "Paraswap",
-                    "input_token_symbol": "$ETH",
-                    "input_token_address": "0x4200000000000000000000000000000006",
-                    "output_token": "$AERO",
-                    "output_token_address": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
-                }
-            ),
+            content="1394601928424631358765",
         ),
         AssistantMessage(
             content="""
@@ -48,7 +39,7 @@ EXAMPLES = [
     ],
     [
         UserMessage(
-            content="{'caller': '@abc123', 'content': 'swap for 3000000000000000 ETH (0x4200000000000000000000000000000000000006) for $AIXBT (0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825) and send half of it to @myfriend'}"
+            content="{'caller': '@abc123', 'content': 'swap 3000000000000000 ETH (0x4200000000000000000000000000000000000006) for $AIXBT (0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825) and send half of it to @myfriend'}"
         ),
         AssistantMessage(
             content="Let's use our swap tool to build this transaction",
@@ -57,32 +48,32 @@ EXAMPLES = [
                     id="c4649732-4cc9-47e4-bc48-88224566686b",
                     type="function",
                     function=ToolCall.Function(
-                        name="make_swap_command",
-                        arguments='{"token_in": "0x4200000000000000000000000000000000000006", "token_out": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount": "3000000000000000", "recipient": "@abc123"}',
+                        name="get_amount_out_tool",
+                        arguments='{"token_in_address": "0x4200000000000000000000000000000000000006", "token_out_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount": "3000000000000000"}',
                     ),
                 )
             ],
         ),
         ToolMessage(
             tool_call_id="c4649732-4cc9-47e4-bc48-88224566686b",
-            content='{"amount_out": "1394601928424631358765", "aggregator": "Paraswap", "input_token_symbol": "ETH", "input_token_address": "0x4200000000000000000000000000000000000006", "output_token_symbol": "AIXBT", "output_token_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825"}',
+            content="1394601928424631358765",
         ),
         AssistantMessage(
-            content="Let's use our transfer tools to build this transaction",
+            content="Lets use the percentage tool to get half of the amount out",
             tool_calls=[
                 ToolCall(
-                    id="5bcd249f-45e6-415f-8582-bd32af4d84aa",
+                    id="c4649732-4cc9-47e4-bc48-88224566686b",
                     type="function",
                     function=ToolCall.Function(
-                        name="make_transfer_command",
-                        arguments='{"token": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount": "697300964212315679382", "sender": "@abc123", "recipient": "@myfriend"}',
+                        name="get_percentage",
+                        arguments='{"amount": "1394601928424631358765", "percentage": "50"}',
                     ),
                 )
             ],
         ),
         ToolMessage(
-            tool_call_id="5bcd249f-45e6-415f-8582-bd32af4d84aa",
-            content='{"token_symbol": "AERO", "token_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "recipient": "@myfriend", "value": "697300964212315679382"}',
+            tool_call_id="c4649732-4cc9-47e4-bc48-88224566686b",
+            content="697300964212315679382",
         ),
         AssistantMessage(
             content="""
