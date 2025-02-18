@@ -23,7 +23,7 @@ async def test_pre_processor():
     assert formatted.error_message is None
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_pre_processor_transfer():
     formatted = await ProcessTokens().format(
         Tweet(
