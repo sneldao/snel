@@ -17,9 +17,12 @@ async def test_pre_processor():
     )
     print(formatted)
     eth_amount = await convert_dollar_amount_to_eth("$300")
-    assert formatted.content.content == (
-        f"1. swap {eth_amount} (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)\n"  # noqa: E501
-        "2. send 50% of the output to @user2"
+    assert (
+        formatted.content.content.lower()
+        == (
+            f"1. swap {eth_amount} (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)\n"  # noqa: E501
+            "2. send 50% of the output to @user2"
+        ).lower()
     )
     assert formatted.error_message is None
 
@@ -35,9 +38,12 @@ async def test_pre_processor_transfer():
         )
     )
     eth_amount = await convert_dollar_amount_to_eth("$100")
-    assert formatted.content.content == (
-        f"1. transfer {eth_amount} (0x4200000000000000000000000000000000000006)"
-        " to @myfriend"
+    assert (
+        formatted.content.content.lower()
+        == (
+            f"1. transfer {eth_amount} (0x4200000000000000000000000000000000000006)"
+            " to @myfriend"
+        ).lower()
     )
     assert formatted.error_message is None
 

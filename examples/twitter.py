@@ -22,7 +22,7 @@ class TweetWithUserHistory(Tweet):
 
 
 class LoadUserData(Processor[Tweet, TweetWithUserHistory]):
-    async def format(self, command: Tweet) -> AgentMessage[TweetWithUserHistory]:
+    async def process(self, command: Tweet) -> AgentMessage[TweetWithUserHistory]:
         return AgentMessage(
             content=TweetWithUserHistory(
                 **command.model_dump(),

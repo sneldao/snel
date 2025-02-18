@@ -15,7 +15,9 @@ T = TypeVar("T", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
 
 
-class AgenticProcessor(Processor[T, U], ExampleLoader, PromptLoader, Generic[T, U]):
+class AgenticProcessor(
+    Processor[T, AgentMessage[U]], ExampleLoader, PromptLoader, Generic[T, U]
+):
     provider: Provider = OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     )
@@ -48,7 +50,12 @@ class AgenticProcessor(Processor[T, U], ExampleLoader, PromptLoader, Generic[T, 
         tools = await self.get_tools(command)
         return await self._process(command_string, tools)
 
-    async def _process(self, command: str, tools: list[Callable]) -> AgentMessage[U]:
+    async def _process(
+        self,
+        command: str,
+        tools: list[Callable],
+        **kwargs: Any,
+    ) -> AgentMessage[U]:
         if not self.prompt:
             raise ValueError("Prompt is required")
         agent = AgentBase(
