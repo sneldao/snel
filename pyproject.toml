@@ -39,6 +39,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:passlib.*:",
     "ignore::DeprecationWarning:jose.*",
     "ignore::DeprecationWarning:websockets.legacy.*",
+    "ignore::DeprecationWarning:pytest_asyncio.*",
 ]
 asyncio_mode = "auto"
 
