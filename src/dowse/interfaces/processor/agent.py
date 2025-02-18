@@ -48,14 +48,17 @@ class AgenticProcessor(
     async def process(self, command: T) -> AgentMessage[U]:
         command_string = await self.to_string(command)
         tools = await self.get_tools(command)
-        return await self._process(command_string, tools)
+        try:
+            processed_result = await self._process(command_string, tools)
+            return AgentMessage[U](content=processed_result, error_message=None)  # type: ignore[arg-type]
+        except Exception as e:
+            return AgentMessage[U](content=None, error_message=str(e))  # type: ignore[arg-type]
 
     async def _process(
         self,
         command: str,
         tools: list[Callable],
-        **kwargs: Any,
-    ) -> AgentMessage[U]:
+    ) -> U:
         if not self.prompt:
             raise ValueError("Prompt is required")
         agent = AgentBase(
@@ -68,12 +71,10 @@ class AgenticProcessor(
             agent.add_messages(example)
 
         response_content_type = self._extract_response_format()
-        response_format = AgentMessage[response_content_type]  # type: ignore[valid-type]
-        response_format.__name__ = "AgentMessage"
+        response_format = response_content_type
 
         response = await agent.answer(command, response_format=response_format)
-
-        return AgentMessage[response_content_type].model_validate_json(response)  # type: ignore[valid-type]
+        return response_content_type.model_validate_json(response)  # type: ignore[valid-type]
 
     def _extract_response_format(self) -> type[U]:
         if type(self).__base__ is Processor:

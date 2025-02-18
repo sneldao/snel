@@ -64,11 +64,8 @@ Your task is to convert user input into a numbered list of commands. A command i
 
 ```json
 {
-    "error_message": null,
-    "content": {
-        "caller": "@user",
-        "user_request": "<transformed_request>"
-    }
+    "caller": "@user",
+    "user_request": "<transformed_request>"
 }
 ```
 

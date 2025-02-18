@@ -74,11 +74,12 @@ class Executor(
         input_: T,
     ) -> AgentMessage[OutputType]:
         response_format_type = self._extract_response_format()
-        response_format = AgentMessage[response_format_type]  # type: ignore[valid-type]
-        response_format.__name__ = "AgentMessage"
+        response_format = response_format_type
+        # response_format = AgentMessage[response_format_type]  # type: ignore[valid-type]
+        # response_format.__name__ = "AgentMessage"
 
         if response_format_type is None:
-            return response_format(
+            return AgentMessage[response_format_type](
                 content=None,
                 error_message="",
             )
@@ -86,7 +87,7 @@ class Executor(
         try:
             processed_input = await self.run_processors(input_)
         except PreprocessorError as e:
-            return response_format(
+            return AgentMessage[response_format](
                 content=None,
                 error_message=str(e),
             )
@@ -113,8 +114,9 @@ class Executor(
         )
 
         try:
-            formatted_response: AgentMessage[OutputType] = (  # type: ignore[valid-type]
-                response_format.model_validate_json(response)
+            formatted_response = AgentMessage[response_format_type](  # type: ignore[valid-type]
+                content=response_format_type.model_validate_json(response),
+                error_message=None,
             )
         except ValidationError as e:
             logger.error(

@@ -82,7 +82,6 @@ EXAMPLES = [
                     {"command": "swap", "args": {"token_in_address": "0x4200000000000000000000000000000006", "token_out_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount_in": "3000000000000000", "amount_out": "1394601928424631358765", "recipient": "@user"}},
                     {"command": "transfer", "args": {"token_address": "0x4F9Fd6Be4a90f2620860d680c0d4d5Fb53d1A825", "amount": "697300964212315679382", "recipient": "@myfriend"}}
                 ],
-                "error_message": None,
             }
             """,
         ),

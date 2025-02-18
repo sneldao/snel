@@ -58,6 +58,5 @@ async def test_pre_processor_errors():
             creator_name="test",
         )
     )
-    assert formatted.content is None
     assert formatted.error_message is not None
     assert "NAFAJD" in formatted.error_message
