@@ -19,7 +19,7 @@ logger = logging.getLogger("dowse")
 
 T = TypeVar("T", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
-OutputType = TypeVar("OutputType")
+OutputType = TypeVar("OutputType", bound=BaseModel | str)
 
 
 class Executor(
@@ -75,8 +75,6 @@ class Executor(
     ) -> AgentMessage[OutputType]:
         response_format_type = self._extract_response_format()
         response_format = response_format_type
-        # response_format = AgentMessage[response_format_type]  # type: ignore[valid-type]
-        # response_format.__name__ = "AgentMessage"
 
         if response_format_type is None:
             return AgentMessage[response_format_type](
@@ -87,7 +85,7 @@ class Executor(
         try:
             processed_input = await self.run_processors(input_)
         except PreprocessorError as e:
-            return AgentMessage[response_format](
+            return AgentMessage[response_format](  # type: ignore[valid-type]
                 content=None,
                 error_message=str(e),
             )

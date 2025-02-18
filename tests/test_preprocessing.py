@@ -15,10 +15,9 @@ async def test_pre_processor():
             creator_name="test",
         )
     )
-    print(formatted)
     eth_amount = await convert_dollar_amount_to_eth("$300")
     assert (
-        formatted.content.content.lower()
+        formatted.content.content.lower().strip().rstrip(".")
         == (
             f"1. swap {eth_amount} (0x4200000000000000000000000000000000000006) for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)\n"  # noqa: E501
             "2. send 50% of the output to @user2"

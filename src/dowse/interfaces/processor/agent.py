@@ -1,15 +1,18 @@
+import logging
 from typing import Any, Callable, Generic, TypeVar
 
 from emp_agents import AgentBase
 from emp_agents.models import Provider
 from emp_agents.providers import OpenAIModelType, OpenAIProvider
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from dowse.interfaces.example_loader import ExampleLoader
 from dowse.interfaces.prompt_loader import PromptLoader
 from dowse.models.message import AgentMessage
 
 from .base import Processor
+
+logger = logging.getLogger("dowse")
 
 T = TypeVar("T", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
@@ -74,7 +77,11 @@ class AgenticProcessor(
         response_format = response_content_type
 
         response = await agent.answer(command, response_format=response_format)
-        return response_content_type.model_validate_json(response)  # type: ignore[valid-type]
+        try:
+            return response_content_type.model_validate_json(response)  # type: ignore[valid-type]
+        except ValidationError as e:
+            logger.error("Error serialization output: %s", e)
+            raise e
 
     def _extract_response_format(self) -> type[U]:
         if type(self).__base__ is Processor:

@@ -50,15 +50,12 @@ EXAMPLES = [
         AssistantMessage(
             content=json.dumps(
                 {
-                    "content": {
-                        "caller": "@user",
-                        "user_request": (
-                            "1. swap 46200000000000000 ETH (0x4200000000000000000000000000000000000006)"
-                            " for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)\n"
-                            "2. send 50% of the output to @user2"
-                        ),
-                        "error_message": None,
-                    },
+                    "caller": "@user",
+                    "user_request": (
+                        "1. swap 46200000000000000 ETH (0x4200000000000000000000000000000000000006)"
+                        " for $AERO (0x940181a94A35A4569E4529A3CDfB74e38FD98631)\n"
+                        "2. send 50% of the output to @user2"
+                    ),
                 }
             ),
         ),
