@@ -31,7 +31,6 @@ async def test_transfer():
     assert command.args.amount > eth_amount * 0.97
     assert command.args.amount < eth_amount * 1.03
 
-    assert command.args.sender == "@ethereum"
     assert command.args.recipient == "@VitalikButerin"
 
 
@@ -59,7 +58,6 @@ async def test_swap():
     )
     assert command_args.amount_in > 9e16
     assert command_args.amount_in < 2e17
-    assert command_args.sender == "@ethereum"
     assert command_args.recipient == "@ethereum"
 
 

@@ -12,6 +12,3 @@ class TransferArgs(BaseModel):
     recipient: Annotated[
         str, Doc("The twitter handle or address of the recipient of the transfer")
     ]
-    sender: Annotated[
-        str, Doc("The twitter handle or address of the sender of the transfer")
-    ]
