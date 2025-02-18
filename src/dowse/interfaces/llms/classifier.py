@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Generic, Literal, TypeVar, get_args
+from typing import Any, Generic, Literal, Self, TypeVar, get_args
 
 from emp_agents import AgentBase
 from emp_agents.models import Provider
@@ -29,6 +29,10 @@ class Classifier(ABC, ExampleLoader, PromptLoader, Generic[InputType, Classifica
     provider: Provider = OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     )
+
+    def update_provider(self, provider: Provider) -> Self:
+        self.provider = provider
+        return self
 
     _agent: AgentBase = PrivateAttr()
 

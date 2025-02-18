@@ -4,6 +4,7 @@ Token Amounts:
 - Token amounts are always in decimal format (e.g. 0.01, 100.00, 1000.00)
 - Token amounts are always followed by the token address in parentheses
 - There is no limit on the number of digits
+- users can send fractional amounts of tokens.  Do not round.
 
 Token Format:
 - Token symbols start with $ followed by letters/numbers (e.g. "$AERO")

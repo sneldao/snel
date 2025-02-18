@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Literal
 
+from emp_agents.providers import AnthropicModelType, AnthropicProvider
 from eth_rpc import set_alchemy_key
 
 from dowse import NoOpExecutor, Pipeline, Processor, logger
@@ -49,7 +50,7 @@ async def amain():
         handlers={
             # effects can be added after the command using the >> operator
             "commands": BasicTwitterCommands >> Printer(),
-            "question": BasicTwitterQuestion >> [Printer()],
+            "question": BasicTwitterQuestion >> Printer(),
             "neither": NoOpExecutor >> Printer(),
         },
         source=TwitterMock(),

@@ -1,6 +1,6 @@
 import logging
 from abc import ABC
-from typing import Any, Awaitable, Callable, Generic, TypeVar
+from typing import Any, Awaitable, Callable, Generic, Self, TypeVar
 
 from emp_agents import AgentBase, GenericTool
 from emp_agents.models import Message, Provider
@@ -34,6 +34,10 @@ class Executor(
     examples: list[list[Message]] = Field(default_factory=list)
 
     _agent: AgentBase | None = PrivateAttr(default=None)
+
+    def set_provider(self, provider: Provider) -> Self:
+        self.provider = provider
+        return self
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

@@ -4,7 +4,7 @@ from dowse.impls.basic.llms import BasicTweetClassifier as classifier
 from dowse.models import Tweet
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_classify_question():
     classification = await classifier.classify(
         Tweet(
@@ -17,7 +17,7 @@ async def test_classify_question():
     assert classification == "question"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_classify_commands():
     classification = await classifier.classify(
         Tweet(
@@ -30,7 +30,7 @@ async def test_classify_commands():
     assert classification == "commands"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_classify_unknown():
     classification = await classifier.classify(
         Tweet(
