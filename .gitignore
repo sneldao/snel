@@ -45,3 +45,4 @@ local_settings.py
 
 .mypy_cache/
 scratch.py
+docs/site/*

@@ -6,8 +6,6 @@ from eth_typeshed.chainlink.eth_usd_feed import ChainlinkPriceOracle, ETHUSDPric
 from eth_typing import ChecksumAddress
 from typing_extensions import Doc
 
-from dowse.exceptions import TokenNotFoundError
-
 from .address import is_address
 from .best_route.kyber import get_quote as get_kyber_quote
 from .simulacrum import get_user_address, get_user_address_helper
@@ -39,14 +37,11 @@ async def get_token_address_tool(
         assert user_id is not None
         return await get_user_address(user_id)
 
-    try:
-        result = to_checksum(await get_token_address(symbol_or_token_address))
-        logger.debug(
-            "Tool Result: get_token_address (%s) -> %s", symbol_or_token_address, result
-        )
-        return result
-    except TokenNotFoundError as e:
-        return f"ERROR: {e}"
+    result = to_checksum(await get_token_address(symbol_or_token_address))
+    logger.debug(
+        "Tool Result: get_token_address (%s) -> %s", symbol_or_token_address, result
+    )
+    return result
 
 
 async def get_eth_price() -> float:

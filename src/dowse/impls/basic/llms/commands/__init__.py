@@ -17,7 +17,7 @@ BasicTwitterCommands = Executor[Tweet, FormattedCommand, CommandsList](
     provider=OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     ),
-    preprocessors=[
+    processors=[
         ProcessTokens(),
     ],
     tools=[

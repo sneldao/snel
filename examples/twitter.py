@@ -22,7 +22,7 @@ class TweetWithUserHistory(Tweet):
 
 
 class LoadUserData(Processor[Tweet, TweetWithUserHistory]):
-    async def format(self, command: Tweet) -> AgentMessage[TweetWithUserHistory]:
+    async def process(self, command: Tweet) -> AgentMessage[TweetWithUserHistory]:
         return AgentMessage(
             content=TweetWithUserHistory(
                 **command.model_dump(),
@@ -39,7 +39,7 @@ async def amain():
     pipeline = Pipeline[
         Tweet, TweetWithUserHistory, Literal["commands", "question", "neither"]
     ](
-        # preprocessors converts the data to the desired format
+        # processors converts the data to the desired format
         processors=[
             LoadUserData(),
         ],

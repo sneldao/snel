@@ -19,7 +19,7 @@ logger = logging.getLogger("dowse")
 
 T = TypeVar("T", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
-OutputType = TypeVar("OutputType")
+OutputType = TypeVar("OutputType", bound=BaseModel | str)
 
 
 class Executor(
@@ -28,7 +28,7 @@ class Executor(
     provider: Provider = Field(
         default_factory=lambda: OpenAIProvider(default_model=OpenAIModelType.gpt4o)
     )
-    preprocessors: list[Processor] = Field(default_factory=list)
+    processors: list[Processor] = Field(default_factory=list)
     tools: list[Callable | GenericTool] = Field(default_factory=list)
     effects: list[Effect[T, OutputType]] = Field(default_factory=list)
     examples: list[list[Message]] = Field(default_factory=list)
@@ -74,19 +74,18 @@ class Executor(
         input_: T,
     ) -> AgentMessage[OutputType]:
         response_format_type = self._extract_response_format()
-        response_format = AgentMessage[response_format_type]  # type: ignore[valid-type]
-        response_format.__name__ = "AgentMessage"
+        response_format = response_format_type
 
         if response_format_type is None:
-            return response_format(
+            return AgentMessage[response_format_type](
                 content=None,
                 error_message="",
             )
 
         try:
-            processed_input = await self.run_preprocessors(input_)
+            processed_input = await self.run_processors(input_)
         except PreprocessorError as e:
-            return response_format(
+            return AgentMessage[response_format](  # type: ignore[valid-type]
                 content=None,
                 error_message=str(e),
             )
@@ -113,8 +112,9 @@ class Executor(
         )
 
         try:
-            formatted_response: AgentMessage[OutputType] = (  # type: ignore[valid-type]
-                response_format.model_validate_json(response)
+            formatted_response = AgentMessage[response_format_type](  # type: ignore[valid-type]
+                content=response_format_type.model_validate_json(response),
+                error_message=None,
             )
         except ValidationError as e:
             logger.error(
@@ -148,9 +148,9 @@ class Executor(
 
     def __rrshift__(self, other: Processor | list[Processor]) -> "Executor":
         if isinstance(other, list):
-            self.preprocessors.extend(other)
+            self.processors.extend(other)
         else:
-            self.preprocessors.append(other)
+            self.processors.append(other)
         return self
 
     def __rshift__(

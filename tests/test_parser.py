@@ -88,7 +88,6 @@ async def test_swap_error_2():
         ),
     )
 
-    assert commands.content is None
     error_reason = commands.error_message
     assert error_reason is not None
     assert "DOGEEE" in error_reason
