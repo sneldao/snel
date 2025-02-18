@@ -1,4 +1,3 @@
-import json
 from typing import Callable
 
 from pydantic import BaseModel, Field
@@ -18,6 +17,3 @@ class ProcessTokens(Processor[Tweet, FormattedCommand]):
         get_token_address_tool,
         convert_dollar_amount_to_eth,
     ]
-
-    async def to_string(self, command: Tweet) -> str:
-        return json.dumps({"caller": command.creator_name, "content": command.content})

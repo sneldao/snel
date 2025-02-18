@@ -40,7 +40,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:jose.*",
     "ignore::DeprecationWarning:websockets.legacy.*",
 ]
-asyncio_default_fixture_loop_scope = "session"
+asyncio_mode = "auto"
 
 [tool.poetry.scripts]
 main = "main:main"

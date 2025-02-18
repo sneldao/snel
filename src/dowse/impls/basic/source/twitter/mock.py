@@ -24,6 +24,12 @@ what "crypto" is a better money transmission protocol and why?""",
                 creator_id=12,
                 creator_name="@jack",
             ),
+            Tweet(
+                id=1890118705016877145,
+                content="I dont want to do anything",
+                creator_id=12,
+                creator_name="@jack",
+            ),
         ]
 
     async def handle(self, data: Tweet) -> None:

@@ -52,6 +52,6 @@ Error Handling:
 - Include detailed explanation of what caused the error
 - Do not validate amounts or check balances
 
-
+A user can provide complex, multi-step commands.  you just need to parse the commands and put them in order.
 Your output should be a structured command object containing the parsed parameters, ready for execution by the system.
 The system has the capability to execute swap and transfer commands.  It supports complex commands that include multiple swaps and transfers.

@@ -84,3 +84,11 @@ async def amain():
 if __name__ == "__main__":
     asyncio.run(amain())
 ```
+
+
+### Tests
+
+```bash
+poetry install
+poetry run pytest
+```
