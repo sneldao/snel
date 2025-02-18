@@ -6,7 +6,6 @@ from dowse.models import Tweet
 
 from ...tools import CommandRequest, Tools
 from ..preprocessor import FormattedCommand, ProcessTokens
-from .examples import EXAMPLES
 
 
 class CommandsList(BaseModel):
@@ -21,6 +20,8 @@ BasicTwitterCommands = Executor[Tweet, FormattedCommand, CommandsList](
     preprocessors=[
         ProcessTokens(),
     ],
-    tools=Tools.tools(),
-    examples=EXAMPLES,
+    tools=[
+        Tools.get_amount_out_tool,
+        Tools.get_percentage,
+    ],
 )

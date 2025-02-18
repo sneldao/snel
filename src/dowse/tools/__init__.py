@@ -13,7 +13,7 @@ from .best_route.kyber import get_quote as get_kyber_quote
 from .simulacrum import get_user_address, get_user_address_helper
 from .symbol_to_address import get_token_address
 from .twitter import get_user_id
-from .wei import convert_token_amount_to_wei
+from .wei import convert_decimal_eth_to_wei, convert_token_amount_to_wei
 
 logger = logging.getLogger("dowse")
 
@@ -26,8 +26,6 @@ async def get_token_address_tool(
     """
     Get the address for a given token symbol
     """
-
-    logger.debug("Tool Call: get_token_address (%s)", symbol_or_token_address)
 
     symbol_or_token_address = symbol_or_token_address.lstrip("$")
 
@@ -42,7 +40,11 @@ async def get_token_address_tool(
         return await get_user_address(user_id)
 
     try:
-        return to_checksum(await get_token_address(symbol_or_token_address))
+        result = to_checksum(await get_token_address(symbol_or_token_address))
+        logger.debug(
+            "Tool Result: get_token_address (%s) -> %s", symbol_or_token_address, result
+        )
+        return result
     except TokenNotFoundError as e:
         return f"ERROR: {e}"
 
@@ -71,18 +73,12 @@ async def convert_dollar_amount_to_eth(
 
     # conver to wei
     if True:
-        return str(int(float(result) * 1e18))
+        wei = str(int(float(result) * 1e18)) + " ETH"
+        logger.debug(
+            "Tool Result: convert_dollar_amount_to_eth (%s) -> '%s'", amount, wei
+        )
+        return wei
 
-    logger.debug("Tool Call: convert_dollar_amount_to_eth (%s) -> %s", amount, result)
-    return result
-
-
-def convert_decimal_eth_to_wei(amount: str) -> str:
-    """
-    convert a decimal ETH amount to a string ETH amount
-    """
-    result = str(int(float(amount) * 1e18))
-    logger.debug("Tool Call: convert_decimal_eth_to_wei (%s) -> %s", amount, result)
     return result
 
 
