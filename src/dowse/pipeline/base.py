@@ -10,7 +10,7 @@ from dowse.exceptions import PreprocessorError
 from dowse.interfaces import SourceT
 from dowse.interfaces.executor import Executor
 from dowse.interfaces.llms.classifier import Classifier
-from dowse.interfaces.processor.base import Processor
+from dowse.interfaces.processor import Processor
 from dowse.models.message import AgentMessage
 
 logger = logging.getLogger("dowse")
@@ -22,7 +22,7 @@ Classifications = TypeVar("Classifications")
 
 class Pipeline(BaseModel, Generic[T, U, Classifications]):
     """
-    A pipeline is a sequence of preprocessors, a classifier, and a mapping of classifications to handlers.
+    A pipeline is a sequence of processors, a classifier, and a mapping of classifications to handlers.
 
     Args:
         T: The input type to the pipeline
@@ -42,7 +42,7 @@ class Pipeline(BaseModel, Generic[T, U, Classifications]):
             return AgentMessage(content=content, error_message=None)
 
         for processor in self.processors:
-            input_ = await processor.format(input_)  # type: ignore[assignment]
+            input_ = await processor.process(input_)  # type: ignore[assignment]
             if input_.is_error:  # type: ignore[attr-defined]
                 raise PreprocessorError(input_.error_message)  # type: ignore[attr-defined]
         return input_  # type: ignore[return-value]

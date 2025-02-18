@@ -57,14 +57,14 @@ BetExecutor = Executor[Tweet, Tweet, str](
 )
 BetInformationExecutor = Executor[Tweet, Tweet, str](
     prompt="Lookup the information for a bet",
-    preprocessors=[BetOddsLookup()],
+    processors=[BetOddsLookup()],
 )
 
 
 async def amain():
     pipeline = Pipeline[Tweet, Literal["is_bet", "bet_information", "neither"]](
         classifier=BetClassifier,
-        preprocessors=[
+        processors=[
             BetOddsLookup(),
         ],
         handlers={

@@ -28,7 +28,7 @@ class Executor(
     provider: Provider = Field(
         default_factory=lambda: OpenAIProvider(default_model=OpenAIModelType.gpt4o)
     )
-    preprocessors: list[Processor] = Field(default_factory=list)
+    processors: list[Processor] = Field(default_factory=list)
     tools: list[Callable | GenericTool] = Field(default_factory=list)
     effects: list[Effect[T, OutputType]] = Field(default_factory=list)
     examples: list[list[Message]] = Field(default_factory=list)
@@ -84,7 +84,7 @@ class Executor(
             )
 
         try:
-            processed_input = await self.run_preprocessors(input_)
+            processed_input = await self.run_processors(input_)
         except PreprocessorError as e:
             return response_format(
                 content=None,
@@ -148,9 +148,9 @@ class Executor(
 
     def __rrshift__(self, other: Processor | list[Processor]) -> "Executor":
         if isinstance(other, list):
-            self.preprocessors.extend(other)
+            self.processors.extend(other)
         else:
-            self.preprocessors.append(other)
+            self.processors.append(other)
         return self
 
     def __rshift__(

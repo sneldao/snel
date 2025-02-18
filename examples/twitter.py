@@ -39,7 +39,7 @@ async def amain():
     pipeline = Pipeline[
         Tweet, TweetWithUserHistory, Literal["commands", "question", "neither"]
     ](
-        # preprocessors converts the data to the desired format
+        # processors converts the data to the desired format
         processors=[
             LoadUserData(),
         ],

@@ -75,7 +75,7 @@ JokeTopicAdder = Processor[ProcessedFood, BreakfastJokeTopic](
 # we specify the input type, the processed type, and the output type
 BreakfastExecutor = Executor[ProcessedFood, BreakfastJokeTopic, str](
     prompt="Write a joke about the breakfast food the user tells you",
-    preprocessors=[JokeTopicAdder],
+    processors=[JokeTopicAdder],
 )
 
 LunchExecutor = Executor[ProcessedFood, ProcessedFood, str](
@@ -90,7 +90,7 @@ DinnerExecutor = Executor[ProcessedFood, ProcessedFood, str](
 async def amain():
     pipeline = Pipeline[Food, Literal["breakfast", "lunch", "dinner"]](
         classifier=FoodClassifier,
-        preprocessors=[
+        processors=[
             GetIngredients(),
         ],
         handlers={
