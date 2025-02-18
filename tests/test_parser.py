@@ -28,14 +28,14 @@ async def test_transfer():
 
     # NOTE: if ETH price moves a lot (up or down) this will fail
     eth_amount = float(await convert_dollar_amount_to_eth("10"))
-    assert command.args.amount > eth_amount * 0.97 * 1e18
-    assert command.args.amount < eth_amount * 1.03 * 1e18
+    assert command.args.amount > eth_amount * 0.97
+    assert command.args.amount < eth_amount * 1.03
 
     assert command.args.sender == "@ethereum"
     assert command.args.recipient == "@VitalikButerin"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_swap():
     commands = await parser.execute(
         Tweet(

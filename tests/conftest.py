@@ -5,8 +5,6 @@ import os
 import pytest
 from eth_rpc import set_alchemy_key
 
-pytest_plugins = ("pytest_asyncio",)
-
 
 @pytest.fixture(autouse=True)
 async def setup_tests():

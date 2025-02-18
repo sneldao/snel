@@ -4,7 +4,11 @@ from pydantic import BaseModel, Field
 
 from dowse.interfaces.processor.base import Processor
 from dowse.models import Tweet
-from dowse.tools import convert_dollar_amount_to_eth, get_token_address_tool
+from dowse.tools import (
+    convert_dollar_amount_to_eth,
+    convert_token_amount_to_wei,
+    get_token_address_tool,
+)
 
 
 class FormattedCommand(BaseModel):
@@ -16,4 +20,5 @@ class ProcessTokens(Processor[Tweet, FormattedCommand]):
     tools: list[Callable] = [
         get_token_address_tool,
         convert_dollar_amount_to_eth,
+        convert_token_amount_to_wei,
     ]

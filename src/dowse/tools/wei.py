@@ -6,5 +6,5 @@ async def convert_token_amount_to_wei(amount: str, token_address: str) -> str:
     convert a decimal token amount to wei
     """
     token = ERC20(address=token_address)
-    decimals = await token.decimals()
+    decimals = await token.decimals().get()
     return str(int(float(amount) * 10**decimals))
