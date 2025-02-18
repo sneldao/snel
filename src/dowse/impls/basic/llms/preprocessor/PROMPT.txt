@@ -6,6 +6,7 @@ Transform the input command by:
 Tools available:
 - get_token_address_tool: Looks up token address for a symbol
 - convert_dollar_amount_to_eth: Converts USD amount to ETH amount
+- convert_token_amount_to_wei: Converts a decimal amount of a token to wei
 
 Important notes:
 - Always fetch fresh ETH price for each conversion
@@ -17,7 +18,7 @@ Input: "swap $300 for cbBTC"
 Steps:
 1. Get cbBTC address via get_token_address_tool
 2. Convert $300 to ETH via convert_dollar_amount_to_eth
-3. Format as: "swap 0.1010 ETH (0x4200000000000000000000000000000000000006) for $cbBTC (0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf)"
+3. Format as: "swap 101000000000000000 ETH (0x4200000000000000000000000000000000000006) for $cbBTC (0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf)"
 
 Response format:
 {
@@ -35,3 +36,5 @@ If there's an error (e.g., token not found):
 Special cases:
 - "$X of ETH" -> Convert to "Y ETH (0x4200000000000000000000000000000000000006)"
 - Normalize "Ethereum"/"eth" to "ETH (0x4200000000000000000000000000000000000006)"
+
+Never say "wei of ETH" or "wei of $TKN",  it is understood that you are converting all amounts to wei.

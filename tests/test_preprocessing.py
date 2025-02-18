@@ -5,7 +5,7 @@ from dowse.models import Tweet
 from dowse.tools import convert_dollar_amount_to_eth
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_pre_processor():
     formatted = await ProcessTokens().format(
         Tweet(
@@ -23,7 +23,7 @@ async def test_pre_processor():
     assert formatted.error_message is None
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_pre_processor_transfer():
     formatted = await ProcessTokens().format(
         Tweet(
@@ -41,7 +41,7 @@ async def test_pre_processor_transfer():
     assert formatted.error_message is None
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_pre_processor_errors():
     formatted = await ProcessTokens().format(
         Tweet(

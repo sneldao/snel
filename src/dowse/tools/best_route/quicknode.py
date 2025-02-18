@@ -50,9 +50,6 @@ async def get_quote(
         tries += 1
         try:
             async with httpx.AsyncClient() as client:
-                logger.debug(
-                    f"GET QUOTE: {token_in}, {token_out}, {amount}, {slippage}, {chain_id}, {recipient}"
-                )
                 response = await client.post(
                     url,
                     json={

@@ -1,11 +1,11 @@
 import logging
 from abc import ABC
-from typing import Any, Awaitable, Callable, Generic, TypeVar
+from typing import Any, Awaitable, Callable, Generic, Self, TypeVar
 
 from emp_agents import AgentBase, GenericTool
 from emp_agents.models import Message, Provider
 from emp_agents.providers import OpenAIModelType, OpenAIProvider
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, ValidationError
 
 from dowse.exceptions import PreprocessorError
 from dowse.models.message import AgentMessage
@@ -34,6 +34,10 @@ class Executor(
     examples: list[list[Message]] = Field(default_factory=list)
 
     _agent: AgentBase | None = PrivateAttr(default=None)
+
+    def set_provider(self, provider: Provider) -> Self:
+        self.provider = provider
+        return self
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -108,9 +112,16 @@ class Executor(
             response_format=response_format,
         )
 
-        formatted_response: AgentMessage[OutputType] = (  # type: ignore[valid-type]
-            response_format.model_validate_json(response)
-        )
+        try:
+            formatted_response: AgentMessage[OutputType] = (  # type: ignore[valid-type]
+                response_format.model_validate_json(response)
+            )
+        except ValidationError as e:
+            logger.error(
+                "Validation error in response: (%s) -> %s", processed_input, response
+            )
+            raise e
+
         if formatted_response.content is None:
             logger.error(
                 "No content in response: (%s) -> %s", processed_input, response

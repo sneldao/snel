@@ -18,7 +18,7 @@ class Processor(ABC, ExampleLoader, PromptLoader, Generic[T, U]):
     provider: Provider = OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     )
-    prompt: str = "Transform the input into the response format"
+    prompt: str | None = None
     tools: list[Callable] = Field(default_factory=list)
 
     def __init_subclass__(cls, **kwargs):
@@ -48,6 +48,8 @@ class Processor(ABC, ExampleLoader, PromptLoader, Generic[T, U]):
         return await self._format(command_string, tools)
 
     async def _format(self, command: str, tools: list[Callable]) -> AgentMessage[U]:
+        if not self.prompt:
+            raise ValueError("Prompt is required")
         agent = AgentBase(
             prompt=self.prompt,
             provider=self.provider,

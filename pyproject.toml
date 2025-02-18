@@ -1,6 +1,6 @@
 [project]
 name = "dowse"
-version = "0.1.1"
+version = "0.1.2"
 description = ""
 authors = [
     {name = "johnny-emp",email = "johnny@empyrealsdk.com"}
@@ -39,8 +39,9 @@ filterwarnings = [
     "ignore::DeprecationWarning:passlib.*:",
     "ignore::DeprecationWarning:jose.*",
     "ignore::DeprecationWarning:websockets.legacy.*",
+    "ignore::DeprecationWarning:pytest_asyncio.*",
 ]
-asyncio_default_fixture_loop_scope = "session"
+asyncio_mode = "auto"
 
 [tool.poetry.scripts]
 main = "main:main"

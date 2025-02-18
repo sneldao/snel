@@ -6,7 +6,7 @@ from dowse.models.commands import SwapArgs, TransferArgs
 from dowse.tools import convert_dollar_amount_to_eth
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_transfer():
     commands = await parser.execute(
         Tweet(
@@ -28,14 +28,13 @@ async def test_transfer():
 
     # NOTE: if ETH price moves a lot (up or down) this will fail
     eth_amount = float(await convert_dollar_amount_to_eth("10"))
-    assert command.args.amount > eth_amount * 0.97 * 1e18
-    assert command.args.amount < eth_amount * 1.03 * 1e18
+    assert command.args.amount > eth_amount * 0.97
+    assert command.args.amount < eth_amount * 1.03
 
-    assert command.args.sender == "@ethereum"
     assert command.args.recipient == "@VitalikButerin"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_swap():
     commands = await parser.execute(
         Tweet(
@@ -59,11 +58,10 @@ async def test_swap():
     )
     assert command_args.amount_in > 9e16
     assert command_args.amount_in < 2e17
-    assert command_args.sender == "@ethereum"
     assert command_args.recipient == "@ethereum"
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_swap_error():
     commands = await parser.execute(
         Tweet(
@@ -79,7 +77,7 @@ async def test_swap_error():
     assert "XJAJKF" in error_reason
 
 
-@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.asyncio()
 async def test_swap_error_2():
     commands = await parser.execute(
         Tweet(

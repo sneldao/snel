@@ -76,7 +76,7 @@ class Pipeline(BaseModel, Generic[T, U, Classifications]):
             loop_start_time = time.time()
             data = await self.source.get_data()
             for item in data:
-                logger.info("ITEM FOUND: %s", item)
+                logger.info("Item Found: %s", item)
 
                 await self.process(item)
 

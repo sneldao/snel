@@ -13,6 +13,7 @@ from .best_route.kyber import get_quote as get_kyber_quote
 from .simulacrum import get_user_address, get_user_address_helper
 from .symbol_to_address import get_token_address
 from .twitter import get_user_id
+from .wei import convert_token_amount_to_wei
 
 logger = logging.getLogger("dowse")
 
@@ -68,6 +69,10 @@ async def convert_dollar_amount_to_eth(
 
     result = str(round(dollar_amount / eth_price, 4))
 
+    # conver to wei
+    if True:
+        return str(int(float(result) * 1e18))
+
     logger.debug("Tool Call: convert_dollar_amount_to_eth (%s) -> %s", amount, result)
     return result
 
@@ -89,4 +94,5 @@ __all__ = [
     "is_address",
     "get_eth_price",
     "get_user_address_helper",
+    "convert_token_amount_to_wei",
 ]
