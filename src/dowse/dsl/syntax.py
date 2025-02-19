@@ -103,6 +103,11 @@ PUSH @user1
 PUSH true
 // ['true:boolean]
 
+But you can not push an expression like:
+
+PUSH 10 + 20
+// ERROR: Invalid value: 10 + 20
+
 **Comments:**
 
 Comments start with "//" and go to the end of the line.
@@ -122,9 +127,6 @@ PUSH 'a
 POP
 :: 'a : 'S -> 'S
 
-DUP
-:: 'a : 'S -> 'a : 'a : 'S
-
 BRANCH: If 'a is true then push 'b else push 'c
 :: 'a : 'b : 'c : 'S -> ('b or 'c) : 'S
 
@@ -139,8 +141,6 @@ EQUAL:
 
 NOT:
 :: 'a:boolean : 'S -> 'not 'a : 'S
-
-ROLL: pulls an element from the nth element on the stack and moves it to the top of the stack.
 
 
 **MATH OPERATORS**
@@ -159,6 +159,12 @@ MUL
 
 DIV:
 :: 'a : 'b : 'S -> 'a / 'b : 'S
+
+PUSH 3
+PUSH 1
+DIV
+// [0.333:float]
+
 
 MOD
 :: 'a : 'b : 'S -> 'a % 'b : 'S

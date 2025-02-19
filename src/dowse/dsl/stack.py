@@ -37,6 +37,9 @@ class Stack(BaseModel):
         return len(self.stack) == 0
 
     def execute_line(self, line: str) -> None:
+        line = line.split("//")[0].strip()
+        if not line:
+            return
         line, *args = line.split()
         self.call(line, *args)
 

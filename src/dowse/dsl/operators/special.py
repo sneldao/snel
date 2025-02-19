@@ -5,7 +5,9 @@ from .stack_op import StackOp
 class MakeUser(StackOp):
     """Convert a username to a User"""
 
-    def operation(self, username: String) -> User:
+    def operation(self, username: String | User) -> User:
+        if isinstance(username, User):
+            return username
         return User(username.value)
 
 
@@ -47,22 +49,26 @@ class ConvertToTokenAmount(StackOp):
 
 
 class TransferFunds(StackOp):
-    """Transfer funds from the current address to the given address"""
+    """Transfer funds from the current address to the given address, pushing the new TokenAmount onto the stack"""
 
-    def operation(self, amount: TokenAmount, to_address: Address | User) -> None:
-        return None
+    def operation(self, amount: TokenAmount, to_address: Address | User) -> TokenAmount:
+        return TokenAmount((amount.value[0], to_address))
 
 
 class MaybeTransferFunds(StackOp):
-    """Does the transfer if the third element in the stack is true"""
+    """
+    Does the transfer if the third element in the stack is true, pushing the new TokenAmount onto the stack.
+    Otherwise pushes the original TokenAmount back onto the stack."""
 
     def operation(
         self,
         amount: TokenAmount,
         to_address: Address | User,
         do_transfer: Boolean,
-    ) -> None:
-        return None
+    ) -> TokenAmount:
+        if do_transfer.value:
+            return TokenAmount((amount.value[0], to_address))
+        return amount
 
 
 class ExchangeFunds(StackOp):
@@ -73,10 +79,18 @@ class ExchangeFunds(StackOp):
 
 
 class GetPercentage(StackOp):
-    """Get a percentage of a TokenAmount.  First arg must be a TokenAmount, second arg must be a Float between 0 and 1"""
+    """
+    Get a percentage of a TokenAmount.  First arg must be a TokenAmount, second arg must be a Float between 0 and 1.
+    Splits the Amount into two TokenAmounts, one with the percentage and one with the remainder.
+    """
 
-    def operation(self, amount: TokenAmount, percentage: Float) -> TokenAmount:
-        return TokenAmount((amount.value[0] * percentage.value, amount.value[1]))
+    def operation(
+        self, amount: TokenAmount, percentage: Float
+    ) -> tuple[TokenAmount, TokenAmount]:
+        return (
+            TokenAmount((amount.value[0] * percentage.value, amount.value[1])),
+            TokenAmount((amount.value[0] * (1 - percentage.value), amount.value[1])),
+        )
 
 
 SPECIAL_OPERATORS: list = [
@@ -89,4 +103,5 @@ SPECIAL_OPERATORS: list = [
     TransferFunds,
     MaybeTransferFunds,
     ExchangeFunds,
+    GetPercentage,
 ]

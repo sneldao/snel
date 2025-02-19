@@ -65,15 +65,24 @@ class Pop(StackOp):
     def operation(self, arg: Wrapper[Any]) -> None:
         return None
 
+    def type_check(self, *args: Any) -> None:
+        pass
+
 
 class Add(StackOp):
     def operation(
         self,
         a: Integer | Float | TokenAmount,
-        b: Integer | Float,
+        b: Integer | Float | TokenAmount,
     ) -> Integer | Float | TokenAmount:
         if a.title == "token_amount" and b.title == "token_amount":
-            raise StackValueError("Cannot add token amounts")
+            if a.value[1].value == b.value[1].value:
+                a.value[0].value += b.value[0].value  # type: ignore
+                return a
+            else:
+                raise StackValueError(
+                    f"Cannot add token amounts from different addresses.  {a.value[1].value} != {b.value[1].value}"
+                )
         elif a.title == "token_amount":
             a.value[0].value += b.value  # type: ignore
         else:
@@ -107,8 +116,14 @@ class Mul(StackOp):
         a: Integer | Float | TokenAmount,
         b: Integer | Float | TokenAmount,
     ) -> Integer | Float | TokenAmount:
-        if b.title == "token_amount":
-            raise StackValueError("Cannot multiply token amounts")
+        if a.title == "token_amount" and b.title == "token_amount":
+            if a.value[1].value == b.value[1].value:
+                a.value[0].value *= b.value[0].value  # type: ignore
+                return a
+            else:
+                raise StackValueError(
+                    "Cannot multiply token amounts from different addresses"
+                )
         elif a.title == "token_amount":
             a.value[0].value *= b.value  # type: ignore
         else:
@@ -128,9 +143,8 @@ class Div(StackOp):
             )
         elif a.title == "token_amount":
             a.value[0].value /= b.value  # type: ignore
-        else:
-            a.value /= b.value  # type: ignore
-        return a
+
+        return Float(a.value / b.value)
 
 
 class Mod(StackOp):
@@ -166,7 +180,7 @@ BASE_OPERATORS: list[type[StackOp]] = [
     Mul,
     Div,
     Mod,
-    Dup,
+    # Dup,
     Branch,
     GreaterThan,
     GreaterThanOrEqual,

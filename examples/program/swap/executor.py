@@ -2,12 +2,14 @@ import asyncio
 
 from dowse.dsl.executors.base import DowseExecutor, UserRequest
 
+from .example import EXAMPLE_PROGRAM
 from .operators import SPECIAL_OPERATORS
 
 
 async def amain():
     executor = DowseExecutor(
         special_operators=SPECIAL_OPERATORS,
+        example_programs=[EXAMPLE_PROGRAM],
     )
 
     code = await executor.solve(
@@ -20,9 +22,10 @@ async def amain():
             username="@user1",
         ),
         max_errors=3,
-        verbose=False,
+        verbose=True,
     )
-    code.print()
+
+    print("EXECUTION SUCCESSFUL")
 
 
 def main():

@@ -54,7 +54,8 @@ Address = Wrapper[
 ]
 TokenAmount = Wrapper[
     Annotated[
-        tuple[Float, Address], Field(title="token_amount", description="A token amount")
+        tuple[Float, Address | User],
+        Field(title="token_amount", description="A token amount"),
     ]
 ]
 TokenAmount.__repr__ = lambda self: f"'{self.value[0].value}:{self.title}"  # type: ignore

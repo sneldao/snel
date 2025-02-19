@@ -23,8 +23,7 @@ class Command(BaseModel):
     def print(self) -> None:
         idx = 0
         for line in self.code_block:
-            if line.startswith("//"):
-                print(line)
+            if line.split("//")[0].strip() == "":
                 continue
             print(f"{idx}: {line}")
             idx += 1
@@ -82,6 +81,9 @@ class DowseExecutor(
                 raise StackError(idx, line, e, stack)
             except StackEmpty as e:
                 raise StackError(idx, line, e, stack)
+            if verbose:
+                print(line)
+                print("Stack: ", stack)
         return stack
 
     async def solve(
@@ -104,7 +106,7 @@ class DowseExecutor(
                 print("CODE BLOCK:")
                 code.print()
             try:
-                self.simulate(code, verbose=True)
+                self.simulate(code, verbose=False)
                 return code
 
             except StackError as e:
