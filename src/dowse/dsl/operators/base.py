@@ -97,7 +97,7 @@ class Sub(StackOp):
         b: Integer | Float | TokenAmount,
     ) -> Integer | Float | TokenAmount:
         if a.title == "token_amount":
-            if b.title == "token_amount":
+            if isinstance(b, TokenAmount):
                 if not a.value[1].value == b.value[1].value:
                     raise StackValueError(
                         "Cannot subtract token amounts from different addresses"

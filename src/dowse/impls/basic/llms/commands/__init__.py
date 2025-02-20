@@ -13,7 +13,6 @@ class CommandsList(BaseModel):
 
 
 BasicTwitterCommands = Executor[Tweet, FormattedCommand, CommandsList](
-    prompt="",
     provider=OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     ),

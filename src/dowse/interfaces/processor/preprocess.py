@@ -6,8 +6,7 @@ from pydantic import BaseModel, Field
 from dowse.exceptions import PreprocessorError
 from dowse.models.message import AgentMessage
 
-from ..example_loader import ExampleLoader
-from ..prompt_loader import PromptLoader
+from ..loaders import Loaders
 from .agent import Processor
 
 T = TypeVar("T")
@@ -16,13 +15,11 @@ U = TypeVar("U", bound=BaseModel)
 logger = logging.getLogger("dowse")
 
 
-class PreProcess(ExampleLoader, PromptLoader, Generic[T, U]):
+class PreProcess(Loaders, Generic[T, U]):
     processors: list[Processor] = Field(default_factory=list)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        cls.load_examples()
-        cls.load_prompt()
 
     async def run_processors(self, input_: T) -> AgentMessage[U]:
         processed_data = input_

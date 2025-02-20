@@ -64,4 +64,30 @@ ASSIGN 80_percent_eth
 
 Token amounts are not global, they just represent a location, an amount, and a token address.
 When you transfer one token amount, it will not affect any other token amounts.
+
+The order is VERY important for function args.  If a function has 3 args, the first arg is the top of the stack,
+the second arg is the second item on the stack, and the third arg is the third item on the stack.
+
+So if a function is defined like:
+
+BRANCH: If 'a is true then push 'b else push 'c
+:: 'a : 'b : 'c : 'S -> ('b or 'c) : 'S
+
+This means that 'a is the first item on the stack, 'b is the second item on the stack,
+and 'c is the third item on the stack.
+
+Therefore if you want to run this, you need to reverse the order that you push the args onto the stack, ie.
+
+```code
+PUSH 20
+PUSH 10
+GREATER THAN
+// ['false:boolean]
+PUSH "failure"
+SWAP
+PUSH "success"
+SWAP
+BRANCH
+// ['failure:string]
+```
 """

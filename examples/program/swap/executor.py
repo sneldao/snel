@@ -25,7 +25,21 @@ async def amain():
         verbose=True,
     )
 
-    print("EXECUTION SUCCESSFUL")
+    # code = await executor.solve(
+    #     UserRequest(
+    #         content="""
+    #         Generate a random number between 1 and 10.  If that number is greater than 3,
+    #         push the word "success" onto the stack, Otherwise push the word "failure"
+    #         """,
+    #         username="@user1",
+    #     ),
+    #     max_errors=3,
+    #     verbose=True,
+    # )
+
+    # print("EXECUTION SUCCESSFUL")
+
+    # executor.simulate(code, verbose=True)
 
 
 def main():
