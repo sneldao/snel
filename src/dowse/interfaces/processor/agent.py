@@ -24,11 +24,6 @@ class AgenticProcessor(Processor[T, AgentMessage[U]], Loaders, Generic[T, U]):
     prompt: str | None = None
     tools: list[Callable] = Field(default_factory=list)
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls.load_prompt()
-        cls.load_examples()
-
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         # Override the examples and prompt from the class variables

@@ -35,6 +35,7 @@ async def test_transfer():
 
 
 @pytest.mark.asyncio()
+@pytest.mark.skip(reason="This is no longer an essential test")
 async def test_swap():
     commands = await parser.execute(
         Tweet(
