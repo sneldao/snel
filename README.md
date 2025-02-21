@@ -1,10 +1,31 @@
-# dowse
+<p align="center">
+  <a href="https://dowse.empyrealsdk.com"><img src="https://raw.githubusercontent.com/empyrealapp/dowse/main/assets/logo.png" alt="dowse" height=300></a>
+</p>
+<p align="center">
+    <em>dowse, a python library for building natural language agents that can interpret and execute commands.</em>
+</p>
+<p align="center">
+<a href="https://github.com/empyrealapp/dowse/actions?query=event%3Apush+branch%3Amain" target="_blank">
+    <img src="https://github.com/empyrealapp/dowse/actions/workflows/publish.yaml/badge.svg?event=push&branch=main" alt="Test">
+</a>
+<!-- <a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/empyrealapp/dowse" target="_blank">
+    <img src="https://coverage-badge.samuelcolvin.workers.dev/empyrealapp/dowse.svg" alt="Coverage">
+</a> -->
+<a href="https://pypi.org/project/dowse" target="_blank">
+    <img src="https://img.shields.io/pypi/v/dowse?color=%2334D058&label=pypi%20package" alt="Package version">
+</a>
+<a href="https://pypi.org/project/dowse" target="_blank">
+    <img src="https://img.shields.io/pypi/pyversions/dowse.svg?color=%2334D058" alt="Supported Python versions">
+</a>
+</p>
 
-<img src="https://raw.githubusercontent.com/empyrealapp/dowse/main/assets/logo.png" alt="dowse logo" width="300"/>
+---
 
-A powerful library for building natural language agents that can interpret and execute commands.
+**Documentation**: <a href="https://dowse.empyrealsdk.com" target="_blank">https://dowse.empyrealsdk.com</a>
 
-## Overview
+**Source Code**: <a href="https://github.com/empyrealapp/dowse" target="_blank">https://github.com/empyrealapp/dowse</a>
+
+---
 
 Dowse is a Python library that enables you to build intelligent agents capable of:
 
@@ -23,14 +44,25 @@ Dowse is a Python library that enables you to build intelligent agents capable o
 - **Async Support**: Built for high-performance async/await operations
 
 
+## Requirements
+
+dowse is built utilizing the following libraries:
+
+* <a href="https://docs.pydantic.dev/" class="external-link" target="_blank">Pydantic</a> for the data parts.
+* <a href="https://github.com/empyrealapp/eth-rpc" class="external-link" target="_blank">eth-rpc</a> for the blockchain parts.
+* <a href="https://github.com/empyrealapp/emp-agents" class="external-link" target="_blank">emp-agents</a> for the agent parts.
+
+
 ## Installation
 ```bash
-# COMING SOON
 pip install dowse
 ```
 
-
 ### Quickstart
+
+Dowse enables you to quickly build intelligent agents by abstracting the complexity of state management, type safety, and async operations.
+
+The following pipeline classifies tweets as either a command or a question, and then executes a handler based on the classification.
 
 ```python
 import asyncio
@@ -50,7 +82,10 @@ from dowse.models import Tweet
 logging.getLogger("dowse").setLevel(logging.DEBUG)
 set_alchemy_key(os.environ["ALCHEMY_KEY"])
 
+
 class Classifications(StrEnum):
+    """A class that defines the different classifications that can be made by the pipeline."""
+
     COMMANDS = "commands"
     QUESTION = "question"
 
@@ -58,17 +93,20 @@ class Classifications(StrEnum):
 async def amain():
     # create a pipeline that classifiers commands as either a command or a question.
     pipeline = Pipeline[Tweet, Tweet, Classifications](
+        # classifies the request as one of the Classifications
         classifier=BasicTweetClassifier,
-        # create a handler for each classification
+        # a handler that executes each classification
         handlers={
             # commands are consumed by the BasicTwitterCommands operator
             "commands": BasicTwitterCommands.add_effect(Printer(prefix="COMMANDS")),
             # questions are consumed by the BasicTwitterQuestion operator
             "question": BasicTwitterQuestion.add_effects([Printer(prefix="QUESTION")]),
         },
+        # the source that will emit the data that is consumed by the pipeline
         source=TwitterMock(),
     )
 
+    # process a single event
     result = await pipeline.process(
         # the input is a tweet, which then gets handled by the Pipeline
         Tweet(
@@ -78,8 +116,6 @@ async def amain():
             creator_name="@jack",
         ),
     )
-
-    print(result)
 
     # run the pipeline for 3 executions, with a minimum of 120 seconds between each execution
     # this pulls data from the source and processes it

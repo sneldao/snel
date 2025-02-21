@@ -1,5 +1,6 @@
 from .impls.executors import NoOpExecutor
 from .interfaces import (
+    AgentExecutor,
     Classifier,
     ClassifierResponse,
     Effect,
@@ -12,6 +13,7 @@ from .logger import logger
 from .pipeline import Pipeline
 
 __all__ = [
+    "AgentExecutor",
     "Classifier",
     "ClassifierResponse",
     "Effect",
