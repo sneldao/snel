@@ -2,7 +2,7 @@ from typing import Callable
 
 from pydantic import BaseModel, Field
 
-from dowse.interfaces.processor.agent import AgenticProcessor
+from dowse.interfaces import AgentExecutor
 from dowse.models import Tweet
 from dowse.tools import (
     convert_dollar_amount_to_eth,
@@ -17,7 +17,7 @@ class FormattedCommand(BaseModel):
     caller: str = Field(description="The Twitter handle of the caller")
 
 
-class ProcessTokens(AgenticProcessor[Tweet, FormattedCommand]):
+class ProcessTokens(AgentExecutor[Tweet, FormattedCommand]):
     tools: list[Callable] = [
         get_token_address_tool,
         convert_dollar_amount_to_eth,

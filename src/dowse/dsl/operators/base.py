@@ -1,3 +1,5 @@
+import re
+from fractions import Fraction
 from typing import Any, ClassVar
 
 from ..exceptions import StackTypeError, StackValueError
@@ -57,8 +59,13 @@ class Push(StackOp):
             return Integer(int(arg))
         elif arg in ["true", "false"]:
             return Boolean(arg == "true")
+        elif self.is_fraction_string(arg):
+            return Float(float(Fraction(arg)))
         else:
             raise ValueError(f"Invalid value: {arg}")
+
+    def is_fraction_string(self, value: str) -> bool:
+        return bool(re.fullmatch(r"-?\d+/\d+", value))
 
 
 class Pop(StackOp):
@@ -76,12 +83,13 @@ class Add(StackOp):
         b: Integer | Float | TokenAmount,
     ) -> Integer | Float | TokenAmount:
         if a.title == "token_amount" and b.title == "token_amount":
-            if a.value[1].value == b.value[1].value:
-                a.value[0].value += b.value[0].value  # type: ignore
+            if a.value[1].value == b.value[1].value:  # type: ignore[index]
+                a.value[0].value += b.value[0].value  # type: ignore[index]
                 return a
             else:
                 raise StackValueError(
-                    f"Cannot add token amounts from different addresses.  {a.value[1].value} != {b.value[1].value}"
+                    "Cannot add token amounts from different addresses."
+                    f"{a.value[1].value} != {b.value[1].value}"  # type: ignore[index]
                 )
         elif a.title == "token_amount":
             a.value[0].value += b.value  # type: ignore
@@ -97,8 +105,8 @@ class Sub(StackOp):
         b: Integer | Float | TokenAmount,
     ) -> Integer | Float | TokenAmount:
         if a.title == "token_amount":
-            if isinstance(b, TokenAmount):
-                if not a.value[1].value == b.value[1].value:
+            if isinstance(b, TokenAmount):  # type: ignore[misc]
+                if not a.value[1].value == b.value[1].value:  # type: ignore[index]
                     raise StackValueError(
                         "Cannot subtract token amounts from different addresses"
                     )
@@ -117,8 +125,8 @@ class Mul(StackOp):
         b: Integer | Float | TokenAmount,
     ) -> Integer | Float | TokenAmount:
         if a.title == "token_amount" and b.title == "token_amount":
-            if a.value[1].value == b.value[1].value:
-                a.value[0].value *= b.value[0].value  # type: ignore
+            if a.value[1].value == b.value[1].value:  # type: ignore[index]
+                a.value[0].value *= b.value[0].value  # type: ignore[index]
                 return a
             else:
                 raise StackValueError(
@@ -144,7 +152,7 @@ class Div(StackOp):
         elif a.title == "token_amount":
             a.value[0].value /= b.value  # type: ignore
 
-        return Float(a.value / b.value)
+        return Float(a.value / b.value)  # type: ignore[operator]
 
 
 class Mod(StackOp):
@@ -167,7 +175,7 @@ class Branch(StackOp):
             return false_value
 
     def type_check(self, *args: Any):
-        if not isinstance(args[0], Boolean):
+        if not isinstance(args[0], Boolean):  # type: ignore[misc]
             raise StackTypeError("The first value on the stack must be a boolean")
 
 

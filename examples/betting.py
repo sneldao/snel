@@ -68,9 +68,9 @@ async def amain():
             BetOddsLookup(),
         ],
         handlers={
-            "is_bet": BetExecutor >> Printer(prefix="BET"),
+            "is_bet": BetExecutor.add_effect(Printer(prefix="BET")),
             "bet_information": (
-                BetInformationExecutor >> Printer(prefix="BET INFORMATION")
+                BetInformationExecutor.add_effect(Printer(prefix="BET INFORMATION"))
             ),
             "neither": NoOpExecutor,
         },

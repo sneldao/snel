@@ -1,5 +1,3 @@
-from typing import Awaitable
-
 from pydantic import Field
 
 from dowse.interfaces.effects import Effect
@@ -12,10 +10,10 @@ from ..llms.questions import Response
 class Printer(Effect[Tweet, CommandsList | Response]):
     prefix: str = Field(default="PRINTER")
 
-    def execute(
+    async def execute(
         self,
         input_: Tweet,
         output: CommandsList | Response,
-    ) -> Awaitable[None]:
+    ) -> None:
         print(f"{self.prefix}:", output)
         return None

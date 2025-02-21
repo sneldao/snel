@@ -7,7 +7,7 @@ from dowse.tools import convert_dollar_amount_to_eth
 
 
 @pytest.mark.asyncio()
-@pytest.mark.skip(reason="This is no longer an essential test")
+# @pytest.mark.skip(reason="This is no longer an essential test")
 async def test_transfer():
     commands = await parser.execute(
         Tweet(

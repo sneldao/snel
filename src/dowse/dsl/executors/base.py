@@ -9,7 +9,7 @@ from dowse.dsl.operators import BASE_OPERATORS, StackOp
 from dowse.dsl.stack import Stack
 from dowse.dsl.syntax import make_syntax_doc
 from dowse.dsl.types import DEFAULT_TYPES
-from dowse.interfaces import Executor
+from dowse.interfaces import AgentExecutor
 
 
 class UserRequest(BaseModel):
@@ -36,9 +36,8 @@ class Command(BaseModel):
 
 
 class DowseExecutor(
-    Executor[
+    AgentExecutor[
         UserRequest,  # the input type of the first processor
-        UserRequest,  # type once all processors are run
         Command,  # the output type of the last processor
     ]
 ):
@@ -95,7 +94,7 @@ class DowseExecutor(
         error_count = 0
         response = await self.execute(
             query,
-            persist_agent=True,
+            persist=True,
         )
         while error_count < max_errors:
             if response.content is None:
@@ -121,6 +120,6 @@ class DowseExecutor(
                         content=f"{error_str}\nPlease fix program and try again",
                         username=query.username,
                     ),
-                    persist_agent=True,
+                    persist=True,
                 )
         raise Exception("Max errors reached")

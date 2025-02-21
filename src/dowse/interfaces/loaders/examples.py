@@ -1,13 +1,13 @@
+from importlib.util import module_from_spec, spec_from_file_location
 from typing import Any
 
 from emp_agents.models import Message
-from pydantic import Field, PrivateAttr
+from pydantic import Field
 
 from .base import Loader
 
 
 class ExampleLoader(Loader):
-    _examples: list[list[Message]] = PrivateAttr(default_factory=list)
     examples: list[list[Message]] = Field(default_factory=list)
 
     def model_post_init(self, __context: Any) -> None:
@@ -15,11 +15,10 @@ class ExampleLoader(Loader):
 
         examples_path = self._path / "examples.py"
         if examples_path.exists():
-            from importlib.util import module_from_spec, spec_from_file_location
 
             spec = spec_from_file_location("examples", examples_path)
             if spec and spec.loader:
                 module = module_from_spec(spec)
                 spec.loader.exec_module(module)
                 if hasattr(module, "EXAMPLES"):
-                    self._examples = module.EXAMPLES
+                    self.examples = module.EXAMPLES

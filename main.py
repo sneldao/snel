@@ -24,8 +24,8 @@ async def amain():
         classifier=BasicTweetClassifier,
         handlers={
             # You can provide effects to be executed after the command is parsed using the >> operator
-            "commands": BasicTwitterCommands >> Printer(),
-            "question": BasicTwitterQuestion >> [Printer()],
+            "commands": BasicTwitterCommands.add_effect(Printer()),
+            "question": BasicTwitterQuestion.add_effects([Printer()]),
         },
         source=TwitterMock(),
     )

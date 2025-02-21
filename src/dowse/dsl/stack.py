@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .exceptions import StackEmpty
+from .exceptions import StackEmpty, StackValueError
 from .operators.stack_op import StackOp
 from .types import Wrapper
 
@@ -50,6 +50,8 @@ class Stack(BaseModel):
             return
         if command == "PUSH" and args and args[0].startswith("&"):
             variable_name = args[0][1:]
+            if variable_name not in self.variables:
+                raise StackValueError(f"Variable {variable_name} not found")
             self.push(self.variables[variable_name])
             return
         elif command == "ASSIGN":

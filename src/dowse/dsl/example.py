@@ -1,5 +1,6 @@
 EXAMPLE_PROGRAM = """
-The command "Swap 0.001 ETH for $AERO and send half to @user2 and half to @user3" can be executed with the following code:
+The command "Swap 0.001 ETH for $AERO and send half to @user2 and half to @user3"
+can be executed with the following code:
 
 ```code
 PUSH "AERO"

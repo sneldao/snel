@@ -1,24 +1,20 @@
 from emp_agents.providers import OpenAIModelType, OpenAIProvider
 from pydantic import BaseModel
 
-from dowse.interfaces.executor import ExecutorWithProcessors
-from dowse.models import Tweet
+from dowse.interfaces import AgentExecutor
 
 from ...tools import CommandRequest, Tools
-from ..preprocessor import FormattedCommand, ProcessTokens
+from ..preprocessor import FormattedCommand, process_tokens
 
 
 class CommandsList(BaseModel):
     commands: list[CommandRequest]
 
 
-BasicTwitterCommands = ExecutorWithProcessors[Tweet, FormattedCommand, CommandsList](
+BasicTwitterCommands = process_tokens >> AgentExecutor[FormattedCommand, CommandsList](
     provider=OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     ),
-    processors=[
-        ProcessTokens(),
-    ],
     tools=[
         Tools.get_amount_out_tool,
         Tools.get_percentage,

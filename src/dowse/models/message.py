@@ -1,4 +1,4 @@
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -12,10 +12,6 @@ class AgentMessage(BaseModel, Generic[T]):
     error_message: str | None = Field(
         description="An optional error message.  Only provide this if content is None",
     )
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.content is None and self.error_message is None:
-            raise ValueError("content or error_message must be set")
 
     @property
     def is_error(self) -> bool:
