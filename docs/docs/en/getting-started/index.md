@@ -17,7 +17,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from dowse import Executor, Processor
+from dowse import AgentExecutor, Processor
 from dowse.models import AgentMessage
 
 
@@ -49,8 +49,14 @@ class NoteSummary(BaseModel):
     timestamp: str
 
 
-class AddUserFact(Processor[Note, UserNote]):
-    async def execute(self, note: Note) -> UserNote:
+class AddUserFact(Executor[Note, UserNote]):
+    async def execute(self, note: Note, **kwargs) -> AgentMessage[UserNote]:
+        return AgentMessage(
+            content=self._execute(note),
+            error_message=None,
+        )
+
+    def _execute(self, note: Note) -> AgentMessage[UserNote]:
         if note.name == "John":
             return UserNote(
                 fun_fact="John is a professional juggler who once juggled 17 rubber ducks while riding a unicycle backwards",
@@ -69,14 +75,10 @@ class AddUserFact(Processor[Note, UserNote]):
         raise ValueError("No facts for user")
 
 
-executor = Executor[
-    Note,  # the input type of the first processor
+summarizer = AgentExecutor[
     UserNote,  # type once all processors are run
     NoteSummary,  # the output type of the last processor
 ](
-    processors=[
-        AddUserFact(),
-    ],
     prompt="""
         You are a helpful assistant that receives notes, and you will respond by analyzing the note and
         how it relates to the user's fun fact.
@@ -88,6 +90,7 @@ executor = Executor[
     ],
 )
 
+executor = AddUserFact() >> summarizer
 
 async def amain() -> None:
     response: AgentMessage[NoteSummary] = await executor.execute(
@@ -97,7 +100,7 @@ async def amain() -> None:
         )
     )
     assert (
-        response.content is not None
+        response.error_message is None
     ), "this should not error because John is in the user data"
 
     print("TIMESTAMP:", response.content.timestamp)
