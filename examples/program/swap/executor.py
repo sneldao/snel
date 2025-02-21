@@ -37,9 +37,8 @@ async def amain():
     #     verbose=True,
     # )
 
-    # print("EXECUTION SUCCESSFUL")
-
-    # executor.simulate(code, verbose=True)
+    print("EXECUTION SUCCESSFUL")
+    executor.simulate(code, verbose=True)
 
 
 def main():

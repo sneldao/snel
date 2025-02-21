@@ -1,6 +1,6 @@
 [project]
 name = "dowse"
-version = "0.1.4"
+version = "0.1.5"
 description = ""
 authors = [
     {name = "johnny-emp",email = "johnny@empyrealsdk.com"}
@@ -8,10 +8,10 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "emp-agents (>=0.2.0.post1,<0.3.0)",
     "python-dotenv (>=1.0.1,<2.0.0)",
     "eth-typeshed-py (>=0.1.26,<0.2.0)",
     "eth-rpc-py (>=0.1.26,<0.2.0)",
+    "emp-agents (>=0.3.0,<0.4.0)",
 ]
 
 

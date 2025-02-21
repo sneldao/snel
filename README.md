@@ -44,7 +44,7 @@ from dowse import Pipeline
 from dowse.impls.basic.llms import BasicTweetClassifier, BasicTwitterCommands, BasicTwitterQuestion
 from dowse.impls.basic.effects import Printer
 from dowse.impls.basic.source import TwitterMock
-from dowse.interfaces import Tweet
+from dowse.models import Tweet
 
 logging.getLogger("dowse").setLevel(logging.DEBUG)
 set_alchemy_key(os.environ["ALCHEMY_KEY"])
@@ -52,14 +52,14 @@ set_alchemy_key(os.environ["ALCHEMY_KEY"])
 
 async def amain():
     # create a pipeline that classifiers commands as either a command or a question.
-    pipeline = Pipeline[Literal["commands", "question"]](
+    pipeline = Pipeline[Tweet, Tweet, Literal["commands", "question"]](
         classifier=BasicTweetClassifier,
         # create a handler for each classification
         handlers={
             # commands are consumed by the BasicTwitterCommands operator
-            "commands": BasicTwitterCommands >> Printer(prefix="COMMANDS"),
+            "commands": BasicTwitterCommands.add_effect(Printer(prefix="COMMANDS")),
             # questions are consumed by the BasicTwitterQuestion operator
-            "question": BasicTwitterQuestion >> Printer(prefix="QUESTION"),
+            "question": BasicTwitterQuestion.add_effects([Printer(prefix="QUESTION")]),
         },
         source=TwitterMock(),
     )

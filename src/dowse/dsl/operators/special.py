@@ -6,7 +6,7 @@ class MakeUser(StackOp):
     """Convert a username to a User"""
 
     def operation(self, username: String | User) -> User:
-        if isinstance(username, User):
+        if isinstance(username, User):  # type: ignore[misc]
             return username
         return User(username.value)
 
@@ -88,8 +88,10 @@ class GetPercentage(StackOp):
         self, amount: TokenAmount, percentage: Float
     ) -> tuple[TokenAmount, TokenAmount]:
         return (
-            TokenAmount((amount.value[0] * percentage.value, amount.value[1])),
-            TokenAmount((amount.value[0] * (1 - percentage.value), amount.value[1])),
+            TokenAmount((amount.value[0] * percentage.value, amount.value[1])),  # type: ignore[arg-type, operator]
+            TokenAmount(
+                (amount.value[0] * (1 - percentage.value), amount.value[1])  # type: ignore[arg-type, operator]
+            ),
         )
 
 

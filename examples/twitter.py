@@ -22,7 +22,10 @@ class TweetWithUserHistory(Tweet):
 
 
 class LoadUserData(Processor[Tweet, TweetWithUserHistory]):
-    async def process(self, command: Tweet) -> AgentMessage[TweetWithUserHistory]:
+    async def process(
+        self,
+        command: Tweet,
+    ) -> AgentMessage[TweetWithUserHistory]:
         return AgentMessage(
             content=TweetWithUserHistory(
                 **command.model_dump(),
@@ -48,9 +51,9 @@ async def amain():
         # each handler can have its own preprocessing, effects, etc.
         handlers={
             # effects can be added after the command using the >> operator
-            "commands": BasicTwitterCommands >> Printer(),
-            "question": BasicTwitterQuestion >> Printer(),
-            "neither": NoOpExecutor >> Printer(),
+            "commands": BasicTwitterCommands.add_effect(Printer()),
+            "question": BasicTwitterQuestion.add_effects([Printer()]),
+            "neither": NoOpExecutor().add_effect(Printer()),
         },
         source=TwitterMock(),
     )

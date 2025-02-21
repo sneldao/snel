@@ -1,7 +1,7 @@
 from random import randint
 
 from dowse.dsl.operators.stack_op import StackOp
-from dowse.dsl.types import Address, Integer
+from dowse.dsl.types import Integer
 
 
 class MakeRandomValue(StackOp):

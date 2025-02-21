@@ -94,9 +94,9 @@ async def amain():
             GetIngredients(),
         ],
         handlers={
-            "breakfast": BreakfastExecutor >> Printer(prefix="BREAKFAST"),
-            "lunch": LunchExecutor >> Printer(prefix="LUNCH"),
-            "dinner": DinnerExecutor >> Printer(prefix="DINNER"),
+            "breakfast": BreakfastExecutor.add_effect(Printer(prefix="BREAKFAST")),
+            "lunch": LunchExecutor.add_effect(Printer(prefix="LUNCH")),
+            "dinner": DinnerExecutor.add_effect(Printer(prefix="DINNER")),
         },
         source=FoodSource(),
     )

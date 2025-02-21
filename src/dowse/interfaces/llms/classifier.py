@@ -44,13 +44,9 @@ class Classifier(ABC, Loaders, Generic[InputType, Classifications]):
             prompt=self.prompt,
             provider=self.provider,
         )
+
         if len(type(self).__pydantic_generic_metadata__["args"]) != 2:
             raise ValueError("Classifier must have input type and classifications set")
-
-        if self._prompt is not None:
-            self.prompt = self._prompt
-        if self._examples:
-            self.examples = self._examples
 
     async def classify(
         self,
@@ -72,4 +68,4 @@ class Classifier(ABC, Loaders, Generic[InputType, Classifications]):
             message.model_dump_json(),
             response_format=response_type,
         )
-        return ClassifierResponse.model_validate_json(response).classification
+        return response.classification
