@@ -1,29 +1,22 @@
+import json
 from datetime import datetime
 from typing import Annotated
 
 import httpx
-from pydantic import BaseModel
 from typing_extensions import Doc
 
 
-class Weather(BaseModel):
-    temperature: str
-    wind: str
-    description: str
-    forecast: list[dict[str, str]]
-
-
-async def get_current_weather(
-    location: Annotated[str, Doc("The location to get the weather for")]
+async def lookup_zip_code(
+    zip_code: Annotated[str, Doc("The zip code to lookup")]
 ) -> str:
-    """Gets the weather for a given location"""
+    """Looks up the city and state for a given zip code"""
 
-    url = f"https://goweather.herokuapp.com/weather/{location.replace(' ', '').lower()}"
+    url = f"https://api.zippopotam.us/us/{zip_code}"
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
-        weather_data = response.json()
-    return Weather(**weather_data).model_dump_json()
+        zip_code_data = response.json()
+    return json.dumps(zip_code_data)
 
 
 def current_time() -> str:
@@ -31,6 +24,6 @@ def current_time() -> str:
 
 
 TOOLS = [
-    get_current_weather,
+    lookup_zip_code,
     current_time,
 ]

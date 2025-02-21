@@ -2,11 +2,11 @@ from emp_agents.models import AssistantMessage, UserMessage
 
 EXAMPLES = [
     [
-        UserMessage(content="What is the weather in San Francisco?"),
-        AssistantMessage(content="The weather in San Francisco is sunny."),
+        UserMessage(content="Tell me about 02108"),
+        AssistantMessage(content="02108 is Boston, MA, it's a great city."),
         UserMessage(
             content="Hey! remember you can't use the letter 'e' in your response."
         ),
-        AssistantMessage(content="oh shit. ok. i'll try not to use it again"),
+        AssistantMessage(content="oh no. ok. i'll try not to do it again"),
     ]
 ]

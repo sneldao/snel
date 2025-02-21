@@ -3,21 +3,21 @@ from pydantic import BaseModel
 from dowse import Executor
 
 
-class QuestionFormat(BaseModel):
+class Question(BaseModel):
     question: str
     guidance: str
 
 
 # input type is QuestionFormat
 # output type is str
-agent = Executor[QuestionFormat, str]()
+agent = Executor[Question, str]()
 
 
 async def main():
     response = await agent.execute(
-        QuestionFormat(
-            question="Tell a detail involving the current weather in San Francisco, referencing the date",
-            guidance="Dont use the letter 'e' in your response.",
+        Question(
+            question="Tell a detail about the city with zip code 21207 and mention the time",
+            guidance="When you respond, do not use the letter 'e'.",
         )
     )
     print(response)

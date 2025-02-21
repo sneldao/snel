@@ -2,7 +2,8 @@ import pytest
 
 from dowse.impls.basic.llms.preprocessor import process_tokens
 from dowse.models import Tweet
-from dowse.tools import convert_dollar_amount_to_eth
+
+# from dowse.tools import convert_dollar_amount_to_eth
 
 
 @pytest.mark.asyncio()
