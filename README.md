@@ -36,6 +36,7 @@ pip install dowse
 import asyncio
 import os
 import logging
+from enum import StrEnum
 from typing import Literal
 
 from eth_rpc import set_alchemy_key
@@ -49,10 +50,14 @@ from dowse.models import Tweet
 logging.getLogger("dowse").setLevel(logging.DEBUG)
 set_alchemy_key(os.environ["ALCHEMY_KEY"])
 
+class Classifications(StrEnum):
+    COMMANDS = "commands"
+    QUESTION = "question"
+
 
 async def amain():
     # create a pipeline that classifiers commands as either a command or a question.
-    pipeline = Pipeline[Tweet, Tweet, Literal["commands", "question"]](
+    pipeline = Pipeline[Tweet, Tweet, Classifications](
         classifier=BasicTweetClassifier,
         # create a handler for each classification
         handlers={
