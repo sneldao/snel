@@ -24,3 +24,6 @@ class ProcessTokens(AgenticProcessor[Tweet, FormattedCommand]):
         convert_token_amount_to_wei,
         convert_decimal_eth_to_wei,
     ]
+
+
+process_tokens = ProcessTokens()

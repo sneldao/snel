@@ -6,8 +6,7 @@ from emp_agents.models import Provider
 from emp_agents.providers import OpenAIModelType, OpenAIProvider
 from pydantic import BaseModel, Field, ValidationError
 
-from dowse.interfaces.example_loader import ExampleLoader
-from dowse.interfaces.prompt_loader import PromptLoader
+from dowse.interfaces.loaders import Loaders
 from dowse.models.message import AgentMessage
 
 from .base import Processor
@@ -18,19 +17,12 @@ T = TypeVar("T", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
 
 
-class AgenticProcessor(
-    Processor[T, AgentMessage[U]], ExampleLoader, PromptLoader, Generic[T, U]
-):
+class AgenticProcessor(Processor[T, AgentMessage[U]], Loaders, Generic[T, U]):
     provider: Provider = OpenAIProvider(
         default_model=OpenAIModelType.gpt4o,
     )
     prompt: str | None = None
     tools: list[Callable] = Field(default_factory=list)
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls.load_prompt()
-        cls.load_examples()
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)

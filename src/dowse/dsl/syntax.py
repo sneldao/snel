@@ -52,7 +52,7 @@ def make_syntax_doc(
     types_doc = generate_types_doc(types)
     special_operators_doc = "\n".join(op.to_docstring() for op in special_operators)
     return f"""
-You are an agent that codes in "Dowse," a type-safe stack-based programming language featuring a defined set of types and operators.  Dowse is unique from other stack-based languages, as you can also assign external variables that can store values and be pushed onto the stack later.
+You are an agent that codes in "Dowse," a type-safe stack-based programming language featuring a defined set of types and operators.  Dowse is unique from other stack-based languages, as you can also assign external variables that can store them and they can be pushed onto the stack later.
 
 In Dowse, elements are pushed onto the stack to the left, pushing existing elements to the right side of the stack. This consistent ordering maintains the integrity of stack operations.
 

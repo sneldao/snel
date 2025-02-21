@@ -1,5 +1,6 @@
 import logging
 from abc import ABC
+from inspect import isclass
 from typing import Any, Awaitable, Callable, Generic, Self, TypeVar
 
 from emp_agents import AgentBase, GenericTool
@@ -12,19 +13,21 @@ from dowse.exceptions import PreprocessorError
 from dowse.models.message import AgentMessage
 
 from .effects import Effect
-from .example_loader import ExampleLoader
+from .loaders import Loaders
 from .processor import PreProcess, Processor
-from .prompt_loader import PromptLoader
 
 logger = logging.getLogger("dowse")
 
 T = TypeVar("T", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
-OutputType = TypeVar("OutputType", bound=BaseModel | str)
+OutputType = TypeVar("OutputType", bound=BaseModel | str | None)
 
 
-class Executor(
-    ABC, PreProcess[T, U], ExampleLoader, PromptLoader, Generic[T, U, OutputType]
+class ExecutorWithProcessors(
+    ABC,
+    PreProcess[T, U],
+    Loaders,
+    Generic[T, U, OutputType],
 ):
     provider: Provider = Field(
         default_factory=lambda: OpenAIProvider(default_model=OpenAIModelType.gpt4o)
@@ -40,11 +43,6 @@ class Executor(
         self.provider = provider
         return self
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        cls.load_examples()
-        cls.load_prompt()
-
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
 
@@ -55,6 +53,8 @@ class Executor(
 
     async def load_tools(self, input_: AgentMessage[U]) -> list[Callable | GenericTool]:
         """This can be overriden by subclasses to provide tools dynamically"""
+        if self._tools:
+            return self._tools
         return self.tools
 
     async def after_execution(self, input_: T, output: OutputType) -> None:
@@ -109,28 +109,34 @@ class Executor(
         for example_lst in self.examples:
             self._agent.add_messages(example_lst)
 
-        response = await self._agent.answer(
-            processed_input.content.model_dump_json(),
-            response_format=response_format,
-        )
-
-        try:
-            formatted_response = AgentMessage[response_format_type](  # type: ignore[valid-type]
-                content=response_format_type.model_validate_json(response),
-                error_message=None,
+        if isclass(response_format) and issubclass(response_format, BaseModel):
+            response = await self._agent.answer(
+                processed_input.content.model_dump_json(),
+                response_format=response_format,
             )
-        except ValidationError as e:
-            logger.error(
-                "Validation error in response: (%s) -> %s", processed_input, response
+            try:
+                formatted_response: AgentMessage = AgentMessage[response_format_type](  # type: ignore[valid-type]
+                    content=response_format_type.model_validate_json(response),
+                    error_message=None,
+                )
+            except ValidationError as e:
+                logger.error(
+                    "Validation error in response: (%s) -> %s",
+                    processed_input,
+                    response,
+                )
+                raise e
+            if formatted_response.content is None:
+                logger.error(
+                    "No content in response: (%s) -> %s", processed_input, response
+                )
+                raise ValueError(formatted_response.error_message)
+            await self.after_execution(input_, formatted_response.content)
+        else:
+            formatted_response: str = await self._agent.answer(
+                processed_input.content.model_dump_json(),
             )
-            raise e
-
-        if formatted_response.content is None:
-            logger.error(
-                "No content in response: (%s) -> %s", processed_input, response
-            )
-            raise ValueError(formatted_response.error_message)
-        await self.after_execution(input_, formatted_response.content)
+            await self.after_execution(input_, formatted_response)
 
         return formatted_response
 
@@ -140,7 +146,7 @@ class Executor(
         return await self._agent.answer(question)
 
     def _extract_response_format(self) -> type[OutputType]:
-        if type(self).__base__ is Executor:
+        if type(self).__base__ is ExecutorWithProcessors:
             return type(self).__pydantic_generic_metadata__["args"][2]
         return type(self).__bases__[0].__pydantic_generic_metadata__["args"][2]  # type: ignore[attr-defined]
 
@@ -154,7 +160,7 @@ class Executor(
             raise ValueError("Response format is not set")
         super().__init__(**kwargs)
 
-    def __rrshift__(self, other: Processor | list[Processor]) -> "Executor":
+    def __rrshift__(self, other: Processor | list[Processor]) -> Self:
         if isinstance(other, list):
             self.processors.extend(other)
         else:
@@ -163,7 +169,7 @@ class Executor(
 
     def __rshift__(
         self, other: Effect[T, OutputType] | list[Effect[T, OutputType]]
-    ) -> "Executor":
+    ) -> Self:
         if isinstance(other, list):
             self.effects.extend(other)
         else:
@@ -174,3 +180,10 @@ class Executor(
         if self.prompt is None:
             return 0
         return count_tokens(self.prompt)
+
+
+class Executor(ExecutorWithProcessors[T, T, OutputType], Generic[T, OutputType]):
+    def _extract_response_format(self) -> type[OutputType]:
+        if type(self).__base__ is Executor:
+            return type(self).__pydantic_generic_metadata__["args"][1]
+        return type(self).__bases__[0].__pydantic_generic_metadata__["args"][1]  # type: ignore[attr-defined]

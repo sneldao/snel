@@ -119,7 +119,7 @@ class DowseExecutor(
                 response = await self.execute(
                     UserRequest(
                         content=f"{error_str}\nPlease fix program and try again",
-                        username="@user1",
+                        username=query.username,
                     ),
                     persist_agent=True,
                 )
