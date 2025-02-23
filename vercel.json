@@ -7,7 +7,7 @@
             "config": {
                 "maxDuration": 60,
                 "memory": 1024,
-                "runtime": "python3.12",
+                "runtime": "python3.9",
                 "handler": "app"
             }
         },
