@@ -25,15 +25,15 @@ try:
     from dowse.impls.basic.effects import Printer
     from dowse.impls.basic.source import TwitterMock
     from dowse.models import Tweet
-    from dowse.tools.best_route.kyber import (
+    from kyber import (
         get_quote as kyber_quote,
         KyberSwapError,
         NoRouteFoundError,
         InsufficientLiquidityError,
         InvalidTokenError,
         BuildTransactionError,
+        get_chain_from_chain_id,
     )
-    from dowse.tools.best_route.kyber import get_chain_from_chain_id
 except ImportError as e:
     logger.error(f"Failed to import required packages: {e}")
     raise
@@ -333,15 +333,22 @@ async def process_command(
         content = command_request.content.lower()
         if "swap" in content:
             try:
+                logger.info("Processing swap command...")
                 # Use the provided chain ID or default to Base
                 chain_id = command_request.chain_id if command_request.chain_id else 8453
+                logger.info(f"Using chain ID: {chain_id}")
+                
                 swap_command = await parse_swap_command(content, chain_id=chain_id)
+                logger.info(f"Parsed swap command: {swap_command}")
+                
                 if swap_command:
                     # Store the normalized command format for later execution
                     normalized_command = f"swap {swap_command.amount_in} {swap_command.token_in} for {swap_command.token_out}"
+                    logger.info(f"Normalized command: {normalized_command}")
                     
                     # Get chain name for the message
                     chain_name = ChainConfig.get_chain_name(chain_id)
+                    logger.info(f"Chain name: {chain_name}")
                     
                     # For now, return a preview of what will be swapped
                     preview = (
@@ -356,13 +363,15 @@ async def process_command(
                         pending_command=normalized_command
                     )
                 else:
+                    logger.warning("Failed to parse swap command")
                     return CommandResponse(
                         content="I couldn't understand your swap command. Please use the format: 'swap 1 usdc for eth'"
                     )
             except ValueError as ve:
+                logger.error(f"ValueError in swap command: {ve}")
                 return CommandResponse(content=str(ve))
             except Exception as e:
-                logger.error(f"Error processing swap command: {e}")
+                logger.error(f"Error processing swap command: {e}", exc_info=True)
                 # Check if this is a transaction rejection
                 if "User rejected the request" in str(e):
                     return CommandResponse(
@@ -595,6 +604,33 @@ async def execute_transaction(
             status_code=500,
             detail="An unexpected error occurred. Please try again."
         )
+
+@app.get("/api/test-kyber")
+async def test_kyber():
+    """Test endpoint to verify Kyber integration."""
+    try:
+        # Test with USDC -> ETH on Base
+        test_quote = await kyber_quote(
+            token_in="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",  # USDC on Base
+            token_out="0x4200000000000000000000000000000000000006",  # WETH on Base
+            amount=1000000,  # 1 USDC (6 decimals)
+            chain_id=8453,  # Base
+            recipient="0x0000000000000000000000000000000000000000"  # Zero address for testing
+        )
+        return {
+            "status": "success",
+            "message": "Kyber integration working",
+            "quote": {
+                "router": test_quote.router_address,
+                "gas": test_quote.gas
+            }
+        }
+    except Exception as e:
+        logger.error(f"Kyber test failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 # This is required for Vercel
 app = app 
