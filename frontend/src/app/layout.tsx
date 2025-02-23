@@ -1,17 +1,18 @@
 "use client";
 
-import * as React from "react";
+import { useState, useEffect } from "react";
 import { ChakraProvider, CSSReset } from "@chakra-ui/react";
 import { Web3Provider } from "../providers/Web3Provider";
+import { Footer } from "../components/Footer";
 
-type RootLayoutProps = {
+export default function RootLayout({
+  children,
+}: {
   children: React.ReactNode;
-};
+}) {
+  const [mounted, setMounted] = useState(false);
 
-export default function RootLayout({ children }: RootLayoutProps) {
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
+  useEffect(() => {
     setMounted(true);
   }, []);
 
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           <ChakraProvider>
             <CSSReset />
             {mounted && children}
+            <Footer />
           </ChakraProvider>
         </Web3Provider>
       </body>

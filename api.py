@@ -1,3 +1,5 @@
+import configure_logging  # This must be the first import
+
 import os
 import asyncio
 import logging
@@ -13,9 +15,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Initialize logger
+# Initialize logger using the configured logger
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 try:
     from eth_rpc import set_alchemy_key
@@ -364,6 +365,12 @@ async def process_command(
                 return CommandResponse(content=str(ve))
             except Exception as e:
                 logger.error(f"Error processing swap command: {e}")
+                # Check if this is a transaction rejection
+                if "User rejected the request" in str(e):
+                    return CommandResponse(
+                        content="Transaction cancelled by user.",
+                        error_message=None
+                    )
                 return CommandResponse(
                     content="Sorry, I couldn't process your swap command. Please try again with the format: 'swap 1 usdc for eth'"
                 )
@@ -400,6 +407,12 @@ async def process_command(
 
     except Exception as e:
         logger.error(f"Unexpected error in command processing: {e}", exc_info=True)
+        # Check if this is a transaction rejection
+        if "User rejected the request" in str(e):
+            return CommandResponse(
+                content="Transaction cancelled by user.",
+                error_message=None
+            )
         return CommandResponse(
             content="Sorry, something went wrong. Please try again!"
         )
@@ -541,38 +554,63 @@ async def execute_transaction(
             amount_in = int(swap_command.amount_in * (10 ** decimals))
             
             # Execute the swap
-            return await execute_swap(
-                token_in=token_addresses[swap_command.token_in],
-                token_out=token_addresses[swap_command.token_out],
-                amount=amount_in,
-                chain_id=tx_request.chain_id,
-                recipient=tx_request.wallet_address,
-            )
-
-        except Exception as e:
-            logger.error(f"Error preparing swap data: {e}")
-            if "400 Bad Request" in str(e):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid swap parameters. Please check token addresses and amounts."
+            try:
+                return await execute_swap(
+                    token_in=token_addresses[swap_command.token_in],
+                    token_out=token_addresses[swap_command.token_out],
+                    amount=amount_in,
+                    chain_id=tx_request.chain_id,
+                    recipient=tx_request.wallet_address,
                 )
+            except Exception as swap_error:
+                logger.error(f"Error executing swap: {swap_error}")
+                if "User rejected the request" in str(swap_error):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Transaction cancelled by user"
+                    )
+                elif "No route found" in str(swap_error):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No valid swap route found. Try a different amount or token pair."
+                    )
+                elif "insufficient liquidity" in str(swap_error).lower():
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Not enough liquidity for this swap. Try a smaller amount."
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to execute swap: {str(swap_error)}"
+                    )
+
+        except ValueError as ve:
+            logger.error(f"Value error in swap preparation: {ve}")
+            raise HTTPException(
+                status_code=400,
+                detail=str(ve)
+            )
+        except Exception as e:
+            logger.error(f"Error preparing swap: {e}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to prepare swap: {str(e)}"
+                detail=f"An error occurred while preparing the swap: {str(e)}"
             )
 
+    except HTTPException:
+        raise
     except ValueError as ve:
-        logger.error(f"ValueError in transaction preparation: {str(ve)}")
+        logger.error(f"ValueError in transaction preparation: {ve}")
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid transaction parameters: {str(ve)}"
+            detail=str(ve)
         )
-    
     except Exception as e:
-        logger.error(f"Unexpected error in transaction preparation: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error in transaction preparation: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred while preparing the transaction: {str(e)}"
+            detail="An unexpected error occurred. Please try again."
         )
 
 # This is required for Vercel

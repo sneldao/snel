@@ -488,13 +488,24 @@ export default function Home() {
   };
 
   return (
-    <Box minH="100vh" bg="gray.50">
-      <Container maxW="container.md" py={8}>
-        <VStack spacing={8}>
+    <Box
+      minH="100vh"
+      bg="gray.50"
+      py={{ base: 4, sm: 10 }}
+      pb={{ base: 16, sm: 20 }}
+    >
+      <Container maxW="container.md" px={{ base: 2, sm: 4 }}>
+        <VStack spacing={{ base: 4, sm: 8 }}>
           <Box textAlign="center" w="100%">
-            <HStack justify="space-between" w="100%" mb={4}>
-              <Heading size="xl">Pointless</Heading>
-              <HStack spacing={4}>
+            <HStack
+              justify="space-between"
+              w="100%"
+              mb={4}
+              flexDir={{ base: "column", sm: "row" }}
+              spacing={{ base: 2, sm: 4 }}
+            >
+              <Heading size={{ base: "lg", sm: "xl" }}>Pointless</Heading>
+              <HStack spacing={{ base: 2, sm: 4 }}>
                 <Button
                   size="sm"
                   variant="outline"
@@ -507,17 +518,21 @@ export default function Home() {
                 <WalletButton />
               </HStack>
             </HStack>
-            <Text color="gray.600" fontSize="lg">
+            <Text color="gray.600" fontSize={{ base: "md", sm: "lg" }}>
               Your friendly crypto command interpreter
             </Text>
-            <Text color="gray.500" fontSize="sm" mt={2}>
+            <Text color="gray.500" fontSize={{ base: "xs", sm: "sm" }} mt={2}>
               Ask me to swap tokens, send crypto, or answer questions about
               crypto!
             </Text>
           </Box>
 
           {!isConnected && (
-            <Alert status="warning" borderRadius="md">
+            <Alert
+              status="warning"
+              borderRadius="md"
+              fontSize={{ base: "sm", sm: "md" }}
+            >
               <AlertIcon />
               <Box>
                 <AlertTitle>Wallet not connected!</AlertTitle>
@@ -530,7 +545,11 @@ export default function Home() {
           )}
 
           {responses.length === 0 ? (
-            <Alert status="info" borderRadius="md">
+            <Alert
+              status="info"
+              borderRadius="md"
+              fontSize={{ base: "sm", sm: "md" }}
+            >
               <AlertIcon />
               <Box>
                 <AlertTitle>Welcome to Pointless!</AlertTitle>
@@ -541,7 +560,12 @@ export default function Home() {
               </Box>
             </Alert>
           ) : (
-            <VStack spacing={4} w="100%" align="stretch" mb={8}>
+            <VStack
+              spacing={{ base: 2, sm: 4 }}
+              w="100%"
+              align="stretch"
+              mb={{ base: 4, sm: 8 }}
+            >
               {responses.map((response, index) => (
                 <CommandResponse
                   key={`response-${index}`}

@@ -92,6 +92,28 @@ export const CommandResponse = ({
 
   const formatContent = (content: string) => {
     if (isError) {
+      // Handle specific error cases
+      if (content.includes("User rejected the request")) {
+        return "Transaction cancelled by user.";
+      }
+      if (content.includes("No valid swap route found")) {
+        return "No valid swap route found. Try a different amount or token pair.";
+      }
+      if (content.includes("Not enough liquidity")) {
+        return "Not enough liquidity for this swap. Try a smaller amount.";
+      }
+      if (content.includes("Failed to execute swap")) {
+        return "Failed to execute the swap. Please try again.";
+      }
+      // For other errors, clean up and return a user-friendly message
+      if (content.includes("Transaction failed:")) {
+        const cleanedError = content
+          .replace(/Transaction failed: /g, "")
+          .replace(/Request Arguments:[\s\S]*$/, "")
+          .trim();
+        return cleanedError;
+      }
+      // Return the original error if none of the above match
       return content;
     }
 
@@ -173,7 +195,7 @@ export const CommandResponse = ({
     <Box
       borderWidth="1px"
       borderRadius="lg"
-      p={4}
+      p={{ base: 2, sm: 4 }}
       bg="white"
       shadow="sm"
       borderColor={
@@ -186,9 +208,9 @@ export const CommandResponse = ({
           : undefined
       }
     >
-      <HStack align="start" spacing={3}>
+      <HStack align="start" spacing={{ base: 2, sm: 3 }}>
         <Avatar
-          size="sm"
+          size={{ base: "xs", sm: "sm" }}
           name={isCommand && !isSuccess ? "You" : "Pointless"}
           bg={
             isError
@@ -203,42 +225,46 @@ export const CommandResponse = ({
           }
           color="white"
         />
-        <VStack align="stretch" flex={1} spacing={2}>
-          <HStack>
+        <VStack align="stretch" flex={1} spacing={{ base: 1, sm: 2 }}>
+          <HStack
+            flexWrap="wrap"
+            spacing={{ base: 1, sm: 2 }}
+            fontSize={{ base: "xs", sm: "sm" }}
+          >
             <Text fontWeight="bold">
               {isCommand && !isSuccess ? "You" : "Pointless"}
             </Text>
-            <Text color="gray.500" fontSize="sm">
+            <Text color="gray.500">
               {isCommand && !isSuccess ? "@user" : "@pointless_agent"}
             </Text>
-            <Text color="gray.500" fontSize="sm">
-              ·
-            </Text>
-            <Text color="gray.500" fontSize="sm">
-              {timestamp}
-            </Text>
+            <Text color="gray.500">·</Text>
+            <Text color="gray.500">{timestamp}</Text>
             <Badge
               colorScheme={badge.colorScheme}
-              ml="auto"
+              ml={{ base: 0, sm: "auto" }}
               display="flex"
               alignItems="center"
               gap={1}
+              fontSize={{ base: "2xs", sm: "xs" }}
             >
               {isLoading && <Spinner size="xs" mr={1} />}
               <Icon as={badge.icon} />
               {badge.text}
             </Badge>
           </HStack>
-          <Box whiteSpace="pre-wrap" color={isError ? "red.600" : "gray.700"}>
+          <Box
+            whiteSpace="pre-wrap"
+            color={isError ? "red.600" : "gray.700"}
+            fontSize={{ base: "sm", sm: "md" }}
+          >
             {formattedContent}
           </Box>
           {isLoading && (
-            <List spacing={1} mt={2}>
+            <List spacing={1} mt={2} fontSize={{ base: "xs", sm: "sm" }}>
               {LoadingSteps.map((step, index) => (
                 <ListItem
                   key={index}
                   color={index <= currentStep ? "blue.500" : "gray.400"}
-                  fontSize="sm"
                   display="flex"
                   alignItems="center"
                 >
@@ -255,7 +281,7 @@ export const CommandResponse = ({
             </List>
           )}
           {needsConfirmation && (
-            <Text fontSize="sm" color="orange.600" mt={2}>
+            <Text fontSize={{ base: "xs", sm: "sm" }} color="orange.600" mt={2}>
               ⚠️ This action will execute a blockchain transaction that cannot
               be undone.
             </Text>

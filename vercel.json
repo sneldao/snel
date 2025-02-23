@@ -30,6 +30,8 @@
         "iad1"
     ],
     "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": ".",
+        "PYTHONIOENCODING": "utf-8"
     }
 }
