@@ -1,14 +1,13 @@
 {
     "version": 2,
-    "buildCommand": "cd frontend && npm install && npm run build",
-    "outputDirectory": "frontend/.next",
     "builds": [
         {
             "src": "api.py",
             "use": "@vercel/python",
             "config": {
-                "maxDuration": 10,
-                "memory": 1024
+                "maxDuration": 60,
+                "memory": 1024,
+                "runtime": "python3.9"
             }
         },
         {
@@ -27,6 +26,15 @@
         }
     ],
     "regions": [
-        "sfo1"
-    ]
+        "iad1"
+    ],
+    "functions": {
+        "api.py": {
+            "memory": 1024,
+            "maxDuration": 60
+        }
+    },
+    "experimental": {
+        "fluidCompute": true
+    }
 }

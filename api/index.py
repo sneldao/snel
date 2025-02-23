@@ -15,30 +15,26 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Initialize logger
+from eth_rpc import set_alchemy_key
+from dowse import Pipeline
+from dowse.impls.basic.llms import BasicTweetClassifier, BasicTwitterCommands, BasicTwitterQuestion
+from dowse.impls.basic.effects import Printer
+from dowse.impls.basic.source import TwitterMock
+from dowse.models import Tweet
+from dowse.tools.best_route.quicknode import swap as quicknode_swap
+from dowse.tools.best_route.kyber import (
+    get_quote as kyber_quote,
+    KyberSwapError,
+    NoRouteFoundError,
+    InsufficientLiquidityError,
+    InvalidTokenError,
+    BuildTransactionError,
+)
+from dowse.tools.best_route.kyber import get_chain_from_chain_id
+
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-try:
-    from eth_rpc import set_alchemy_key
-    from dowse import Pipeline
-    from dowse.impls.basic.llms import BasicTweetClassifier, BasicTwitterCommands, BasicTwitterQuestion
-    from dowse.impls.basic.effects import Printer
-    from dowse.impls.basic.source import TwitterMock
-    from dowse.models import Tweet
-    from dowse.tools.best_route.quicknode import swap as quicknode_swap
-    from dowse.tools.best_route.kyber import (
-        get_quote as kyber_quote,
-        KyberSwapError,
-        NoRouteFoundError,
-        InsufficientLiquidityError,
-        InvalidTokenError,
-        BuildTransactionError,
-    )
-    from dowse.tools.best_route.kyber import get_chain_from_chain_id
-except ImportError as e:
-    logger.error(f"Failed to import required packages: {e}")
-    raise
 
 class Classifications(StrEnum):
     """A class that defines the different classifications that can be made by the pipeline."""
