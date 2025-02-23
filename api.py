@@ -2,9 +2,7 @@ import os
 import asyncio
 import logging
 from typing import Optional
-from pathlib import Path
 from enum import StrEnum
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
@@ -45,27 +43,6 @@ class Classifications(StrEnum):
     COMMANDS = "commands"
     QUESTION = "question"
 
-# Load environment variables
-env_path = Path('.env').absolute()
-if not env_path.exists():
-    raise FileNotFoundError(f"Could not find .env file at {env_path}")
-load_dotenv(dotenv_path=env_path, override=True)
-
-# Ensure all required environment variables are in os.environ
-required_vars = {
-    "ALCHEMY_KEY": os.getenv("ALCHEMY_KEY"),
-    "QUICKNODE_ENDPOINT": os.getenv("QUICKNODE_ENDPOINT"),
-    "COINGECKO_API_KEY": os.getenv("COINGECKO_API_KEY")
-}
-
-for var_name, value in required_vars.items():
-    if not value:
-        raise ValueError(f"{var_name} environment variable is required")
-    os.environ[var_name] = value
-
-# Set Alchemy key
-set_alchemy_key(required_vars["ALCHEMY_KEY"])
-
 # Set up rate limiter
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
@@ -77,12 +54,28 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Local development
-        "https://your-production-domain.com",  # Replace with your domain
+        "https://dowse-pointless.vercel.app",  # Production domain
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize required services
+def init_services():
+    # Get environment variables (these should be set in Vercel)
+    alchemy_key = os.environ.get("ALCHEMY_KEY")
+    quicknode_endpoint = os.environ.get("QUICKNODE_ENDPOINT")
+    coingecko_key = os.environ.get("COINGECKO_API_KEY")
+
+    if not all([alchemy_key, quicknode_endpoint, coingecko_key]):
+        logger.error("Missing required environment variables")
+        raise ValueError("Missing required environment variables")
+
+    # Set Alchemy key
+    set_alchemy_key(alchemy_key)
+
+init_services()
 
 # OpenAI API key header
 openai_key_header = APIKeyHeader(name="X-OpenAI-Key", auto_error=False)
@@ -207,7 +200,7 @@ async def get_token_price(token_id: str) -> float:
             response = await client.get(
                 url,
                 headers={
-                    "x-cg-demo-api-key": required_vars["COINGECKO_API_KEY"]
+                    "x-cg-demo-api-key": os.environ["COINGECKO_API_KEY"]
                 }
             )
             if response.status_code == 429:  # Rate limit exceeded
@@ -582,6 +575,5 @@ async def execute_transaction(
             detail=f"An error occurred while preparing the transaction: {str(e)}"
         )
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+# This is required for Vercel
+app = app 

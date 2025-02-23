@@ -1,0 +1,20 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "==0.115.8"
+uvicorn = "==0.34.0"
+pydantic = "==2.10.6"
+httpx = "==0.28.1"
+slowapi = "==0.1.9"
+eth-rpc-py = "==0.1.26"
+eth-account = "==0.13.5"
+eth-typing = "==5.2.0"
+dowse = "==0.1.0"
+emp-agents = "==0.1.0"
+eth-rpc = "==0.1.26"
+
+[requires]
+python_version = "3.12" 
