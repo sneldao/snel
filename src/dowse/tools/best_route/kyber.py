@@ -7,7 +7,12 @@ from pydantic import BaseModel
 
 from dowse.logger import logger
 
-QUICKNODE_ENDPOINT = os.environ["QUICKNODE_ENDPOINT"]
+
+def get_quicknode_endpoint() -> str:
+    endpoint = os.environ.get("QUICKNODE_ENDPOINT")
+    if not endpoint:
+        raise ValueError("QUICKNODE_ENDPOINT environment variable is required")
+    return endpoint
 
 
 class Quote(BaseModel):
@@ -25,6 +30,9 @@ async def get_quote(
     amount: int,
     chain_id: Literal[1, 8453, 42161, 10, 137, 43114] = 8453,
 ) -> Quote:
+    # Get endpoint when needed
+    quicknode_endpoint = get_quicknode_endpoint()
+    
     chain = get_chain_from_chain_id(chain_id)
     if token_in.lower() == "eth":
         token_in = HexAddress(HexStr("0x4200000000000000000000000000000000000006"))
@@ -53,7 +61,7 @@ async def get_quote(
         except Exception as e:
             logger.error("ERROR GETTING QUOTE: %s", e)
 
-    raise ValueError("Failed to get quote.  Most likely an API Limit")
+    raise ValueError("Failed to get quote. Most likely an API Limit")
 
 
 def get_chain_from_chain_id(
