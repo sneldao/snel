@@ -50,7 +50,6 @@ load_dotenv(dotenv_path=env_path, override=True)
 # Ensure all required environment variables are in os.environ
 required_vars = {
     "ALCHEMY_KEY": os.getenv("ALCHEMY_KEY"),
-    "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
     "QUICKNODE_ENDPOINT": os.getenv("QUICKNODE_ENDPOINT"),
     "COINGECKO_API_KEY": os.getenv("COINGECKO_API_KEY")
 }
