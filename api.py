@@ -14,6 +14,8 @@ import httpx
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import datetime
+import sys
 
 # Initialize logger using the configured logger
 logger = logging.getLogger(__name__)
@@ -630,6 +632,31 @@ async def test_kyber():
         return {
             "status": "error",
             "message": str(e)
+        }
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint."""
+    try:
+        # Check if required environment variables are set
+        env_vars = {
+            "ALCHEMY_KEY": bool(os.environ.get("ALCHEMY_KEY")),
+            "COINGECKO_API_KEY": bool(os.environ.get("COINGECKO_API_KEY")),
+        }
+        
+        return {
+            "status": "healthy",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "environment": {
+                "python_version": sys.version,
+                "environment_variables": env_vars
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
         }
 
 # This is required for Vercel
