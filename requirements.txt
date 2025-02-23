@@ -8,4 +8,4 @@ eth-rpc-py==0.1.26
 eth-account==0.13.5
 eth-typing==5.2.0
 dowse==0.1.0
-emp-agents==0.1.0 
+emp-agents>=0.2.0.post1,<0.3.0 
