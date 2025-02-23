@@ -91,14 +91,18 @@ async def process_command(request: CommandRequest) -> CommandResponse:
             )
         )
 
-        if not result:
+        if not result or not result.content:
             logger.warning("Pipeline returned no result")
-            return CommandResponse(
-                content="I'm sorry, I couldn't process your request. Please try again."
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to process command. Please try again."
             )
 
-        logger.info(f"Command processed successfully. Result: {result.content}")
-        return CommandResponse(content=str(result.content) if result else None)
+        # Log the result for debugging
+        logger.info(f"Command processed successfully. Result type: {type(result)}")
+        logger.info(f"Result content: {result.content}")
+
+        return CommandResponse(content=str(result.content))
     
     except ValueError as ve:
         logger.error(f"ValueError in command processing: {str(ve)}")

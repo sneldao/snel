@@ -7,16 +7,35 @@ import {
   Text,
   Badge,
   Icon,
-  Button,
+  List,
+  ListItem,
+  ListIcon,
+  Spinner,
 } from "@chakra-ui/react";
-import { CheckCircleIcon, QuestionIcon, WarningIcon } from "@chakra-ui/icons";
+import {
+  CheckCircleIcon,
+  QuestionIcon,
+  WarningIcon,
+  TimeIcon,
+  ChatIcon,
+} from "@chakra-ui/icons";
 
 type CommandResponseProps = {
   content: string;
   timestamp: string;
   isCommand: boolean;
-  onConfirm?: () => Promise<void>;
+  status?: "pending" | "processing" | "success" | "error";
+  awaitingConfirmation?: boolean;
 };
+
+const LoadingSteps = [
+  "Processing your command...",
+  "Classifying command type...",
+  "Getting token information...",
+  "Converting amounts...",
+  "Getting best swap route...",
+  "Preparing transaction...",
+];
 
 const formatSwapResponse = (
   content: string
@@ -30,7 +49,9 @@ const formatSwapResponse = (
         return {
           preview: `I'll swap ${amountIn.toFixed(
             4
-          )} ETH for approximately ${amountOut.toFixed(4)} UNI tokens.`,
+          )} ETH for approximately ${amountOut.toFixed(
+            4
+          )} UNI tokens.\n\nDoes this look good? Reply with 'yes' to confirm or 'no' to cancel.`,
           success: true,
         };
       }
@@ -45,43 +66,46 @@ export const CommandResponse = ({
   content,
   timestamp,
   isCommand,
-  onConfirm,
+  status = "pending",
+  awaitingConfirmation,
 }: CommandResponseProps) => {
-  const [isConfirming, setIsConfirming] = React.useState(false);
-  const isError =
-    content.toLowerCase().includes("error") ||
-    content.toLowerCase().includes("sorry");
-  const needsConfirmation = isCommand && !content.includes("None") && !isError;
+  const [currentStep, setCurrentStep] = React.useState(0);
+  const isError = status === "error";
+  const isLoading = status === "processing";
+  const isSuccess = status === "success";
+  const needsConfirmation = awaitingConfirmation;
 
-  const handleConfirm = async () => {
-    if (!onConfirm) return;
-    setIsConfirming(true);
-    try {
-      await onConfirm();
-    } finally {
-      setIsConfirming(false);
+  // Simulate progress through steps when loading
+  React.useEffect(() => {
+    if (isLoading) {
+      const interval = setInterval(() => {
+        setCurrentStep((prev) =>
+          prev < LoadingSteps.length - 1 ? prev + 1 : prev
+        );
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setCurrentStep(0);
     }
-  };
+  }, [isLoading]);
 
-  // Format the content to be more conversational
   const formatContent = (content: string) => {
     if (isError) {
       return content;
     }
 
-    if (content === "None") {
-      return "I'm processing your request...";
+    if (isLoading) {
+      return LoadingSteps[currentStep];
     }
 
-    if (isCommand) {
+    if (isCommand && !isSuccess) {
       const { preview, success } = formatSwapResponse(content);
       if (success) {
         return preview;
       }
-      return content;
-    } else {
-      return content;
     }
+
+    return content;
   };
 
   const getBadgeProps = () => {
@@ -99,10 +123,24 @@ export const CommandResponse = ({
         text: "Needs Confirmation",
       };
     }
+    if (isLoading) {
+      return {
+        colorScheme: "blue",
+        icon: TimeIcon,
+        text: "Processing",
+      };
+    }
+    if (isSuccess) {
+      return {
+        colorScheme: "green",
+        icon: CheckCircleIcon,
+        text: "Success",
+      };
+    }
     return {
-      colorScheme: isCommand ? "green" : "blue",
-      icon: isCommand ? CheckCircleIcon : QuestionIcon,
-      text: isCommand ? "Command" : "Question",
+      colorScheme: isCommand ? "purple" : "blue",
+      icon: isCommand ? ChatIcon : QuestionIcon,
+      text: isCommand ? "User" : "Question",
     };
   };
 
@@ -117,27 +155,39 @@ export const CommandResponse = ({
       bg="white"
       shadow="sm"
       borderColor={
-        isError ? "red.200" : needsConfirmation ? "orange.200" : undefined
+        isError
+          ? "red.200"
+          : needsConfirmation
+          ? "orange.200"
+          : isSuccess
+          ? "green.200"
+          : undefined
       }
     >
       <HStack align="start" spacing={3}>
         <Avatar
           size="sm"
-          name="Pointless"
+          name={isCommand && !isSuccess ? "You" : "Pointless"}
           bg={
             isError
               ? "red.500"
               : needsConfirmation
               ? "orange.500"
+              : isSuccess
+              ? "green.500"
+              : isCommand
+              ? "purple.500"
               : "twitter.500"
           }
           color="white"
         />
         <VStack align="stretch" flex={1} spacing={2}>
           <HStack>
-            <Text fontWeight="bold">Pointless</Text>
+            <Text fontWeight="bold">
+              {isCommand && !isSuccess ? "You" : "Pointless"}
+            </Text>
             <Text color="gray.500" fontSize="sm">
-              @pointless_agent
+              {isCommand && !isSuccess ? "@user" : "@pointless_agent"}
             </Text>
             <Text color="gray.500" fontSize="sm">
               ·
@@ -152,6 +202,7 @@ export const CommandResponse = ({
               alignItems="center"
               gap={1}
             >
+              {isLoading && <Spinner size="xs" mr={1} />}
               <Icon as={badge.icon} />
               {badge.text}
             </Badge>
@@ -159,37 +210,32 @@ export const CommandResponse = ({
           <Text whiteSpace="pre-wrap" color={isError ? "red.600" : "gray.700"}>
             {formattedContent}
           </Text>
-          {needsConfirmation && (
-            <VStack align="start" spacing={2} mt={2}>
-              <Text fontSize="sm" color="orange.600">
-                ⚠️ This action will execute a blockchain transaction that cannot
-                be undone.
-              </Text>
-              <HStack>
-                <Button
-                  size="sm"
-                  colorScheme="twitter"
-                  onClick={handleConfirm}
-                  isLoading={isConfirming}
+          {isLoading && (
+            <List spacing={1} mt={2}>
+              {LoadingSteps.map((step, index) => (
+                <ListItem
+                  key={index}
+                  color={index <= currentStep ? "blue.500" : "gray.400"}
+                  fontSize="sm"
+                  display="flex"
+                  alignItems="center"
                 >
-                  Confirm Transaction
-                </Button>
-                <Button size="sm" variant="ghost">
-                  Cancel
-                </Button>
-              </HStack>
-            </VStack>
+                  {index < currentStep ? (
+                    <ListIcon as={CheckCircleIcon} color="green.500" />
+                  ) : index === currentStep ? (
+                    <Spinner size="xs" mr={2} />
+                  ) : (
+                    <ListIcon as={TimeIcon} />
+                  )}
+                  {step}
+                </ListItem>
+              ))}
+            </List>
           )}
-          {content === "None" && (
-            <Text fontSize="sm" color="gray.500" mt={2}>
-              Please wait while I process your request...
-            </Text>
-          )}
-          {!isError && !needsConfirmation && content !== "None" && (
-            <Text fontSize="sm" color="gray.500" mt={2}>
-              {isCommand
-                ? "Transaction details will appear here once processed."
-                : "Let me know if you have any other questions!"}
+          {needsConfirmation && (
+            <Text fontSize="sm" color="orange.600" mt={2}>
+              ⚠️ This action will execute a blockchain transaction that cannot
+              be undone.
             </Text>
           )}
         </VStack>

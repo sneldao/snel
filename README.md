@@ -1,3 +1,5 @@
+# Dowse Pointless
+
 <p align="center">
   <a href="https://dowse.empyrealsdk.com"><img src="https://raw.githubusercontent.com/empyrealapp/dowse/main/assets/logo.png" alt="dowse" height=300></a>
 </p>
@@ -27,6 +29,8 @@
 
 ---
 
+## Overview
+
 Dowse is a Python library that enables you to build intelligent agents capable of:
 
 - Parsing natural language commands and questions
@@ -43,26 +47,119 @@ Dowse is a Python library that enables you to build intelligent agents capable o
 - **Extensible Design**: Easy to add new command types and handlers
 - **Async Support**: Built for high-performance async/await operations
 
+## Project Structure
+
+```
+dowse-pointless/
+├── api.py              # FastAPI backend server
+├── frontend/          # Next.js frontend application
+├── .env              # Environment variables
+└── README.md         # This file
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.8+
+- Node.js 16+
+- Poetry (Python package manager)
+- npm or yarn (Node.js package manager)
+
+### Environment Setup
+
+1. Create a `.env` file in the root directory with the following variables:
+
+```bash
+ALCHEMY_KEY=your_alchemy_key
+OPENAI_API_KEY=your_openai_key
+QUICKNODE_ENDPOINT=your_quicknode_endpoint
+```
+
+### Backend Setup
+
+1. Install Python dependencies:
+
+```bash
+poetry install
+```
+
+2. Start the backend server:
+
+```bash
+poetry run uvicorn api:app --reload
+```
+
+The backend will be available at `http://localhost:8000`.
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+
+```bash
+cd frontend
+```
+
+2. Install Node.js dependencies:
+
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Start the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+```
+
+The frontend will be available at `http://localhost:3000`.
+
+## Development
+
+### Running Tests
+
+```bash
+poetry install
+poetry run pytest
+```
+
+### Git Best Practices
+
+When committing changes:
+
+1. Check untracked files before committing:
+
+```bash
+git clean -n
+```
+
+2. Review changes to be committed:
+
+```bash
+git status
+```
+
+3. Avoid committing build files and dependencies:
+
+- Use `.gitignore` to exclude build directories
+- Don't commit `node_modules/` or `.next/` directories
+- Don't commit environment files (`.env`)
 
 ## Requirements
 
 dowse is built utilizing the following libraries:
 
-* <a href="https://docs.pydantic.dev/" class="external-link" target="_blank">Pydantic</a> for the data parts.
-* <a href="https://github.com/empyrealapp/eth-rpc" class="external-link" target="_blank">eth-rpc</a> for the blockchain parts.
-* <a href="https://github.com/empyrealapp/emp-agents" class="external-link" target="_blank">emp-agents</a> for the agent parts.
+- <a href="https://docs.pydantic.dev/" class="external-link" target="_blank">Pydantic</a> for the data parts
+- <a href="https://github.com/empyrealapp/eth-rpc" class="external-link" target="_blank">eth-rpc</a> for the blockchain parts
+- <a href="https://github.com/empyrealapp/emp-agents" class="external-link" target="_blank">emp-agents</a> for the agent parts
 
+## Example Usage
 
-## Installation
-```bash
-pip install dowse
-```
-
-### Quickstart
-
-Dowse enables you to quickly build intelligent agents by abstracting the complexity of state management, type safety, and async operations.
-
-The following pipeline classifies tweets as either a command or a question, and then executes a handler based on the classification.
+The following example shows how to create a pipeline that classifies tweets as either a command or a question:
 
 ```python
 import asyncio
@@ -85,30 +182,21 @@ set_alchemy_key(os.environ["ALCHEMY_KEY"])
 
 class Classifications(StrEnum):
     """A class that defines the different classifications that can be made by the pipeline."""
-
     COMMANDS = "commands"
     QUESTION = "question"
 
 
 async def amain():
-    # create a pipeline that classifiers commands as either a command or a question.
     pipeline = Pipeline[Tweet, Tweet, Classifications](
-        # classifies the request as one of the Classifications
         classifier=BasicTweetClassifier,
-        # a handler that executes each classification
         handlers={
-            # commands are consumed by the BasicTwitterCommands operator
             "commands": BasicTwitterCommands.add_effect(Printer(prefix="COMMANDS")),
-            # questions are consumed by the BasicTwitterQuestion operator
             "question": BasicTwitterQuestion.add_effects([Printer(prefix="QUESTION")]),
         },
-        # the source that will emit the data that is consumed by the pipeline
         source=TwitterMock(),
     )
 
-    # process a single event
     result = await pipeline.process(
-        # the input is a tweet, which then gets handled by the Pipeline
         Tweet(
             id=1684298214198108160,
             content="swap $300 for $UNI and then send half of it to @vitalikbuterin",
@@ -117,19 +205,9 @@ async def amain():
         ),
     )
 
-    # run the pipeline for 3 executions, with a minimum of 120 seconds between each execution
-    # this pulls data from the source and processes it
     await pipeline.run(max_executions=3, iteration_min_time=120)
 
 
 if __name__ == "__main__":
     asyncio.run(amain())
-```
-
-
-### Tests
-
-```bash
-poetry install
-poetry run pytest
 ```

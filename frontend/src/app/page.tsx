@@ -20,8 +20,9 @@ type Response = {
   content: string;
   timestamp: string;
   isCommand: boolean;
-  needsConfirmation?: boolean;
   pendingCommand?: string;
+  awaitingConfirmation?: boolean;
+  status?: "pending" | "processing" | "success" | "error";
 };
 
 export default function Home() {
@@ -41,6 +42,92 @@ export default function Home() {
   const processCommand = async (command: string) => {
     setIsLoading(true);
     try {
+      const isConfirmation = /^(yes|confirm|no|cancel)$/i.test(command.trim());
+
+      // Handle confirmation responses without making API calls
+      if (isConfirmation) {
+        const confirmationIndex = responses.findIndex(
+          (r) => r.awaitingConfirmation
+        );
+        if (confirmationIndex === -1) {
+          setResponses((prev) => [
+            ...prev,
+            {
+              content:
+                "I don't see any pending commands to confirm. Try sending a new command.",
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "error",
+            },
+          ]);
+          return;
+        }
+
+        const shouldExecute = /^(yes|confirm)$/i.test(command.trim());
+        if (shouldExecute) {
+          // Add user's confirmation message
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: command,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: true,
+              status: "success",
+            },
+          ]);
+
+          // Add processing message
+          const processingTimestamp = new Date().toLocaleTimeString();
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: "Processing your transaction...",
+              timestamp: processingTimestamp,
+              isCommand: false,
+              status: "processing",
+            },
+          ]);
+
+          // Add success message after a short delay and remove the processing message
+          setTimeout(() => {
+            setResponses((prev) =>
+              prev
+                .filter((r) => r.timestamp !== processingTimestamp)
+                .concat({
+                  content: "Transaction completed successfully! 🎉",
+                  timestamp: new Date().toLocaleTimeString(),
+                  isCommand: false,
+                  status: "success",
+                })
+            );
+          }, 2000);
+        } else {
+          // Add user's cancellation message
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: command,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: true,
+              status: "error",
+            },
+          ]);
+
+          // Add cancellation confirmation
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: "Transaction cancelled.",
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "error",
+            },
+          ]);
+        }
+        return;
+      }
+
+      // For non-confirmation commands, make the API call
       const response = await fetch(
         "http://localhost:8000/api/process-command",
         {
@@ -62,29 +149,76 @@ export default function Home() {
         throw new Error(data.detail || "Failed to process command");
       }
 
-      if (!data.content) {
-        throw new Error("No response from the agent");
+      // Handle None response or missing content
+      if (!data.content || data.content === "None") {
+        // Add user's command with error status
+        setResponses((prev) => [
+          ...prev,
+          {
+            content: command,
+            timestamp: new Date().toLocaleTimeString(),
+            isCommand: true,
+            status: "error",
+          },
+        ]);
+
+        setResponses((prev) => [
+          ...prev,
+          {
+            content:
+              "Sorry, I encountered an error processing your command. Please try again.",
+            timestamp: new Date().toLocaleTimeString(),
+            isCommand: false,
+            status: "error",
+          },
+        ]);
+        return;
       }
 
       const isQuestion =
         command.toLowerCase().startsWith("what") ||
         command.toLowerCase().startsWith("how");
-      const needsConfirmation = !isQuestion && data.content !== "None";
 
+      // Add user's command with success status
       setResponses((prev) => [
+        ...prev,
+        {
+          content: command,
+          timestamp: new Date().toLocaleTimeString(),
+          isCommand: true,
+          status: "success",
+        },
+      ]);
+
+      // Add agent's response
+      setResponses((prev) => [
+        ...prev,
         {
           content: data.content,
           timestamp: new Date().toLocaleTimeString(),
           isCommand: !isQuestion,
-          needsConfirmation,
-          pendingCommand: needsConfirmation ? command : undefined,
+          pendingCommand: !isQuestion ? command : undefined,
+          awaitingConfirmation: !isQuestion && data.content !== "None",
+          status: !isQuestion ? "pending" : "success",
         },
-        ...prev,
       ]);
     } catch (error) {
       console.error("Error:", error);
 
+      // Add user's command with error status
       setResponses((prev) => [
+        ...prev,
+        {
+          content: command,
+          timestamp: new Date().toLocaleTimeString(),
+          isCommand: true,
+          status: "error",
+        },
+      ]);
+
+      // Add error message
+      setResponses((prev) => [
+        ...prev,
         {
           content:
             error instanceof Error
@@ -92,8 +226,8 @@ export default function Home() {
               : "An unknown error occurred. Please try again.",
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
+          status: "error",
         },
-        ...prev,
       ]);
 
       toast({
@@ -115,25 +249,6 @@ export default function Home() {
     await processCommand(command);
   };
 
-  const handleConfirm = async (index: number) => {
-    const response = responses[index];
-    if (!response.pendingCommand) return;
-
-    // Remove the confirmation UI
-    setResponses((prev) => {
-      const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        needsConfirmation: false,
-        content: "Processing transaction...",
-      };
-      return updated;
-    });
-
-    // Process the actual command
-    await processCommand(response.pendingCommand);
-  };
-
   return (
     <Box minH="100vh" bg="gray.50">
       <Container maxW="container.md" py={8}>
@@ -151,8 +266,6 @@ export default function Home() {
             </Text>
           </Box>
 
-          <CommandInput onSubmit={handleSubmit} isLoading={isLoading} />
-
           {responses.length === 0 ? (
             <Alert status="info" borderRadius="md">
               <AlertIcon />
@@ -165,23 +278,22 @@ export default function Home() {
               </Box>
             </Alert>
           ) : (
-            <VStack spacing={4} w="100%" align="stretch">
+            <VStack spacing={4} w="100%" align="stretch" mb={8}>
               {responses.map((response, index) => (
                 <CommandResponse
                   key={`response-${index}`}
                   content={response.content}
                   timestamp={response.timestamp}
                   isCommand={response.isCommand}
-                  onConfirm={
-                    response.needsConfirmation
-                      ? () => handleConfirm(index)
-                      : undefined
-                  }
+                  status={response.status}
+                  awaitingConfirmation={response.awaitingConfirmation}
                 />
               ))}
               <div ref={responsesEndRef} />
             </VStack>
           )}
+
+          <CommandInput onSubmit={handleSubmit} isLoading={isLoading} />
         </VStack>
       </Container>
     </Box>
