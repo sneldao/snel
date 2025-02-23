@@ -17,13 +17,26 @@ import {
   List,
   ListItem,
   ListIcon,
+  Badge,
 } from "@chakra-ui/react";
 import { InfoIcon, ChatIcon } from "@chakra-ui/icons";
+import { useAccount, useChainId } from "wagmi";
 
 type CommandInputProps = {
   onSubmit: (command: string) => Promise<void>;
   isLoading: boolean;
+  isDisabled?: boolean;
 };
+
+const SUPPORTED_CHAINS = {
+  1: "Ethereum",
+  8453: "Base",
+  42161: "Arbitrum",
+  10: "Optimism",
+  137: "Polygon",
+  43114: "Avalanche",
+  534352: "Scroll",
+} as const;
 
 const EXAMPLE_COMMANDS = [
   "swap 1 usdc for eth",
@@ -32,9 +45,20 @@ const EXAMPLE_COMMANDS = [
   "how much UNI can I get for 1 ETH?",
 ];
 
-export const CommandInput = ({ onSubmit, isLoading }: CommandInputProps) => {
+export const CommandInput = ({
+  onSubmit,
+  isLoading,
+  isDisabled,
+}: CommandInputProps) => {
   const [command, setCommand] = React.useState("");
   const toast = useToast();
+  const chainId = useChainId();
+  const { isConnected } = useAccount();
+
+  const isChainSupported = chainId && chainId in SUPPORTED_CHAINS;
+  const currentChainName = chainId
+    ? SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
+    : undefined;
 
   const handleSubmit = async () => {
     if (!command.trim()) {
@@ -46,6 +70,31 @@ export const CommandInput = ({ onSubmit, isLoading }: CommandInputProps) => {
         isClosable: true,
       });
       return;
+    }
+
+    // Check if it's a swap command and validate chain
+    if (command.toLowerCase().includes("swap")) {
+      if (!isConnected) {
+        toast({
+          title: "Wallet not connected",
+          description: "Please connect your wallet to execute swaps",
+          status: "warning",
+          duration: 5000,
+        });
+        return;
+      }
+
+      if (!isChainSupported) {
+        toast({
+          title: "Unsupported Network",
+          description: `Please switch to a supported network: ${Object.values(
+            SUPPORTED_CHAINS
+          ).join(", ")}`,
+          status: "warning",
+          duration: 5000,
+        });
+        return;
+      }
     }
 
     try {
@@ -68,12 +117,27 @@ export const CommandInput = ({ onSubmit, isLoading }: CommandInputProps) => {
   };
 
   return (
-    <Box borderWidth="1px" borderRadius="lg" p={4} bg="white">
+    <Box
+      borderWidth="1px"
+      borderRadius="lg"
+      p={4}
+      bg="white"
+      opacity={isDisabled ? 0.6 : 1}
+    >
       <VStack spacing={4} align="stretch">
         <HStack>
           <Text fontSize="lg" fontWeight="bold">
             Ask Pointless
           </Text>
+          {chainId && (
+            <Badge
+              colorScheme={isChainSupported ? "green" : "red"}
+              variant="subtle"
+              fontSize="sm"
+            >
+              {isChainSupported ? currentChainName : "Unsupported Network"}
+            </Badge>
+          )}
           <Popover placement="top">
             <PopoverTrigger>
               <IconButton
@@ -92,9 +156,11 @@ export const CommandInput = ({ onSubmit, isLoading }: CommandInputProps) => {
                     {EXAMPLE_COMMANDS.map((example, index) => (
                       <ListItem
                         key={index}
-                        cursor="pointer"
-                        onClick={() => handleExampleClick(example)}
-                        _hover={{ color: "blue.500" }}
+                        cursor={isDisabled ? "not-allowed" : "pointer"}
+                        onClick={() =>
+                          !isDisabled && handleExampleClick(example)
+                        }
+                        _hover={{ color: isDisabled ? undefined : "blue.500" }}
                       >
                         <ListIcon as={ChatIcon} color="green.500" />
                         {example}
@@ -114,12 +180,18 @@ export const CommandInput = ({ onSubmit, isLoading }: CommandInputProps) => {
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type a command or question (e.g., 'swap $300 for $UNI')"
+              placeholder={
+                isDisabled
+                  ? "Please set your OpenAI API key to start"
+                  : `Type a command or question (e.g., 'swap 1 usdc for eth')${
+                      currentChainName ? ` on ${currentChainName} network` : ""
+                    }`
+              }
               resize="none"
               minH="60px"
               maxLength={280}
               bg="white"
-              isDisabled={isLoading}
+              isDisabled={isLoading || isDisabled}
             />
             <HStack justify="space-between">
               <Text fontSize="sm" color="gray.500">
@@ -131,7 +203,7 @@ export const CommandInput = ({ onSubmit, isLoading }: CommandInputProps) => {
                 onClick={handleSubmit}
                 leftIcon={<ChatIcon />}
                 px={6}
-                isDisabled={!command.trim()}
+                isDisabled={!command.trim() || isDisabled}
               >
                 Send
               </Button>
