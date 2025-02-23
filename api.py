@@ -5,11 +5,15 @@ from typing import Optional
 from pathlib import Path
 from enum import StrEnum
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from eth_typing import HexAddress
 import httpx
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from eth_rpc import set_alchemy_key
 from dowse import Pipeline
@@ -59,21 +63,32 @@ for var_name, value in required_vars.items():
 # Set Alchemy key
 set_alchemy_key(required_vars["ALCHEMY_KEY"])
 
+# Set up rate limiter
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Add CORS middleware
+# Add CORS middleware with more restrictive settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend domain
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://your-production-domain.com",  # Replace with your domain
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# OpenAI API key header
+openai_key_header = APIKeyHeader(name="X-OpenAI-Key", auto_error=False)
+
 class CommandRequest(BaseModel):
     content: str
     creator_name: str = "@user"
     creator_id: int = 1
+    chain_id: Optional[int] = None  # Add chain_id field
 
 class CommandResponse(BaseModel):
     content: Optional[str] = None
@@ -95,6 +110,9 @@ class TransactionResponse(BaseModel):
     gas_price: Optional[str] = None  # hex string, optional for EIP-1559
     max_fee_per_gas: Optional[str] = None  # hex string, for EIP-1559
     max_priority_fee_per_gas: Optional[str] = None  # hex string, for EIP-1559
+    needs_approval: bool = False
+    token_to_approve: Optional[HexAddress] = None
+    spender: Optional[HexAddress] = None
 
 class SwapCommand(BaseModel):
     token_in: str
@@ -134,11 +152,36 @@ async def get_token_addresses(chain_id: int) -> dict[str, HexAddress]:
             "USDC": HexAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"),
             "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # Example
         },
-        # Add more chains as needed
+        10: {  # Optimism
+            "ETH": HexAddress("0x4200000000000000000000000000000000000006"),
+            "USDC": HexAddress("0x7F5c764cBc14f9669B88837ca1490cCa17c31607"),  # Updated USDC on Optimism
+            "UNI": HexAddress("0x6fd9d7AD17242c41f7131d257212c54A0e816691"),
+        },
+        42161: {  # Arbitrum
+            "ETH": HexAddress("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"),
+            "USDC": HexAddress("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
+            "UNI": HexAddress("0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0"),
+        },
+        137: {  # Polygon
+            "ETH": HexAddress("0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"),
+            "USDC": HexAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"),
+            "UNI": HexAddress("0xb33EaAd8d922B1083446DC23f610c2567fB5180f"),
+        },
+        43114: {  # Avalanche
+            "ETH": HexAddress("0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB"),
+            "USDC": HexAddress("0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"),
+            "UNI": HexAddress("0x8eBAf22B6F053dFFeaf46f4Dd9eFA95D89ba8580"),
+        },
+        534352: {  # Scroll
+            "ETH": HexAddress("0x5300000000000000000000000000000000000004"),
+            "USDC": HexAddress("0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),
+            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # Placeholder
+        }
     }
     
     if chain_id not in addresses:
-        raise ValueError(f"Token addresses not configured for chain {chain_id}")
+        chain_name = ChainConfig.get_chain_name(chain_id)
+        raise ValueError(f"Token addresses not configured for {chain_name} (chain ID: {chain_id})")
     
     return addresses[chain_id]
 
@@ -252,36 +295,70 @@ async def parse_swap_command(content: str, chain_id: int) -> Optional[SwapComman
         logger.error(f"Error parsing swap command: {e}")
         raise
 
+async def get_openai_key(
+    openai_key: str = Depends(openai_key_header),
+) -> str:
+    """Validate and return OpenAI API key."""
+    if not openai_key:
+        raise HTTPException(
+            status_code=401,
+            detail="OpenAI API key is required. Please provide it in the X-OpenAI-Key header."
+        )
+    return openai_key
+
+async def get_api_keys(request: Request) -> dict[str, str]:
+    """Get OpenAI API key from request headers."""
+    openai_key = request.headers.get("X-OpenAI-Key")
+    if not openai_key:
+        raise HTTPException(
+            status_code=401,
+            detail="OpenAI API key is required. Please provide it in the X-OpenAI-Key header."
+        )
+    return {"OPENAI_API_KEY": openai_key}
+
 @app.post("/api/process-command")
-async def process_command(request: CommandRequest) -> CommandResponse:
+@limiter.limit("20/minute")
+async def process_command(
+    request: Request,
+    command_request: CommandRequest,
+    openai_key: str = Depends(get_openai_key)
+) -> CommandResponse:
     try:
-        logger.info(f"Processing command: {request.content}")
+        # Set OpenAI API key for this request
+        os.environ["OPENAI_API_KEY"] = openai_key
+        
+        logger.info(f"Processing command: {command_request.content} on chain {command_request.chain_id}")
         
         # Check if it's a price query
-        if "price" in request.content.lower():
-            response = await handle_price_query(request.content)
+        if "price" in command_request.content.lower():
+            response = await handle_price_query(command_request.content)
             return CommandResponse(content=response)
 
         # Check if it's a swap command
-        content = request.content.lower()
+        content = command_request.content.lower()
         if "swap" in content:
             try:
-                # Default to Base chain for initial preview
-                swap_command = await parse_swap_command(content, chain_id=8453)
+                # Use the provided chain ID or default to Base
+                chain_id = command_request.chain_id if command_request.chain_id else 8453
+                swap_command = await parse_swap_command(content, chain_id=chain_id)
                 if swap_command:
                     # Store the normalized command format for later execution
                     normalized_command = f"swap {swap_command.amount_in} {swap_command.token_in} for {swap_command.token_out}"
+                    
+                    # Get chain name for the message
+                    chain_name = ChainConfig.get_chain_name(chain_id)
+                    
                     # For now, return a preview of what will be swapped
                     preview = (
                         f"I'll help you swap {swap_command.amount_in} {swap_command.token_in} "
                         f"for {swap_command.token_out}.\n\n"
-                        "The swap will be executed on the Base chain.\n\n"
+                        f"The swap will be executed on the {chain_name} chain.\n\n"
                         f"Does this look good? Reply with 'yes' to confirm or 'no' to cancel."
                     )
                     return CommandResponse(
                         content=preview,
                         error_message=None,
-                        pending_command=normalized_command  # Add this field to store the normalized command
+                        pending_command=normalized_command
                     )
                 else:
                     return CommandResponse(
@@ -300,9 +377,9 @@ async def process_command(request: CommandRequest) -> CommandResponse:
             result = await pipeline.process(
                 Tweet(
                     id=1,
-                    content=request.content,
-                    creator_id=request.creator_id,
-                    creator_name=request.creator_name,
+                    content=command_request.content,
+                    creator_id=command_request.creator_id,
+                    creator_name=command_request.creator_name,
                 )
             )
             
@@ -363,21 +440,38 @@ async def execute_swap(
             token_out=token_out,
             amount=amount,
             chain_id=chain_id,
-            recipient=recipient  # Pass the recipient address
+            recipient=recipient
         )
         
         logger.info(f"Got quote from Kyber: {quote}")
+
+        # If token_in is not ETH/WETH, we need to check if approval is needed
+        if token_in not in [
+            "0x4200000000000000000000000000000000000006",  # WETH on OP/Base
+            "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # ETH
+        ]:
+            # Return both approval and swap transactions
+            return TransactionResponse(
+                to=quote.router_address,
+                data=quote.data,
+                value="0x0",
+                chain_id=chain_id,
+                method="swap",
+                gas_limit=hex(int(float(quote.gas) * 1.1)),
+                needs_approval=True,
+                token_to_approve=token_in,
+                spender=quote.router_address
+            )
         
         # Convert the response to our transaction format
         return TransactionResponse(
-            to=quote.router_address,  # The Kyber router contract
-            data=quote.data,  # The encoded swap data
-            value="0x0",  # No ETH value being sent
+            to=quote.router_address,
+            data=quote.data,
+            value="0x0",
             chain_id=chain_id,
             method="swap",
-            gas_limit=hex(int(float(quote.gas) * 1.1)),  # Use quote's gas estimate with 10% buffer
-            max_fee_per_gas=None,  # Will be calculated by the wallet
-            max_priority_fee_per_gas=None  # Will be calculated by the wallet
+            gas_limit=hex(int(float(quote.gas) * 1.1)),
+            needs_approval=False
         )
             
     except NoRouteFoundError:
@@ -414,25 +508,33 @@ async def execute_swap(
         )
 
 @app.post("/api/execute-transaction")
-async def execute_transaction(request: TransactionRequest) -> TransactionResponse:
+@limiter.limit("10/minute")
+async def execute_transaction(
+    request: Request,
+    tx_request: TransactionRequest,
+    openai_key: str = Depends(get_openai_key)
+) -> TransactionResponse:
     try:
-        logger.info(f"Executing transaction for command: {request.command} on chain {request.chain_id}")
+        # Set OpenAI API key for this request
+        os.environ["OPENAI_API_KEY"] = openai_key
+        
+        logger.info(f"Executing transaction for command: {tx_request.command} on chain {tx_request.chain_id}")
         
         # Validate chain support
-        if not ChainConfig.is_supported(request.chain_id):
+        if not ChainConfig.is_supported(tx_request.chain_id):
             raise ValueError(
-                f"Chain {request.chain_id} is not supported. Supported chains: "
+                f"Chain {tx_request.chain_id} is not supported. Supported chains: "
                 f"{', '.join(f'{name} ({id})' for id, name in ChainConfig.SUPPORTED_CHAINS.items())}"
             )
 
         # Parse the swap command with the actual chain ID
-        swap_command = await parse_swap_command(request.command, request.chain_id)
+        swap_command = await parse_swap_command(tx_request.command, tx_request.chain_id)
         if not swap_command:
-            logger.error(f"Failed to parse swap command: {request.command}")
-            raise ValueError(f"Invalid swap command format. Expected format: 'swap 1 usdc for eth', got: {request.command}")
+            logger.error(f"Failed to parse swap command: {tx_request.command}")
+            raise ValueError(f"Invalid swap command format. Expected format: 'swap 1 usdc for eth', got: {tx_request.command}")
 
         # Get token addresses for the chain
-        token_addresses = await get_token_addresses(request.chain_id)
+        token_addresses = await get_token_addresses(tx_request.chain_id)
         
         try:
             # Handle decimals correctly for different tokens
@@ -447,8 +549,8 @@ async def execute_transaction(request: TransactionRequest) -> TransactionRespons
                 token_in=token_addresses[swap_command.token_in],
                 token_out=token_addresses[swap_command.token_out],
                 amount=amount_in,
-                chain_id=request.chain_id,
-                recipient=request.wallet_address,
+                chain_id=tx_request.chain_id,
+                recipient=tx_request.wallet_address,
             )
 
         except Exception as e:

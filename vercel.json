@@ -1,0 +1,34 @@
+{
+    "version": 2,
+    "buildCommand": "cd frontend && npm install && npm run build",
+    "outputDirectory": "frontend/.next",
+    "builds": [
+        {
+            "src": "api.py",
+            "use": "@vercel/python"
+        },
+        {
+            "src": "frontend/package.json",
+            "use": "@vercel/next"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "api.py"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/"
+        }
+    ],
+    "regions": [
+        "sfo1"
+    ],
+    "functions": {
+        "api.py": {
+            "memory": 1024,
+            "maxDuration": 10
+        }
+    }
+}
