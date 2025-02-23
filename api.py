@@ -56,7 +56,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Local development
-        "https://dowse-pointless.vercel.app",  # Production domain
+        "https://snel-pointless.vercel.app",  # Production domain
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -477,37 +477,41 @@ async def execute_swap(
             needs_approval=False
         )
             
-    except NoRouteFoundError:
+    except NoRouteFoundError as e:
+        logger.error(f"No route found error: {e}")
         raise HTTPException(
             status_code=400,
-            detail="No route found for this swap. Try a different amount or token pair."
+            detail=str(e)
         )
-    except InsufficientLiquidityError:
+    except InsufficientLiquidityError as e:
+        logger.error(f"Insufficient liquidity error: {e}")
         raise HTTPException(
             status_code=400,
-            detail="Not enough liquidity for this swap. Try a smaller amount."
+            detail=str(e)
         )
     except InvalidTokenError as e:
+        logger.error(f"Invalid token error: {e}")
         raise HTTPException(
             status_code=400,
-            detail=f"Token not supported on this chain: {str(e)}"
+            detail=str(e)
         )
     except BuildTransactionError as e:
+        logger.error(f"Build transaction error: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to build swap: {str(e)}"
+            status_code=400,
+            detail=str(e)
         )
     except KyberSwapError as e:
         logger.error(f"KyberSwap error: {e}")
         raise HTTPException(
-            status_code=500,
-            detail="Swap service temporarily unavailable. Please try again."
+            status_code=400,
+            detail=f"Swap failed: {str(e)}"
         )
     except Exception as e:
-        logger.error(f"Unexpected error during swap execution: {e}")
+        logger.error(f"Unexpected error in execute_swap: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="Something went wrong. Please try again."
+            detail="An unexpected error occurred while processing the swap. Please try again."
         )
 
 @app.post("/api/execute-transaction")
