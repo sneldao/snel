@@ -25,7 +25,6 @@ try:
     from dowse.impls.basic.effects import Printer
     from dowse.impls.basic.source import TwitterMock
     from dowse.models import Tweet
-    from dowse.tools.best_route.quicknode import swap as quicknode_swap
     from dowse.tools.best_route.kyber import (
         get_quote as kyber_quote,
         KyberSwapError,
@@ -66,10 +65,9 @@ app.add_middleware(
 def init_services():
     # Get environment variables (these should be set in Vercel)
     alchemy_key = os.environ.get("ALCHEMY_KEY")
-    quicknode_endpoint = os.environ.get("QUICKNODE_ENDPOINT")
     coingecko_key = os.environ.get("COINGECKO_API_KEY")
 
-    if not all([alchemy_key, quicknode_endpoint, coingecko_key]):
+    if not all([alchemy_key, coingecko_key]):
         logger.error("Missing required environment variables")
         raise ValueError("Missing required environment variables")
 
@@ -416,21 +414,6 @@ async def process_command(
         return CommandResponse(
             content="Sorry, something went wrong. Please try again!"
         )
-
-async def get_quicknode_endpoint() -> str:
-    """Get and validate QuickNode endpoint."""
-    endpoint = os.environ.get("QUICKNODE_ENDPOINT")
-    if not endpoint:
-        raise ValueError("QUICKNODE_ENDPOINT environment variable is required")
-    
-    # Remove trailing slash if present
-    endpoint = endpoint.rstrip('/')
-    
-    # Validate the endpoint format
-    if not endpoint.startswith(('https://', 'http://')):
-        raise ValueError("QUICKNODE_ENDPOINT must start with https:// or http://")
-    
-    return endpoint
 
 async def execute_swap(
     token_in: HexAddress,
