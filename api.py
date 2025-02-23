@@ -14,8 +14,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 # Initialize logger
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 try:
     from eth_rpc import set_alchemy_key
