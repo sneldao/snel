@@ -11,6 +11,7 @@ import {
   ListItem,
   ListIcon,
   Spinner,
+  Link,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -103,6 +104,27 @@ export const CommandResponse = ({
       if (success) {
         return preview;
       }
+    }
+
+    // Format block explorer links
+    if (content.includes("block explorer")) {
+      return content.split("\n").map((line, i) => {
+        if (line.startsWith("http")) {
+          return (
+            <Link
+              key={i}
+              href={line}
+              isExternal
+              color="blue.500"
+              wordBreak="break-all"
+              display="inline-block"
+            >
+              {line}
+            </Link>
+          );
+        }
+        return <Text key={i}>{line}</Text>;
+      });
     }
 
     return content;
@@ -207,9 +229,9 @@ export const CommandResponse = ({
               {badge.text}
             </Badge>
           </HStack>
-          <Text whiteSpace="pre-wrap" color={isError ? "red.600" : "gray.700"}>
+          <Box whiteSpace="pre-wrap" color={isError ? "red.600" : "gray.700"}>
             {formattedContent}
-          </Text>
+          </Box>
           {isLoading && (
             <List spacing={1} mt={2}>
               {LoadingSteps.map((step, index) => (

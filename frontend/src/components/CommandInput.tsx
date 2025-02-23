@@ -26,7 +26,7 @@ type CommandInputProps = {
 };
 
 const EXAMPLE_COMMANDS = [
-  "swap $300 for $UNI",
+  "swap 1 usdc for eth",
   "send 5 ETH to @vitalik",
   "what is the price of ETH?",
   "how much UNI can I get for 1 ETH?",
