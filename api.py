@@ -216,16 +216,14 @@ async def startup_event():
     """Initialize services."""
     init_services()
     
-    # Initialize Redis connection
+    # Test Redis connection
     try:
-        await command_store.initialize()
-        
         # Test Redis operations
         test_user_id = "test_user"
         test_command = "test_command"
         
         # Store test command
-        await command_store.store_command(test_user_id, test_command)
+        await command_store.store_command(test_user_id, test_command, chain_id=1)  # Use chain_id=1 for testing
         logger.info("Test command stored successfully")
         
         # Retrieve test command
@@ -240,7 +238,7 @@ async def startup_event():
         logger.info("Test command cleared successfully")
         
     except Exception as e:
-        logger.error(f"Failed to initialize Redis: {e}")
+        logger.error(f"Failed to test Redis connection: {e}")
         raise
 
 @app.post("/api/process-command")
@@ -639,7 +637,6 @@ async def health_check():
         redis_status = "unknown"
         redis_error = None
         try:
-            await command_store.initialize()
             # Test basic Redis operations
             test_key = "health_check_test"
             await command_store._redis.set(test_key, "test")
@@ -652,6 +649,8 @@ async def health_check():
         # Check if required environment variables are set
         env_vars = {
             "REDIS_URL": bool(os.environ.get("REDIS_URL")),
+            "UPSTASH_REDIS_REST_URL": bool(os.environ.get("UPSTASH_REDIS_REST_URL")),
+            "UPSTASH_REDIS_REST_TOKEN": bool(os.environ.get("UPSTASH_REDIS_REST_TOKEN")),
             "MORALIS_API_KEY": bool(os.environ.get("MORALIS_API_KEY")),
             "ALCHEMY_KEY": bool(os.environ.get("ALCHEMY_KEY")),
             "COINGECKO_API_KEY": bool(os.environ.get("COINGECKO_API_KEY")),
