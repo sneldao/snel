@@ -199,7 +199,7 @@ Dowse is a Python library that enables you to build intelligent agents capable o
 
 ## Project Structure
 
-```
+````
 dowse-pointless/
 ├── api.py              # FastAPI backend server
 ├── frontend/          # Next.js frontend application
@@ -261,4 +261,33 @@ During our attempt to integrate Dowse for natural language command processing, w
    - More maintainable and easier to extend for our specific use case
 
 These notes are provided to help future development decisions and to document why we chose a custom implementation over the Dowse framework.
+
+## Testing
+
+### Environment Setup
+
+For running tests, you'll need to set up the following environment variables:
+
+```bash
+# Create a .env.test file (DO NOT commit this file)
+OPENAI_API_KEY=your_openai_key
+REDIS_URL=your_upstash_url
+UPSTASH_REDIS_TOKEN=your_upstash_token
+MORALIS_API_KEY=your_moralis_key
+````
+
+To run tests:
+
+```bash
+# Load test environment variables
+source .env.test
+
+# Run tests
+poetry run pytest
+```
+
+Note: Never commit API keys or sensitive tokens to version control. Always use environment variables or secure secret management systems.
+
+```
+
 ```
