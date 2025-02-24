@@ -1,5 +1,8 @@
-// API base URL - use relative path if NEXT_PUBLIC_API_URL is empty
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+// API base URL - use relative path in production
+const API_BASE =
+  process.env.NODE_ENV === "production"
+    ? ""
+    : process.env.NEXT_PUBLIC_API_URL || "";
 
 export async function processCommand(command: string, openaiKey: string) {
   const response = await fetch(`${API_BASE}/api/process-command`, {
@@ -12,7 +15,8 @@ export async function processCommand(command: string, openaiKey: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`API error (${response.status}): ${errorText}`);
   }
 
   return response.json();
