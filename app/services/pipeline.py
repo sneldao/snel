@@ -465,44 +465,45 @@ class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
             error_message=None
         )
 
-# Global pipeline instance
-pipeline: Optional[Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]] = None
+# Global pipeline instances - keyed by user
+pipelines: Dict[str, Pipeline[Tweet, TweetWithChain]] = {}
 
-def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]:
-    """Initialize the Dowse pipeline with specialized agents."""
-    global pipeline
-    if pipeline is None:
-        # Create OpenAI provider with specific model
-        provider = OpenAIProvider(
-            api_key=openai_key,
-            default_model=OpenAIModelType.gpt4o_mini
-        )
+def init_pipeline(openai_key: str, user_id: str) -> Pipeline[Tweet, TweetWithChain]:
+    """Initialize or get a Dowse pipeline for a specific user.
+    
+    Args:
+        openai_key: The user's OpenAI API key
+        user_id: Unique identifier for the user
         
-        # Create pipeline with routing and effects
-        pipeline = Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]](
+    Returns:
+        Pipeline instance for the user
+    """
+    global pipelines
+    
+    # Return existing pipeline if we have one for this user
+    if user_id in pipelines:
+        return pipelines[user_id]
+        
+    # Create OpenAI provider with user's API key
+    try:
+        provider = OpenAIProvider(api_key=openai_key, model=ModelType.gpt4o)
+        
+        # Initialize pipeline with our custom processors and executors
+        pipeline = Pipeline(
+            input_type=Tweet,
+            output_type=TweetWithChain,
             processors=[LoadChainData()],
-            classifier=Classifier[TweetWithChain, Literal["swap", "price", "unknown"]](
-                prompt="""
-                You are a crypto assistant that helps users with token swaps and price queries.
-                Classify the input message into one of these categories:
-                - swap: Any message about swapping, exchanging, or buying tokens
-                - price: Any message asking about token prices or values
-                - unknown: Any other message
-                
-                Respond with just the classification.
-                """,
-                provider=provider,
-                mapping={
-                    "swap": "swap",
-                    "price": "price",
-                    "unknown": "unknown"
-                }
-            ),
-            handlers={
+            executors={
                 "swap": SwapExecutor(provider=provider),
                 "price": PriceExecutor(provider=provider),
                 "unknown": UnknownExecutor(provider=provider)
             }
         )
-    
-    return pipeline 
+        
+        # Store the pipeline for this user
+        pipelines[user_id] = pipeline
+        return pipeline
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize pipeline for user {user_id}: {e}")
+        raise ValueError("Invalid OpenAI API key or configuration error") 

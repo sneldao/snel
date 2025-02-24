@@ -9,6 +9,30 @@ A friendly crypto command interpreter that helps users swap tokens and answers q
 - Automatic token approval handling
 - Multi-chain support with automatic chain detection
 - Persistent command storage with Redis
+- Bring your own OpenAI API key architecture
+
+## OpenAI API Key
+
+This project uses a "bring your own key" architecture for OpenAI API access:
+
+- **Development**: For local development, set your OpenAI API key in `.env`:
+
+  ```env
+  OPENAI_API_KEY=your_key_here
+  ```
+
+- **Production**: Users must provide their own OpenAI API key when using the application. This ensures:
+  - Better cost control for users
+  - No shared API key usage
+  - Individual rate limiting
+  - Enhanced security
+
+To get an OpenAI API key:
+
+1. Visit [OpenAI's platform](https://platform.openai.com/)
+2. Sign up or log in
+3. Navigate to API keys section
+4. Create a new API key
 
 ## Supported Chains
 
