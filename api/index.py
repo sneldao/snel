@@ -63,7 +63,8 @@ def check_required_env_vars() -> Optional[Dict[str, Any]]:
     """Check if all required environment variables are present"""
     required_vars = [
         "OPENAI_API_KEY",
-        "REDIS_URL",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
         "QUICKNODE_ENDPOINT",
         "MORALIS_API_KEY",
         "COINGECKO_API_KEY",
@@ -78,6 +79,17 @@ def check_required_env_vars() -> Optional[Dict[str, Any]]:
             "trace": "Environment variables check failed",
             "type": "environment_error"
         }
+    
+    # Construct REDIS_URL from Upstash components if not present
+    if not os.getenv("REDIS_URL"):
+        redis_url = os.getenv("UPSTASH_REDIS_REST_URL")
+        redis_token = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+        if redis_url and redis_token:
+            # Remove any trailing slashes
+            redis_url = redis_url.rstrip("/")
+            # Set the constructed URL
+            os.environ["REDIS_URL"] = f"{redis_url}?token={redis_token}"
+            logger.info("Constructed REDIS_URL from Upstash components")
     
     return None
 
@@ -167,12 +179,27 @@ async def execute_transaction(request: Request):
 async def health_check():
     env_vars = {
         "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
-        "REDIS_URL": bool(os.getenv("REDIS_URL")),
+        "UPSTASH_REDIS_REST_URL": bool(os.getenv("UPSTASH_REDIS_REST_URL")),
+        "UPSTASH_REDIS_REST_TOKEN": bool(os.getenv("UPSTASH_REDIS_REST_TOKEN")),
         "QUICKNODE_ENDPOINT": bool(os.getenv("QUICKNODE_ENDPOINT")),
         "MORALIS_API_KEY": bool(os.getenv("MORALIS_API_KEY")),
         "COINGECKO_API_KEY": bool(os.getenv("COINGECKO_API_KEY")),
         "ALCHEMY_KEY": bool(os.getenv("ALCHEMY_KEY"))
     }
+    
+    # Check Redis connection
+    redis_status = {"status": "unknown"}
+    try:
+        if os.getenv("REDIS_URL"):
+            from upstash_redis import Redis
+            redis = Redis.from_env()
+            await redis.ping()
+            redis_status = {"status": "healthy"}
+    except Exception as e:
+        redis_status = {
+            "status": "error",
+            "error": str(e)
+        }
     
     paths = {
         "root_dir": root_dir,
@@ -188,7 +215,10 @@ async def health_check():
             "trace": api_init_error["trace"],
             "type": api_init_error["type"],
             "paths": paths,
-            "env_vars": env_vars
+            "env_vars": env_vars,
+            "services": {
+                "redis": redis_status
+            }
         }
     
     try:
@@ -198,6 +228,9 @@ async def health_check():
             "status": "ok",
             "paths": paths,
             "env_vars": env_vars,
+            "services": {
+                "redis": redis_status
+            },
             "mounted_app": bool(mounted_app)
         }
     except Exception as e:
@@ -208,6 +241,9 @@ async def health_check():
             "trace": error_trace,
             "paths": paths,
             "env_vars": env_vars,
+            "services": {
+                "redis": redis_status
+            },
             "mounted_app": bool(mounted_app)
         }
 

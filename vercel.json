@@ -59,11 +59,6 @@
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
         "PYTHONIOENCODING": "utf-8",
-        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
-        "REDIS_URL": "${REDIS_URL}",
-        "MORALIS_API_KEY": "${MORALIS_API_KEY}",
-        "ALCHEMY_KEY": "${ALCHEMY_KEY}",
-        "COINGECKO_API_KEY": "${COINGECKO_API_KEY}",
-        "NODE_ENV": "production"
+        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
     }
 }
