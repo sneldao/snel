@@ -22,9 +22,6 @@ cp api.py .vercel/cache/
 echo "Environment variables set:"
 env | grep -v "KEY\|TOKEN\|SECRET\|PASSWORD"
 
-# Install additional packages with specific versions
-pip install dowse==0.1.0 emp-agents==0.2.0.post1 eth-rpc==0.1.26
-
 # Print installed packages for debugging
 pip freeze > installed_packages.txt
 

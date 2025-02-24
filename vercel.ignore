@@ -7,10 +7,14 @@ __pycache__/
 .env
 .env.local
 .venv/
+poetry.lock
+pyproject.toml
 
 # Tests
 test_*.py
 tests/
+pytest.ini
+.pytest_cache/
 
 # Development
 *.log
@@ -18,4 +22,8 @@ tests/
 .gitignore
 node_modules/
 examples/
-docs/ 
+docs/
+.github/
+.flake8
+black.toml
+isort.cfg 

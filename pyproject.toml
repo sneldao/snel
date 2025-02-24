@@ -1,9 +1,8 @@
 [tool.poetry]
-name = "dowse-pointless"
+name = "snel-pointless"
 version = "0.1.0"
-description = "A natural language crypto command interpreter"
-authors = ["Your Name <your.email@example.com>"]
-package-mode = false
+description = "AI Crypto Assistant"
+authors = ["papa <papaandthejimjams@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.12"
@@ -16,19 +15,22 @@ slowapi = "0.1.9"
 eth-rpc-py = "0.1.26"
 eth-account = "0.13.5"
 eth-typing = "5.2.0"
-dowse = "0.1.6post1"
-emp-agents = ">=0.3.0,<0.4.0"
-redis = "^5.2.1"
-web3 = "^7.8.0"
-upstash-redis = "^1.2.0"
+dowse = "0.1.0"
+emp-agents = ">=0.2.0.post1,<0.3.0"
+upstash-redis = "1.2.0"
+redis = "5.0.1"
+web3 = "6.15.1"
+eth-utils = "2.3.1"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
-pytest-asyncio = "^0.25.3"
-ipython = "^8.32.0"
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.5"
+black = "^24.1.1"
+isort = "^5.13.2"
+flake8 = "^7.0.0"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
@@ -37,14 +39,9 @@ src-paths = ["./src"]
 line-length = 120
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
-filterwarnings = [
-    "ignore::DeprecationWarning:passlib.*:",
-    "ignore::DeprecationWarning:jose.*",
-    "ignore::DeprecationWarning:websockets.legacy.*",
-    "ignore::DeprecationWarning:pytest_asyncio.*",
-]
-asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
 
 [tool.poetry.scripts]
 main = "main:main"
