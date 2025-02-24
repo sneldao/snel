@@ -6,6 +6,7 @@ import os
 from typing import Optional
 import logging
 import traceback
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,17 +40,25 @@ try:
     app.mount("/", api_app)
     logger.info("Successfully mounted API")
 
-except Exception as e:
+except Exception as init_error:
     error_trace = traceback.format_exc()
-    logger.error(f"Failed to initialize API: {str(e)}\nTraceback:\n{error_trace}")
+    logger.error(f"Failed to initialize API: {str(init_error)}\nTraceback:\n{error_trace}")
     
     # Add error routes
     @app.post("/api/process-command")
     async def process_command(request: Request):
+        try:
+            # Try to read the request body
+            body = await request.json()
+            logger.error(f"Command processing failed. Request body: {json.dumps(body)}")
+        except Exception:
+            body = "Could not parse request body"
+            
         error_msg = {
             "detail": "API initialization failed",
-            "error": str(e),
-            "trace": error_trace
+            "error": str(init_error),
+            "trace": error_trace,
+            "request_body": body
         }
         logger.error(f"Command processing failed: {error_msg}")
         return JSONResponse(
@@ -59,10 +68,18 @@ except Exception as e:
 
     @app.post("/api/execute-transaction")
     async def execute_transaction(request: Request):
+        try:
+            # Try to read the request body
+            body = await request.json()
+            logger.error(f"Transaction execution failed. Request body: {json.dumps(body)}")
+        except Exception:
+            body = "Could not parse request body"
+            
         error_msg = {
             "detail": "API initialization failed",
-            "error": str(e),
-            "trace": error_trace
+            "error": str(init_error),
+            "trace": error_trace,
+            "request_body": body
         }
         logger.error(f"Transaction execution failed: {error_msg}")
         return JSONResponse(
@@ -82,10 +99,11 @@ async def health_check():
             "root_dir": root_dir
         }
     except Exception as e:
+        error_trace = traceback.format_exc()
         return {
             "status": "error",
             "message": str(e),
-            "trace": traceback.format_exc(),
+            "trace": error_trace,
             "python_path": sys.path,
             "root_dir": root_dir
         }
@@ -95,11 +113,20 @@ async def health_check():
 async def internal_error_handler(request: Request, exc: Exception):
     error_trace = traceback.format_exc()
     logger.error(f"Internal server error: {str(exc)}\nTraceback:\n{error_trace}")
+    
+    try:
+        # Try to read the request body
+        body = await request.json()
+        logger.error(f"Request body: {json.dumps(body)}")
+    except Exception:
+        body = "Could not parse request body"
+        
     return JSONResponse(
         status_code=500,
         content={
             "detail": "An internal server error occurred",
             "error": str(exc),
-            "trace": error_trace
+            "trace": error_trace,
+            "request_body": body
         }
     ) 
