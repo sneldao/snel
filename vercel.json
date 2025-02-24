@@ -11,8 +11,7 @@
                 "handler": "app",
                 "includeFiles": [
                     "kyber.py",
-                    "configure_logging.py",
-                    "requirements.txt"
+                    "configure_logging.py"
                 ]
             }
         },
@@ -37,6 +36,7 @@
     "env": {
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
-        "PYTHONIOENCODING": "utf-8"
+        "PYTHONIOENCODING": "utf-8",
+        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
     }
 }
