@@ -1,35 +1,167 @@
-# Dowse Pointless
+# Pointless - AI Crypto Assistant
 
-<p align="center">
-  <a href="https://dowse.empyrealsdk.com"><img src="https://raw.githubusercontent.com/empyrealapp/dowse/main/assets/logo.png" alt="dowse" height=300></a>
-</p>
-<p align="center">
-    <em>dowse, a python library for building natural language agents that can interpret and execute commands.</em>
-</p>
-<p align="center">
-<a href="https://github.com/empyrealapp/dowse/actions?query=event%3Apush+branch%3Amain" target="_blank">
-    <img src="https://github.com/empyrealapp/dowse/actions/workflows/publish.yaml/badge.svg?event=push&branch=main" alt="Test">
-</a>
-<!-- <a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/empyrealapp/dowse" target="_blank">
-    <img src="https://coverage-badge.samuelcolvin.workers.dev/empyrealapp/dowse.svg" alt="Coverage">
-</a> -->
-<a href="https://pypi.org/project/dowse" target="_blank">
-    <img src="https://img.shields.io/pypi/v/dowse?color=%2334D058&label=pypi%20package" alt="Package version">
-</a>
-<a href="https://pypi.org/project/dowse" target="_blank">
-    <img src="https://img.shields.io/pypi/pyversions/dowse.svg?color=%2334D058" alt="Supported Python versions">
-</a>
-</p>
+A friendly crypto command interpreter that helps users swap tokens and answers questions about crypto.
 
----
+## Features
 
-**Documentation**: <a href="https://dowse.empyrealsdk.com" target="_blank">https://dowse.empyrealsdk.com</a>
+- Token swaps across multiple chains (Optimism, Base, Scroll)
+- Natural language command processing
+- Automatic token approval handling
+- Multi-chain support with automatic chain detection
 
-**Source Code**: <a href="https://github.com/empyrealapp/dowse" target="_blank">https://github.com/empyrealapp/dowse</a>
+## Supported Chains
 
----
+- Optimism
+- Base
+- Scroll
+- (More coming soon)
 
-## Overview
+## Local Development Setup
+
+### Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- Poetry for Python dependency management
+- pnpm for Node.js dependency management
+
+### Environment Variables
+
+Create a `.env.local` file in the root directory:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+ALCHEMY_KEY=your_alchemy_key
+COINGECKO_API_KEY=your_coingecko_key
+```
+
+### Backend Setup
+
+1. Install Python dependencies:
+
+```bash
+poetry install
+```
+
+2. Start the FastAPI server:
+
+```bash
+poetry run uvicorn api:app --reload --port 8000
+```
+
+### Frontend Setup
+
+1. Install Node.js dependencies:
+
+```bash
+cd frontend
+pnpm install
+```
+
+2. Start the Next.js development server:
+
+```bash
+pnpm dev
+```
+
+## Production Setup (Vercel)
+
+### Vercel Configuration
+
+The project uses Vercel's serverless functions for the backend. Configuration is managed through `vercel.json`:
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 60,
+        "memory": 1024,
+        "runtime": "python3.12",
+        "handler": "app",
+        "includeFiles": ["kyber.py", "configure_logging.py"]
+      }
+    },
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
+    }
+  ],
+  "regions": ["iad1"],
+  "env": {
+    "PYTHONUNBUFFERED": "1",
+    "PYTHONPATH": ".",
+    "PYTHONIOENCODING": "utf-8",
+    "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
+  }
+}
+```
+
+### Environment Variables (Vercel)
+
+Set these in your Vercel project settings:
+
+- `ALCHEMY_KEY`
+- `COINGECKO_API_KEY`
+- `NEXT_PUBLIC_API_URL` (set to your production domain)
+
+### Dependencies
+
+The project uses specific versions of dependencies that are known to work with Vercel's serverless environment:
+
+```requirements.txt
+fastapi==0.115.8
+uvicorn==0.34.0
+pydantic==2.10.6
+httpx==0.28.1
+python-dotenv==1.0.1
+slowapi==0.1.9
+eth-rpc-py==0.1.26
+eth-account==0.13.5
+eth-typing==5.2.0
+dowse==0.1.0
+emp-agents>=0.2.0.post1,<0.3.0
+```
+
+## Key Differences Between Local and Production
+
+### Backend
+
+- Local: Runs as a standalone FastAPI server
+- Production: Runs as Vercel serverless functions
+
+### API URLs
+
+- Local: `http://localhost:8000`
+- Production: Your Vercel deployment URL
+
+### CORS Configuration
+
+The backend supports these origins:
+
+```python
+allow_origins=[
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://snel-pointless.vercel.app",
+    "https://snel-pointless-git-main-papas-projects-5b188431.vercel.app",
+]
+```
+
+## Underpinned by Dowse
 
 Dowse is a Python library that enables you to build intelligent agents capable of:
 
@@ -55,159 +187,60 @@ dowse-pointless/
 ├── frontend/          # Next.js frontend application
 ├── .env              # Environment variables
 └── README.md         # This file
-```
 
-## Getting Started
+## Troubleshooting
 
-### Prerequisites
+### Common Issues
 
-- Python 3.8+
-- Node.js 16+
-- Poetry (Python package manager)
-- npm or yarn (Node.js package manager)
+1. API Connection Errors
+   - Check CORS settings
+   - Verify environment variables
+   - Ensure correct API URL configuration
 
-### Environment Setup
+2. Swap Failures
+   - Verify token approvals
+   - Check token addresses for the chain
+   - Ensure sufficient balance
 
-1. Create a `.env` file in the root directory with the following variables:
+### Logs
 
-```bash
-ALCHEMY_KEY=your_alchemy_key
-OPENAI_API_KEY=your_openai_key
-QUICKNODE_ENDPOINT=your_quicknode_endpoint
-```
+- Local: Available in terminal running the FastAPI server
+- Production: Check Vercel deployment logs
 
-### Backend Setup
+## Contributing
 
-1. Install Python dependencies:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
 
-```bash
-poetry install
-```
+## License
 
-2. Start the backend server:
+MIT
 
-```bash
-poetry run uvicorn api:app --reload
-```
+## Notes on Dowse Implementation Challenges
 
-The backend will be available at `http://localhost:8000`.
+During our attempt to integrate Dowse for natural language command processing, we encountered several challenges that led us to implement our own command parsing solution:
 
-### Frontend Setup
+1. Type System Complexity
+   - Dowse's type system is highly opinionated and tightly coupled with Pydantic
+   - The generic type parameters for Pipeline, Classifier, and Executor were difficult to align with our use case
+   - Validation errors were hard to resolve due to complex inheritance patterns
 
-1. Navigate to the frontend directory:
+2. Architecture Constraints
+   - Dowse's Pipeline architecture assumes a specific flow that didn't match our swap/price query needs
+   - The built-in classifiers and executors were too rigid for our token swap use case
+   - Custom implementations required extensive boilerplate to satisfy Dowse's type system
 
-```bash
-cd frontend
-```
+3. Integration Issues
+   - Difficulty integrating with our existing token address and chain management
+   - Challenges with error handling and transaction flow control
+   - Limited flexibility in command parsing and response formatting
 
-2. Install Node.js dependencies:
+4. Alternative Solution
+   - Implemented a simpler, more focused command parsing system
+   - Direct control over swap command validation and execution
+   - Better integration with our existing token price and swap infrastructure
+   - More maintainable and easier to extend for our specific use case
 
-```bash
-npm install
-# or
-yarn install
-```
-
-3. Start the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-```
-
-The frontend will be available at `http://localhost:3000`.
-
-## Development
-
-### Running Tests
-
-```bash
-poetry install
-poetry run pytest
-```
-
-### Git Best Practices
-
-When committing changes:
-
-1. Check untracked files before committing:
-
-```bash
-git clean -n
-```
-
-2. Review changes to be committed:
-
-```bash
-git status
-```
-
-3. Avoid committing build files and dependencies:
-
-- Use `.gitignore` to exclude build directories
-- Don't commit `node_modules/` or `.next/` directories
-- Don't commit environment files (`.env`)
-
-## Requirements
-
-dowse is built utilizing the following libraries:
-
-- <a href="https://docs.pydantic.dev/" class="external-link" target="_blank">Pydantic</a> for the data parts
-- <a href="https://github.com/empyrealapp/eth-rpc" class="external-link" target="_blank">eth-rpc</a> for the blockchain parts
-- <a href="https://github.com/empyrealapp/emp-agents" class="external-link" target="_blank">emp-agents</a> for the agent parts
-
-## Example Usage
-
-The following example shows how to create a pipeline that classifies tweets as either a command or a question:
-
-```python
-import asyncio
-import os
-import logging
-from enum import StrEnum
-from typing import Literal
-
-from eth_rpc import set_alchemy_key
-
-from dowse import Pipeline
-from dowse.impls.basic.llms import BasicTweetClassifier, BasicTwitterCommands, BasicTwitterQuestion
-from dowse.impls.basic.effects import Printer
-from dowse.impls.basic.source import TwitterMock
-from dowse.models import Tweet
-
-logging.getLogger("dowse").setLevel(logging.DEBUG)
-set_alchemy_key(os.environ["ALCHEMY_KEY"])
-
-
-class Classifications(StrEnum):
-    """A class that defines the different classifications that can be made by the pipeline."""
-    COMMANDS = "commands"
-    QUESTION = "question"
-
-
-async def amain():
-    pipeline = Pipeline[Tweet, Tweet, Classifications](
-        classifier=BasicTweetClassifier,
-        handlers={
-            "commands": BasicTwitterCommands.add_effect(Printer(prefix="COMMANDS")),
-            "question": BasicTwitterQuestion.add_effects([Printer(prefix="QUESTION")]),
-        },
-        source=TwitterMock(),
-    )
-
-    result = await pipeline.process(
-        Tweet(
-            id=1684298214198108160,
-            content="swap $300 for $UNI and then send half of it to @vitalikbuterin",
-            creator_id=12,
-            creator_name="@jack",
-        ),
-    )
-
-    await pipeline.run(max_executions=3, iteration_min_time=120)
-
-
-if __name__ == "__main__":
-    asyncio.run(amain())
+These notes are provided to help future development decisions and to document why we chose a custom implementation over the Dowse framework.
 ```

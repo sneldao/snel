@@ -201,6 +201,7 @@ export default function Home() {
               command: txData.pending_command,
               wallet_address: address,
               chain_id: chainId,
+              creator_id: address || "anonymous",
             }),
           });
 
@@ -364,6 +365,7 @@ export default function Home() {
                 command: pendingResponse.pendingCommand,
                 wallet_address: address,
                 chain_id: chainId,
+                creator_id: address || "anonymous",
               }),
             });
 
@@ -433,7 +435,7 @@ export default function Home() {
         body: JSON.stringify({
           content: command,
           creator_name: "@user",
-          creator_id: 1,
+          creator_id: address || "anonymous",
           chain_id: chainId,
         }),
       });
@@ -522,7 +524,7 @@ export default function Home() {
               flexDir={{ base: "column", sm: "row" }}
               spacing={{ base: 2, sm: 4 }}
             >
-              <Heading size={{ base: "lg", sm: "xl" }}>Pointless</Heading>
+              <Heading size={{ base: "lg", sm: "xl" }}>SNEL</Heading>
               <HStack spacing={{ base: 2, sm: 4 }}>
                 <Button
                   size="sm"
@@ -537,11 +539,11 @@ export default function Home() {
               </HStack>
             </HStack>
             <Text color="gray.600" fontSize={{ base: "md", sm: "lg" }}>
-              Your friendly crypto command interpreter
+              a Super poiNtlEss Lazy agent
             </Text>
             <Text color="gray.500" fontSize={{ base: "xs", sm: "sm" }} mt={2}>
-              Ask me to swap tokens, send crypto, or answer questions about
-              crypto!
+              swap tokens, check balance etc. <br />
+              double check all i do please.
             </Text>
           </Box>
 
@@ -570,10 +572,9 @@ export default function Home() {
             >
               <AlertIcon />
               <Box>
-                <AlertTitle>Welcome to Pointless!</AlertTitle>
+                <AlertTitle>Welcome! Why are you here?</AlertTitle>
                 <AlertDescription>
-                  Try asking me to swap some tokens or check crypto prices.
-                  Click the help icon above for example commands.
+                  Click the help icon if you need help.
                 </AlertDescription>
               </Box>
             </Alert>

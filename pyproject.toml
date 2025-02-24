@@ -16,8 +16,10 @@ slowapi = "0.1.9"
 eth-rpc-py = "0.1.26"
 eth-account = "0.13.5"
 eth-typing = "5.2.0"
-dowse = "0.1.0"
-emp-agents = ">=0.2.0.post1,<0.3.0"
+dowse = "0.1.6post1"
+emp-agents = ">=0.3.0,<0.4.0"
+redis = "^5.2.1"
+web3 = "^7.8.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"

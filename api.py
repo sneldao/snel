@@ -1,32 +1,207 @@
 import configure_logging  # This must be the first import
 
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+import datetime
+import sys
+import json
+from typing import Dict, Optional
+import redis.asyncio as redis
 import asyncio
+
+# Load environment variables from .env file BEFORE importing dowse
+env_path = Path(__file__).parent / '.env'
+load_dotenv(env_path)
+
+# Ensure OpenAI key is set before importing dowse
+if not os.environ.get("OPENAI_API_KEY"):
+    openai_key = os.environ.get("OPENAI_API_KEY_LOCAL")  # Try local key
+    if openai_key:
+        os.environ["OPENAI_API_KEY"] = openai_key
+
+# Now we can safely import dowse
+from dowse import Pipeline
+
 import logging
-from typing import Optional
-from enum import StrEnum
-from fastapi import FastAPI, HTTPException, Header, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel
-from eth_typing import HexAddress
-import httpx
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-import datetime
-import sys
 
-# Initialize logger using the configured logger
+from app.models.commands import (
+    CommandRequest, CommandResponse, TransactionRequest, TransactionResponse,
+    UserMessage, BotMessage, SwapCommand
+)
+from app.config.chains import ChainConfig, TOKEN_ADDRESSES, NATIVE_TOKENS
+from app.services.pipeline import init_pipeline
+from app.services.prices import get_token_price
+
+# Initialize logger
 logger = logging.getLogger(__name__)
+
+class RedisPendingCommandStore:
+    """Redis-backed store for pending commands."""
+    KEY_PREFIX = "pending_cmd"  # Namespace for all command keys
+    MAX_RETRIES = 3  # Maximum number of retries for operations
+    RETRY_DELAY = 0.1  # Delay between retries in seconds
+    
+    def __init__(self):
+        self._logger = logging.getLogger(__name__)
+        self._redis = None
+        self._redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        
+    async def _ensure_connection(self):
+        """Ensure Redis connection is active, reconnect if needed."""
+        try:
+            if not self._redis:
+                self._redis = redis.from_url(
+                    self._redis_url,
+                    encoding="utf-8",
+                    decode_responses=True,
+                    retry_on_timeout=True,
+                    health_check_interval=30,
+                    socket_keepalive=True,  # Keep connection alive
+                    socket_timeout=5,  # 5 second timeout
+                    retry_on_error=[redis.ConnectionError, redis.TimeoutError]  # Auto-retry on these errors
+                )
+            await self._redis.ping()
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            self._logger.warning(f"Redis connection lost, attempting to reconnect: {e}")
+            try:
+                # Close existing connection if any
+                if self._redis:
+                    await self._redis.close()
+                # Create new connection
+                self._redis = redis.from_url(
+                    self._redis_url,
+                    encoding="utf-8",
+                    decode_responses=True,
+                    retry_on_timeout=True,
+                    health_check_interval=30,
+                    socket_keepalive=True,
+                    socket_timeout=5,
+                    retry_on_error=[redis.ConnectionError, redis.TimeoutError]
+                )
+                await self._redis.ping()
+                self._logger.info("Successfully reconnected to Redis")
+            except Exception as e:
+                self._logger.error(f"Failed to reconnect to Redis: {e}")
+                raise RuntimeError("Redis connection failed")
+
+    async def _retry_operation(self, operation):
+        """Retry an operation with exponential backoff."""
+        last_error = None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                await self._ensure_connection()
+                return await operation()
+            except (redis.ConnectionError, redis.TimeoutError) as e:
+                last_error = e
+                if attempt < self.MAX_RETRIES - 1:
+                    delay = self.RETRY_DELAY * (2 ** attempt)  # Exponential backoff
+                    self._logger.warning(f"Operation failed, retrying in {delay}s: {e}")
+                    await asyncio.sleep(delay)
+                continue
+            except Exception as e:
+                self._logger.error(f"Unexpected error during operation: {e}")
+                raise
+        raise RuntimeError(f"Operation failed after {self.MAX_RETRIES} attempts: {last_error}")
+
+    def _make_key(self, address: str) -> str:
+        """Create a Redis key for a wallet address."""
+        from eth_utils import to_checksum_address
+        try:
+            # Convert to checksum address if it's a valid Ethereum address
+            if address.startswith("0x"):
+                checksummed = to_checksum_address(address)
+                return f"{self.KEY_PREFIX}:{checksummed}"
+        except ValueError:
+            pass
+        # For non-ETH addresses (e.g. test accounts), just lowercase
+        return f"{self.KEY_PREFIX}:{address.lower()}"
+
+    async def initialize(self):
+        """Initialize the Redis connection."""
+        await self._ensure_connection()
+        self._logger.info("Successfully connected to Redis")
+    
+    async def store_command(self, user_id: str, command: str, chain_id: Optional[int] = None) -> None:
+        """Store a pending command for a user."""
+        data = {
+            "command": command,
+            "chain_id": chain_id,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        
+        key = self._make_key(user_id)
+        
+        async def _store():
+            # Store with 30 minute TTL
+            await self._redis.setex(key, 1800, json.dumps(data))
+            
+            # Verify storage
+            stored_data = await self._redis.get(key)
+            if not stored_data:
+                raise RuntimeError("Command was not stored successfully")
+            
+            ttl = await self._redis.ttl(key)
+            self._logger.info(f"Stored command for key {key}: {command} (chain: {chain_id})")
+            self._logger.info(f"Command TTL for key {key}: {ttl} seconds")
+            
+        await self._retry_operation(_store)
+    
+    async def get_command(self, user_id: str) -> Optional[Dict]:
+        """Get a pending command for a user."""
+        key = self._make_key(user_id)
+        self._logger.info(f"Attempting to get command for key {key}")
+        
+        async def _get():
+            # Get data and TTL
+            data = await self._redis.get(key)
+            ttl = await self._redis.ttl(key)
+            
+            self._logger.info(f"Command TTL for key {key}: {ttl} seconds")
+            self._logger.info(f"Raw Redis data for key {key}: {data}")
+            
+            if not data:
+                self._logger.info(f"No command found for key {key}")
+                return None
+                
+            command_data = json.loads(data)
+            self._logger.info(f"Found command for key {key}: {command_data['command']}")
+            return command_data
+            
+        return await self._retry_operation(_get)
+    
+    async def clear_command(self, user_id: str) -> None:
+        """Clear a pending command for a user."""
+        key = self._make_key(user_id)
+        
+        async def _clear():
+            exists = await self._redis.exists(key)
+            if exists:
+                await self._redis.delete(key)
+                self._logger.info(f"Cleared command for key {key}")
+            else:
+                self._logger.warning(f"No command found to clear for key {key}")
+                
+        await self._retry_operation(_clear)
+
+    async def list_all_commands(self) -> list[str]:
+        """List all pending command keys (useful for debugging)."""
+        async def _list():
+            return await self._redis.keys(f"{self.KEY_PREFIX}:*")
+            
+        return await self._retry_operation(_list)
+
+# Global command store
+command_store = RedisPendingCommandStore()
 
 try:
     from eth_rpc import set_alchemy_key
-    from dowse import Pipeline
-    from dowse.impls.basic.llms import BasicTweetClassifier, BasicTwitterCommands, BasicTwitterQuestion
-    from dowse.impls.basic.effects import Printer
-    from dowse.impls.basic.source import TwitterMock
-    from dowse.models import Tweet
     from kyber import (
         get_quote as kyber_quote,
         KyberSwapError,
@@ -40,11 +215,6 @@ try:
 except ImportError as e:
     logger.error(f"Failed to import required packages: {e}")
     raise
-
-class Classifications(StrEnum):
-    """A class that defines the different classifications that can be made by the pipeline."""
-    COMMANDS = "commands"
-    QUESTION = "question"
 
 # Set up rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -79,243 +249,68 @@ def init_services():
     # Set Alchemy key
     set_alchemy_key(alchemy_key)
 
-init_services()
-
 # OpenAI API key header
 openai_key_header = APIKeyHeader(name="X-OpenAI-Key", auto_error=False)
 
-class CommandRequest(BaseModel):
-    content: str
-    creator_name: str = "@user"
-    creator_id: int = 1
-    chain_id: Optional[int] = None  # Add chain_id field
+def get_openai_key(api_key: str = Depends(openai_key_header)) -> str:
+    # First try to get from header (production)
+    if api_key:
+        return api_key
 
-class CommandResponse(BaseModel):
-    content: Optional[str] = None
-    error_message: Optional[str] = None
-    pending_command: Optional[str] = None
+    # Then try environment variable (development)
+    env_key = os.environ.get("OPENAI_API_KEY")
+    if env_key:
+        return env_key
 
-class TransactionRequest(BaseModel):
-    command: str
-    wallet_address: HexAddress
-    chain_id: int  # Add chain_id to the request
+    raise HTTPException(
+        status_code=401,
+        detail="OpenAI API Key is required (either in header or environment)"
+    )
 
-class TransactionResponse(BaseModel):
-    to: HexAddress
-    data: str
-    value: str
-    chain_id: int
-    method: str
-    gas_limit: str
-    gas_price: Optional[str] = None
-    max_fee_per_gas: Optional[str] = None
-    max_priority_fee_per_gas: Optional[str] = None
-    needs_approval: bool = False
-    token_to_approve: Optional[HexAddress] = None
-    spender: Optional[HexAddress] = None
-    pending_command: Optional[str] = None
+# Global pipeline instance
+pipeline = None
 
-class SwapCommand(BaseModel):
-    token_in: str
-    token_out: str
-    amount_in: float
+def get_pipeline(openai_key: str) -> Pipeline:
+    """Get or create the pipeline instance."""
+    global pipeline
+    if pipeline is None:
+        # Set OpenAI key in environment
+        os.environ["OPENAI_API_KEY"] = openai_key
+        # Initialize pipeline
+        pipeline = init_pipeline(openai_key)
+    return pipeline
 
-class ChainConfig:
-    """Configuration for supported chains."""
-    SUPPORTED_CHAINS = {
-        1: "Ethereum",
-        8453: "Base",
-        42161: "Arbitrum",
-        10: "Optimism",
-        137: "Polygon",
-        43114: "Avalanche",
-        534352: "Scroll"  # Add Scroll support
-    }
-
-    @staticmethod
-    def is_supported(chain_id: int) -> bool:
-        return chain_id in ChainConfig.SUPPORTED_CHAINS
-
-    @staticmethod
-    def get_chain_name(chain_id: int) -> str:
-        return ChainConfig.SUPPORTED_CHAINS.get(chain_id, "Unknown")
-
-async def get_token_addresses(chain_id: int) -> dict[str, HexAddress]:
-    """Get token addresses for the specified chain."""
-    addresses = {
-        1: {  # Ethereum
-            "ETH": HexAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"),
-            "USDC": HexAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
-            "UNI": HexAddress("0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"),
-        },
-        8453: {  # Base
-            "ETH": HexAddress("0x4200000000000000000000000000000000000006"),
-            "USDC": HexAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"),
-            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # Example
-        },
-        10: {  # Optimism
-            "ETH": HexAddress("0x4200000000000000000000000000000000000006"),
-            "USDC": HexAddress("0x7F5c764cBc14f9669B88837ca1490cCa17c31607"),  # Updated USDC on Optimism
-            "UNI": HexAddress("0x6fd9d7AD17242c41f7131d257212c54A0e816691"),
-        },
-        42161: {  # Arbitrum
-            "ETH": HexAddress("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"),
-            "USDC": HexAddress("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
-            "UNI": HexAddress("0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0"),
-        },
-        137: {  # Polygon
-            "ETH": HexAddress("0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619"),
-            "USDC": HexAddress("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"),
-            "UNI": HexAddress("0xb33EaAd8d922B1083446DC23f610c2567fB5180f"),
-        },
-        43114: {  # Avalanche
-            "ETH": HexAddress("0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB"),
-            "USDC": HexAddress("0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"),
-            "UNI": HexAddress("0x8eBAf22B6F053dFFeaf46f4Dd9eFA95D89ba8580"),
-        },
-        534352: {  # Scroll
-            "ETH": HexAddress("0x5300000000000000000000000000000000000004"),  # Native ETH on Scroll
-            "USDC": HexAddress("0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),  # USDC on Scroll
-            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # UNI not yet available
-        }
-    }
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services."""
+    init_services()
     
-    if chain_id not in addresses:
-        chain_name = ChainConfig.get_chain_name(chain_id)
-        raise ValueError(f"Token addresses not configured for {chain_name} (chain ID: {chain_id})")
-    
-    return addresses[chain_id]
-
-async def get_token_price(token_id: str) -> float:
-    """Get token price from CoinGecko."""
-    token_mapping = {
-        "ETH": "ethereum",
-        "UNI": "uniswap",
-        # Add more tokens as needed
-    }
-    
-    if token_id not in token_mapping:
-        raise ValueError(f"Unsupported token: {token_id}")
+    # Initialize Redis connection
+    try:
+        await command_store.initialize()
         
-    coin_id = token_mapping[token_id]
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                url,
-                headers={
-                    "x-cg-demo-api-key": os.environ["COINGECKO_API_KEY"]
-                }
-            )
-            if response.status_code == 429:  # Rate limit exceeded
-                logger.warning("CoinGecko rate limit exceeded")
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded. Please try again later."
-                )
-            data = response.json()
-            return data[coin_id]["usd"]
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error fetching price from CoinGecko: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to fetch price data. Please try again later."
-        )
-    except Exception as e:
-        logger.error(f"Error fetching price from CoinGecko: {e}")
-        raise
-
-async def handle_price_query(query: str) -> str:
-    """Handle price-related queries."""
-    try:
-        # Extract token symbol from query
-        token = query.lower()
-        if "$eth" in token or "eth" in token:
-            price = await get_token_price("ETH")
-            return f"The current price of ETH is ${price:,.2f}"
-        elif "$uni" in token or "uni" in token:
-            price = await get_token_price("UNI")
-            return f"The current price of UNI is ${price:,.2f}"
-        # Add more tokens as needed
+        # Test Redis operations
+        test_user_id = "test_user"
+        test_command = "test_command"
+        
+        # Store test command
+        await command_store.store_command(test_user_id, test_command)
+        logger.info("Test command stored successfully")
+        
+        # Retrieve test command
+        stored_command = await command_store.get_command(test_user_id)
+        if stored_command and stored_command["command"] == test_command:
+            logger.info("Test command retrieved successfully")
         else:
-            return "I can check prices for ETH and UNI. Please specify which token you'd like to know about."
-    except Exception as e:
-        logger.error(f"Error getting price: {e}")
-        return "Sorry, I couldn't fetch the price at the moment. Please try again later."
-
-async def parse_swap_command(content: str, chain_id: int) -> Optional[SwapCommand]:
-    """Parse a swap command to extract token and amount information."""
-    content = content.lower()
-    try:
-        # Basic pattern matching for swap commands
-        if "swap" not in content:
-            return None
+            logger.error("Test command retrieval failed")
             
-        # Extract amount and tokens
-        words = content.split()
-        amount = None
-        token_in = None
-        token_out = None
+        # Clear test command
+        await command_store.clear_command(test_user_id)
+        logger.info("Test command cleared successfully")
         
-        for i, word in enumerate(words):
-            if word.replace(".", "").isdigit():
-                amount = float(word)
-                if i + 1 < len(words):
-                    token_in = words[i + 1].strip("$")
-            elif word == "for" and i + 1 < len(words):
-                token_out = words[i + 1].strip("$")
-                
-        if amount and token_in and token_out:
-            # Validate chain support
-            if not ChainConfig.is_supported(chain_id):
-                raise ValueError(
-                    f"Chain {chain_id} is not supported. Supported chains: "
-                    f"{', '.join(f'{name} ({id})' for id, name in ChainConfig.SUPPORTED_CHAINS.items())}"
-                )
-
-            # Get token addresses for the chain
-            token_addresses = await get_token_addresses(chain_id)
-            
-            # Validate tokens are supported on this chain
-            token_in_upper = token_in.upper()
-            token_out_upper = token_out.upper()
-            
-            if token_in_upper not in token_addresses:
-                raise ValueError(f"{token_in_upper} is not supported on {ChainConfig.get_chain_name(chain_id)}")
-            if token_out_upper not in token_addresses:
-                raise ValueError(f"{token_out_upper} is not supported on {ChainConfig.get_chain_name(chain_id)}")
-
-            return SwapCommand(
-                token_in=token_in_upper,
-                token_out=token_out_upper,
-                amount_in=amount
-            )
-        return None
     except Exception as e:
-        logger.error(f"Error parsing swap command: {e}")
+        logger.error(f"Failed to initialize Redis: {e}")
         raise
-
-async def get_openai_key(
-    openai_key: str = Depends(openai_key_header),
-) -> str:
-    """Validate and return OpenAI API key."""
-    if not openai_key:
-        raise HTTPException(
-            status_code=401,
-            detail="OpenAI API key is required. Please provide it in the X-OpenAI-Key header."
-        )
-    return openai_key
-
-async def get_api_keys(request: Request) -> dict[str, str]:
-    """Get OpenAI API key from request headers."""
-    openai_key = request.headers.get("X-OpenAI-Key")
-    if not openai_key:
-        raise HTTPException(
-            status_code=401,
-            detail="OpenAI API key is required. Please provide it in the X-OpenAI-Key header."
-        )
-    return {"OPENAI_API_KEY": openai_key}
 
 @app.post("/api/process-command")
 @limiter.limit("20/minute")
@@ -325,205 +320,208 @@ async def process_command(
     openai_key: str = Depends(get_openai_key)
 ) -> CommandResponse:
     try:
-        # Set OpenAI API key for this request
-        os.environ["OPENAI_API_KEY"] = openai_key
+        # Get pipeline instance
+        pipeline = get_pipeline(openai_key)
+        
+        # Always convert user ID to checksum address if it's an ETH address
+        from eth_utils import to_checksum_address
+        try:
+            if command_request.creator_id.startswith("0x"):
+                user_id = to_checksum_address(command_request.creator_id)
+            else:
+                user_id = command_request.creator_id.lower()
+        except ValueError:
+            user_id = command_request.creator_id.lower()
+            
+        command_request.creator_id = user_id
         
         logger.info(f"Processing command: {command_request.content} on chain {command_request.chain_id}")
+        logger.info(f"User ID (normalized): {user_id}, Name: {command_request.creator_name}")
         
-        # Check if it's a price query
-        if "price" in command_request.content.lower():
-            response = await handle_price_query(command_request.content)
-            return CommandResponse(content=response)
-
-        # Check if it's a swap command
-        content = command_request.content.lower()
-        if "swap" in content:
+        # Handle confirmations
+        content = command_request.content.lower().strip()
+        if content in ["yes", "y", "confirm"]:
+            # List all commands for debugging
+            all_keys = await command_store.list_all_commands()
+            logger.info(f"All pending command keys: {all_keys}")
+            
+            # Get pending command
             try:
-                logger.info("Processing swap command...")
-                # Use the provided chain ID or default to Base
-                chain_id = command_request.chain_id if command_request.chain_id else 8453
-                logger.info(f"Using chain ID: {chain_id}")
+                # Double-check the key format
+                key = command_store._make_key(user_id)
+                logger.info(f"Looking up command with key: {key}")
                 
-                swap_command = await parse_swap_command(content, chain_id=chain_id)
-                logger.info(f"Parsed swap command: {swap_command}")
+                # Get raw data first
+                raw_data = await command_store._redis.get(key)
+                logger.info(f"Raw Redis data: {raw_data}")
                 
-                if swap_command:
-                    # Store the normalized command format for later execution
-                    normalized_command = f"swap {swap_command.amount_in} {swap_command.token_in} for {swap_command.token_out}"
-                    logger.info(f"Normalized command: {normalized_command}")
-                    
-                    # Get chain name for the message
-                    chain_name = ChainConfig.get_chain_name(chain_id)
-                    logger.info(f"Chain name: {chain_name}")
-                    
-                    # For now, return a preview of what will be swapped
-                    preview = (
-                        f"I'll help you swap {swap_command.amount_in} {swap_command.token_in} "
-                        f"for {swap_command.token_out}.\n\n"
-                        f"The swap will be executed on the {chain_name} chain.\n\n"
-                        f"Does this look good? Reply with 'yes' to confirm or 'no' to cancel."
-                    )
+                pending_data = await command_store.get_command(user_id)
+                logger.info(f"Parsed pending data: {pending_data}")
+                
+                if not pending_data:
+                    logger.error(f"No pending command found for user {user_id}")
                     return CommandResponse(
-                        content=preview,
-                        error_message=None,
-                        pending_command=normalized_command
+                        content="No pending command found. Please try your swap command again.",
+                        error_message="No pending command found"
                     )
-                else:
-                    logger.warning("Failed to parse swap command")
+                
+                # Execute the pending command
+                pending_command = pending_data["command"]
+                chain_id = pending_data.get("chain_id") or command_request.chain_id  # Fallback to current chain_id
+                logger.info(f"Found pending command for user {user_id}: {pending_command} on chain {chain_id}")
+                
+                try:
+                    # Parse the command to get swap details
+                    parts = pending_command.split()
+                    if len(parts) == 5 and parts[0].lower() == "swap" and parts[3].lower() == "for":
+                        amount = float(parts[1])
+                        token_in = parts[2].upper()
+                        token_out = parts[4].upper()
+                        
+                        logger.info(f"Creating transaction request for {amount} {token_in} -> {token_out} on chain {chain_id}")
+                        
+                        # Create a transaction request
+                        tx_request = TransactionRequest(
+                            command=pending_command,
+                            chain_id=chain_id,
+                            wallet_address=user_id
+                        )
+                        
+                        # Clear the command only after successful creation of tx request
+                        await command_store.clear_command(user_id)
+                        
+                        # Return success response
+                        return CommandResponse(
+                            content=f"Preparing to swap {amount} {token_in} for {token_out}...",
+                            pending_command=None,
+                            metadata={"transaction_request": tx_request.model_dump()}
+                        )
+                    else:
+                        raise ValueError("Invalid command format")
+                        
+                except Exception as e:
+                    logger.error(f"Error executing command: {e}")
                     return CommandResponse(
-                        content="I couldn't understand your swap command. Please use the format: 'swap 1 usdc for eth'"
+                        content="Sorry, something went wrong executing your command.",
+                        error_message=str(e)
                     )
-            except ValueError as ve:
-                logger.error(f"ValueError in swap command: {ve}")
-                return CommandResponse(content=str(ve))
+                
             except Exception as e:
-                logger.error(f"Error processing swap command: {e}", exc_info=True)
-                # Check if this is a transaction rejection
-                if "User rejected the request" in str(e):
-                    return CommandResponse(
-                        content="Transaction cancelled by user.",
-                        error_message=None
-                    )
+                logger.error(f"Error retrieving pending command: {e}", exc_info=True)
                 return CommandResponse(
-                    content="Sorry, I couldn't process your swap command. Please try again with the format: 'swap 1 usdc for eth'"
+                    content="Sorry, something went wrong retrieving your pending command.",
+                    error_message=str(e)
                 )
-
-        # If we get here, it's not a swap or price command, so use the pipeline
-        try:
-            result = await pipeline.process(
-                Tweet(
-                    id=1,
-                    content=command_request.content,
-                    creator_id=command_request.creator_id,
-                    creator_name=command_request.creator_name,
-                )
-            )
             
-            if not result or not result.content:
-                return CommandResponse(
-                    content="I'm not sure how to help with that. Try asking about prices or making a swap!"
-                )
-
-            # Clean up the response format
-            content = result.content
-            if isinstance(content, str):
-                if content.startswith('response="') and content.endswith('"'):
-                    content = content[10:-1]
-
-            return CommandResponse(content=content)
-            
-        except Exception as e:
-            logger.error(f"Pipeline processing error: {e}")
+        # Convert request to Tweet
+        tweet = command_request.to_tweet()
+        
+        # Process through pipeline
+        result = await pipeline.process(tweet)
+        logger.info(f"Pipeline result: {result}")
+        
+        # Handle pipeline errors
+        if result.error_message:
             return CommandResponse(
-                content="I'm having trouble understanding that command. Try asking about prices or making a swap!"
+                content=f"Sorry, I couldn't process your command: {result.error_message}",
+                error_message=result.error_message
             )
-
+        
+        # Convert result to BotMessage
+        bot_message = BotMessage.from_agent_message(result)
+        
+        # Store pending command if one was generated
+        if bot_message.metadata and "pending_command" in bot_message.metadata:
+            logger.info(f"Storing pending command for user {user_id}: {bot_message.metadata['pending_command']}")
+            await command_store.store_command(
+                user_id,
+                bot_message.metadata["pending_command"],
+                command_request.chain_id
+            )
+            
+            # Verify storage immediately
+            stored = await command_store.get_command(user_id)
+            if not stored:
+                logger.error(f"Failed to verify command storage for user {user_id}")
+                raise RuntimeError("Failed to store command")
+        
+        # Convert BotMessage to API response
+        response = CommandResponse.from_bot_message(bot_message)
+        
+        # Add pending command to response if it exists
+        if bot_message.metadata and "pending_command" in bot_message.metadata:
+            response.pending_command = bot_message.metadata["pending_command"]
+            
+        return response
+            
     except Exception as e:
         logger.error(f"Unexpected error in command processing: {e}", exc_info=True)
-        # Check if this is a transaction rejection
-        if "User rejected the request" in str(e):
-            return CommandResponse(
-                content="Transaction cancelled by user.",
-                error_message=None
-            )
         return CommandResponse(
-            content="Sorry, something went wrong. Please try again!"
+            content="Sorry, something went wrong. Please try again!",
+            error_message=str(e)
         )
 
-async def execute_swap(
-    token_in: HexAddress,
-    token_out: HexAddress,
-    amount: int,
-    chain_id: int,
-    recipient: HexAddress,
-) -> TransactionResponse:
-    """Execute swap using Kyber's API."""
+async def parse_swap_command(command: str, chain_id: Optional[int] = None) -> SwapCommand:
+    """Parse a swap command string into a SwapCommand object."""
     try:
-        logger.info(f"Executing swap on chain {chain_id} ({get_chain_from_chain_id(chain_id)})")
-        logger.info(f"Swap details: {amount} from {token_in} to {token_out}")
-        
-        try:
-            # First try to get quote
-            quote = await kyber_quote(
-                token_in=token_in,
-                token_out=token_out,
-                amount=amount,
-                chain_id=chain_id,
-                recipient=recipient
-            )
-            logger.info(f"Got quote from Kyber: {quote}")
+        # Remove 'approved:' prefix if present
+        if command.startswith("approved:"):
+            command = command[9:]  # Remove 'approved:' prefix
             
-        except TransferFromFailedError as e:
-            # If transfer fails, it means we need approval
-            logger.info("Transfer failed, generating approval transaction")
-            if token_in.lower() not in [addr.lower() for addr in native_tokens]:
-                return TransactionResponse(
-                    to=token_in,  # Token contract address
-                    data="0x095ea7b3" +  # approve(address,uint256)
-                         "000000000000000000000000" +  # Pad router address
-                         "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
-                         "f" * 64,  # Max uint256 for unlimited approval
-                    value="0x0",
-                    chain_id=chain_id,
-                    method="approve",
-                    gas_limit="0x186a0",  # 100,000 gas
-                    needs_approval=True,
-                    token_to_approve=token_in,
-                    spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"  # Kyber router
+        parts = command.split()  # Don't convert to lower case here
+        if len(parts) == 5 and parts[0].lower() == "swap" and (parts[3].lower() == "for" or parts[3].lower() == "to"):
+            # Get tokens preserving case
+            token_in = parts[2]
+            token_out = parts[4]
+            
+            # Only convert to upper case if they're not contract addresses
+            from app.services.prices import _is_valid_contract_address
+            if not _is_valid_contract_address(token_in):
+                token_in = token_in.upper()
+            if not _is_valid_contract_address(token_out):
+                token_out = token_out.upper()
+            
+            # Handle token aliases
+            if token_in in ["ETH", "WETH"]:
+                token_in = "ETH"
+            if token_out in ["ETH", "WETH"]:
+                token_out = "ETH"
+            if token_in in ["USD", "USDC"]:
+                token_in = "USDC"
+            if token_out in ["USD", "USDC"]:
+                token_out = "USDC"
+                
+            try:
+                # Try to parse amount as float
+                amount = float(parts[1])
+                
+                # If amount is very small (like 0.000373) and token is ETH, this is likely a calculated amount
+                # from a target amount swap, so we should use it directly
+                if token_in == "ETH" and amount < 0.01:
+                    logger.info(f"Using pre-calculated ETH amount: {amount}")
+                    return SwapCommand(
+                        action="swap",
+                        amount=amount,
+                        token_in=token_in,
+                        token_out=token_out,  # Preserve case for contract address
+                        is_target_amount=False  # We're using the calculated amount directly
+                    )
+                    
+                return SwapCommand(
+                    action="swap",
+                    amount=amount,
+                    token_in=token_in,
+                    token_out=token_out,  # Preserve case for contract address
+                    is_target_amount=False
                 )
-            raise  # Re-raise if it's a native token (shouldn't happen)
-
-        # For successful quote, return swap transaction
-        return TransactionResponse(
-            to=quote.router_address,
-            data=quote.data,
-            value=hex(amount) if token_in.lower() in [addr.lower() for addr in native_tokens] else "0x0",
-            chain_id=chain_id,
-            method="swap",
-            gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
-            needs_approval=False
-        )
-
-    except NoRouteFoundError as e:
-        logger.error(f"No route found error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except InsufficientLiquidityError as e:
-        logger.error(f"Insufficient liquidity error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except InvalidTokenError as e:
-        logger.error(f"Invalid token error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except BuildTransactionError as e:
-        logger.error(f"Build transaction error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except TransferFromFailedError as e:
-        logger.error(f"Transfer failed error: {e}")
-        # Return approval transaction when transfer fails due to no allowance
-        if token_in.lower() not in [addr.lower() for addr in native_tokens]:
-            return TransactionResponse(
-                to=token_in,
-                data="0x095ea7b3" +  # approve(address,uint256)
-                     "000000000000000000000000" +  # Pad router address
-                     "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
-                     "f" * 64,  # Max uint256 for unlimited approval
-                value="0x0",
-                chain_id=chain_id,
-                method="approve",
-                gas_limit="0x186a0",  # 100,000 gas
-                needs_approval=True,
-                token_to_approve=token_in,
-                spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"  # Kyber router
-            )
-        raise HTTPException(status_code=400, detail=f"Token approval needed: {str(e)}")
-    except KyberSwapError as e:
-        logger.error(f"KyberSwap error: {e}")
-        raise HTTPException(status_code=400, detail=f"Swap failed: {str(e)}")
-    except Exception as e:
-        logger.error(f"Swap failed on chain {chain_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to execute swap: {str(e)}"
-        )
+            except ValueError:
+                logger.error(f"Failed to parse amount: {parts[1]}")
+                return None
+                
+        return None
+    except (ValueError, IndexError) as e:
+        logger.error(f"Failed to parse swap command: {e}")
+        return None
 
 @app.post("/api/execute-transaction")
 @limiter.limit("10/minute")
@@ -536,6 +534,9 @@ async def execute_transaction(
         os.environ["OPENAI_API_KEY"] = openai_key
         
         logger.info(f"Executing transaction for command: {tx_request.command} on chain {tx_request.chain_id}")
+        
+        # Track if this is a post-approval attempt
+        is_post_approval = tx_request.command.startswith("approved:")
         
         # Validate chain support
         if not ChainConfig.is_supported(tx_request.chain_id):
@@ -551,55 +552,104 @@ async def execute_transaction(
             raise ValueError(f"Invalid swap command format. Expected format: 'swap 1 usdc for eth', got: {tx_request.command}")
 
         # Get token addresses
-        token_addresses = await get_token_addresses(tx_request.chain_id)
+        token_addresses = TOKEN_ADDRESSES.get(tx_request.chain_id, {})
+        if not token_addresses:
+            raise ValueError(f"No token addresses configured for chain {tx_request.chain_id}")
         
         try:
-            # Handle decimals
-            decimals = 18  # Default for most tokens
-            if swap_command.token_in == "USDC":
-                decimals = 6  # USDC uses 6 decimals
+            # Get decimals for input token
+            _, token_in_decimals = await get_token_price(
+                swap_command.token_in,
+                token_addresses.get(swap_command.token_in),
+                tx_request.chain_id
+            )
             
-            amount_in = int(swap_command.amount_in * (10 ** decimals))
-            logger.info(f"Calculated amount_in: {amount_in} ({swap_command.amount_in} * 10^{decimals})")
+            # Calculate amount_in based on decimals
+            if swap_command.token_in == "ETH":
+                # For ETH, we need to be extra careful with the decimal conversion
+                # Convert the float amount to wei directly
+                from web3 import Web3
+                amount_in = int(Web3.to_wei(swap_command.amount, 'ether'))
+                logger.info(f"Converting {swap_command.amount} ETH to {amount_in} wei")
+            else:
+                amount_in = int(swap_command.amount * (10 ** token_in_decimals))
             
-            # Execute the swap
+            logger.info(f"Calculated amount_in: {amount_in} ({swap_command.amount} * 10^{token_in_decimals})")
+            
+            # Handle native ETH vs WETH
+            token_in = token_addresses[swap_command.token_in] if swap_command.token_in in token_addresses else swap_command.token_in
+            token_out = token_addresses[swap_command.token_out] if swap_command.token_out in token_addresses else swap_command.token_out
+            
+            # If swapping from ETH, use native ETH address
+            if swap_command.token_in == "ETH":
+                token_in = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"
+            
+            # If swapping to ETH, use WETH address for routing
+            if swap_command.token_out == "ETH":
+                token_out = token_addresses["ETH"]  # Use WETH address
+            
+            logger.info(f"Preparing Kyber quote with token_in: {token_in}, token_out: {token_out}")
+            
             try:
-                response = await execute_swap(
-                    token_in=token_addresses[swap_command.token_in],
-                    token_out=token_addresses[swap_command.token_out],
+                # Preserve case for contract addresses in Kyber API call
+                quote = await kyber_quote(
+                    token_in=token_in,
+                    token_out=token_out,  # Use original case
                     amount=amount_in,
                     chain_id=tx_request.chain_id,
-                    recipient=tx_request.wallet_address,
+                    recipient=tx_request.wallet_address
                 )
                 
-                # If this is an approval response, store the command for retry
-                if response.method == "approve":
-                    response.pending_command = tx_request.command  # Add this field to TransactionResponse model
-                
-                return response
+                # Return swap transaction
+                return TransactionResponse(
+                    to=quote.router_address,
+                    data=quote.data,
+                    value=hex(amount_in) if swap_command.token_in == "ETH" else "0x0",
+                    chain_id=tx_request.chain_id,
+                    method="swap",
+                    gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
+                    needs_approval=False
+                )
 
             except TransferFromFailedError as e:
-                logger.info("Transfer failed, generating approval transaction")
-                return TransactionResponse(
-                    to=token_addresses[swap_command.token_in],
-                    data="0x095ea7b3" +  # approve(address,uint256)
-                         "000000000000000000000000" +  # Pad router address
-                         "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
-                         "f" * 64,  # Max uint256 for unlimited approval
-                    value="0x0",
-                    chain_id=tx_request.chain_id,
-                    method="approve",
-                    gas_limit="0x186a0",  # 100,000 gas
-                    needs_approval=True,
-                    token_to_approve=token_addresses[swap_command.token_in],
-                    spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Kyber router
-                    pending_command=tx_request.command  # Store the original command
-                )
+                error_str = str(e).lower()
+                if "insufficient funds" in error_str:
+                    raise ValueError("Insufficient funds for transaction. Please try a smaller amount.")
+                    
+                # Only handle approval if input token is not ETH and we haven't just approved
+                if swap_command.token_in != "ETH" and not is_post_approval:
+                    logger.info(f"Token approval needed for {swap_command.token_in}")
+                    return TransactionResponse(
+                        to=token_addresses[swap_command.token_in],
+                        data="0x095ea7b3" +  # approve(address,uint256)
+                             "000000000000000000000000" +  # Pad router address
+                             "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
+                             "f" * 64,  # Max uint256 for unlimited approval
+                        value="0x0",
+                        chain_id=tx_request.chain_id,
+                        method="approve",
+                        gas_limit="0x186a0",  # 100,000 gas
+                        needs_approval=True,
+                        token_to_approve=token_addresses[swap_command.token_in],
+                        spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Kyber router
+                        pending_command=f"approved:{tx_request.command}"  # Mark as approved for next attempt
+                    )
+                elif swap_command.token_in == "ETH":
+                    raise ValueError("Insufficient ETH balance for the transaction")
+                else:
+                    # If we've just approved and still getting transfer failed, there might be another issue
+                    raise ValueError("Token transfer failed even after approval. Please check your balance and try again.")
+                    
+            except (NoRouteFoundError, InsufficientLiquidityError, InvalidTokenError, BuildTransactionError) as e:
+                logger.error(f"Kyber error: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
 
         except ValueError as ve:
             logger.error(f"Value error in swap preparation: {ve}")
             raise HTTPException(status_code=400, detail=str(ve))
             
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         logger.error(f"Error preparing swap: {e}")
         raise HTTPException(
@@ -661,10 +711,3 @@ async def health_check():
 
 # This is required for Vercel
 app = app 
-
-native_tokens = {
-    "0x4200000000000000000000000000000000000006",  # WETH on OP/Base
-    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # ETH
-    "0x5300000000000000000000000000000000000004",  # ETH on Scroll
-    # ... other native tokens ...
-} 

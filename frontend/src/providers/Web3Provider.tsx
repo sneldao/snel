@@ -49,8 +49,8 @@ const config = createConfig(
     appName: "Pointless",
 
     // Optional App Info
-    appDescription: "Your friendly crypto command interpreter",
-    appUrl: "https://pointless.xyz", // your app's url
+    appDescription: "Super pointless agent",
+    appUrl: "https://snel-pointless.vercel.app", // your app's url
     appIcon: "https://pointless.xyz/logo.png", // your app's icon
   })
 );

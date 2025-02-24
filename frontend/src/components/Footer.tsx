@@ -32,7 +32,7 @@ export const Footer = () => {
           |
         </Text>
         <Link
-          href="https://www.pointless.wtf/"
+          href="https://hey.xyz/u/pointless"
           isExternal
           color="blue.500"
           _hover={{ textDecoration: "none", color: "blue.600" }}
