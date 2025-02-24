@@ -51,11 +51,14 @@ def parse_redis_url(url):
     # Handle both URL formats (redis:// and https://)
     if url.startswith('redis://') or url.startswith('rediss://'):
         rest_url = f"https://{hostname}"
-        token = parsed.password
+        token = parsed.password or os.environ.get("UPSTASH_REDIS_TOKEN")
     else:
-        rest_url = url
+        rest_url = url if url.startswith('https://') else f"https://{hostname}"
         token = os.environ.get("UPSTASH_REDIS_TOKEN") or parsed.password
     
+    if not token:
+        raise ValueError("Redis token not found in URL or environment variables")
+        
     logger.info(f"Parsed Redis URL: {rest_url} (hostname: {hostname})")
     return rest_url, token
 
@@ -305,7 +308,7 @@ async def startup_event():
         logger.error(f"Failed to initialize Redis: {e}")
         raise
 
-@app.post("/process-command")
+@app.post("/api/process-command")
 @limiter.limit("20/minute")
 async def process_command(
     request: Request,
@@ -525,7 +528,7 @@ TOKEN_DECIMALS = {
     "DAI": 18,
 }
 
-@app.post("/execute-transaction")
+@app.post("/api/execute-transaction")
 @limiter.limit("10/minute")
 async def execute_transaction(
     request: Request,
@@ -666,7 +669,7 @@ async def execute_transaction(
             detail=f"An error occurred while preparing the swap: {str(e)}"
         )
 
-@app.get("/test-kyber")
+@app.get("/api/test-kyber")
 async def test_kyber():
     """Test endpoint to verify Kyber integration."""
     try:
@@ -693,7 +696,7 @@ async def test_kyber():
             "message": str(e)
         }
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
     try:
