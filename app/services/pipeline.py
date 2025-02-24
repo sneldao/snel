@@ -237,7 +237,7 @@ class PriceExtractor(Processor[TweetWithChain, str]):
                 error_message=str(e)
             )
 
-class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
+class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand, ProcessedSwapCommand]):
     """Executor for swap commands."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="""
@@ -387,7 +387,7 @@ class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
             error_message="Failed to process swap command"
         )
 
-class PriceExecutor(Executor[TweetWithChain, str]):
+class PriceExecutor(Executor[TweetWithChain, str, str]):
     """Executor for price queries."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="""
@@ -436,7 +436,7 @@ class PriceExecutor(Executor[TweetWithChain, str]):
             error_message="Failed to process price query"
         )
 
-class UnknownExecutor(Executor[TweetWithChain, TweetWithChain]):
+class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, TweetWithChain]):
     """Executor for unknown commands."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="I don't understand that request. I can help you with token swaps (e.g. 'swap 1 ETH for USDC') or price queries (e.g. 'what's the price of ETH?').")

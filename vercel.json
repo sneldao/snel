@@ -15,7 +15,8 @@
                     "configure_logging.py",
                     "app/**",
                     "src/**",
-                    "requirements.txt"
+                    "requirements.txt",
+                    "dowse/**"
                 ],
                 "excludeFiles": [
                     "**/*.test.py",
@@ -55,7 +56,7 @@
     ],
     "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": ".",
+        "PYTHONPATH": "/var/task",
         "PYTHONIOENCODING": "utf-8",
         "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
         "REDIS_URL": "${REDIS_URL}",
