@@ -466,9 +466,9 @@ class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
         )
 
 # Global pipeline instance
-pipeline: Optional[Pipeline[Tweet, TweetWithChain]] = None
+pipeline: Optional[Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]] = None
 
-def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain]:
+def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]:
     """Initialize the Dowse pipeline with specialized agents."""
     global pipeline
     if pipeline is None:
@@ -479,7 +479,7 @@ def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain]:
         )
         
         # Create pipeline with routing and effects
-        pipeline = Pipeline[Tweet, TweetWithChain](
+        pipeline = Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]](
             processors=[LoadChainData()],
             classifier=Classifier[TweetWithChain, Literal["swap", "price", "unknown"]](
                 prompt="""

@@ -47,7 +47,7 @@
         "PYTHONIOENCODING": "utf-8",
         "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
         "MORALIS_API_KEY": "${MORALIS_API_KEY}",
-        "REDIS_URL": "${REDIS_URL}",
+        "REDIS_URL": "https://touched-crab-18970.upstash.io",
         "UPSTASH_REDIS_TOKEN": "${UPSTASH_REDIS_TOKEN}"
     }
 }
