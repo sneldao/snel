@@ -59,6 +59,7 @@ app.add_middleware(
         "http://localhost:3000",  # Local development
         "http://127.0.0.1:3000",  # Alternative local URL
         "https://snel-pointless.vercel.app",  # Production domain
+        "https://snel-pointless-git-main-papas-projects-5b188431.vercel.app",  # Add preview domains
     ],
     allow_credentials=True,
     allow_methods=["*"],
