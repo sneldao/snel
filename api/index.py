@@ -5,56 +5,101 @@ import sys
 import os
 from typing import Optional
 import logging
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Add the root directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(root_dir)
+logger.info(f"Added {root_dir} to Python path")
+logger.info(f"Current PYTHONPATH: {sys.path}")
+
+# Create the ASGI app
+app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 try:
     # Import your existing API functionality
+    logger.info("Attempting to import api.py...")
     from api import app as api_app
+    logger.info("Successfully imported api.py")
     
-    # Create the ASGI app
-    app = FastAPI()
-
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     # Mount your existing API
     app.mount("/", api_app)
-
-    # Health check endpoint
-    @app.get("/api/health")
-    async def health_check():
-        return {"status": "ok"}
-
-    # Error handler for 500 errors
-    @app.exception_handler(500)
-    async def internal_error_handler(request: Request, exc: Exception):
-        logger.error(f"Internal server error: {str(exc)}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "An internal server error occurred. Please try again later."}
-        )
+    logger.info("Successfully mounted API")
 
 except Exception as e:
-    logger.error(f"Failed to initialize API: {str(e)}", exc_info=True)
-    # Create a minimal app that returns error responses
-    app = FastAPI()
+    error_trace = traceback.format_exc()
+    logger.error(f"Failed to initialize API: {str(e)}\nTraceback:\n{error_trace}")
     
-    @app.get("/api/health")
-    async def health_check():
-        return {"status": "error", "message": str(e)}
-    
-    @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
-    async def catch_all(path: str):
-        raise HTTPException(status_code=500, detail="API initialization failed") 
+    # Add error routes
+    @app.post("/api/process-command")
+    async def process_command(request: Request):
+        error_msg = {
+            "detail": "API initialization failed",
+            "error": str(e),
+            "trace": error_trace
+        }
+        logger.error(f"Command processing failed: {error_msg}")
+        return JSONResponse(
+            status_code=500,
+            content=error_msg
+        )
+
+    @app.post("/api/execute-transaction")
+    async def execute_transaction(request: Request):
+        error_msg = {
+            "detail": "API initialization failed",
+            "error": str(e),
+            "trace": error_trace
+        }
+        logger.error(f"Transaction execution failed: {error_msg}")
+        return JSONResponse(
+            status_code=500,
+            content=error_msg
+        )
+
+# Health check endpoint
+@app.get("/api/health")
+async def health_check():
+    try:
+        # Import check
+        from api import app as api_app
+        return {
+            "status": "ok",
+            "python_path": sys.path,
+            "root_dir": root_dir
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "trace": traceback.format_exc(),
+            "python_path": sys.path,
+            "root_dir": root_dir
+        }
+
+# Error handler for 500 errors
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc: Exception):
+    error_trace = traceback.format_exc()
+    logger.error(f"Internal server error: {str(exc)}\nTraceback:\n{error_trace}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal server error occurred",
+            "error": str(exc),
+            "trace": error_trace
+        }
+    ) 
