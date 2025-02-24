@@ -550,6 +550,7 @@ async def execute_transaction(
                 decimals = 6  # USDC uses 6 decimals
             
             amount_in = int(swap_command.amount_in * (10 ** decimals))
+            logger.info(f"Calculated amount_in: {amount_in} ({swap_command.amount_in} * 10^{decimals})")
             
             # Execute the swap
             try:
@@ -560,6 +561,24 @@ async def execute_transaction(
                     chain_id=tx_request.chain_id,
                     recipient=tx_request.wallet_address,
                 )
+            except NoRouteFoundError as e:
+                logger.error(f"No route found: {e}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(e)
+                )
+            except InsufficientLiquidityError as e:
+                logger.error(f"Insufficient liquidity: {e}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(e)
+                )
+            except KyberSwapError as e:
+                logger.error(f"Kyber error: {e}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(e)
+                )
             except Exception as swap_error:
                 logger.error(f"Error executing swap: {swap_error}")
                 if "User rejected the request" in str(swap_error):
@@ -567,21 +586,10 @@ async def execute_transaction(
                         status_code=400,
                         detail="Transaction cancelled by user"
                     )
-                elif "No route found" in str(swap_error):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="No valid swap route found. Try a different amount or token pair."
-                    )
-                elif "insufficient liquidity" in str(swap_error).lower():
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Not enough liquidity for this swap. Try a smaller amount."
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Failed to execute swap: {str(swap_error)}"
-                    )
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to execute swap: {str(swap_error)}"
+                )
 
         except ValueError as ve:
             logger.error(f"Value error in swap preparation: {ve}")
