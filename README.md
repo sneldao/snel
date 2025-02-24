@@ -312,6 +312,120 @@ poetry run pytest
 
 Note: Never commit API keys or sensitive tokens to version control. Always use environment variables or secure secret management systems.
 
+## Serverless Architecture
+
+### Overview
+
+The application uses a serverless architecture on Vercel with the following components:
+
+1. **Frontend**: Next.js application served by Vercel's Edge Network
+2. **Backend**: Python FastAPI application running as Vercel Functions
+3. **Database**: Upstash Redis for persistent storage
+4. **User Authentication**: Bring-your-own OpenAI API key model
+
+### Key Components
+
+#### Frontend (Next.js)
+
+- Handles user interactions and wallet connections
+- Stores user's API keys in localStorage
+- Makes API calls to backend with relative paths (`/api/*`)
+- Manages transaction confirmations and chain switching
+
+#### Backend (Vercel Functions)
+
+- FastAPI application running as serverless functions
+- Each function instance maintains its own Redis connection
+- User-specific pipelines keyed by user ID
+- Environment variables managed through Vercel dashboard
+
+#### Redis Integration
+
+- Uses Upstash Redis for persistent storage
+- Connection string format: `rediss://default:token@hostname:6379`
+- Automatic connection management in serverless environment
+- Handles command storage and retrieval
+
+### API Flow
+
+1. User provides OpenAI API key through frontend
+2. Frontend stores key in localStorage
+3. API requests include key in `X-OpenAI-Key` header
+4. Backend creates user-specific pipeline instance
+5. Redis maintains command state between requests
+
+### Environment Configuration
+
+#### Development
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000  # Points to local FastAPI server
+REDIS_URL=rediss://default:token@hostname:6379  # Upstash Redis URL
+```
+
+#### Production (Vercel)
+
+```env
+NEXT_PUBLIC_API_URL=""  # Empty for relative paths
+REDIS_URL=rediss://default:token@hostname:6379  # Upstash Redis URL
+```
+
+### Vercel Function Configuration
+
+The `vercel.json` configuration handles routing and environment setup:
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 90,
+        "memory": 1024,
+        "runtime": "python3.12",
+        "handler": "app",
+        "includeFiles": ["kyber.py", "configure_logging.py", "app/**", "src/**"]
+      }
+    },
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
+    }
+  ]
+}
+```
+
+### Security Considerations
+
+1. **API Keys**:
+
+   - OpenAI API keys stored client-side
+   - Keys transmitted via secure headers
+   - No server-side key storage
+
+2. **Redis Security**:
+
+   - TLS encryption enabled (rediss://)
+   - Token-based authentication
+   - Per-user data isolation
+
+3. **Environment Variables**:
+   - Sensitive values stored in Vercel
+   - No exposure in client-side code
+   - Proper secret management
+
 ```
 
 ```

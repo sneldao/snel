@@ -267,14 +267,13 @@ def get_openai_key(api_key: str = Depends(openai_key_header)) -> str:
 pipeline = None
 
 def get_pipeline(openai_key: str) -> Pipeline:
-    """Get or create the pipeline instance."""
-    global pipeline
-    if pipeline is None:
-        # Set OpenAI key in environment
-        os.environ["OPENAI_API_KEY"] = openai_key
-        # Initialize pipeline
-        pipeline = init_pipeline(openai_key)
-    return pipeline
+    """Get or initialize a pipeline instance."""
+    try:
+        pipeline = init_pipeline(openai_key=openai_key)
+        return pipeline
+    except Exception as e:
+        logger.error(f"Failed to initialize pipeline: {e}")
+        raise
 
 @app.on_event("startup")
 async def startup_event():
@@ -317,7 +316,7 @@ async def process_command(
 ) -> CommandResponse:
     try:
         # Get pipeline instance
-        pipeline = get_pipeline(openai_key)
+        pipeline = get_pipeline(openai_key=openai_key)
         
         # Always convert user ID to checksum address if it's an ETH address
         from eth_utils import to_checksum_address

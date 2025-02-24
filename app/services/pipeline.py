@@ -465,27 +465,14 @@ class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
             error_message=None
         )
 
-# Global pipeline instances - keyed by user
-pipelines: Dict[str, Pipeline[Tweet, TweetWithChain]] = {}
+# Global pipeline instance
+pipeline: Optional[Pipeline[Tweet, TweetWithChain]] = None
 
-def init_pipeline(openai_key: str, user_id: str) -> Pipeline[Tweet, TweetWithChain]:
-    """Initialize or get a Dowse pipeline for a specific user.
-    
-    Args:
-        openai_key: The user's OpenAI API key
-        user_id: Unique identifier for the user
-        
-    Returns:
-        Pipeline instance for the user
-    """
-    global pipelines
-    
-    # Return existing pipeline if we have one for this user
-    if user_id in pipelines:
-        return pipelines[user_id]
-        
-    # Create OpenAI provider with user's API key
-    try:
+def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain]:
+    """Initialize the Dowse pipeline with specialized agents."""
+    global pipeline
+    if pipeline is None:
+        # Create OpenAI provider with specific model
         provider = OpenAIProvider(api_key=openai_key, model=ModelType.gpt4o)
         
         # Initialize pipeline with our custom processors and executors
@@ -499,11 +486,4 @@ def init_pipeline(openai_key: str, user_id: str) -> Pipeline[Tweet, TweetWithCha
                 "unknown": UnknownExecutor(provider=provider)
             }
         )
-        
-        # Store the pipeline for this user
-        pipelines[user_id] = pipeline
-        return pipeline
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize pipeline for user {user_id}: {e}")
-        raise ValueError("Invalid OpenAI API key or configuration error") 
+    return pipeline 
