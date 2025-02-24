@@ -8,14 +8,12 @@
                 "maxDuration": 60,
                 "memory": 1024,
                 "runtime": "python3.12",
-                "handler": "api.app",
+                "handler": "app",
                 "includeFiles": [
                     "kyber.py",
                     "configure_logging.py",
-                    "requirements.txt",
                     "app/**"
-                ],
-                "buildCommand": "pip install -r requirements.txt && bash vercel.build.sh"
+                ]
             }
         },
         {
@@ -26,14 +24,11 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "api.py"
-        },
-        {
-            "handle": "filesystem"
+            "dest": "/api.py"
         },
         {
             "src": "/(.*)",
-            "dest": "frontend/$1"
+            "dest": "/frontend/$1"
         }
     ],
     "regions": [
