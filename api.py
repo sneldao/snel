@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import datetime
 import sys
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any
 from urllib.parse import urlparse
 from upstash_redis import Redis
 import asyncio
@@ -60,136 +60,72 @@ def parse_redis_url(url):
     return rest_url, token
 
 class RedisPendingCommandStore:
-    """Redis-backed store for pending commands using Upstash Redis."""
-    KEY_PREFIX = "pending_cmd"  # Namespace for all command keys
-    
+    """Store pending commands in Redis."""
     def __init__(self):
-        self._logger = logging.getLogger(__name__)
-        self._redis = None
-        self._redis_url = os.environ.get("REDIS_URL")
-        if not self._redis_url:
-            raise ValueError("REDIS_URL environment variable is required")
-        
-    async def _ensure_connection(self):
-        """Ensure Redis connection is active, reconnect if needed."""
-        try:
-            if not self._redis:
-                rest_url, token = parse_redis_url(self._redis_url)
-                self._redis = Redis(url=rest_url, token=token)
-                # Test connection
-                self._redis.ping()
-                self._logger.info("Successfully connected to Redis")
-        except Exception as e:
-            self._logger.error(f"Redis connection error: {e}")
-            raise
+        # Check for either Redis URL format
+        if not (os.getenv("REDIS_URL") or (os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN"))):
+            raise ValueError("Either REDIS_URL or both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required")
 
-    def _make_key(self, address: str) -> str:
-        """Create a Redis key for a wallet address."""
-        from eth_utils import to_checksum_address
-        try:
-            # Convert to checksum address if it's a valid Ethereum address
-            if address.startswith("0x"):
-                checksummed = to_checksum_address(address)
-                return f"{self.KEY_PREFIX}:{checksummed}"
-        except ValueError:
-            pass
-        # For non-ETH addresses (e.g. test accounts), just lowercase
-        return f"{self.KEY_PREFIX}:{address.lower()}"
+        # Initialize Redis client
+        if os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN"):
+            self._redis = Redis(
+                url=os.getenv("UPSTASH_REDIS_REST_URL"),
+                token=os.getenv("UPSTASH_REDIS_REST_TOKEN")
+            )
+        else:
+            # Parse Redis URL for Upstash REST format
+            from urllib.parse import urlparse
+            parsed = urlparse(os.getenv("REDIS_URL"))
+            rest_url = f"https://{parsed.hostname}"
+            token = parsed.password
+            self._redis = Redis(url=rest_url, token=token)
 
-    async def initialize(self):
-        """Initialize the Redis connection."""
-        await self._ensure_connection()
-        self._logger.info("Successfully initialized Redis connection")
-    
-    async def store_command(self, user_id: str, command: str, chain_id: Optional[int] = None) -> None:
+        self._ttl = 1800  # 30 minutes
+
+    def _make_key(self, user_id: str) -> str:
+        """Create a Redis key for a user's pending command."""
+        return f"pending_command:{user_id}"
+
+    async def store_command(self, user_id: str, command: str, chain_id: int) -> None:
         """Store a pending command for a user."""
-        await self._ensure_connection()
-        
-        data = {
-            "command": command,
-            "chain_id": chain_id,
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-        
         key = self._make_key(user_id)
-        
-        try:
-            # Store with 30 minute TTL
-            result = self._redis.set(key, json.dumps(data), ex=1800)
-            if not result:
-                raise RuntimeError("Command was not stored successfully")
-            
-            # Verify storage
-            stored_data = self._redis.get(key)
-            if not stored_data:
-                raise RuntimeError("Command was not stored successfully")
-            
-            ttl = self._redis.ttl(key)
-            self._logger.info(f"Stored command for key {key}: {command} (chain: {chain_id})")
-            self._logger.info(f"Command TTL for key {key}: {ttl} seconds")
-            
-        except Exception as e:
-            self._logger.error(f"Failed to store command: {e}")
-            raise
-    
-    async def get_command(self, user_id: str) -> Optional[Dict]:
+        await self._redis.set(
+            key,
+            json.dumps({
+                "command": command,
+                "chain_id": chain_id,
+                "timestamp": datetime.now().isoformat()
+            }),
+            ex=self._ttl
+        )
+
+    async def get_command(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a pending command for a user."""
-        await self._ensure_connection()
-        
         key = self._make_key(user_id)
-        self._logger.info(f"Attempting to get command for key {key}")
-        
-        try:
-            # Get data and TTL
-            data = self._redis.get(key)
-            ttl = self._redis.ttl(key)
-            
-            self._logger.info(f"Command TTL for key {key}: {ttl} seconds")
-            self._logger.info(f"Raw Redis data for key {key}: {data}")
-            
-            if not data:
-                self._logger.info(f"No command found for key {key}")
-                return None
-                
-            command_data = json.loads(data)
-            self._logger.info(f"Found command for key {key}: {command_data['command']}")
-            return command_data
-            
-        except Exception as e:
-            self._logger.error(f"Failed to get command: {e}")
-            raise
-    
+        value = await self._redis.get(key)
+        if value:
+            return json.loads(value)
+        return None
+
     async def clear_command(self, user_id: str) -> None:
         """Clear a pending command for a user."""
-        await self._ensure_connection()
-        
         key = self._make_key(user_id)
-        
-        try:
-            exists = self._redis.exists(key)
-            if exists:
-                self._redis.delete(key)
-                self._logger.info(f"Cleared command for key {key}")
-            else:
-                self._logger.warning(f"No command found to clear for key {key}")
-                
-        except Exception as e:
-            self._logger.error(f"Failed to clear command: {e}")
-            raise
+        await self._redis.delete(key)
 
-    async def list_all_commands(self) -> list[str]:
-        """List all pending command keys (useful for debugging)."""
-        await self._ensure_connection()
+    async def list_all_commands(self) -> List[Dict[str, Any]]:
+        """List all pending commands."""
+        keys = await self._redis.keys("pending_command:*")
+        if not keys:
+            return []
         
-        try:
-            # Use scan to get all keys with our prefix
-            pattern = f"{self.KEY_PREFIX}:*"
-            keys = self._redis.scan(0, pattern, 1000)[1]
-            return keys
-            
-        except Exception as e:
-            self._logger.error(f"Failed to list commands: {e}")
-            raise
+        values = await self._redis.mget(*keys)
+        commands = []
+        for key, value in zip(keys, values):
+            if value:
+                command_data = json.loads(value)
+                command_data["user_id"] = key.split(":", 1)[1]
+                commands.append(command_data)
+        return commands
 
 # Global command store
 command_store = RedisPendingCommandStore()
