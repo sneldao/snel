@@ -8,14 +8,14 @@
                 "maxDuration": 60,
                 "memory": 1024,
                 "runtime": "python3.12",
-                "handler": "app",
+                "handler": "api.app",
                 "includeFiles": [
                     "kyber.py",
                     "configure_logging.py",
                     "requirements.txt",
                     "app/**"
                 ],
-                "buildCommand": "bash vercel.build.sh"
+                "buildCommand": "pip install -r requirements.txt && bash vercel.build.sh"
             }
         },
         {
@@ -26,7 +26,7 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "api.py"
+            "dest": "api.py:app"
         },
         {
             "src": "/(.*)",

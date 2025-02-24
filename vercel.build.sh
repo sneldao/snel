@@ -10,13 +10,12 @@ python --version
 pip install -r requirements.txt
 
 # Create necessary directories
-mkdir -p .vercel/cache
+mkdir -p api
 
-# Copy necessary files
-cp -r app .vercel/cache/
-cp kyber.py .vercel/cache/
-cp configure_logging.py .vercel/cache/
-cp api.py .vercel/cache/
+# Copy necessary files to root/api directory
+cp -r app/* api/
+cp kyber.py api/
+cp configure_logging.py api/
 
 # Print environment for debugging (excluding sensitive values)
 echo "Environment variables set:"
@@ -24,9 +23,6 @@ env | grep -v "KEY\|TOKEN\|SECRET\|PASSWORD"
 
 # Print installed packages for debugging
 pip freeze > installed_packages.txt
-
-# Create necessary directories if they don't exist
-mkdir -p app/services
 
 # Ensure the script exits with success
 exit 0 

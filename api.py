@@ -204,7 +204,14 @@ except ImportError as e:
 
 # Set up rate limiter
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI()
+app = FastAPI(
+    title="Pointless API",
+    description="AI Crypto Assistant API",
+    version="0.1.0",
+    docs_url="/api/docs",  # Serve docs at /api/docs instead of /docs
+    redoc_url="/api/redoc",  # Serve redoc at /api/redoc
+    openapi_url="/api/openapi.json"  # Serve OpenAPI schema at /api/openapi.json
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -731,6 +738,16 @@ async def health_check():
             "status": "unhealthy",
             "error": str(e)
         }
+
+# Add a root endpoint for health checks
+@app.get("/")
+async def root():
+    """Root endpoint for health checks."""
+    return {
+        "status": "healthy",
+        "message": "Pointless API is running",
+        "version": "0.1.0"
+    }
 
 # This is required for Vercel
 app = app 
