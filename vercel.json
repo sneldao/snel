@@ -16,7 +16,8 @@
                     "app/**",
                     "src/**",
                     "requirements.txt",
-                    "*.py"
+                    "*.py",
+                    ".env*"
                 ],
                 "excludeFiles": [
                     "**/*.test.py",
@@ -62,6 +63,7 @@
         "REDIS_URL": "${REDIS_URL}",
         "MORALIS_API_KEY": "${MORALIS_API_KEY}",
         "ALCHEMY_KEY": "${ALCHEMY_KEY}",
-        "COINGECKO_API_KEY": "${COINGECKO_API_KEY}"
+        "COINGECKO_API_KEY": "${COINGECKO_API_KEY}",
+        "NODE_ENV": "production"
     }
 }
