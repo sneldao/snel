@@ -577,6 +577,23 @@ async def execute_transaction(
                     chain_id=tx_request.chain_id,
                     recipient=tx_request.wallet_address,
                 )
+            except TransferFromFailedError as e:
+                logger.info(f"Transfer failed, needs approval: {e}")
+                # Return approval transaction
+                return TransactionResponse(
+                    to=token_addresses[swap_command.token_in],  # Token contract address
+                    data="0x095ea7b3" +  # approve(address,uint256)
+                         "000000000000000000000000" +  # Pad router address to 32 bytes
+                         "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
+                         "f" * 64,  # Max uint256 for unlimited approval
+                    value="0x0",
+                    chain_id=tx_request.chain_id,
+                    method="approve",
+                    gas_limit="0x186a0",  # 100,000 gas
+                    needs_approval=True,
+                    token_to_approve=token_addresses[swap_command.token_in],
+                    spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"  # Kyber router
+                )
             except NoRouteFoundError as e:
                 logger.error(f"No route found: {e}")
                 raise HTTPException(
