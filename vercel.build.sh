@@ -1,7 +1,26 @@
 #!/bin/bash
 
-# Install Python packages from requirements.txt
+# Exit on error
+set -e
+
+# Print Python version
+python --version
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Create necessary directories
+mkdir -p .vercel/cache
+
+# Copy necessary files
+cp -r app .vercel/cache/
+cp kyber.py .vercel/cache/
+cp configure_logging.py .vercel/cache/
+cp api.py .vercel/cache/
+
+# Print environment for debugging (excluding sensitive values)
+echo "Environment variables set:"
+env | grep -v "KEY\|TOKEN\|SECRET\|PASSWORD"
 
 # Install additional packages with specific versions
 pip install dowse==0.1.0 emp-agents==0.2.0.post1 eth-rpc==0.1.26
