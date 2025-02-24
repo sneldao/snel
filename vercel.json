@@ -37,7 +37,6 @@
     "env": {
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
-        "PYTHONIOENCODING": "utf-8",
-        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
+        "PYTHONIOENCODING": "utf-8"
     }
 }
