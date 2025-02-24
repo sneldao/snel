@@ -67,8 +67,6 @@ const SUPPORTED_CHAINS = {
   534352: "Scroll",
 } as const;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
 export default function Home() {
   const [responses, setResponses] = React.useState<Response[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -197,7 +195,7 @@ export default function Home() {
 
         // Retry the original transaction after approval
         if (txData.pending_command) {
-          const response = await fetch(`${API_URL}/api/execute-transaction`, {
+          const response = await fetch(`/api/execute-transaction`, {
             method: "POST",
             headers: getApiHeaders(),
             body: JSON.stringify({
@@ -361,7 +359,7 @@ export default function Home() {
         const shouldExecute = /^(yes|confirm)$/i.test(command.trim());
         if (shouldExecute) {
           try {
-            const response = await fetch(`${API_URL}/api/execute-transaction`, {
+            const response = await fetch(`/api/execute-transaction`, {
               method: "POST",
               headers: getApiHeaders(),
               body: JSON.stringify({
@@ -432,7 +430,7 @@ export default function Home() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/api/process-command`, {
+      const response = await fetch(`/api/process-command`, {
         method: "POST",
         headers: getApiHeaders(),
         body: JSON.stringify({
@@ -483,7 +481,7 @@ export default function Home() {
         {
           content:
             error instanceof Error
-              ? `Sorry, I encountered an error: ${error.message}. Please make sure the backend server is running at ${API_URL}`
+              ? `Sorry, I encountered an error: ${error.message}`
               : "An unknown error occurred. Please try again.",
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,

@@ -5,29 +5,34 @@ const API_BASE =
     : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // In a monorepo, we always use relative paths and let Next.js handle the routing
-export async function processCommand(command: string, openaiKey: string) {
-  try {
-    // Log the API call (for debugging)
-    console.log("Making API call to:", "/api/process-command");
+export async function processCommand(command: string) {
+  const response = await fetch(`/api/process-command`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ command }),
+  });
 
-    const response = await fetch("/api/process-command", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-OpenAI-Key": openaiKey,
-      },
-      body: JSON.stringify({ content: command }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API error (${response.status}): ${errorText}`);
-    }
-
-    return response.json();
-  } catch (error) {
-    // Log the actual error for debugging
-    console.error("API call failed:", error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Failed to process command: ${response.statusText}`);
   }
+
+  return response.json();
+}
+
+export async function executeTransaction(txData: any) {
+  const response = await fetch(`/api/execute-transaction`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(txData),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to execute transaction: ${response.statusText}`);
+  }
+
+  return response.json();
 }
