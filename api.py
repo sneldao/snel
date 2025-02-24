@@ -305,7 +305,7 @@ async def startup_event():
         logger.error(f"Failed to initialize Redis: {e}")
         raise
 
-@app.post("/api/process-command")
+@app.post("/process-command")
 @limiter.limit("20/minute")
 async def process_command(
     request: Request,
@@ -525,7 +525,7 @@ TOKEN_DECIMALS = {
     "DAI": 18,
 }
 
-@app.post("/api/execute-transaction")
+@app.post("/execute-transaction")
 @limiter.limit("10/minute")
 async def execute_transaction(
     request: Request,
@@ -666,7 +666,7 @@ async def execute_transaction(
             detail=f"An error occurred while preparing the swap: {str(e)}"
         )
 
-@app.get("/api/test-kyber")
+@app.get("/test-kyber")
 async def test_kyber():
     """Test endpoint to verify Kyber integration."""
     try:
@@ -693,7 +693,7 @@ async def test_kyber():
             "message": str(e)
         }
 
-@app.get("/api/health")
+@app.get("/health")
 async def health_check():
     """Health check endpoint."""
     try:
