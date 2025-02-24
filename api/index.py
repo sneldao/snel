@@ -9,6 +9,7 @@ import traceback
 import json
 from dotenv import load_dotenv
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Configure logging first
 logging.basicConfig(
@@ -16,6 +17,21 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def parse_redis_url(url: str) -> tuple[str, str]:
+    """Parse Redis URL to get Upstash REST URL and token."""
+    parsed = urlparse(url)
+    
+    # Extract the hostname (e.g., touched-crab-18970.upstash.io)
+    hostname = parsed.hostname
+    
+    # Construct the REST URL
+    rest_url = f"https://{hostname}"
+    
+    # Get the token (password) from the URL
+    token = parsed.password
+    
+    return rest_url, token
 
 # Setup paths
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -36,6 +52,16 @@ for env_file in env_files:
     if os.path.exists(env_file):
         logger.info(f"Loading environment variables from {env_file}")
         load_dotenv(env_file)
+
+# Parse Redis URL if present
+if os.getenv("REDIS_URL"):
+    try:
+        rest_url, token = parse_redis_url(os.getenv("REDIS_URL"))
+        os.environ["UPSTASH_REDIS_REST_URL"] = rest_url
+        os.environ["UPSTASH_REDIS_REST_TOKEN"] = token
+        logger.info(f"Parsed Redis URL into Upstash components: {rest_url}")
+    except Exception as e:
+        logger.error(f"Failed to parse Redis URL: {e}")
 
 # Log path information
 logger.info(f"Root directory: {root_dir}")
@@ -63,13 +89,15 @@ def check_required_env_vars() -> Optional[Dict[str, Any]]:
     """Check if all required environment variables are present"""
     required_vars = [
         "OPENAI_API_KEY",
-        "UPSTASH_REDIS_REST_URL",
-        "UPSTASH_REDIS_REST_TOKEN",
         "QUICKNODE_ENDPOINT",
         "MORALIS_API_KEY",
         "COINGECKO_API_KEY",
         "ALCHEMY_KEY"
     ]
+    
+    # Check either Redis URL format
+    if not (os.getenv("REDIS_URL") or (os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN"))):
+        required_vars.extend(["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"])
     
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     
@@ -79,17 +107,6 @@ def check_required_env_vars() -> Optional[Dict[str, Any]]:
             "trace": "Environment variables check failed",
             "type": "environment_error"
         }
-    
-    # Construct REDIS_URL from Upstash components if not present
-    if not os.getenv("REDIS_URL"):
-        redis_url = os.getenv("UPSTASH_REDIS_REST_URL")
-        redis_token = os.getenv("UPSTASH_REDIS_REST_TOKEN")
-        if redis_url and redis_token:
-            # Remove any trailing slashes
-            redis_url = redis_url.rstrip("/")
-            # Set the constructed URL
-            os.environ["REDIS_URL"] = f"{redis_url}?token={redis_token}"
-            logger.info("Constructed REDIS_URL from Upstash components")
     
     return None
 
@@ -179,6 +196,7 @@ async def execute_transaction(request: Request):
 async def health_check():
     env_vars = {
         "OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
+        "REDIS_URL": bool(os.getenv("REDIS_URL")),
         "UPSTASH_REDIS_REST_URL": bool(os.getenv("UPSTASH_REDIS_REST_URL")),
         "UPSTASH_REDIS_REST_TOKEN": bool(os.getenv("UPSTASH_REDIS_REST_TOKEN")),
         "QUICKNODE_ENDPOINT": bool(os.getenv("QUICKNODE_ENDPOINT")),
@@ -190,10 +208,21 @@ async def health_check():
     # Check Redis connection
     redis_status = {"status": "unknown"}
     try:
-        if os.getenv("REDIS_URL"):
+        if os.getenv("REDIS_URL") or (os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN")):
             from upstash_redis import Redis
-            redis = Redis.from_env()
-            await redis.ping()
+            
+            # Try to use explicit REST URL/token first
+            if os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN"):
+                redis = Redis(
+                    url=os.getenv("UPSTASH_REDIS_REST_URL"),
+                    token=os.getenv("UPSTASH_REDIS_REST_TOKEN")
+                )
+            # Fall back to parsing REDIS_URL
+            else:
+                rest_url, token = parse_redis_url(os.getenv("REDIS_URL"))
+                redis = Redis(url=rest_url, token=token)
+            
+            redis.ping()
             redis_status = {"status": "healthy"}
     except Exception as e:
         redis_status = {
