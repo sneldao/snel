@@ -237,7 +237,7 @@ class PriceExtractor(Processor[TweetWithChain, str]):
                 error_message=str(e)
             )
 
-class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand, BotMessage]):
+class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
     """Executor for swap commands."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="""
@@ -387,7 +387,7 @@ class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand, BotMessage]):
             error_message="Failed to process swap command"
         )
 
-class PriceExecutor(Executor[TweetWithChain, str, BotMessage]):
+class PriceExecutor(Executor[TweetWithChain, str]):
     """Executor for price queries."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="""
@@ -436,7 +436,7 @@ class PriceExecutor(Executor[TweetWithChain, str, BotMessage]):
             error_message="Failed to process price query"
         )
 
-class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
+class UnknownExecutor(Executor[TweetWithChain, TweetWithChain]):
     """Executor for unknown commands."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="I don't understand that request. I can help you with token swaps (e.g. 'swap 1 ETH for USDC') or price queries (e.g. 'what's the price of ETH?').")
@@ -466,24 +466,43 @@ class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
         )
 
 # Global pipeline instance
-pipeline: Optional[Pipeline[Tweet, TweetWithChain]] = None
+pipeline: Optional[Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]] = None
 
-def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain]:
+def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]:
     """Initialize the Dowse pipeline with specialized agents."""
     global pipeline
     if pipeline is None:
         # Create OpenAI provider with specific model
-        provider = OpenAIProvider(api_key=openai_key, model=ModelType.gpt4o)
+        provider = OpenAIProvider(
+            api_key=openai_key,
+            default_model=OpenAIModelType.gpt4o_mini
+        )
         
-        # Initialize pipeline with our custom processors and executors
-        pipeline = Pipeline(
-            input_type=Tweet,
-            output_type=TweetWithChain,
+        # Create pipeline with routing and effects
+        pipeline = Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]](
             processors=[LoadChainData()],
-            executors={
+            classifier=Classifier[TweetWithChain, Literal["swap", "price", "unknown"]](
+                prompt="""
+                You are a crypto assistant that helps users with token swaps and price queries.
+                Classify the input message into one of these categories:
+                - swap: Any message about swapping, exchanging, or buying tokens
+                - price: Any message asking about token prices or values
+                - unknown: Any other message
+                
+                Respond with just the classification.
+                """,
+                provider=provider,
+                mapping={
+                    "swap": "swap",
+                    "price": "price",
+                    "unknown": "unknown"
+                }
+            ),
+            handlers={
                 "swap": SwapExecutor(provider=provider),
                 "price": PriceExecutor(provider=provider),
                 "unknown": UnknownExecutor(provider=provider)
             }
         )
+    
     return pipeline 

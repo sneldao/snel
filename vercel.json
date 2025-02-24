@@ -12,9 +12,22 @@
                 "includeFiles": [
                     "kyber.py",
                     "configure_logging.py",
-                    "requirements.txt",
                     "app/**",
-                    "src/**"
+                    "src/**",
+                    "requirements.txt"
+                ],
+                "excludeFiles": [
+                    "**/*.test.py",
+                    "**/*_test.py",
+                    "test_*.py",
+                    "tests/**",
+                    ".pytest_cache/**",
+                    "__pycache__/**",
+                    ".coverage",
+                    ".env.test",
+                    "test_redis_simple.py",
+                    "test_redis_ssl.py",
+                    "test_redis_upstash.py"
                 ]
             }
         },
@@ -26,11 +39,11 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "/api.py"
+            "dest": "api.py"
         },
         {
             "src": "/(.*)",
-            "dest": "/frontend/$1"
+            "dest": "frontend/$1"
         }
     ],
     "regions": [
@@ -38,11 +51,12 @@
     ],
     "env": {
         "PYTHONUNBUFFERED": "1",
-        "PYTHONPATH": ".:src",
+        "PYTHONPATH": ".",
         "PYTHONIOENCODING": "utf-8",
         "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
+        "REDIS_URL": "${REDIS_URL}",
         "MORALIS_API_KEY": "${MORALIS_API_KEY}",
-        "REDIS_URL": "https://touched-crab-18970.upstash.io",
-        "UPSTASH_REDIS_TOKEN": "${UPSTASH_REDIS_TOKEN}"
+        "ALCHEMY_KEY": "${ALCHEMY_KEY}",
+        "COINGECKO_API_KEY": "${COINGECKO_API_KEY}"
     }
 }

@@ -65,8 +65,7 @@ const SUPPORTED_CHAINS = {
   534352: "Scroll",
 } as const;
 
-// API URL handling - empty string in production (relative path), full URL in development
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function Home() {
   const [responses, setResponses] = React.useState<Response[]>([]);
