@@ -93,96 +93,92 @@ async def get_quote(
         headers = {
             "Accept": "application/json",
             "User-Agent": "pointless/1.0",
-            "x-client-id": "pointless"  # Identify our client
+            "x-client-id": "pointless"
         }
         
         logger.info(f"Requesting route from KyberSwap API: {route_url}")
         logger.info(f"Route params: {route_params}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
+            route_response = await client.get(route_url, params=route_params, headers=headers)
+            logger.info(f"KyberSwap route API response status: {route_response.status_code}")
+            
             try:
-                route_response = await client.get(route_url, params=route_params, headers=headers)
-                logger.info(f"KyberSwap route API response status: {route_response.status_code}")
-                
-                try:
-                    route_data = route_response.json()
-                    logger.info(f"Route response data: {route_data}")
-                except Exception as json_error:
-                    logger.error(f"Failed to parse route response as JSON: {route_response.text}")
-                    raise KyberSwapError("Failed to parse route response")
-                
-                if route_response.status_code != 200:
-                    error_msg = route_data.get('message', route_response.text)
-                    logger.error(f"Route request failed: {error_msg}")
-                    if route_response.status_code == 404:
-                        raise NoRouteFoundError("No valid route found for this swap")
-                    raise KyberSwapError(f"Route request failed: {error_msg}")
-                
-                if not route_data.get('data', {}).get('routeSummary'):
-                    logger.error("No route summary in response")
+                route_data = route_response.json()
+                logger.info(f"Route response data: {route_data}")
+            except Exception as json_error:
+                logger.error(f"Failed to parse route response as JSON: {route_response.text}")
+                raise KyberSwapError("Failed to parse route response")
+            
+            if route_response.status_code != 200:
+                error_msg = route_data.get('message', route_response.text)
+                logger.error(f"Route request failed: {error_msg}")
+                if route_response.status_code == 404:
                     raise NoRouteFoundError("No valid route found for this swap")
+                raise KyberSwapError(f"Route request failed: {error_msg}")
+            
+            if not route_data.get('data', {}).get('routeSummary'):
+                logger.error("No route summary in response")
+                raise NoRouteFoundError("No valid route found for this swap")
+            
+            # Step 2: Build transaction using the route
+            build_url = f"https://aggregator-api.kyberswap.com/{chain_name}/api/v1/route/build"
+            
+            build_data = {
+                "routeSummary": route_data['data']['routeSummary'],
+                "sender": recipient,
+                "recipient": recipient,
+                "slippageTolerance": 50,  # 0.5% slippage tolerance
+                "deadline": int(time.time()) + 1200,  # 20 minutes
+                "source": "pointless",
+                "enableGasEstimation": True
+            }
+            
+            logger.info(f"Building transaction at: {build_url}")
+            build_response = await client.post(build_url, json=build_data, headers=headers)
+            logger.info(f"Build API response status: {build_response.status_code}")
+            
+            try:
+                build_data = build_response.json()
+                logger.info(f"Build response data: {build_data}")
+            except Exception as json_error:
+                logger.error(f"Failed to parse build response as JSON: {build_response.text}")
+                raise BuildTransactionError("Failed to parse build response")
+            
+            if build_response.status_code != 200:
+                error_msg = build_data.get('message', build_response.text)
+                logger.error(f"Build request failed: {error_msg}")
                 
-                # Step 2: Build transaction using the route
-                build_url = f"https://aggregator-api.kyberswap.com/{chain_name}/api/v1/route/build"
+                # Check for TRANSFER_FROM_FAILED in the error message or code
+                if (
+                    "TRANSFER_FROM_FAILED" in error_msg or 
+                    build_data.get('code') == 4227 or  # Add specific error code check
+                    "TransferHelper: TRANSFER_FROM_FAILED" in error_msg
+                ):
+                    logger.info("Transfer failed, needs approval")
+                    raise TransferFromFailedError(
+                        "Token transfer failed. Please ensure you have sufficient balance and have approved the router."
+                    )
+                elif "No valid route found" in error_msg:
+                    raise NoRouteFoundError("No valid route found for this swap")
+                elif "insufficient liquidity" in error_msg.lower():
+                    raise InsufficientLiquidityError("Insufficient liquidity for this swap")
+                elif "invalid token" in error_msg.lower():
+                    raise InvalidTokenError("One or more tokens are invalid or not supported")
                 
-                build_data = {
-                    "routeSummary": route_data['data']['routeSummary'],
-                    "sender": recipient,  # Use recipient as sender
-                    "recipient": recipient,
-                    "slippageTolerance": 50,  # 0.5% slippage tolerance
-                    "deadline": int(time.time()) + 1200,  # 20 minutes
-                    "source": "pointless",
-                    "enableGasEstimation": True
-                }
-                
-                logger.info(f"Building transaction at: {build_url}")
-                build_response = await client.post(build_url, json=build_data, headers=headers)
-                logger.info(f"Build API response status: {build_response.status_code}")
-                
-                try:
-                    build_data = build_response.json()
-                    logger.info(f"Build response data: {build_data}")
-                except Exception as json_error:
-                    logger.error(f"Failed to parse build response as JSON: {build_response.text}")
-                    raise BuildTransactionError("Failed to parse build response")
-                
-                if build_response.status_code != 200:
-                    error_msg = build_data.get('message', build_response.text)
-                    logger.error(f"Build request failed: {error_msg}")
-                    
-                    # Check for specific error messages
-                    if "TRANSFER_FROM_FAILED" in error_msg:
-                        raise TransferFromFailedError(
-                            "Token transfer failed. Please ensure you have sufficient balance and have approved the router."
-                        )
-                    elif "No valid route found" in error_msg:
-                        raise NoRouteFoundError("No valid route found for this swap")
-                    elif "insufficient liquidity" in error_msg.lower():
-                        raise InsufficientLiquidityError("Insufficient liquidity for this swap")
-                    elif "invalid token" in error_msg.lower():
-                        raise InvalidTokenError("One or more tokens are invalid or not supported")
-                    
-                    raise BuildTransactionError(f"Failed to build transaction: {error_msg}")
-                
-                tx_data = build_data['data']
-                logger.info("Successfully built transaction")
-                
-                return KyberQuote(
-                    router_address=tx_data["routerAddress"],
-                    data=tx_data["data"],
-                    gas=tx_data.get("gas", "500000")  # Default gas if not provided
-                )
-                
-            except httpx.TimeoutException:
-                logger.error("Request timed out")
-                raise KyberSwapError("Request timed out while getting quote")
-                
-    except httpx.HTTPError as e:
-        logger.error(f"HTTP error occurred: {str(e)}")
-        raise KyberSwapError(f"HTTP error occurred: {str(e)}")
+                raise BuildTransactionError(f"Failed to build transaction: {error_msg}")
+            
+            tx_data = build_data['data']
+            logger.info("Successfully built transaction")
+            
+            return KyberQuote(
+                router_address=tx_data["routerAddress"],
+                data=tx_data["data"],
+                gas=tx_data.get("gas", "500000")  # Default gas if not provided
+            )
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise KyberSwapError(f"Unexpected error: {str(e)}")
+        logger.error(f"Error in get_quote: {str(e)}")
+        raise
 
 def get_chain_from_chain_id(chain_id: int) -> str:
     """Get chain name from chain ID."""

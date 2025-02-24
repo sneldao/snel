@@ -51,6 +51,7 @@ type TransactionData = {
   needs_approval?: boolean;
   token_to_approve?: string;
   spender?: string;
+  pending_command?: string;
 };
 
 // Add supported chains constant
@@ -64,7 +65,7 @@ const SUPPORTED_CHAINS = {
   534352: "Scroll",
 } as const;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function Home() {
   const [responses, setResponses] = React.useState<Response[]>([]);
@@ -164,20 +165,15 @@ export default function Home() {
           },
         ]);
 
-        // Encode approve function call
         const approveData = {
           to: txData.token_to_approve as `0x${string}`,
-          data: ("0x095ea7b3" + // approve(address,uint256)
-            txData.spender.slice(2).padStart(64, "0") +
-            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") as `0x${string}`,
+          data: txData.data as `0x${string}`,
           value: BigInt(0),
           chainId: txData.chainId,
-          gas: BigInt(100000), // Standard gas for approvals
+          gas: BigInt(100000),
         };
 
         const approveHash = await walletClient.sendTransaction(approveData);
-
-        // Wait for approval transaction
         const approveReceipt = await publicClient?.waitForTransactionReceipt({
           hash: approveHash,
         });
@@ -195,9 +191,31 @@ export default function Home() {
             status: "success",
           },
         ]);
+
+        // Retry the original transaction after approval
+        if (txData.pending_command) {
+          const response = await fetch(`${API_URL}/api/execute-transaction`, {
+            method: "POST",
+            headers: getApiHeaders(),
+            body: JSON.stringify({
+              command: txData.pending_command,
+              wallet_address: address,
+              chain_id: chainId,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Failed to execute swap after approval: ${await response.text()}`
+            );
+          }
+
+          const swapData = await response.json();
+          return executeTransaction(swapData); // Execute the swap transaction
+        }
       }
 
-      // Prepare the swap transaction
+      // Execute the main transaction
       const transaction = {
         to: txData.to as `0x${string}`,
         data: txData.data as `0x${string}`,
@@ -206,7 +224,6 @@ export default function Home() {
         gas: BigInt(txData.gasLimit),
       };
 
-      // Send the transaction
       const hash = await walletClient.sendTransaction(transaction);
 
       setResponses((prev) => [
@@ -377,6 +394,7 @@ export default function Home() {
               needs_approval: data.needs_approval,
               token_to_approve: data.token_to_approve,
               spender: data.spender,
+              pending_command: data.pending_command,
             });
           } catch (error) {
             console.error("Transaction error:", error);

@@ -1,40 +1,37 @@
-[project]
-name = "dowse"
-version = "0.1.6post1"
-description = ""
-authors = [
-    {name = "johnny-emp",email = "johnny@empyrealsdk.com"}
-]
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "python-dotenv (>=1.0.1,<2.0.0)",
-    "eth-typeshed-py (>=0.1.26,<0.2.0)",
-    "eth-rpc-py (>=0.1.26,<0.2.0)",
-    "emp-agents (>=0.3.0,<0.4.0)",
-    "fastapi (>=0.115.8,<0.116.0)",
-    "uvicorn (>=0.34.0,<0.35.0)",
-    "slowapi (>=0.1.9,<0.2.0)",
-]
-
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.poetry]
+name = "dowse-pointless"
+version = "0.1.0"
+description = "A natural language crypto command interpreter"
+authors = ["Your Name <your.email@example.com>"]
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12"
+fastapi = "0.115.8"
+uvicorn = "0.34.0"
+pydantic = "2.10.6"
+httpx = "0.28.1"
+python-dotenv = "1.0.1"
+slowapi = "0.1.9"
+eth-rpc-py = "0.1.26"
+eth-account = "0.13.5"
+eth-typing = "5.2.0"
+dowse = "0.1.0"
+emp-agents = ">=0.2.0.post1,<0.3.0"
 
-[tool.poetry.group.test.dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
 pytest-asyncio = "^0.25.3"
 ipython = "^8.32.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 ignore = ["E704"]
 src-paths = ["./src"]
 line-length = 120
-
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

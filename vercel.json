@@ -7,11 +7,12 @@
             "config": {
                 "maxDuration": 60,
                 "memory": 1024,
-                "runtime": "python3.9",
+                "runtime": "python3.12",
                 "handler": "app",
                 "includeFiles": [
                     "kyber.py",
-                    "configure_logging.py"
+                    "configure_logging.py",
+                    "requirements.txt"
                 ]
             }
         },

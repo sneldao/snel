@@ -57,6 +57,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",  # Local development
+        "http://127.0.0.1:3000",  # Alternative local URL
         "https://snel-pointless.vercel.app",  # Production domain
     ],
     allow_credentials=True,
@@ -101,16 +102,17 @@ class TransactionRequest(BaseModel):
 class TransactionResponse(BaseModel):
     to: HexAddress
     data: str
-    value: str  # hex string of the value in wei
+    value: str
     chain_id: int
-    method: str  # e.g., "swap", "transfer"
-    gas_limit: str  # hex string
-    gas_price: Optional[str] = None  # hex string, optional for EIP-1559
-    max_fee_per_gas: Optional[str] = None  # hex string, for EIP-1559
-    max_priority_fee_per_gas: Optional[str] = None  # hex string, for EIP-1559
+    method: str
+    gas_limit: str
+    gas_price: Optional[str] = None
+    max_fee_per_gas: Optional[str] = None
+    max_priority_fee_per_gas: Optional[str] = None
     needs_approval: bool = False
     token_to_approve: Optional[HexAddress] = None
     spender: Optional[HexAddress] = None
+    pending_command: Optional[str] = None
 
 class SwapCommand(BaseModel):
     token_in: str
@@ -139,7 +141,6 @@ class ChainConfig:
 
 async def get_token_addresses(chain_id: int) -> dict[str, HexAddress]:
     """Get token addresses for the specified chain."""
-    # Common token addresses across different chains
     addresses = {
         1: {  # Ethereum
             "ETH": HexAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"),
@@ -174,7 +175,7 @@ async def get_token_addresses(chain_id: int) -> dict[str, HexAddress]:
         534352: {  # Scroll
             "ETH": HexAddress("0x5300000000000000000000000000000000000004"),  # Native ETH on Scroll
             "USDC": HexAddress("0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),  # USDC on Scroll
-            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # UNI not yet available on Scroll
+            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # UNI not yet available
         }
     }
     
@@ -437,97 +438,90 @@ async def execute_swap(
 ) -> TransactionResponse:
     """Execute swap using Kyber's API."""
     try:
-        logger.info(f"Executing swap with Kyber: token_in={token_in}, token_out={token_out}, amount={amount}, recipient={recipient}")
+        logger.info(f"Executing swap on chain {chain_id} ({get_chain_from_chain_id(chain_id)})")
+        logger.info(f"Swap details: {amount} from {token_in} to {token_out}")
         
-        # Get quote and build transaction from Kyber
-        quote = await kyber_quote(
-            token_in=token_in,
-            token_out=token_out,
-            amount=amount,
-            chain_id=chain_id,
-            recipient=recipient
-        )
-        
-        logger.info(f"Got quote from Kyber: {quote}")
-
-        # List of native ETH/WETH addresses across chains
-        native_tokens = {
-            "0x4200000000000000000000000000000000000006",  # WETH on OP/Base
-            "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # ETH
-            "0x5300000000000000000000000000000000000004",  # ETH on Scroll
-            "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",  # WETH on Arbitrum
-            "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",  # WETH on Polygon
-            "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",  # WETH on Avalanche
-        }
-
-        # If token_in is not ETH/WETH, we need to check if approval is needed
-        if token_in.lower() not in [addr.lower() for addr in native_tokens]:
-            logger.info(f"Non-native token swap detected. Token: {token_in}")
-            # Return both approval and swap transactions
-            return TransactionResponse(
-                to=quote.router_address,
-                data=quote.data,
-                value="0x0",
+        try:
+            # First try to get quote
+            quote = await kyber_quote(
+                token_in=token_in,
+                token_out=token_out,
+                amount=amount,
                 chain_id=chain_id,
-                method="swap",
-                gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
-                needs_approval=True,
-                token_to_approve=token_in,
-                spender=quote.router_address
+                recipient=recipient
             )
-        
-        # For native token swaps, no approval needed
+            logger.info(f"Got quote from Kyber: {quote}")
+            
+        except TransferFromFailedError as e:
+            # If transfer fails, it means we need approval
+            logger.info("Transfer failed, generating approval transaction")
+            if token_in.lower() not in [addr.lower() for addr in native_tokens]:
+                return TransactionResponse(
+                    to=token_in,  # Token contract address
+                    data="0x095ea7b3" +  # approve(address,uint256)
+                         "000000000000000000000000" +  # Pad router address
+                         "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
+                         "f" * 64,  # Max uint256 for unlimited approval
+                    value="0x0",
+                    chain_id=chain_id,
+                    method="approve",
+                    gas_limit="0x186a0",  # 100,000 gas
+                    needs_approval=True,
+                    token_to_approve=token_in,
+                    spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"  # Kyber router
+                )
+            raise  # Re-raise if it's a native token (shouldn't happen)
+
+        # For successful quote, return swap transaction
         return TransactionResponse(
             to=quote.router_address,
             data=quote.data,
-            value=hex(amount) if token_in in native_tokens else "0x0",  # Only send value if swapping native token
+            value=hex(amount) if token_in.lower() in [addr.lower() for addr in native_tokens] else "0x0",
             chain_id=chain_id,
             method="swap",
             gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
             needs_approval=False
         )
-            
+
     except NoRouteFoundError as e:
         logger.error(f"No route found error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
     except InsufficientLiquidityError as e:
         logger.error(f"Insufficient liquidity error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
     except InvalidTokenError as e:
         logger.error(f"Invalid token error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
     except BuildTransactionError as e:
         logger.error(f"Build transaction error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
     except TransferFromFailedError as e:
         logger.error(f"Transfer failed error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Token approval needed: {str(e)}"
-        )
+        # Return approval transaction when transfer fails due to no allowance
+        if token_in.lower() not in [addr.lower() for addr in native_tokens]:
+            return TransactionResponse(
+                to=token_in,
+                data="0x095ea7b3" +  # approve(address,uint256)
+                     "000000000000000000000000" +  # Pad router address
+                     "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
+                     "f" * 64,  # Max uint256 for unlimited approval
+                value="0x0",
+                chain_id=chain_id,
+                method="approve",
+                gas_limit="0x186a0",  # 100,000 gas
+                needs_approval=True,
+                token_to_approve=token_in,
+                spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"  # Kyber router
+            )
+        raise HTTPException(status_code=400, detail=f"Token approval needed: {str(e)}")
     except KyberSwapError as e:
         logger.error(f"KyberSwap error: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Swap failed: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Swap failed: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error in execute_swap: {e}", exc_info=True)
+        logger.error(f"Swap failed on chain {chain_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail="An unexpected error occurred while processing the swap. Please try again."
+            detail=f"Failed to execute swap: {str(e)}"
         )
 
 @app.post("/api/execute-transaction")
@@ -538,7 +532,6 @@ async def execute_transaction(
     openai_key: str = Depends(get_openai_key)
 ) -> TransactionResponse:
     try:
-        # Set OpenAI API key for this request
         os.environ["OPENAI_API_KEY"] = openai_key
         
         logger.info(f"Executing transaction for command: {tx_request.command} on chain {tx_request.chain_id}")
@@ -550,17 +543,17 @@ async def execute_transaction(
                 f"{', '.join(f'{name} ({id})' for id, name in ChainConfig.SUPPORTED_CHAINS.items())}"
             )
 
-        # Parse the swap command with the actual chain ID
+        # Parse the swap command
         swap_command = await parse_swap_command(tx_request.command, tx_request.chain_id)
         if not swap_command:
             logger.error(f"Failed to parse swap command: {tx_request.command}")
             raise ValueError(f"Invalid swap command format. Expected format: 'swap 1 usdc for eth', got: {tx_request.command}")
 
-        # Get token addresses for the chain
+        # Get token addresses
         token_addresses = await get_token_addresses(tx_request.chain_id)
         
         try:
-            # Handle decimals correctly for different tokens
+            # Handle decimals
             decimals = 18  # Default for most tokens
             if swap_command.token_in == "USDC":
                 decimals = 6  # USDC uses 6 decimals
@@ -570,20 +563,26 @@ async def execute_transaction(
             
             # Execute the swap
             try:
-                return await execute_swap(
+                response = await execute_swap(
                     token_in=token_addresses[swap_command.token_in],
                     token_out=token_addresses[swap_command.token_out],
                     amount=amount_in,
                     chain_id=tx_request.chain_id,
                     recipient=tx_request.wallet_address,
                 )
+                
+                # If this is an approval response, store the command for retry
+                if response.method == "approve":
+                    response.pending_command = tx_request.command  # Add this field to TransactionResponse model
+                
+                return response
+
             except TransferFromFailedError as e:
-                logger.info(f"Transfer failed, needs approval: {e}")
-                # Return approval transaction
+                logger.info("Transfer failed, generating approval transaction")
                 return TransactionResponse(
-                    to=token_addresses[swap_command.token_in],  # Token contract address
+                    to=token_addresses[swap_command.token_in],
                     data="0x095ea7b3" +  # approve(address,uint256)
-                         "000000000000000000000000" +  # Pad router address to 32 bytes
+                         "000000000000000000000000" +  # Pad router address
                          "6131B5fae19EA4f9D964eAc0408E4408b66337b5" +  # Kyber router address
                          "f" * 64,  # Max uint256 for unlimited approval
                     value="0x0",
@@ -592,64 +591,19 @@ async def execute_transaction(
                     gas_limit="0x186a0",  # 100,000 gas
                     needs_approval=True,
                     token_to_approve=token_addresses[swap_command.token_in],
-                    spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5"  # Kyber router
-                )
-            except NoRouteFoundError as e:
-                logger.error(f"No route found: {e}")
-                raise HTTPException(
-                    status_code=400,
-                    detail=str(e)
-                )
-            except InsufficientLiquidityError as e:
-                logger.error(f"Insufficient liquidity: {e}")
-                raise HTTPException(
-                    status_code=400,
-                    detail=str(e)
-                )
-            except KyberSwapError as e:
-                logger.error(f"Kyber error: {e}")
-                raise HTTPException(
-                    status_code=400,
-                    detail=str(e)
-                )
-            except Exception as swap_error:
-                logger.error(f"Error executing swap: {swap_error}")
-                if "User rejected the request" in str(swap_error):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Transaction cancelled by user"
-                    )
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to execute swap: {str(swap_error)}"
+                    spender="0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Kyber router
+                    pending_command=tx_request.command  # Store the original command
                 )
 
         except ValueError as ve:
             logger.error(f"Value error in swap preparation: {ve}")
-            raise HTTPException(
-                status_code=400,
-                detail=str(ve)
-            )
-        except Exception as e:
-            logger.error(f"Error preparing swap: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"An error occurred while preparing the swap: {str(e)}"
-            )
-
-    except HTTPException:
-        raise
-    except ValueError as ve:
-        logger.error(f"ValueError in transaction preparation: {ve}")
-        raise HTTPException(
-            status_code=400,
-            detail=str(ve)
-        )
+            raise HTTPException(status_code=400, detail=str(ve))
+            
     except Exception as e:
-        logger.error(f"Unexpected error in transaction preparation: {e}", exc_info=True)
+        logger.error(f"Error preparing swap: {e}")
         raise HTTPException(
             status_code=500,
-            detail="An unexpected error occurred. Please try again."
+            detail=f"An error occurred while preparing the swap: {str(e)}"
         )
 
 @app.get("/api/test-kyber")
@@ -706,3 +660,10 @@ async def health_check():
 
 # This is required for Vercel
 app = app 
+
+native_tokens = {
+    "0x4200000000000000000000000000000000000006",  # WETH on OP/Base
+    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # ETH
+    "0x5300000000000000000000000000000000000004",  # ETH on Scroll
+    # ... other native tokens ...
+} 
