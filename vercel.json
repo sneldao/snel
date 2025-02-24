@@ -16,7 +16,6 @@
                     "app/**",
                     "src/**",
                     "requirements.txt",
-                    "dowse/**",
                     "*.py"
                 ],
                 "excludeFiles": [
