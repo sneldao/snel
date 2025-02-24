@@ -3,4 +3,6 @@ README.md
 *.pyc
 __pycache__/
 .git/
-.env.local 
+.env.local
+.venv/
+node_modules/ 

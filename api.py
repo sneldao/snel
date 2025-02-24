@@ -51,7 +51,9 @@ class RedisPendingCommandStore:
     def __init__(self):
         self._logger = logging.getLogger(__name__)
         self._redis = None
-        self._redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        self._redis_url = os.environ.get("REDIS_URL")
+        if not self._redis_url:
+            raise ValueError("REDIS_URL environment variable is required")
         
     async def _ensure_connection(self):
         """Ensure Redis connection is active, reconnect if needed."""
@@ -63,33 +65,14 @@ class RedisPendingCommandStore:
                     decode_responses=True,
                     retry_on_timeout=True,
                     health_check_interval=30,
-                    socket_keepalive=True,  # Keep connection alive
-                    socket_timeout=5,  # 5 second timeout
-                    retry_on_error=[redis.ConnectionError, redis.TimeoutError]  # Auto-retry on these errors
-                )
-            await self._redis.ping()
-        except (redis.ConnectionError, redis.TimeoutError) as e:
-            self._logger.warning(f"Redis connection lost, attempting to reconnect: {e}")
-            try:
-                # Close existing connection if any
-                if self._redis:
-                    await self._redis.close()
-                # Create new connection
-                self._redis = redis.from_url(
-                    self._redis_url,
-                    encoding="utf-8",
-                    decode_responses=True,
-                    retry_on_timeout=True,
-                    health_check_interval=30,
                     socket_keepalive=True,
                     socket_timeout=5,
                     retry_on_error=[redis.ConnectionError, redis.TimeoutError]
                 )
-                await self._redis.ping()
-                self._logger.info("Successfully reconnected to Redis")
-            except Exception as e:
-                self._logger.error(f"Failed to reconnect to Redis: {e}")
-                raise RuntimeError("Redis connection failed")
+            await self._redis.ping()
+        except Exception as e:
+            self._logger.error(f"Redis connection error: {e}")
+            raise
 
     async def _retry_operation(self, operation):
         """Retry an operation with exponential backoff."""
@@ -239,6 +222,7 @@ def init_services():
     # Get environment variables (these should be set in Vercel)
     alchemy_key = os.environ.get("ALCHEMY_KEY")
     coingecko_key = os.environ.get("COINGECKO_API_KEY")
+    moralis_key = os.environ.get("MORALIS_API_KEY")
 
     if not all([alchemy_key, coingecko_key]):
         logger.error("Missing required environment variables")

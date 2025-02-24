@@ -12,7 +12,8 @@
                 "includeFiles": [
                     "kyber.py",
                     "configure_logging.py",
-                    "requirements.txt"
+                    "requirements.txt",
+                    "app/**"
                 ]
             }
         },
@@ -38,6 +39,8 @@
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
         "PYTHONIOENCODING": "utf-8",
-        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
+        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
+        "MORALIS_API_KEY": "@moralis_api_key",
+        "REDIS_URL": "@redis_url"
     }
 }

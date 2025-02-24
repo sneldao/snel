@@ -10,7 +10,9 @@ from eth_utils import is_address, to_checksum_address
 
 logger = logging.getLogger(__name__)
 
-MORALIS_API_KEY = os.getenv("MORALIS_API_KEY")
+MORALIS_API_KEY = os.environ.get("MORALIS_API_KEY")
+if not MORALIS_API_KEY:
+    raise ValueError("MORALIS_API_KEY environment variable is required")
 
 # Cache for validated tokens to reduce API calls
 # Structure: {(token_id, chain_id): (timestamp, is_valid)}
@@ -52,8 +54,7 @@ async def get_token_metadata(token_address: str, chain_id: Optional[int] = None)
         return None
         
     try:
-        moralis_api_key = os.getenv("MORALIS_API_KEY")
-        if not moralis_api_key or not chain_id:
+        if not chain_id:
             return None
             
         # Map chain IDs to Moralis chain names
@@ -81,8 +82,9 @@ async def get_token_metadata(token_address: str, chain_id: Optional[int] = None)
                 },
                 headers={
                     "Accept": "application/json",
-                    "X-API-Key": moralis_api_key
-                }
+                    "X-API-Key": MORALIS_API_KEY
+                },
+                timeout=10.0  # Add explicit timeout for serverless
             )
             
             if response.status_code == 200:
