@@ -8,6 +8,7 @@ A friendly crypto command interpreter that helps users swap tokens and answers q
 - Natural language command processing
 - Automatic token approval handling
 - Multi-chain support with automatic chain detection
+- Persistent command storage with Redis
 
 ## Supported Chains
 
@@ -24,6 +25,7 @@ A friendly crypto command interpreter that helps users swap tokens and answers q
 - Node.js 18+
 - Poetry for Python dependency management
 - pnpm for Node.js dependency management
+- Redis (via Upstash)
 
 ### Environment Variables
 
@@ -33,6 +35,20 @@ Create a `.env.local` file in the root directory:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ALCHEMY_KEY=your_alchemy_key
 COINGECKO_API_KEY=your_coingecko_key
+REDIS_URL=your_upstash_redis_url  # Format: rediss://default:token@hostname:port
+```
+
+### Redis Setup
+
+The project uses Upstash Redis for persistent storage. To set up:
+
+1. Create a database at [Upstash Console](https://console.upstash.com/)
+2. Get your Redis URL from the Upstash dashboard
+3. Add the URL to your `.env` file
+4. Test the connection:
+
+```bash
+poetry run python test_redis_upstash.py
 ```
 
 ### Backend Setup
@@ -117,6 +133,7 @@ Set these in your Vercel project settings:
 - `ALCHEMY_KEY`
 - `COINGECKO_API_KEY`
 - `NEXT_PUBLIC_API_URL` (set to your production domain)
+- `REDIS_URL` (your Upstash Redis URL)
 
 ### Dependencies
 
@@ -134,6 +151,7 @@ eth-account==0.13.5
 eth-typing==5.2.0
 dowse==0.1.0
 emp-agents>=0.2.0.post1,<0.3.0
+upstash-redis==1.2.0
 ```
 
 ## Key Differences Between Local and Production

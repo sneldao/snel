@@ -7,7 +7,8 @@ import datetime
 import sys
 import json
 from typing import Dict, Optional
-import redis.asyncio as redis
+from urllib.parse import urlparse
+from upstash_redis import Redis
 import asyncio
 
 # Load environment variables from .env file BEFORE importing dowse
@@ -42,11 +43,17 @@ from app.services.prices import get_token_price
 # Initialize logger
 logger = logging.getLogger(__name__)
 
+def parse_redis_url(url):
+    """Parse Redis URL to get Upstash REST URL and token."""
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    rest_url = f"https://{hostname}"
+    token = parsed.password
+    return rest_url, token
+
 class RedisPendingCommandStore:
-    """Redis-backed store for pending commands."""
+    """Redis-backed store for pending commands using Upstash Redis."""
     KEY_PREFIX = "pending_cmd"  # Namespace for all command keys
-    MAX_RETRIES = 3  # Maximum number of retries for operations
-    RETRY_DELAY = 0.1  # Delay between retries in seconds
     
     def __init__(self):
         self._logger = logging.getLogger(__name__)
@@ -59,39 +66,14 @@ class RedisPendingCommandStore:
         """Ensure Redis connection is active, reconnect if needed."""
         try:
             if not self._redis:
-                self._redis = redis.from_url(
-                    self._redis_url,
-                    encoding="utf-8",
-                    decode_responses=True,
-                    retry_on_timeout=True,
-                    health_check_interval=30,
-                    socket_keepalive=True,
-                    socket_timeout=5,
-                    retry_on_error=[redis.ConnectionError, redis.TimeoutError]
-                )
-            await self._redis.ping()
+                rest_url, token = parse_redis_url(self._redis_url)
+                self._redis = Redis(url=rest_url, token=token)
+                # Test connection
+                self._redis.ping()
+                self._logger.info("Successfully connected to Redis")
         except Exception as e:
             self._logger.error(f"Redis connection error: {e}")
             raise
-
-    async def _retry_operation(self, operation):
-        """Retry an operation with exponential backoff."""
-        last_error = None
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                await self._ensure_connection()
-                return await operation()
-            except (redis.ConnectionError, redis.TimeoutError) as e:
-                last_error = e
-                if attempt < self.MAX_RETRIES - 1:
-                    delay = self.RETRY_DELAY * (2 ** attempt)  # Exponential backoff
-                    self._logger.warning(f"Operation failed, retrying in {delay}s: {e}")
-                    await asyncio.sleep(delay)
-                continue
-            except Exception as e:
-                self._logger.error(f"Unexpected error during operation: {e}")
-                raise
-        raise RuntimeError(f"Operation failed after {self.MAX_RETRIES} attempts: {last_error}")
 
     def _make_key(self, address: str) -> str:
         """Create a Redis key for a wallet address."""
@@ -109,10 +91,12 @@ class RedisPendingCommandStore:
     async def initialize(self):
         """Initialize the Redis connection."""
         await self._ensure_connection()
-        self._logger.info("Successfully connected to Redis")
+        self._logger.info("Successfully initialized Redis connection")
     
     async def store_command(self, user_id: str, command: str, chain_id: Optional[int] = None) -> None:
         """Store a pending command for a user."""
+        await self._ensure_connection()
+        
         data = {
             "command": command,
             "chain_id": chain_id,
@@ -121,30 +105,36 @@ class RedisPendingCommandStore:
         
         key = self._make_key(user_id)
         
-        async def _store():
+        try:
             # Store with 30 minute TTL
-            await self._redis.setex(key, 1800, json.dumps(data))
+            result = self._redis.set(key, json.dumps(data), ex=1800)
+            if not result:
+                raise RuntimeError("Command was not stored successfully")
             
             # Verify storage
-            stored_data = await self._redis.get(key)
+            stored_data = self._redis.get(key)
             if not stored_data:
                 raise RuntimeError("Command was not stored successfully")
             
-            ttl = await self._redis.ttl(key)
+            ttl = self._redis.ttl(key)
             self._logger.info(f"Stored command for key {key}: {command} (chain: {chain_id})")
             self._logger.info(f"Command TTL for key {key}: {ttl} seconds")
             
-        await self._retry_operation(_store)
+        except Exception as e:
+            self._logger.error(f"Failed to store command: {e}")
+            raise
     
     async def get_command(self, user_id: str) -> Optional[Dict]:
         """Get a pending command for a user."""
+        await self._ensure_connection()
+        
         key = self._make_key(user_id)
         self._logger.info(f"Attempting to get command for key {key}")
         
-        async def _get():
+        try:
             # Get data and TTL
-            data = await self._redis.get(key)
-            ttl = await self._redis.ttl(key)
+            data = self._redis.get(key)
+            ttl = self._redis.ttl(key)
             
             self._logger.info(f"Command TTL for key {key}: {ttl} seconds")
             self._logger.info(f"Raw Redis data for key {key}: {data}")
@@ -157,28 +147,41 @@ class RedisPendingCommandStore:
             self._logger.info(f"Found command for key {key}: {command_data['command']}")
             return command_data
             
-        return await self._retry_operation(_get)
+        except Exception as e:
+            self._logger.error(f"Failed to get command: {e}")
+            raise
     
     async def clear_command(self, user_id: str) -> None:
         """Clear a pending command for a user."""
+        await self._ensure_connection()
+        
         key = self._make_key(user_id)
         
-        async def _clear():
-            exists = await self._redis.exists(key)
+        try:
+            exists = self._redis.exists(key)
             if exists:
-                await self._redis.delete(key)
+                self._redis.delete(key)
                 self._logger.info(f"Cleared command for key {key}")
             else:
                 self._logger.warning(f"No command found to clear for key {key}")
                 
-        await self._retry_operation(_clear)
+        except Exception as e:
+            self._logger.error(f"Failed to clear command: {e}")
+            raise
 
     async def list_all_commands(self) -> list[str]:
         """List all pending command keys (useful for debugging)."""
-        async def _list():
-            return await self._redis.keys(f"{self.KEY_PREFIX}:*")
+        await self._ensure_connection()
+        
+        try:
+            # Use scan to get all keys with our prefix
+            pattern = f"{self.KEY_PREFIX}:*"
+            keys = self._redis.scan(0, pattern, 1000)[1]
+            return keys
             
-        return await self._retry_operation(_list)
+        except Exception as e:
+            self._logger.error(f"Failed to list commands: {e}")
+            raise
 
 # Global command store
 command_store = RedisPendingCommandStore()
@@ -505,6 +508,15 @@ async def parse_swap_command(command: str, chain_id: Optional[int] = None) -> Sw
         logger.error(f"Failed to parse swap command: {e}")
         return None
 
+# Token decimals mapping
+TOKEN_DECIMALS = {
+    "ETH": 18,
+    "WETH": 18,
+    "USDC": 6,
+    "USDT": 6,
+    "DAI": 18,
+}
+
 @app.post("/api/execute-transaction")
 @limiter.limit("10/minute")
 async def execute_transaction(
@@ -539,12 +551,17 @@ async def execute_transaction(
             raise ValueError(f"No token addresses configured for chain {tx_request.chain_id}")
         
         try:
-            # Get decimals for input token
-            _, token_in_decimals = await get_token_price(
-                swap_command.token_in,
-                token_addresses.get(swap_command.token_in),
-                tx_request.chain_id
-            )
+            # Get token decimals - first try hardcoded values, then fallback to price API
+            token_in_upper = swap_command.token_in.upper()
+            if token_in_upper in TOKEN_DECIMALS:
+                token_in_decimals = TOKEN_DECIMALS[token_in_upper]
+                logger.info(f"Using hardcoded decimals for {token_in_upper}: {token_in_decimals}")
+            else:
+                _, token_in_decimals = await get_token_price(
+                    swap_command.token_in,
+                    token_addresses.get(swap_command.token_in),
+                    tx_request.chain_id
+                )
             
             # Calculate amount_in based on decimals
             if swap_command.token_in == "ETH":
@@ -554,7 +571,9 @@ async def execute_transaction(
                 amount_in = int(Web3.to_wei(swap_command.amount, 'ether'))
                 logger.info(f"Converting {swap_command.amount} ETH to {amount_in} wei")
             else:
+                # For other tokens, use their specific decimals
                 amount_in = int(swap_command.amount * (10 ** token_in_decimals))
+                logger.info(f"Converting {swap_command.amount} {swap_command.token_in} to {amount_in} (using {token_in_decimals} decimals)")
             
             logger.info(f"Calculated amount_in: {amount_in} ({swap_command.amount} * 10^{token_in_decimals})")
             
@@ -670,15 +689,37 @@ async def test_kyber():
 async def health_check():
     """Health check endpoint."""
     try:
+        # Check Redis connection
+        redis_status = "unknown"
+        redis_error = None
+        try:
+            await command_store.initialize()
+            # Test basic Redis operations
+            test_key = "health_check_test"
+            await command_store._redis.set(test_key, "test")
+            await command_store._redis.delete(test_key)
+            redis_status = "connected"
+        except Exception as e:
+            redis_status = "error"
+            redis_error = str(e)
+
         # Check if required environment variables are set
         env_vars = {
+            "REDIS_URL": bool(os.environ.get("REDIS_URL")),
+            "MORALIS_API_KEY": bool(os.environ.get("MORALIS_API_KEY")),
             "ALCHEMY_KEY": bool(os.environ.get("ALCHEMY_KEY")),
             "COINGECKO_API_KEY": bool(os.environ.get("COINGECKO_API_KEY")),
         }
         
         return {
-            "status": "healthy",
+            "status": "healthy" if redis_status == "connected" else "unhealthy",
             "timestamp": datetime.datetime.now().isoformat(),
+            "services": {
+                "redis": {
+                    "status": redis_status,
+                    "error": redis_error
+                }
+            },
             "environment": {
                 "python_version": sys.version,
                 "environment_variables": env_vars

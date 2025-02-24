@@ -11,6 +11,7 @@ from app.models.commands import SwapCommand, BotMessage
 from emp_agents import AgentBase
 from emp_agents.models import Message, SystemMessage
 import json
+from upstash_redis.errors import UpstashError
 
 logger = logging.getLogger(__name__)
 
@@ -284,90 +285,103 @@ class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
         return token, None
 
     async def execute(self, input_: TweetWithChain) -> AgentMessage[ProcessedSwapCommand]:
-        # First run the processors
-        for processor_cls in self.processors:
-            processor = processor_cls(provider=self.provider)
-            result = await processor.process(input_)
-            if result.error_message:
-                return result
-            input_ = result.content
+        try:
+            # First run the processors
+            for processor_cls in self.processors:
+                processor = processor_cls(provider=self.provider)
+                result = await processor.process(input_)
+                if result.error_message:
+                    return result
+                input_ = result.content
 
-        # Format the response using the prompt
-        if isinstance(input_, ProcessedSwapCommand):
-            try:
-                # Get token prices if needed
-                from app.services.prices import get_token_price, _is_valid_contract_address
-                
-                # Get token display info - preserve original addresses for the command
-                token_in_original = input_.token_in
-                token_out_original = input_.token_out
-                
-                logger.info(f"Getting token info for input token: {token_in_original}")
-                _, token_in_name = await self.get_token_info(input_.token_in, input_.chain_id)
-                logger.info(f"Getting token info for output token: {token_out_original}")
-                _, token_out_name = await self.get_token_info(input_.token_out, input_.chain_id)
-                
-                logger.info(f"Token info - Input: {token_in_name}, Output: {token_out_name}")
-                
-                # Format display names - use name if available, otherwise use address
-                token_in_display = token_in_name or token_in_original
-                token_out_display = token_out_name or token_out_original
-                
-                if input_.amount_is_usd:
-                    # Calculate the input amount based on USD value
-                    token_in_price, _ = await get_token_price(input_.token_in)
-                    eth_amount = input_.amount / token_in_price
-                    message = (
-                        f"I'll help you swap approximately {eth_amount:.6f} {token_in_display} (~${input_.amount:.2f}) "
-                        f"for {token_out_display}. The exact amount of tokens you'll receive will be determined at "
-                        "the time of the swap based on current market rates."
-                    )
-                    # IMPORTANT: Use original addresses in the command
-                    command = f"swap {eth_amount:.6f} {token_in_original} for {token_out_original}"
+            # Format the response using the prompt
+            if isinstance(input_, ProcessedSwapCommand):
+                try:
+                    # Get token prices if needed
+                    from app.services.prices import get_token_price, _is_valid_contract_address
                     
-                    # Update the input object with the calculated amount
-                    input_.amount = eth_amount
-                    input_.is_target_amount = False
-                    input_.amount_is_usd = False
-                elif input_.is_target_amount:
-                    message = f"I'll help you swap {token_in_display} to get {input_.amount} {token_out_display}."
-                    command = f"swap {token_in_original} for {input_.amount} {token_out_original}"
-                else:
-                    message = f"I'll help you swap {input_.amount} {token_in_display} for {token_out_display}."
-                    command = f"swap {input_.amount} {token_in_original} for {token_out_original}"
-                
-                message += " Does this look good? Reply with 'yes' to confirm or 'no' to cancel."
-                
-                # Create a Tweet with the response
-                tweet = BotMessage(
-                    id=0,  # Bot messages use ID 0
-                    content=message,
-                    creator_name="@bot",
-                    creator_id="bot",
-                    metadata={
-                        "pending_command": command,
-                        "swap_details": {
-                            **input_.model_dump(),
-                            "natural_command": input_.natural_command,
-                            "is_target_amount": input_.is_target_amount,
-                            "amount_is_usd": input_.amount_is_usd,
-                            "token_in_name": token_in_name,
-                            "token_out_name": token_out_name
+                    # Get token display info - preserve original addresses for the command
+                    token_in_original = input_.token_in
+                    token_out_original = input_.token_out
+                    
+                    logger.info(f"Getting token info for input token: {token_in_original}")
+                    _, token_in_name = await self.get_token_info(input_.token_in, input_.chain_id)
+                    logger.info(f"Getting token info for output token: {token_out_original}")
+                    _, token_out_name = await self.get_token_info(input_.token_out, input_.chain_id)
+                    
+                    logger.info(f"Token info - Input: {token_in_name}, Output: {token_out_name}")
+                    
+                    # Format display names - use name if available, otherwise use address
+                    token_in_display = token_in_name or token_in_original
+                    token_out_display = token_out_name or token_out_original
+                    
+                    if input_.amount_is_usd:
+                        # Calculate the input amount based on USD value
+                        token_in_price, _ = await get_token_price(input_.token_in)
+                        eth_amount = input_.amount / token_in_price
+                        message = (
+                            f"I'll help you swap approximately {eth_amount:.6f} {token_in_display} (~${input_.amount:.2f}) "
+                            f"for {token_out_display}. The exact amount of tokens you'll receive will be determined at "
+                            "the time of the swap based on current market rates."
+                        )
+                        # IMPORTANT: Use original addresses in the command
+                        command = f"swap {eth_amount:.6f} {token_in_original} for {token_out_original}"
+                        
+                        # Update the input object with the calculated amount
+                        input_.amount = eth_amount
+                        input_.is_target_amount = False
+                        input_.amount_is_usd = False
+                    elif input_.is_target_amount:
+                        message = f"I'll help you swap {token_in_display} to get {input_.amount} {token_out_display}."
+                        command = f"swap {token_in_original} for {input_.amount} {token_out_original}"
+                    else:
+                        message = f"I'll help you swap {input_.amount} {token_in_display} for {token_out_display}."
+                        command = f"swap {input_.amount} {token_in_original} for {token_out_original}"
+                    
+                    message += " Does this look good? Reply with 'yes' to confirm or 'no' to cancel."
+                    
+                    # Create a Tweet with the response
+                    tweet = BotMessage(
+                        id=0,  # Bot messages use ID 0
+                        content=message,
+                        creator_name="@bot",
+                        creator_id="bot",
+                        metadata={
+                            "pending_command": command,
+                            "swap_details": {
+                                **input_.model_dump(),
+                                "natural_command": input_.natural_command,
+                                "is_target_amount": input_.is_target_amount,
+                                "amount_is_usd": input_.amount_is_usd,
+                                "token_in_name": token_in_name,
+                                "token_out_name": token_out_name
+                            }
                         }
-                    }
-                )
-                
-                return AgentMessage(
-                    content=tweet,
-                    error_message=None,
-                    metadata=tweet.metadata
-                )
-            except Exception as e:
-                logger.error(f"Error formatting swap message: {e}", exc_info=True)
-                return AgentMessage(
-                    content=None,
-                    error_message=f"Failed to prepare swap message: {str(e)}"
-                )
+                    )
+                    
+                    return AgentMessage(
+                        content=tweet,
+                        error_message=None,
+                        metadata=tweet.metadata
+                    )
+                except UpstashError as e:
+                    logger.error(f"Redis error while processing swap: {e}")
+                    return AgentMessage(
+                        content=None,
+                        error_message="Unable to process your swap request at the moment. Please try again."
+                    )
+                except Exception as e:
+                    logger.error(f"Error formatting swap message: {e}", exc_info=True)
+                    return AgentMessage(
+                        content=None,
+                        error_message=f"Failed to prepare swap message: {str(e)}"
+                    )
+        except Exception as e:
+            logger.error(f"Error in swap execution: {e}", exc_info=True)
+            return AgentMessage(
+                content=None,
+                error_message=f"Failed to process swap command: {str(e)}"
+            )
         return AgentMessage(
             content=None,
             error_message="Failed to process swap command"
