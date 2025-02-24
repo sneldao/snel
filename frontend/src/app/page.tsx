@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   Box,
   Container,
@@ -28,6 +29,7 @@ import { CommandResponse } from "../components/CommandResponse";
 import { WalletButton } from "../components/WalletButton";
 import { ExternalLinkIcon, SettingsIcon } from "@chakra-ui/icons";
 import { ApiKeyModal } from "../components/ApiKeyModal";
+import { LogoModal } from "../components/LogoModal";
 
 type Response = {
   content: string;
@@ -77,6 +79,7 @@ export default function Home() {
   const toast = useToast();
   const responsesEndRef = React.useRef<HTMLDivElement>(null);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = React.useState(false);
+  const [isLogoModalOpen, setIsLogoModalOpen] = React.useState(false);
 
   // Add chain change effect
   React.useEffect(() => {
@@ -524,7 +527,28 @@ export default function Home() {
               flexDir={{ base: "column", sm: "row" }}
               spacing={{ base: 2, sm: 4 }}
             >
-              <Heading size={{ base: "lg", sm: "xl" }}>SNEL</Heading>
+              <HStack spacing={2} align="center">
+                <Box
+                  as="button"
+                  onClick={() => setIsLogoModalOpen(true)}
+                  cursor="pointer"
+                  transition="transform 0.2s"
+                  _hover={{ transform: "scale(1.1)" }}
+                >
+                  <Image
+                    src="/icon.png"
+                    alt="SNEL Logo"
+                    width={32}
+                    height={32}
+                    priority
+                    style={{
+                      marginRight: "4px",
+                      objectFit: "contain",
+                    }}
+                  />
+                </Box>
+                <Heading size={{ base: "lg", sm: "xl" }}>SNEL</Heading>
+              </HStack>
               <HStack spacing={{ base: 2, sm: 4 }}>
                 <Button
                   size="sm"
@@ -601,6 +625,10 @@ export default function Home() {
 
           <CommandInput onSubmit={handleSubmit} isLoading={isLoading} />
 
+          <LogoModal
+            isOpen={isLogoModalOpen}
+            onClose={() => setIsLogoModalOpen(false)}
+          />
           <ApiKeyModal
             isOpen={isApiKeyModalOpen}
             onClose={() => setIsApiKeyModalOpen(false)}

@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Set NODE_ENV to production
+export NODE_ENV=production
+
+# Clear any existing NEXT_PUBLIC_API_URL
+unset NEXT_PUBLIC_API_URL
+
 # Install Python packages from requirements.txt
 pip install -r requirements.txt
 

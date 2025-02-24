@@ -1,9 +1,16 @@
-// In production, NEXT_PUBLIC_API_URL will be undefined, so we'll use relative paths
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+// Force empty API_BASE in production, use env var only in development
+const API_BASE =
+  process.env.NODE_ENV === "production"
+    ? ""
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// In a monorepo, we always use relative paths and let Next.js handle the routing
 export async function processCommand(command: string, openaiKey: string) {
   try {
-    const response = await fetch(`${API_BASE}/api/process-command`, {
+    // Log the API call (for debugging)
+    console.log("Making API call to:", "/api/process-command");
+
+    const response = await fetch("/api/process-command", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
