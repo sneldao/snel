@@ -11,7 +11,8 @@
                 "handler": "app",
                 "includeFiles": [
                     "kyber.py",
-                    "configure_logging.py"
+                    "configure_logging.py",
+                    "requirements.txt"
                 ]
             }
         },
@@ -23,11 +24,11 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "/api.py"
+            "dest": "api.py"
         },
         {
             "src": "/(.*)",
-            "dest": "/frontend/$1"
+            "dest": "frontend/$1"
         }
     ],
     "regions": [

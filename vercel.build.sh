@@ -1,10 +1,13 @@
 #!/bin/bash
 
-# Install Python packages
+# Install Python packages from requirements.txt
 pip install -r requirements.txt
 
-# Install dowse and its dependencies from PyPI
+# Install additional packages
 pip install dowse emp-agents eth-rpc
 
 # Print installed packages for debugging
-pip freeze 
+pip freeze > installed_packages.txt
+
+# Ensure the script exits with success
+exit 0 

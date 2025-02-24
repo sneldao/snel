@@ -226,10 +226,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # Local development
-        "http://127.0.0.1:3000",  # Alternative local URL
-        "https://snel-pointless.vercel.app",  # Production domain
-        "https://snel-pointless-git-main-papas-projects-5b188431.vercel.app",  # Add preview domains
+        "https://snel-pointless.vercel.app",
+        "http://localhost:3000"  # for development
     ],
     allow_credentials=True,
     allow_methods=["*"],
