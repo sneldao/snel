@@ -237,7 +237,7 @@ class PriceExtractor(Processor[TweetWithChain, str]):
                 error_message=str(e)
             )
 
-class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand, BotMessage]):
+class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
     """Executor for swap commands."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="""
@@ -387,7 +387,7 @@ class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand, BotMessage]):
             error_message="Failed to process swap command"
         )
 
-class PriceExecutor(Executor[TweetWithChain, str, BotMessage]):
+class PriceExecutor(Executor[TweetWithChain, str]):
     """Executor for price queries."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="""
@@ -436,7 +436,7 @@ class PriceExecutor(Executor[TweetWithChain, str, BotMessage]):
             error_message="Failed to process price query"
         )
 
-class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
+class UnknownExecutor(Executor[TweetWithChain, TweetWithChain]):
     """Executor for unknown commands."""
     provider: OpenAIProvider = Field(description="OpenAI provider for LLM completion")
     prompt: str = Field(default="I don't understand that request. I can help you with token swaps (e.g. 'swap 1 ETH for USDC') or price queries (e.g. 'what's the price of ETH?').")
@@ -466,9 +466,9 @@ class UnknownExecutor(Executor[TweetWithChain, TweetWithChain, BotMessage]):
         )
 
 # Global pipeline instance
-pipeline: Optional[Pipeline] = None
+pipeline: Optional[Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]] = None
 
-def init_pipeline(openai_key: str) -> Pipeline:
+def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]:
     """Initialize the Dowse pipeline with specialized agents."""
     global pipeline
     if pipeline is None:
@@ -479,7 +479,7 @@ def init_pipeline(openai_key: str) -> Pipeline:
         )
         
         # Create pipeline with routing and effects
-        pipeline = Pipeline(
+        pipeline = Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]](
             processors=[LoadChainData()],
             classifier=Classifier[TweetWithChain, Literal["swap", "price", "unknown"]](
                 prompt="""

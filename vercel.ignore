@@ -1,0 +1,8 @@
+# Ignore files that don't affect the build
+README.md
+*.pyc
+__pycache__/
+.git/
+.env.local
+.venv/
+node_modules/ 

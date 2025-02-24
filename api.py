@@ -47,8 +47,16 @@ def parse_redis_url(url):
     """Parse Redis URL to get Upstash REST URL and token."""
     parsed = urlparse(url)
     hostname = parsed.hostname
-    rest_url = f"https://{hostname}"
-    token = parsed.password
+    
+    # Handle both URL formats (redis:// and https://)
+    if url.startswith('redis://') or url.startswith('rediss://'):
+        rest_url = f"https://{hostname}"
+        token = parsed.password
+    else:
+        rest_url = url
+        token = os.environ.get("UPSTASH_REDIS_TOKEN") or parsed.password
+    
+    logger.info(f"Parsed Redis URL: {rest_url} (hostname: {hostname})")
     return rest_url, token
 
 class RedisPendingCommandStore:
@@ -204,30 +212,20 @@ except ImportError as e:
 
 # Set up rate limiter
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(
-    title="Pointless API",
-    description="AI Crypto Assistant API",
-    version="0.1.0",
-    docs_url="/api/docs",  # Serve docs at /api/docs instead of /docs
-    redoc_url="/api/redoc",  # Serve redoc at /api/redoc
-    openapi_url="/api/openapi.json"  # Serve OpenAPI schema at /api/openapi.json
-)
+app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Add CORS middleware with more permissive settings
+# Add CORS middleware with more restrictive settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://snel-pointless.vercel.app",
-        "https://snel-pointless-git-main-papas-projects-5b188431.vercel.app",
-        "http://localhost:3000",  # for development
-        "http://127.0.0.1:3000"   # for development
+        "http://localhost:3000"  # for development
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"]
 )
 
 # Initialize required services
@@ -741,16 +739,6 @@ async def health_check():
             "status": "unhealthy",
             "error": str(e)
         }
-
-# Add a root endpoint for health checks
-@app.get("/")
-async def root():
-    """Root endpoint for health checks."""
-    return {
-        "status": "healthy",
-        "message": "Pointless API is running",
-        "version": "0.1.0"
-    }
 
 # This is required for Vercel
 app = app 

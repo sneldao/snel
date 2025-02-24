@@ -12,6 +12,7 @@
                 "includeFiles": [
                     "kyber.py",
                     "configure_logging.py",
+                    "requirements.txt",
                     "app/**"
                 ]
             }
@@ -24,11 +25,11 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "/api.py"
+            "dest": "api.py"
         },
         {
             "src": "/(.*)",
-            "dest": "/frontend/$1"
+            "dest": "frontend/$1"
         }
     ],
     "regions": [
@@ -38,6 +39,8 @@
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
         "PYTHONIOENCODING": "utf-8",
-        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
+        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
+        "MORALIS_API_KEY": "${MORALIS_API_KEY}",
+        "REDIS_URL": "${REDIS_URL}"
     }
 }
