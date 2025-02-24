@@ -24,7 +24,15 @@
     ],
     "routes": [
         {
-            "src": "/api/(.*)",
+            "src": "/process-command",
+            "dest": "/api.py"
+        },
+        {
+            "src": "/execute-transaction",
+            "dest": "/api.py"
+        },
+        {
+            "src": "/health",
             "dest": "/api.py"
         },
         {
