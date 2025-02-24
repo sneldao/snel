@@ -124,7 +124,8 @@ class ChainConfig:
         42161: "Arbitrum",
         10: "Optimism",
         137: "Polygon",
-        43114: "Avalanche"
+        43114: "Avalanche",
+        534352: "Scroll"  # Add Scroll support
     }
 
     @staticmethod
@@ -170,9 +171,9 @@ async def get_token_addresses(chain_id: int) -> dict[str, HexAddress]:
             "UNI": HexAddress("0x8eBAf22B6F053dFFeaf46f4Dd9eFA95D89ba8580"),
         },
         534352: {  # Scroll
-            "ETH": HexAddress("0x5300000000000000000000000000000000000004"),
-            "USDC": HexAddress("0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),
-            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # Placeholder
+            "ETH": HexAddress("0x5300000000000000000000000000000000000004"),  # Native ETH on Scroll
+            "USDC": HexAddress("0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),  # USDC on Scroll
+            "UNI": HexAddress("0x0000000000000000000000000000000000000000"),  # UNI not yet available on Scroll
         }
     }
     
