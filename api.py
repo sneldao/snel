@@ -35,6 +35,7 @@ try:
         InvalidTokenError,
         BuildTransactionError,
         get_chain_from_chain_id,
+        TransferFromFailedError,
     )
 except ImportError as e:
     logger.error(f"Failed to import required packages: {e}")
@@ -449,11 +450,19 @@ async def execute_swap(
         
         logger.info(f"Got quote from Kyber: {quote}")
 
-        # If token_in is not ETH/WETH, we need to check if approval is needed
-        if token_in not in [
+        # List of native ETH/WETH addresses across chains
+        native_tokens = {
             "0x4200000000000000000000000000000000000006",  # WETH on OP/Base
             "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # ETH
-        ]:
+            "0x5300000000000000000000000000000000000004",  # ETH on Scroll
+            "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",  # WETH on Arbitrum
+            "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",  # WETH on Polygon
+            "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",  # WETH on Avalanche
+        }
+
+        # If token_in is not ETH/WETH, we need to check if approval is needed
+        if token_in.lower() not in [addr.lower() for addr in native_tokens]:
+            logger.info(f"Non-native token swap detected. Token: {token_in}")
             # Return both approval and swap transactions
             return TransactionResponse(
                 to=quote.router_address,
@@ -461,20 +470,20 @@ async def execute_swap(
                 value="0x0",
                 chain_id=chain_id,
                 method="swap",
-                gas_limit=hex(int(float(quote.gas) * 1.1)),
+                gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
                 needs_approval=True,
                 token_to_approve=token_in,
                 spender=quote.router_address
             )
         
-        # Convert the response to our transaction format
+        # For native token swaps, no approval needed
         return TransactionResponse(
             to=quote.router_address,
             data=quote.data,
-            value="0x0",
+            value=hex(amount) if token_in in native_tokens else "0x0",  # Only send value if swapping native token
             chain_id=chain_id,
             method="swap",
-            gas_limit=hex(int(float(quote.gas) * 1.1)),
+            gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
             needs_approval=False
         )
             
@@ -501,6 +510,12 @@ async def execute_swap(
         raise HTTPException(
             status_code=400,
             detail=str(e)
+        )
+    except TransferFromFailedError as e:
+        logger.error(f"Transfer failed error: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Token approval needed: {str(e)}"
         )
     except KyberSwapError as e:
         logger.error(f"KyberSwap error: {e}")
