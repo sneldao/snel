@@ -26,11 +26,11 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "api.py:app"
+            "dest": "/api.py"
         },
         {
             "src": "/(.*)",
-            "dest": "frontend/$1"
+            "dest": "/frontend/$1"
         }
     ],
     "regions": [
