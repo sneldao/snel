@@ -65,9 +65,7 @@ const SUPPORTED_CHAINS = {
   534352: "Scroll",
 } as const;
 
-const API_URL = process.env.NEXT_PUBLIC_VERCEL_URL
-  ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-  : "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function Home() {
   const [responses, setResponses] = React.useState<Response[]>([]);
