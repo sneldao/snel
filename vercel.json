@@ -2,7 +2,7 @@
     "version": 2,
     "builds": [
         {
-            "src": "api.py",
+            "src": "api/index.py",
             "use": "@vercel/python",
             "config": {
                 "maxDuration": 90,
@@ -10,6 +10,7 @@
                 "runtime": "python3.12",
                 "handler": "app",
                 "includeFiles": [
+                    "api.py",
                     "kyber.py",
                     "configure_logging.py",
                     "app/**",
@@ -39,7 +40,7 @@
     "routes": [
         {
             "src": "/api/(.*)",
-            "dest": "/api.py"
+            "dest": "/api/index.py"
         },
         {
             "handle": "filesystem"
