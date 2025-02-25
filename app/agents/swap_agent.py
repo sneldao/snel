@@ -61,7 +61,38 @@ class SwapAgent(PointlessAgent):
             
             # Parse the JSON response
             try:
-                data = json.loads(response["content"])
+                # Add debug logging to see what's coming back from the LLM
+                logger.info(f"Raw LLM response: {response['content']}")
+                
+                # Check if the response is empty or None
+                if not response["content"]:
+                    return {
+                        "content": None,
+                        "error": "Received empty response from language model",
+                        "metadata": {}
+                    }
+                
+                # Clean up the response if it's wrapped in markdown code blocks
+                content = response["content"]
+                if content.startswith("```") and "```" in content[3:]:
+                    # Extract the content between the code blocks
+                    content = content.split("```", 2)[1]
+                    # Remove language identifier if present (e.g., "json")
+                    if "\n" in content:
+                        content = content.split("\n", 1)[1]
+                    # Find the closing code block and remove everything after it
+                    if "```" in content:
+                        content = content.split("```")[0]
+                    logger.info(f"Extracted JSON from markdown: {content}")
+                
+                # Try to parse as JSON
+                try:
+                    data = json.loads(content)
+                except json.JSONDecodeError:
+                    # Try one more time with the original content
+                    logger.warning("Failed to parse extracted content, trying original response")
+                    data = json.loads(response["content"])
+                
                 if "error" in data:
                     return {
                         "content": None,
@@ -73,8 +104,22 @@ class SwapAgent(PointlessAgent):
                 token_in = data["token_in"]
                 token_out = data["token_out"]
                 
-                # Look up tokens
-                token_in_address, token_in_symbol, token_in_name = await self.token_service.lookup_token(token_in, chain_id)
+                # Look up tokens - handle the tuple unpacking correctly
+                token_in_result = await self.token_service.lookup_token(token_in, chain_id)
+                token_in_address = token_in_symbol = token_in_name = None
+                token_in_metadata = {}
+                
+                # Safely unpack token_in_result
+                if token_in_result:
+                    if len(token_in_result) >= 1:
+                        token_in_address = token_in_result[0]
+                    if len(token_in_result) >= 2:
+                        token_in_symbol = token_in_result[1]
+                    if len(token_in_result) >= 3:
+                        token_in_name = token_in_result[2]
+                    if len(token_in_result) >= 4:
+                        token_in_metadata = token_in_result[3] or {}
+                
                 if not token_in_symbol and not token_in_address:
                     error_msg = f"The token '{token_in}' is not recognized as a valid cryptocurrency or contract address."
                     return {
@@ -83,7 +128,20 @@ class SwapAgent(PointlessAgent):
                         "metadata": {}
                     }
                 
-                token_out_address, token_out_symbol, token_out_name = await self.token_service.lookup_token(token_out, chain_id)
+                token_out_result = await self.token_service.lookup_token(token_out, chain_id)
+                token_out_address = token_out_symbol = token_out_name = None
+                token_out_metadata = {}
+                
+                # Safely unpack token_out_result
+                if token_out_result:
+                    if len(token_out_result) >= 1:
+                        token_out_address = token_out_result[0]
+                    if len(token_out_result) >= 2:
+                        token_out_symbol = token_out_result[1]
+                    if len(token_out_result) >= 3:
+                        token_out_name = token_out_result[2]
+                    if len(token_out_result) >= 4:
+                        token_out_metadata = token_out_result[3] or {}
                 
                 # Special case for NURI token on Scroll
                 if (not token_out_symbol and not token_out_address) and token_out.upper() in ["NURI", "$NURI"] and chain_id == 534352:
@@ -152,24 +210,88 @@ class SwapAgent(PointlessAgent):
                     # Calculate the input amount based on USD value
                     token_in_price, _ = await get_token_price(token_in_symbol or token_in)
                     eth_amount = data["amount"] / token_in_price
-                    message = (
-                        f"I'll help you swap approximately {eth_amount:.6f} {display_token_in} (~${data['amount']:.2f}) "
-                        f"for {display_token_out}. The exact amount of tokens you'll receive will be determined at "
-                        "the time of the swap based on current market rates."
-                    )
+                    message = {
+                        "type": "swap_confirmation",
+                        "text": f"I'll help you swap approximately {eth_amount:.6f} {display_token_in} (~${data['amount']:.2f}) for {display_token_out}.",
+                        "subtext": "The exact amount of tokens you'll receive will be determined at the time of the swap based on current market rates.",
+                        "tokens": {
+                            "in": {
+                                "symbol": token_in_symbol,
+                                "name": token_in_name,
+                                "address": token_in_address,
+                                "display": display_token_in,
+                                "amount": eth_amount,
+                                "usd_value": data['amount']
+                            },
+                            "out": {
+                                "symbol": token_out_symbol,
+                                "name": token_out_name,
+                                "address": token_out_address,
+                                "display": display_token_out
+                            }
+                        },
+                        "verification_links": {
+                            "in": self._get_verification_links(token_in_address or token_in_symbol, chain_id),
+                            "out": self._get_verification_links(token_out_address or token_out_symbol, chain_id)
+                        }
+                    }
                     command = f"swap {eth_amount:.6f} {token_in_symbol or token_in} for {token_out_symbol or token_out}"
                 elif data.get("is_target_amount", False):
-                    message = f"I'll help you swap {display_token_in} to get {data['amount']} {display_token_out}."
+                    message = {
+                        "type": "swap_confirmation",
+                        "text": f"I'll help you swap {display_token_in} to get {data['amount']} {display_token_out}.",
+                        "tokens": {
+                            "in": {
+                                "symbol": token_in_symbol,
+                                "name": token_in_name,
+                                "address": token_in_address,
+                                "display": display_token_in
+                            },
+                            "out": {
+                                "symbol": token_out_symbol,
+                                "name": token_out_name,
+                                "address": token_out_address,
+                                "display": display_token_out,
+                                "amount": data['amount']
+                            }
+                        },
+                        "verification_links": {
+                            "in": self._get_verification_links(token_in_address or token_in_symbol, chain_id),
+                            "out": self._get_verification_links(token_out_address or token_out_symbol, chain_id)
+                        }
+                    }
                     command = f"swap {token_in_symbol or token_in} for {data['amount']} {token_out_symbol or token_out}"
                 else:
-                    message = f"I'll help you swap {data['amount']} {display_token_in} for {display_token_out}."
+                    message = {
+                        "type": "swap_confirmation",
+                        "text": f"I'll help you swap {data['amount']} {display_token_in} for {display_token_out}.",
+                        "tokens": {
+                            "in": {
+                                "symbol": token_in_symbol,
+                                "name": token_in_name,
+                                "address": token_in_address,
+                                "display": display_token_in,
+                                "amount": data['amount']
+                            },
+                            "out": {
+                                "symbol": token_out_symbol,
+                                "name": token_out_name,
+                                "address": token_out_address,
+                                "display": display_token_out
+                            }
+                        },
+                        "verification_links": {
+                            "in": self._get_verification_links(token_in_address or token_in_symbol, chain_id),
+                            "out": self._get_verification_links(token_out_address or token_out_symbol, chain_id)
+                        }
+                    }
                     command = f"swap {data['amount']} {token_in_symbol or token_in} for {token_out_symbol or token_out}"
                 
                 # Add warning if token couldn't be verified
                 if 'warning_msg' in locals():
-                    message = f"{message}\n\n{warning_msg}"
+                    message["warning"] = warning_msg
                 
-                message += " Does this look good? Reply with 'yes' to confirm or 'no' to cancel."
+                message["confirmation_prompt"] = "Does this look good? Reply with 'yes' to confirm or 'no' to cancel in the chat."
                 
                 # Store the actual addresses for the transaction
                 actual_token_in = token_in_address if token_in_address else token_in
@@ -197,17 +319,72 @@ class SwapAgent(PointlessAgent):
                 }
                 
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse LLM response: {e}")
+                logger.error(f"Failed to parse LLM response as JSON: {e}")
+                # Return a more helpful error message
                 return {
                     "content": None,
-                    "error": "Could not parse swap command. Please try rephrasing your request.",
+                    "error": f"Failed to parse swap details. Please try again with a clearer request. Error: {str(e)}",
                     "metadata": {}
                 }
-                
+            except KeyError as e:
+                logger.error(f"Missing required field in LLM response: {e}")
+                return {
+                    "content": None,
+                    "error": f"Missing required information in swap request: {str(e)}",
+                    "metadata": {}
+                }
+            except Exception as e:
+                logger.error(f"Error processing swap request: {e}")
+                return {
+                    "content": None,
+                    "error": f"Error processing swap request: {str(e)}",
+                    "metadata": {}
+                }
+            
         except Exception as e:
             logger.error(f"Error processing swap: {e}", exc_info=True)
             return {
                 "content": None,
                 "error": f"An error occurred while processing your request: {str(e)}",
                 "metadata": {}
-            } 
+            }
+            
+    def _get_verification_links(self, token: str, chain_id: Optional[int] = None) -> Dict[str, str]:
+        """Generate verification links for a token."""
+        links = {}
+        
+        # Skip if token is None
+        if not token:
+            return links
+            
+        # Handle contract addresses
+        if is_address(token):
+            # Etherscan and similar
+            if chain_id == 1:  # Ethereum Mainnet
+                links["explorer"] = f"https://etherscan.io/token/{token}"
+            elif chain_id == 137:  # Polygon
+                links["explorer"] = f"https://polygonscan.com/token/{token}"
+            elif chain_id == 10:  # Optimism
+                links["explorer"] = f"https://optimistic.etherscan.io/token/{token}"
+            elif chain_id == 42161:  # Arbitrum
+                links["explorer"] = f"https://arbiscan.io/token/{token}"
+            elif chain_id == 8453:  # Base
+                links["explorer"] = f"https://basescan.org/token/{token}"
+            elif chain_id == 534352:  # Scroll
+                links["explorer"] = f"https://scrollscan.com/token/{token}"
+            
+            # Add CoinGecko if we have a contract address
+            links["coingecko"] = f"https://www.coingecko.com/en/coins/{token}"
+            
+            # Add Dexscreener for price charts
+            links["dexscreener"] = f"https://dexscreener.com/ethereum/{token}"
+            
+        # Handle token symbols
+        else:
+            # For well-known tokens, add CoinGecko
+            token_lower = token.lower()
+            if token_lower in ["eth", "weth", "usdc", "usdt", "dai"]:
+                links["coingecko"] = f"https://www.coingecko.com/en/coins/{token_lower}"
+                links["dexscreener"] = f"https://dexscreener.com/search?q={token_lower}"
+        
+        return links 

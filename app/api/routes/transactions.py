@@ -11,7 +11,7 @@ from app.services.prices import get_token_price
 from app.api.dependencies import get_openai_key, get_token_service
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 # Token decimals mapping
 TOKEN_DECIMALS = {
@@ -596,340 +596,61 @@ async def execute_transaction(
             detail=str(e)
         )
 
-@router.post("/api/execute-transaction")
+@router.post("/execute-transaction")
 async def execute_transaction(
     tx_request: TransactionRequest,
     token_service: TokenService = Depends(get_token_service)
 ):
-    """
-    Execute a transaction based on a command.
-    This endpoint prepares transaction data for the frontend to execute.
-    """
+    """Execute a transaction."""
     try:
-        logger.info(f"Executing transaction for command: {tx_request.command}")
-        logger.info(f"Wallet address: {tx_request.wallet_address}, Chain ID: {tx_request.chain_id}")
+        # Parse the command
+        swap_command = await parse_swap_command(tx_request.command, tx_request.chain_id, token_service)
         
-        # Validate chain support
-        if not ChainConfig.is_supported(tx_request.chain_id):
-            raise ValueError(
-                f"Chain {tx_request.chain_id} is not supported. Supported chains: "
-                f"{', '.join(f'{name} ({id})' for id, name in ChainConfig.SUPPORTED_CHAINS.items())}"
-            )
-
-        # For swap commands, we need to look up token addresses
-        if tx_request.command.startswith("swap "):
-            logger.info(f"Processing swap command: {tx_request.command}")
-            
-            # Parse the swap command
-            swap_command = await parse_swap_command(
-                tx_request.command, 
-                tx_request.chain_id,
-                token_service
-            )
-            
-            if not swap_command:
-                raise ValueError(f"Failed to parse swap command: {tx_request.command}")
-            
-            # Check if this is a post-approval command
-            is_post_approval = tx_request.command.startswith("approved:")
-            
-            # Look up token addresses
-            token_in_result = await token_service.lookup_token(swap_command.token_in, tx_request.chain_id)
-            token_out_result = await token_service.lookup_token(swap_command.token_out, tx_request.chain_id)
-            
-            # Safely unpack the results - handle different return values
-            token_in_address = token_in_symbol = token_in_name = None
-            token_in_metadata = {}
-            token_out_address = token_out_symbol = token_out_name = None
-            token_out_metadata = {}
-            
-            # Safely unpack token_in_result
-            if token_in_result:
-                if len(token_in_result) >= 1:
-                    token_in_address = token_in_result[0]
-                if len(token_in_result) >= 2:
-                    token_in_symbol = token_in_result[1]
-                if len(token_in_result) >= 3:
-                    token_in_name = token_in_result[2]
-                if len(token_in_result) >= 4:
-                    token_in_metadata = token_in_result[3] or {}
-            
-            # Safely unpack token_out_result
-            if token_out_result:
-                if len(token_out_result) >= 1:
-                    token_out_address = token_out_result[0]
-                if len(token_out_result) >= 2:
-                    token_out_symbol = token_out_result[1]
-                if len(token_out_result) >= 3:
-                    token_out_name = token_out_result[2]
-                if len(token_out_result) >= 4:
-                    token_out_metadata = token_out_result[3] or {}
-            
-            # Log the token lookup results
-            logger.info(f"Token in lookup result: {token_in_result}")
-            logger.info(f"Token out lookup result: {token_out_result}")
-            
-            # Handle token_in
-            token_in = token_in_address
-            # Check if token_in_address is in NATIVE_TOKENS or if token_in_symbol is 'ETH'
-            if token_in_address in NATIVE_TOKENS or token_in_symbol == 'ETH':
-                token_in = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"  # ETH placeholder address
-                logger.info(f"Using ETH placeholder address for {token_in_symbol}")
-            
-            # Handle token_out
-            token_out = token_out_address
-            
-            # Check if token_in is valid
-            if not token_in and token_in_metadata and not token_in_metadata.get("verified", False):
-                # Provide a helpful error message with the warning from metadata
-                warning_msg = token_in_metadata.get("warning", "")
-                raise ValueError(
-                    f"Could not find contract address for token {swap_command.token_in}. {warning_msg} "
-                    "Please use a valid contract address directly in your swap command. "
-                    "For example: 'swap ETH for 0x1234...abcd'"
-                )
-            
-            # Check if token_out is valid
-            if not token_out:
-                # Check if token_out is a valid contract address
-                if is_address(swap_command.token_out):
-                    token_out = Web3.to_checksum_address(swap_command.token_out)
-                    logger.info(f"Using provided contract address for token_out: {token_out}")
-                    
-                    # Add a warning for direct contract address usage
-                    if not token_out_metadata or not token_out_metadata.get("verified", False):
-                        logger.warning(f"User is swapping to an unverified contract address: {token_out}")
-                        # We'll allow the swap but add a warning to the metadata
-                        token_out_metadata = token_out_metadata or {}
-                        token_out_metadata["warning"] = "This token was provided as a contract address and has not been verified. Please ensure you trust this token before proceeding."
-                        token_out_metadata["verified"] = False
-                        token_out_metadata["source"] = "user_provided"
-                        
-                elif token_out_metadata and not token_out_metadata.get("verified", False):
-                    # Include any metadata we found about the token
-                    token_info = ""
-                    if token_out_symbol:
-                        token_info += f" Symbol: {token_out_symbol}."
-                    if token_out_name:
-                        token_info += f" Name: {token_out_name}."
-                    if token_out_metadata and token_out_metadata.get("warning"):
-                        token_info += f" {token_out_metadata.get('warning')}"
-                        
-                    raise ValueError(
-                        f"Cannot proceed with swap to {swap_command.token_out}.{token_info} "
-                        "This token requires a contract address. Please try again with the token's contract address. "
-                        "For example: 'swap ETH for 0x1234...abcd'"
-                    )
-                else:
-                    # For NURI token on Scroll, provide the contract address
-                    if swap_command.token_out.upper() in ["NURI", "$NURI"] and tx_request.chain_id == 534352:
-                        nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
-                        logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
-                        token_out = nuri_address
-                    # For custom tokens with $ prefix, provide a more helpful error
-                    elif swap_command.token_out.startswith('$'):
-                        raise ValueError(
-                            f"Cannot proceed with swap to custom token {swap_command.token_out}. "
-                            f"This appears to be a custom or new token that we couldn't verify. "
-                            f"For safety, please provide the contract address directly. "
-                            f"You can find contract addresses on sites like Etherscan, Basescan, or other block explorers."
-                        )
-                    else:
-                        # Include any metadata we found about the token
-                        token_info = ""
-                        if token_out_symbol:
-                            token_info += f" Symbol: {token_out_symbol}."
-                        if token_out_name:
-                            token_info += f" Name: {token_out_name}."
-                        if token_out_metadata and token_out_metadata.get("warning"):
-                            token_info += f" {token_out_metadata.get('warning')}"
-                            
-                        raise ValueError(
-                            f"Could not find contract address for token {swap_command.token_out}.{token_info} "
-                            "Please use a valid contract address directly in your swap command. "
-                            "For example: 'swap ETH for 0x1234...abcd'"
-                        )
-            
-            logger.info(f"Preparing Kyber quote with token_in: {token_in}, token_out: {token_out}")
-            
-            try:
-                # Import Kyber functions
-                from app.utils.kyber import (
-                    get_quote as kyber_quote,
-                    KyberSwapError,
-                    NoRouteFoundError,
-                    InsufficientLiquidityError,
-                    InvalidTokenError,
-                    BuildTransactionError,
-                    get_chain_from_chain_id,
-                    TransferFromFailedError,
-                )
-                
-                # Preserve case for contract addresses in Kyber API call
-                quote = await kyber_quote(
-                    token_in=token_in,
-                    token_out=token_out,
-                    amount=swap_command.amount,
-                    chain_id=tx_request.chain_id,
-                    recipient=tx_request.wallet_address,
-                    token_in_decimals=token_in_metadata.get("decimals", 18) if token_in_metadata else 18
-                )
-                
-                # Prepare metadata for the response
-                metadata = {
-                    "token_in_address": token_in,
-                    "token_in_symbol": token_in_symbol,
-                    "token_in_name": token_in_name,
-                    "token_in_verified": token_in_metadata.get("verified", True) if token_in_metadata else True,
-                    "token_in_source": token_in_metadata.get("source", "unknown") if token_in_metadata else "unknown",
-                    "token_out_address": token_out,
-                    "token_out_symbol": token_out_symbol,
-                    "token_out_name": token_out_name,
-                    "token_out_verified": token_out_metadata.get("verified", True) if token_out_metadata else True,
-                    "token_out_source": token_out_metadata.get("source", "unknown") if token_out_metadata else "unknown",
-                }
-                
-                # Add warnings for unverified tokens
-                if token_out_metadata and not token_out_metadata.get("verified", True):
-                    metadata["token_out_warning"] = token_out_metadata.get("warning", 
-                        "This token has not been verified. Please ensure you trust this token before proceeding."
-                    )
-                
-                # Add warnings for custom tokens (tokens with $ prefix)
-                if swap_command.token_out.startswith('$'):
-                    metadata["token_out_warning"] = (
-                        f"'{swap_command.token_out}' appears to be a custom token. "
-                        f"Please verify the contract address ({token_out}) before proceeding with the swap."
-                    )
-                
-                # Return the transaction data
-                return TransactionResponse(
-                    to=quote.router_address,
-                    data=quote.data,
-                    value=hex(int(swap_command.amount * 10**18)) if swap_command.token_in == "ETH" else "0x0",
-                    chain_id=tx_request.chain_id,
-                    method="swap",
-                    gas_limit=quote.gas,
-                    metadata=metadata,
-                    agent_type="swap"  # Always swap for transactions
-                )
-                
-            except (NoRouteFoundError, InsufficientLiquidityError, InvalidTokenError, BuildTransactionError, KyberSwapError, TransferFromFailedError) as e:
-                logger.error(f"Kyber swap error: {e}", exc_info=True)
-                
-                # Check for approval errors
-                error_str = str(e).lower()
-                spender = None
-                
-                if "transferfrom failed" in error_str or "allowance" in error_str:
-                    # Extract spender from error message if possible
-                    if "allowance" in error_str and "spender" in error_str:
-                        try:
-                            spender_part = error_str.split("spender: ")[1]
-                            spender = spender_part.split(",")[0].strip()
-                            logger.info(f"Extracted spender from error: {spender}")
-                        except (IndexError, ValueError):
-                            logger.error("Failed to extract spender from error message")
-                    
-                    # If we couldn't extract spender, use router address
-                    if not spender:
-                        # Import Kyber router addresses
-                        from app.utils.kyber import get_chain_name
-                        chain_name = get_chain_name(tx_request.chain_id)
-                        
-                        # Construct router address based on chain
-                        router_addresses = {
-                            1: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Ethereum
-                            137: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Polygon
-                            42161: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Arbitrum
-                            10: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Optimism
-                            8453: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Base
-                            534352: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Scroll
-                        }
-                        spender = router_addresses.get(tx_request.chain_id)
-                        logger.info(f"Using default router address as spender: {spender}")
-                    
-                    return TransactionResponse(
-                        to=token_in,  # Token contract address
-                        data="0x",  # Will be filled by frontend
-                        value="0x0",
-                        chain_id=tx_request.chain_id,
-                        method="approve",
-                        gas_limit="0x186a0",  # 100,000 gas
-                        needs_approval=True,
-                        token_to_approve=token_in,
-                        spender=spender,
-                        pending_command=f"approved:{tx_request.command}",
-                        agent_type="swap"  # Always swap for transactions
-                    )
-                elif "no route found" in error_str:
-                    raise ValueError(f"No swap route found between {swap_command.token_in} and {swap_command.token_out}")
-                elif "insufficient liquidity" in error_str:
-                    raise ValueError(f"Insufficient liquidity for swap between {swap_command.token_in} and {swap_command.token_out}")
-                elif "nuri token swaps are not currently supported" in error_str:
-                    # Special case for NURI token
-                    raise ValueError(
-                        "NURI token swaps are not currently supported through our service. "
-                        "Please use SyncSwap or ScrollSwap directly to swap for NURI tokens on Scroll."
-                    )
-                elif "token not found" in error_str and swap_command.token_out.upper() in ["NURI", "$NURI"]:
-                    # Special case for NURI token
-                    raise ValueError(
-                        "NURI token swaps are not currently supported through our service. "
-                        "Please use SyncSwap or ScrollSwap directly to swap for NURI tokens on Scroll."
-                    )
-                # Special handling for Scroll network
-                elif "scroll" in error_str.lower() or tx_request.chain_id == 534352:
-                    raise ValueError(
-                        f"Swap failed on Scroll network: {str(e)}. "
-                        f"Scroll is a newer network and may have limited liquidity or token support. "
-                        f"Try a different token pair or use ScrollSwap directly."
-                    )
-                # Special handling for custom tokens (tokens with $ prefix)
-                elif "token not found" in error_str and (
-                    (swap_command.token_in and swap_command.token_in.startswith("$")) or 
-                    (swap_command.token_out and swap_command.token_out.startswith("$"))
-                ):
-                    custom_token = swap_command.token_in if swap_command.token_in.startswith("$") else swap_command.token_out
-                    raise ValueError(
-                        f"Custom token '{custom_token}' not supported by KyberSwap. "
-                        f"For custom tokens, please use a dedicated DEX that supports this token."
-                    )
-                elif "return amount is too low" in error_str.lower():
-                    raise ValueError(
-                        f"The swap cannot be completed because the return amount is too low. "
-                        f"This usually happens when there is high price impact or slippage. "
-                        f"Try swapping a smaller amount or using a different token pair."
-                    )
-                elif "execution reverted: return amount is not enough" in error_str.lower() or "code 4227" in error_str.lower() or "code: 4227" in error_str.lower():
-                    raise ValueError(
-                        f"The swap cannot be completed because the return amount is too low. "
-                        f"This usually happens when there is high price impact or slippage. "
-                        f"Try swapping a smaller amount or using a different token pair."
-                    )
-                elif "estimate gas" in error_str.lower() and "failed" in error_str.lower():
-                    raise ValueError(
-                        f"Failed to estimate gas for this transaction. "
-                        f"This usually happens with high price impact swaps or tokens with special transfer mechanics. "
-                        f"Try swapping a smaller amount or using a different token pair."
-                    )
-                elif "price impact too high" in error_str.lower():
-                    raise ValueError(
-                        f"The price impact for this swap is too high, which could result in significant loss. "
-                        f"Try swapping a smaller amount or using a different token pair."
-                    )
-                elif "slippage" in error_str.lower():
-                    raise ValueError(
-                        f"The swap failed due to slippage tolerance. "
-                        f"This happens when the price moves unfavorably during transaction confirmation. "
-                        f"Try again or swap a smaller amount."
-                    )
-                else:
-                    raise ValueError(f"Failed to build swap transaction: {str(e)}")
-            
+        # Get token details for metadata
+        token_in_address, token_in_symbol, token_in_name = await token_service.lookup_token(
+            swap_command.token_in, tx_request.chain_id
+        )
+        token_out_address, token_out_symbol, token_out_name = await token_service.lookup_token(
+            swap_command.token_out, tx_request.chain_id
+        )
+        
+        # Build the transaction
+        tx_data = await build_swap_transaction(
+            swap_command,
+            tx_request.wallet_address,
+            tx_request.chain_id,
+            token_service
+        )
+        
+        # Add token metadata to the response
+        metadata = {
+            "token_in_address": token_in_address,
+            "token_in_symbol": token_in_symbol,
+            "token_in_name": token_in_name,
+            "token_out_address": token_out_address,
+            "token_out_symbol": token_out_symbol,
+            "token_out_name": token_out_name,
+            "swap_details": swap_command.model_dump()
+        }
+        
+        # Return the transaction data
+        return {
+            "to": tx_data["to"],
+            "data": tx_data["data"],
+            "value": tx_data["value"],
+            "chain_id": tx_request.chain_id,
+            "method": tx_data["method"],
+            "gas_limit": tx_data["gas_limit"],
+            "gas_price": tx_data.get("gas_price"),
+            "max_fee_per_gas": tx_data.get("max_fee_per_gas"),
+            "max_priority_fee_per_gas": tx_data.get("max_priority_fee_per_gas"),
+            "needs_approval": tx_data.get("needs_approval", False),
+            "token_to_approve": tx_data.get("token_to_approve"),
+            "spender": tx_data.get("spender"),
+            "pending_command": tx_request.command,
+            "agent_type": "swap",
+            "metadata": metadata
+        }
     except Exception as e:
         logger.error(f"Error executing transaction: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        ) 
+        raise HTTPException(status_code=500, detail=str(e)) 

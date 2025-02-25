@@ -49,7 +49,7 @@ const config = createConfig(
     appName: "Pointless",
 
     // Optional App Info
-    appDescription: "Super pointless agent",
+    appDescription: "super pointless lazy agents",
     appUrl: "https://snel-pointless.vercel.app", // your app's url
     appIcon: "https://pointless.xyz/logo.png", // your app's icon
   })

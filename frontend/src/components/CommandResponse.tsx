@@ -17,6 +17,7 @@ import {
   AlertTitle,
   AlertDescription,
   Divider,
+  useColorModeValue,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -26,6 +27,17 @@ import {
   ChatIcon,
   InfoIcon,
 } from "@chakra-ui/icons";
+import { SwapConfirmation } from "./SwapConfirmation";
+
+interface CommandResponseProps {
+  content: string | any; // Updated to accept structured content
+  timestamp: string;
+  isCommand: boolean;
+  status?: "pending" | "processing" | "success" | "error";
+  awaitingConfirmation?: boolean;
+  agentType?: "default" | "swap";
+  metadata?: any;
+}
 
 type TokenInfo = {
   address?: string;
@@ -34,27 +46,6 @@ type TokenInfo = {
   verified?: boolean;
   source?: string;
   warning?: string;
-};
-
-type CommandResponseProps = {
-  content: string;
-  timestamp: string;
-  isCommand: boolean;
-  status?: "pending" | "processing" | "success" | "error";
-  awaitingConfirmation?: boolean;
-  agentType?: "default" | "swap";
-  metadata?: {
-    token_in_address?: string;
-    token_in_symbol?: string;
-    token_in_name?: string;
-    token_in_verified?: boolean;
-    token_in_source?: string;
-    token_out_address?: string;
-    token_out_symbol?: string;
-    token_out_name?: string;
-    token_out_verified?: boolean;
-    token_out_source?: string;
-  };
 };
 
 const LoadingSteps = [
@@ -91,20 +82,30 @@ const formatSwapResponse = (
   }
 };
 
-export const CommandResponse = ({
+export const CommandResponse: React.FC<CommandResponseProps> = ({
   content,
   timestamp,
   isCommand,
-  status = "pending",
-  awaitingConfirmation,
+  status = "success",
+  awaitingConfirmation = false,
   agentType = "default",
   metadata,
-}: CommandResponseProps) => {
+}) => {
   const [currentStep, setCurrentStep] = React.useState(0);
   const isError = status === "error";
   const isLoading = status === "processing";
   const isSuccess = status === "success";
   const needsConfirmation = awaitingConfirmation;
+
+  const bgColor = useColorModeValue(
+    isCommand ? "blue.50" : "gray.50",
+    isCommand ? "blue.900" : "gray.700"
+  );
+  const borderColor = useColorModeValue(
+    isCommand ? "blue.200" : "gray.200",
+    isCommand ? "blue.700" : "gray.600"
+  );
+  const textColor = useColorModeValue("gray.800", "white");
 
   // Extract token information from metadata
   const tokenInInfo: TokenInfo = metadata
@@ -141,119 +142,92 @@ export const CommandResponse = ({
     }
   }, [isLoading]);
 
-  const formatContent = (content: string) => {
-    if (isError) {
-      // Handle specific error cases
-      if (content.includes("User rejected the request")) {
-        return "Transaction cancelled by user.";
-      }
-      if (content.includes("No valid swap route found")) {
-        return "No valid swap route found. Try a different amount or token pair.";
-      }
-      if (content.includes("Not enough liquidity")) {
-        return "Not enough liquidity for this swap. Try a smaller amount.";
-      }
-      if (content.includes("Failed to execute swap")) {
-        return "Failed to execute the swap. Please try again.";
-      }
-      // Handle token not found errors
-      if (content.includes("Could not find contract address for token")) {
-        return (
-          <Box>
-            <Text>{content}</Text>
-            {content.includes("NURI") && (
-              <Alert status="info" mt={2} borderRadius="md">
-                <AlertIcon />
-                <AlertDescription>
-                  NURI token swaps are not supported through our service. Please
-                  use SyncSwap or ScrollSwap directly.
-                </AlertDescription>
-              </Alert>
-            )}
-          </Box>
-        );
-      }
-      // For other errors, clean up and return a user-friendly message
-      if (content.includes("Transaction failed:")) {
-        const cleanedError = content
-          .replace(/Transaction failed: /g, "")
-          .replace(/Request Arguments:[\s\S]*$/, "")
-          .trim();
-        return cleanedError;
-      }
-      // Return the original error if none of the above match
-      return content;
-    }
+  // Check if content is a structured swap confirmation
+  const isStructuredSwapConfirmation =
+    typeof content === "object" &&
+    content !== null &&
+    content.type === "swap_confirmation";
 
-    if (isLoading) {
-      return LoadingSteps[currentStep];
-    }
-
-    if (isCommand && !isSuccess) {
-      const { preview, success } = formatSwapResponse(content);
-      if (success) {
-        return preview;
-      }
-    }
-
-    // Format block explorer links
-    if (content.includes("block explorer")) {
-      return content.split("\n").map((line, i) => {
-        if (line.startsWith("http")) {
-          return (
-            <Link
-              key={i}
-              href={line}
-              isExternal
-              color="blue.500"
-              wordBreak="break-all"
-              display="inline-block"
-            >
-              {line}
-            </Link>
-          );
-        }
-        return <Text key={i}>{line}</Text>;
+  // Handle confirmation actions
+  const handleConfirm = () => {
+    // Simulate typing "yes" in the command input
+    const inputElement = document.querySelector(
+      'input[placeholder="Type a command..."]'
+    ) as HTMLInputElement;
+    if (inputElement) {
+      inputElement.value = "yes";
+      inputElement.focus();
+      // Trigger the Enter key press
+      const enterEvent = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
       });
+      inputElement.dispatchEvent(enterEvent);
     }
-
-    return content;
   };
 
-  const getBadgeProps = () => {
-    if (isError) {
-      return {
-        colorScheme: "red",
-        icon: WarningIcon,
-        text: "Error",
-      };
+  const handleCancel = () => {
+    // Simulate typing "no" in the command input
+    const inputElement = document.querySelector(
+      'input[placeholder="Type a command..."]'
+    ) as HTMLInputElement;
+    if (inputElement) {
+      inputElement.value = "no";
+      inputElement.focus();
+      // Trigger the Enter key press
+      const enterEvent = new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+      });
+      inputElement.dispatchEvent(enterEvent);
     }
-    if (needsConfirmation) {
-      return {
-        colorScheme: "orange",
-        icon: WarningIcon,
-        text: "Needs Confirmation",
-      };
+  };
+
+  const formatContent = (text: string) => {
+    return text.split("\n").map((line, i) => (
+      <React.Fragment key={i}>
+        {line}
+        {i < text.split("\n").length - 1 && <br />}
+      </React.Fragment>
+    ));
+  };
+
+  // Format links in content
+  const formatLinks = (text: string) => {
+    // Regex to match URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        return (
+          <Link key={i} href={part} isExternal color="blue.500">
+            {part}
+          </Link>
+        );
+      }
+      return formatContent(part);
+    });
+  };
+
+  // Render status icon
+  const renderStatusIcon = () => {
+    if (status === "pending") {
+      return <InfoIcon color="blue.500" />;
+    } else if (status === "processing") {
+      return <Spinner size="sm" color="blue.500" />;
+    } else if (status === "success") {
+      return <CheckCircleIcon color="green.500" />;
+    } else if (status === "error") {
+      return <WarningIcon color="red.500" />;
     }
-    if (isLoading) {
-      return {
-        colorScheme: "blue",
-        icon: TimeIcon,
-        text: "Processing",
-      };
-    }
-    if (isSuccess) {
-      return {
-        colorScheme: "green",
-        icon: CheckCircleIcon,
-        text: "Success",
-      };
-    }
-    return {
-      colorScheme: isCommand ? "purple" : "blue",
-      icon: isCommand ? ChatIcon : QuestionIcon,
-      text: isCommand ? "User" : "Question",
-    };
+    return null;
   };
 
   // Get agent name and avatar based on agent type
@@ -356,100 +330,85 @@ export const CommandResponse = ({
     );
   };
 
-  const badge = getBadgeProps();
-  const formattedContent = formatContent(content);
-
   return (
     <Box
-      w="full"
-      bg={isCommand ? "gray.50" : "white"}
-      borderRadius="lg"
-      p={{ base: 2, sm: 4 }}
-      position="relative"
       borderWidth="1px"
-      shadow="sm"
-      borderColor={
-        isError
-          ? "red.200"
-          : needsConfirmation
-          ? "orange.200"
-          : isSuccess
-          ? "green.200"
-          : undefined
-      }
+      borderRadius="lg"
+      borderColor={borderColor}
+      bg={bgColor}
+      p={3}
+      position="relative"
+      width="100%"
     >
-      <HStack align="start" spacing={{ base: 2, sm: 3 }}>
-        <Avatar
-          size={{ base: "xs", sm: "sm" }}
-          name={isCommand ? "You" : name}
-          bg={
-            isError
-              ? "red.500"
-              : needsConfirmation
-              ? "orange.500"
-              : isSuccess
-              ? "green.500"
-              : isCommand
-              ? "purple.500"
-              : "twitter.500"
-          }
-          color="white"
-          src={!isCommand ? avatarSrc : undefined}
-        />
-        <VStack align="stretch" flex={1} spacing={{ base: 1, sm: 2 }}>
-          <HStack spacing={2} fontSize={{ base: "xs", sm: "sm" }}>
-            <Text fontWeight="bold">{isCommand ? "You" : name}</Text>
-            <Text color="gray.500">{isCommand ? "@user" : handle}</Text>
-            <Text color="gray.500">·</Text>
-            <Text color="gray.500">{timestamp}</Text>
+      <HStack spacing={3} align="flex-start">
+        {!isCommand && (
+          <Avatar
+            src={avatarSrc}
+            name={name}
+            size="sm"
+            bg="transparent"
+            fontSize="xl"
+          />
+        )}
+        <Box pt={1}>{renderStatusIcon()}</Box>
+        <VStack spacing={1} align="stretch" flex={1}>
+          <HStack justify="space-between">
             <Badge
-              colorScheme={badge.colorScheme}
-              ml={{ base: 0, sm: "auto" }}
-              display="flex"
-              alignItems="center"
-              gap={1}
-              fontSize={{ base: "2xs", sm: "xs" }}
+              colorScheme={
+                isCommand ? "blue" : agentType === "swap" ? "purple" : "gray"
+              }
+              fontSize="xs"
             >
-              {isLoading && <Spinner size="xs" mr={1} />}
-              <Icon as={badge.icon} />
-              {badge.text}
+              {isCommand
+                ? "@user"
+                : agentType === "swap"
+                ? "@wheeler_dealer"
+                : "@snel"}
             </Badge>
+            <Text fontSize="xs" color="gray.500">
+              {timestamp}
+            </Text>
           </HStack>
-          <Box
-            fontSize={{ base: "sm", sm: "md" }}
-            whiteSpace="pre-wrap"
-            wordBreak="break-word"
-          >
-            {formattedContent}
-          </Box>
-          {renderTokenInfo()}
-          {isLoading && (
-            <List spacing={1} mt={2} fontSize={{ base: "xs", sm: "sm" }}>
-              {LoadingSteps.map((step, index) => (
-                <ListItem
-                  key={index}
-                  color={index <= currentStep ? "blue.500" : "gray.400"}
-                  display="flex"
-                  alignItems="center"
-                >
-                  {index < currentStep ? (
-                    <ListIcon as={CheckCircleIcon} color="green.500" />
-                  ) : index === currentStep ? (
-                    <Spinner size="xs" mr={2} />
-                  ) : (
-                    <ListIcon as={TimeIcon} />
-                  )}
-                  {step}
-                </ListItem>
-              ))}
-            </List>
-          )}
-          {needsConfirmation && (
-            <Text fontSize={{ base: "xs", sm: "sm" }} color="orange.600" mt={2}>
-              ⚠️ This action will execute a blockchain transaction that cannot
-              be undone.
+
+          {isStructuredSwapConfirmation ? (
+            <SwapConfirmation
+              message={content}
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+            />
+          ) : (
+            <Text fontSize="sm" color={textColor}>
+              {typeof content === "string"
+                ? formatLinks(content)
+                : JSON.stringify(content)}
             </Text>
           )}
+
+          {awaitingConfirmation && (
+            <Badge colorScheme="yellow" alignSelf="flex-start" mt={2}>
+              Needs Confirmation
+            </Badge>
+          )}
+
+          {status === "processing" && (
+            <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
+              Processing
+            </Badge>
+          )}
+
+          {status === "error" && (
+            <Badge colorScheme="red" alignSelf="flex-start" mt={2}>
+              Error
+            </Badge>
+          )}
+
+          {status === "success" &&
+            !isCommand &&
+            !isStructuredSwapConfirmation && (
+              <Badge colorScheme="green" alignSelf="flex-start" mt={2}>
+                Success
+              </Badge>
+            )}
         </VStack>
       </HStack>
     </Box>

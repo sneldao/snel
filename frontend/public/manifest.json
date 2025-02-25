@@ -1,7 +1,7 @@
 {
     "name": "SNEL",
     "short_name": "SNEL",
-    "description": "Super pointless agent",
+    "description": "super pointless lazy agents",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",

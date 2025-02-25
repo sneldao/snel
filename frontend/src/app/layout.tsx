@@ -4,7 +4,7 @@ import { Providers } from "../providers/Providers";
 // Metadata must be exported from a Server Component
 export const metadata: Metadata = {
   title: "SNEL",
-  description: "Super pointless agent",
+  description: "super pointless lazy agents",
   icons: {
     icon: [{ url: "/favicon.ico" }, { url: "/icon.png", type: "image/png" }],
     apple: { url: "/apple-icon.png", sizes: "180x180" },

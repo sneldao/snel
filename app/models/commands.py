@@ -63,21 +63,22 @@ class CommandRequest(BaseModel):
 
 class CommandResponse(BaseModel):
     """API response for a processed command."""
-    content: Optional[str] = None
+    content: Optional[Any] = None  # Updated to accept any type
     error_message: Optional[str] = None
     pending_command: Optional[str] = None
     agent_type: Optional[str] = "default"  # Can be "default" or "swap"
+    metadata: Optional[Dict[str, Any]] = None  # Added metadata field
 
     @classmethod
     def from_bot_message(cls, msg: BotMessage) -> 'CommandResponse':
         """Create a CommandResponse from a BotMessage."""
         # Determine agent type based on content and metadata
         agent_type = "default"
-        content = msg.content.lower() if msg.content else ""
+        content = msg.content if isinstance(msg.content, str) else str(msg.content) if msg.content else ""
         metadata = msg.metadata or {}
         
         # Check if this is a swap-related message
-        if any(word in content for word in ["swap", "token", "approve", "allowance", "liquidity"]) or \
+        if isinstance(content, str) and any(word in content.lower() for word in ["swap", "token", "approve", "allowance", "liquidity"]) or \
            metadata.get("method") == "swap" or \
            metadata.get("pending_command", "").startswith("swap"):
             agent_type = "swap"
@@ -85,8 +86,9 @@ class CommandResponse(BaseModel):
         return cls(
             content=msg.content,
             error_message=msg.error_message,
-            pending_command=msg.metadata.get("pending_command") if msg.metadata else None,
-            agent_type=agent_type
+            pending_command=metadata.get("pending_command"),
+            agent_type=agent_type,
+            metadata=metadata
         )
 
 class TransactionRequest(BaseModel):

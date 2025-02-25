@@ -3,146 +3,112 @@ import logging
 from eth_utils import to_checksum_address
 from app.models.commands import CommandRequest, CommandResponse, BotMessage
 from app.services.command_store import CommandStore
-from app.api.dependencies import get_openai_key, get_pipeline, get_command_store
+from app.api.dependencies import get_openai_key, get_pipeline, get_command_store, get_token_service
 from app.agents.swap_agent import SwapAgent
 from app.agents.price_agent import PriceAgent
+from typing import Optional, Dict, Any
+from pydantic import BaseModel
+from app.services.token_service import TokenService
+from emp_agents.providers import OpenAIProvider, OpenAIModelType
+import json
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
-@router.post("/api/process-command")
+def get_openai_key(request: Request) -> str:
+    """Get OpenAI API key from request headers."""
+    openai_key = request.headers.get("X-OpenAI-Key")
+    if not openai_key:
+        # Use environment variable as fallback
+        import os
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_key:
+            raise HTTPException(status_code=400, detail="OpenAI API key is required")
+    return openai_key
+
+@router.post("/process-command", response_model=CommandResponse)
 async def process_command(
+    command: CommandRequest,
     request: Request,
-    command_request: CommandRequest,
-    command_store: CommandStore = Depends(get_command_store),
-    openai_key: str = Depends(get_openai_key)
+    token_service: TokenService = Depends(get_token_service)
 ):
+    """Process a command and return a response."""
     try:
-        # Get pipeline instance
-        pipeline = get_pipeline(openai_key)
+        # Get OpenAI API key
+        openai_key = get_openai_key(request)
         
-        # Normalize user ID - ALWAYS use lowercase for consistency
-        original_id = command_request.creator_id
-        user_id = command_request.creator_id.lower()
+        # Check if this is a confirmation or cancellation
+        is_confirmation = command.content.lower().strip() in ["yes", "confirm"]
+        is_cancellation = command.content.lower().strip() in ["no", "cancel"]
         
-        # Log the normalization for debugging
-        logger.info(f"User ID normalization: Original: {original_id}, Normalized: {user_id}")
-        
-        # Update the request with normalized ID
-        command_request.creator_id = user_id
-        
-        logger.info(f"Processing command: {command_request.content} on chain {command_request.chain_id}")
-        logger.info(f"User ID (normalized): {user_id}, Name: {command_request.creator_name}")
-        
-        # Handle confirmations
-        content = command_request.content.lower().strip()
-        if content in ["yes", "y", "confirm"]:
-            # Get pending command
-            pending_command = command_store.get_command(user_id)
-            if pending_command:
-                logger.info(f"Found pending command for user {user_id}: {pending_command}")
-                return CommandResponse(
-                    content=f"Great! I'll execute your swap. Please approve the transaction in your wallet.",
-                    pending_command=pending_command["command"]
-                )
-            else:
-                # Debug: List all pending commands to help diagnose the issue
-                all_commands = command_store.list_all_commands()
-                logger.warning(f"No pending command found for user {user_id}. All pending commands: {all_commands}")
-                
-                # Try to find a command with a similar user ID (case-insensitive)
-                similar_command = None
-                for cmd in all_commands:
-                    if cmd.get("user_id", "").lower() == user_id.lower():
-                        similar_command = cmd
-                        logger.info(f"Found command with similar user ID: {similar_command}")
-                        break
-                
-                if similar_command:
-                    # Use the command with the similar user ID
-                    logger.info(f"Using command with similar user ID: {similar_command}")
-                    return CommandResponse(
-                        content=f"Great! I'll execute your swap. Please approve the transaction in your wallet.",
-                        pending_command=similar_command["command"]
-                    )
-                
-                return CommandResponse(
-                    content="I don't have any pending commands to confirm. Please submit a new swap request.",
-                    error_message="No pending command found"
-                )
-        
-        # Handle cancellations
-        if content in ["no", "n", "cancel"]:
-            # Clear pending command
-            command_store.clear_command(user_id)
+        # If it's a confirmation or cancellation, handle it differently
+        if is_confirmation:
             return CommandResponse(
-                content="I've cancelled your request. How else can I help you?"
+                content="Please confirm the transaction in your wallet.",
+                pending_command="confirm",
+                agent_type="swap"
             )
-            
-        # Convert request to Tweet
-        tweet = command_request.to_tweet()
-        
-        # Process through pipeline
-        result = await pipeline.process(tweet)
-        logger.info(f"Pipeline result: {result}")
-        
-        # Handle pipeline errors
-        if result.error_message:
+        elif is_cancellation:
             return CommandResponse(
-                content=f"Sorry, I couldn't process your command: {result.error_message}",
-                error_message=result.error_message
+                content="Transaction cancelled.",
+                agent_type="swap"
             )
-        
-        # Convert result to BotMessage
-        bot_message = BotMessage.from_agent_message(result)
-        
-        # Store pending command if one was generated
-        if bot_message.metadata and "pending_command" in bot_message.metadata:
-            logger.info(f"Storing pending command for user {user_id}: {bot_message.metadata['pending_command']}")
-            command_store.store_command(
-                user_id,
-                bot_message.metadata["pending_command"],
-                command_request.chain_id
-            )
-            
-            # Verify storage immediately
-            stored = command_store.get_command(user_id)
-            if not stored:
-                logger.error(f"Failed to verify command storage for user {user_id}")
-                raise RuntimeError("Failed to store command")
-        
-        # Convert BotMessage to API response
-        response = CommandResponse.from_bot_message(bot_message)
-        
-        # Set agent type based on content and command type
-        response_content = response.content.lower() if response.content else ""
         
         # Check if this is a swap-related query
-        is_swap_related = any(word in content for word in ["swap", "token", "price", "approve", "allowance", "liquidity"]) or \
-                         any(word in response_content for word in ["swap", "token", "price", "approve", "allowance", "liquidity"])
+        is_swap_related = any(word in command.content.lower() for word in ["swap", "token", "price", "approve", "allowance", "liquidity"])
         
-        # Add pending command to response if it exists
-        if bot_message.metadata and "pending_command" in bot_message.metadata:
-            response.pending_command = bot_message.metadata["pending_command"]
-            # If it's a swap command, set agent type to swap
-            if response.pending_command.startswith("swap"):
-                response.agent_type = "swap"
+        if is_swap_related:
+            # Use the SwapAgent for swap-related queries
+            provider = OpenAIProvider(
+                api_key=openai_key,
+                default_model=OpenAIModelType.gpt4o_mini
+            )
+            swap_agent = SwapAgent(provider=provider)
+            
+            # Process the swap command
+            result = await swap_agent.process_swap(command.content, command.chain_id)
+            
+            if result["error"]:
+                return CommandResponse(
+                    error_message=result["error"],
+                    agent_type="swap"
+                )
+            
+            # Check if the content is a structured message
+            if isinstance(result["content"], dict) and result["content"].get("type") == "swap_confirmation":
+                # Return the structured message directly
+                return CommandResponse(
+                    content=result["content"],
+                    pending_command=result["metadata"].get("pending_command"),
+                    agent_type="swap",
+                    metadata=result["metadata"]
+                )
             else:
-                # For non-swap pending commands, use default agent
-                response.agent_type = "default"
+                # Return the text content
+                return CommandResponse(
+                    content=result["content"],
+                    pending_command=result["metadata"].get("pending_command"),
+                    agent_type="swap",
+                    metadata=result["metadata"]
+                )
         else:
-            # For non-pending commands, set agent type based on content
-            response.agent_type = "swap" if is_swap_related else "default"
+            # Use the Dowse pipeline for general queries
+            pipeline = get_pipeline(openai_key)
             
-        # For initial greetings, always use SNEL
-        if content in ["gm", "hello", "hi", "hey", "good morning", "good afternoon", "good evening"]:
-            response.agent_type = "default"
+            # Convert the command to a Tweet
+            tweet = command.to_tweet()
             
-        return response
+            # Process the command
+            result = await pipeline.process(tweet)
+            
+            # Convert the result to a BotMessage
+            bot_message = BotMessage.from_agent_message(result)
+            
+            # Convert the BotMessage to a CommandResponse
+            response = CommandResponse.from_bot_message(bot_message)
+            
+            return response
             
     except Exception as e:
-        logger.error(f"Unexpected error in command processing: {e}", exc_info=True)
-        return CommandResponse(
-            content="Sorry, something went wrong. Please try again!",
-            error_message=str(e)
-        ) 
+        logger.error(f"Error processing command: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)) 

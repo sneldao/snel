@@ -495,7 +495,7 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false, // Bot responses are never commands
           pendingCommand: data.pending_command,
-          awaitingConfirmation: data.pending_command,
+          awaitingConfirmation: Boolean(data.pending_command),
           status: data.pending_command ? "pending" : "success",
           agentType: data.agent_type || "default", // Use the agent_type from the response
           metadata: data.metadata,
@@ -589,7 +589,7 @@ export default function Home() {
               </HStack>
             </HStack>
             <Text color="gray.600" fontSize={{ base: "md", sm: "lg" }}>
-              a Super poiNtlEss Lazy agent
+              Super poiNtlEss Lazy agents
             </Text>
             <Text color="gray.500" fontSize={{ base: "xs", sm: "sm" }} mt={2}>
               swap tokens, check balance etc. <br />
