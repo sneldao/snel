@@ -17,7 +17,8 @@ sys.path.insert(0, api_dir)   # API directory second
 
 # Patch the Dowse logger before importing any Dowse modules
 from app.utils.dowse_logger_patch import patch_dowse_logger
-patch_dowse_logger()
+logger = patch_dowse_logger()
+logger.info("Dowse logger patched successfully for serverless environment")
 
-# Import the app from the app module
+# Now it's safe to import the app
 from app.main import app 

@@ -10,7 +10,12 @@ from pathlib import Path
 # Add the current directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Import the app from the app module
+# Patch the Dowse logger before importing any Dowse modules
+from app.utils.dowse_logger_patch import patch_dowse_logger
+logger = patch_dowse_logger()
+logger.info("Dowse logger patched successfully for local environment")
+
+# Now it's safe to import the app
 from app.main import app
 
 if __name__ == "__main__":

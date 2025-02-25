@@ -1,5 +1,4 @@
 from app.utils.configure_logging import configure_logging  # This must be the first import
-from app.utils.dowse_logger_patch import patch_dowse_logger  # Patch Dowse logger
 
 import os
 from pathlib import Path
@@ -18,7 +17,6 @@ load_dotenv(env_path)
 
 # Initialize logger
 configure_logging()
-patch_dowse_logger()  # Patch Dowse logger before importing any Dowse modules
 logger = logging.getLogger(__name__)
 
 # Set up rate limiter

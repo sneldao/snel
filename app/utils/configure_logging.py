@@ -21,12 +21,24 @@ def configure_logging():
     # Configure file handler if LOG_FILE is set
     log_file = os.environ.get("LOG_FILE")
     if log_file:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(log_level)
-        file_handler.setFormatter(logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        ))
-        logging.getLogger().addHandler(file_handler)
+        # Check if we're in a serverless environment (Vercel)
+        is_serverless = os.environ.get("VERCEL", "").lower() == "1"
+        
+        # If in serverless, use /tmp directory which is writable
+        if is_serverless and not log_file.startswith("/tmp/"):
+            log_file = f"/tmp/{os.path.basename(log_file)}"
+            
+        try:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(log_level)
+            file_handler.setFormatter(logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            ))
+            logging.getLogger().addHandler(file_handler)
+            logging.getLogger(__name__).info(f"File logging enabled to: {log_file}")
+        except (OSError, IOError) as e:
+            logging.getLogger(__name__).warning(f"Could not set up file logging to {log_file}: {e}")
+            logging.getLogger(__name__).info("Continuing with stdout logging only")
     
     # Set specific loggers to different levels if needed
     logging.getLogger("httpx").setLevel(logging.WARNING)

@@ -74,6 +74,9 @@
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
         "PYTHONIOENCODING": "utf-8",
-        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com"
+        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
+        "VERCEL": "1",
+        "LOG_LEVEL": "INFO",
+        "ENABLE_FILE_LOGGING": "false"
     }
 }

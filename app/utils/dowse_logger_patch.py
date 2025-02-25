@@ -7,6 +7,8 @@ import logging
 import os
 import sys as system_module  # Rename to avoid shadowing
 from pathlib import Path
+import importlib.util
+import types
 
 def patch_dowse_logger():
     """
@@ -39,23 +41,20 @@ def patch_dowse_logger():
         )
         logger.addHandler(file_handler)
     
-    # Monkey patch the dowse.logger module to use our logger
-    try:
-        # Import dowse here to avoid circular imports
-        import dowse
-        
-        # Create a fake module to replace dowse.logger
-        class LoggerModule:
-            logger = logger
-        
-        # Replace the module in sys.modules
-        system_module.modules["dowse.logger"] = LoggerModule()
-        
-        # Also patch the logger in the dowse module itself if it exists
-        if hasattr(dowse, "logger"):
-            dowse.logger = logger
-    except ImportError:
-        # Dowse not installed yet, which is fine
-        pass
+    # Create a fake module to replace dowse.logger
+    class LoggerModule(types.ModuleType):
+        def __init__(self):
+            super().__init__("dowse.logger")
+            self.logger = logger
+    
+    # Create and install the fake module
+    fake_logger_module = LoggerModule()
+    system_module.modules["dowse.logger"] = fake_logger_module
+    
+    # If dowse is already imported, patch its logger attribute
+    if "dowse" in system_module.modules:
+        dowse_module = system_module.modules["dowse"]
+        if hasattr(dowse_module, "logger"):
+            dowse_module.logger = logger
     
     return logger 
