@@ -67,6 +67,7 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
     3. Target amount in USD: "swap $50 worth of ETH to USDC"
     4. Natural language: "I want to trade my ETH for some USDC"
     5. Contract addresses: Handle Ethereum addresses (e.g. "0x1234...") exactly as provided
+    6. Custom tokens: Handle custom tokens with $ prefix (e.g. "$PEPE", "$DICKBUTT") exactly as provided
     
     Return a JSON object with:
     {
@@ -99,12 +100,25 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
         "natural_command": "swap $5 worth of ETH into token at 0xaF13924f23Be104b96c6aC424925357463b0d105"
     }
     
+    "swap $1 of eth for $dickbutt" ->
+    {
+        "amount": 1.0,
+        "token_in": "ETH",
+        "token_out": "$dickbutt",
+        "is_target_amount": true,
+        "amount_is_usd": true,
+        "natural_command": "swap $1 worth of ETH for $dickbutt token"
+    }
+    
     If you can't understand the swap request, return:
     {
         "error": "Specific error message explaining what's wrong"
     }
     
-    IMPORTANT: When a contract address is provided, use it EXACTLY as given, preserving case.
+    IMPORTANT: 
+    1. When a contract address is provided, use it EXACTLY as given, preserving case.
+    2. When a custom token with $ prefix is provided, use it EXACTLY as given, preserving case.
+    3. DO NOT reject custom tokens with $ prefix - pass them through exactly as provided.
     """)
 
     async def process(self, tweet: TweetWithChain) -> AgentMessage[ProcessedSwapCommand]:
@@ -135,8 +149,12 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
                 token_in = data["token_in"]
                 token_out = data["token_out"]
                 
-                # Validate input token
-                token_in_valid = _is_valid_contract_address(token_in) or await validate_token(token_in, tweet.chain_id)
+                # Special handling for custom tokens with $ prefix
+                is_custom_token_in = token_in.startswith('$')
+                is_custom_token_out = token_out.startswith('$')
+                
+                # Validate input token (skip validation for custom tokens with $ prefix)
+                token_in_valid = is_custom_token_in or _is_valid_contract_address(token_in) or await validate_token(token_in, tweet.chain_id)
                 if not token_in_valid:
                     error_msg = (
                         f"The token '{token_in}' is not recognized as a valid cryptocurrency or contract address. "
@@ -148,8 +166,8 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
                         error_message=error_msg
                     )
                 
-                # Validate output token
-                token_out_valid = _is_valid_contract_address(token_out) or await validate_token(token_out, tweet.chain_id)
+                # Validate output token (skip validation for custom tokens with $ prefix)
+                token_out_valid = is_custom_token_out or _is_valid_contract_address(token_out) or await validate_token(token_out, tweet.chain_id)
                 if not token_out_valid:
                     error_msg = (
                         f"The token '{token_out}' is not recognized as a valid cryptocurrency or contract address. "
@@ -164,8 +182,8 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
                 # Create the command object
                 command_obj = ProcessedSwapCommand(
                     amount=data["amount"],
-                    token_in=token_in.upper() if not _is_valid_contract_address(token_in) else token_in,
-                    token_out=token_out.upper() if not _is_valid_contract_address(token_out) else token_out,
+                    token_in=token_in if is_custom_token_in or _is_valid_contract_address(token_in) else token_in.upper(),
+                    token_out=token_out if is_custom_token_out or _is_valid_contract_address(token_out) else token_out.upper(),
                     chain_id=tweet.chain_id,
                     is_target_amount=data["is_target_amount"],
                     amount_is_usd=data.get("amount_is_usd", False),
@@ -254,46 +272,71 @@ class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
     
     If token_in or token_out is a contract address, try to include its name/symbol if available.
     
+    For custom tokens with $ prefix (like $PEPE or $DICKBUTT), add this warning:
+    "Note: [token] appears to be a custom token. Please verify the contract address before proceeding with the swap."
+    
     Add: "Does this look good? Reply with 'yes' to confirm or 'no' to cancel."
     """)
     processors: list[type[Processor]] = [SwapCommandExtractor]
 
-    async def get_token_info(self, token: str, chain_id: Optional[int] = None) -> tuple[str, Optional[str]]:
-        """Get token display info (address/symbol and name if available)."""
+    async def get_token_info(self, token: str, chain_id: Optional[int] = None) -> tuple[str, Optional[str], bool]:
+        """Get token display info (address/symbol, name if available, and whether it's verified)."""
         from app.services.prices import _is_valid_contract_address, get_token_metadata
         
+        # Check if this is a custom token with $ prefix
+        if token.startswith('$'):
+            return token, None, False  # Not verified
+            
         if not _is_valid_contract_address(token):
-            return token.upper(), None
+            return token.upper(), None, True  # Standard tokens are verified
             
         try:
             if chain_id:
                 logger.info(f"Fetching metadata for token {token} on chain {chain_id}")
                 # Try to get metadata from Moralis
                 metadata = await get_token_metadata(token, chain_id)
+                
                 if metadata:
                     symbol = metadata.get("symbol", "").upper()
-                    name = metadata.get("name", "Unknown Token")
-                    logger.info(f"Got token info for {token}: {symbol} ({name})")
-                    # Return both the original address (preserving case) and the display name
-                    return token, f"{symbol} ({name})"
-                else:
-                    logger.warning(f"No metadata found for token {token}")
+                    name = metadata.get("name")
+                    return symbol, name, True  # Tokens with metadata are verified
+                    
         except Exception as e:
             logger.warning(f"Failed to get token metadata: {e}")
             
-        # If we couldn't get metadata, return the original address (preserving case)
-        return token, None
+        # If we get here, we couldn't get metadata
+        return token, None, False  # Not verified
 
     async def execute(self, input_: TweetWithChain) -> AgentMessage[ProcessedSwapCommand]:
         try:
             # First run the processors
+            result = None
             for processor_cls in self.processors:
                 processor = processor_cls(provider=self.provider)
                 result = await processor.process(input_)
                 if result.error_message:
                     return result
                 input_ = result.content
-
+                
+            if not result or result.error_message:
+                return AgentMessage(
+                    content=None,
+                    error_message=result.error_message if result else "Failed to process command"
+                )
+                
+            command = result.content
+            
+            # Get token info for display
+            token_in_info, token_in_name, token_in_verified = await self.get_token_info(command.token_in, command.chain_id)
+            token_out_info, token_out_name, token_out_verified = await self.get_token_info(command.token_out, command.chain_id)
+            
+            # Add warnings for unverified tokens
+            warnings = []
+            if not token_in_verified:
+                warnings.append(f"⚠️ {token_in_info} appears to be a custom or unverified token. Please verify before proceeding.")
+            if not token_out_verified:
+                warnings.append(f"⚠️ {token_out_info} appears to be a custom or unverified token. Please verify before proceeding.")
+            
             # Format the response using the prompt
             if isinstance(input_, ProcessedSwapCommand):
                 try:
@@ -305,15 +348,15 @@ class SwapExecutor(Executor[TweetWithChain, ProcessedSwapCommand]):
                     token_out_original = input_.token_out
                     
                     logger.info(f"Getting token info for input token: {token_in_original}")
-                    _, token_in_name = await self.get_token_info(input_.token_in, input_.chain_id)
+                    token_in_symbol, token_in_name, token_in_verified = await self.get_token_info(input_.token_in, input_.chain_id)
                     logger.info(f"Getting token info for output token: {token_out_original}")
-                    _, token_out_name = await self.get_token_info(input_.token_out, input_.chain_id)
+                    token_out_symbol, token_out_name, token_out_verified = await self.get_token_info(input_.token_out, input_.chain_id)
                     
-                    logger.info(f"Token info - Input: {token_in_name}, Output: {token_out_name}")
+                    logger.info(f"Token info - Input: {token_in_name or token_in_symbol}, Output: {token_out_name or token_out_symbol}")
                     
                     # Format display names - use name if available, otherwise use address
-                    token_in_display = token_in_name or token_in_original
-                    token_out_display = token_out_name or token_out_original
+                    token_in_display = token_in_name or token_in_symbol
+                    token_out_display = token_out_name or token_out_symbol
                     
                     if input_.amount_is_usd:
                         # Calculate the input amount based on USD value

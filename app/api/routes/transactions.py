@@ -342,70 +342,50 @@ async def execute_transaction(
                 )
             
             # Check if token_out is valid
-            if not token_out and token_out_metadata and not token_out_metadata.get("verified", False):
-                # Provide a helpful error message with the warning from metadata
-                warning_msg = token_out_metadata.get("warning", "")
-                
-                # Special case for NURI token on Scroll
-                if swap_command.token_out.upper() in ["NURI", "$NURI"] and tx_request.chain_id == 534352:
-                    nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
-                    logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
-                    token_out = nuri_address
-                else:
-                    # If we have metadata but no address, provide a detailed error message
-                    source = token_out_metadata.get("source", "unknown")
-                    if source == "unverified":
-                        raise ValueError(
-                            f"Token {swap_command.token_out} was found but could not be verified. {warning_msg} "
-                            "Please use a valid contract address directly in your swap command. "
-                            "For example: 'swap ETH for 0x1234...abcd'"
-                        )
-                    else:
-                        raise ValueError(
-                            f"Could not find contract address for token {swap_command.token_out}. {warning_msg} "
-                            "Please use a valid contract address directly in your swap command. "
-                            "For example: 'swap ETH for 0x1234...abcd'"
-                        )
-            
-            # Verify that we have valid contract addresses for both tokens
-            if not is_address(token_in) and token_in != "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE":
-                raise ValueError(
-                    f"Could not find contract address for token {swap_command.token_in}. "
-                    "Please use a valid contract address directly in your swap command. "
-                    "For example: 'swap ETH for 0x1234...abcd'"
-                )
-                
-            if not is_address(token_out):
-                # Special case for tokens with $ prefix - if the user has explicitly confirmed
-                # they want to use this token (by responding 'yes' to the confirmation prompt),
-                # we'll show a more specific error message
-                if swap_command.token_out.startswith('$') and is_post_approval:
-                    # For NURI token on Scroll, provide the contract address
-                    if swap_command.token_out.upper() == "$NURI" and tx_request.chain_id == 534352:
-                        nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
-                        logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
-                        token_out = nuri_address
-                    else:
-                        # Include any metadata we found about the token
-                        token_info = ""
-                        if token_out_symbol:
-                            token_info += f" Symbol: {token_out_symbol}."
-                        if token_out_name:
-                            token_info += f" Name: {token_out_name}."
-                        if token_out_metadata and token_out_metadata.get("warning"):
-                            token_info += f" {token_out_metadata.get('warning')}"
-                            
-                        raise ValueError(
-                            f"Cannot proceed with swap to {swap_command.token_out}.{token_info} "
-                            "This token requires a contract address. Please try again with the token's contract address. "
-                            "For example: 'swap ETH for 0x1234...abcd'"
-                        )
+            if not token_out:
+                # Check if token_out is a valid contract address
+                if is_address(swap_command.token_out):
+                    token_out = Web3.to_checksum_address(swap_command.token_out)
+                    logger.info(f"Using provided contract address for token_out: {token_out}")
+                    
+                    # Add a warning for direct contract address usage
+                    if not token_out_metadata or not token_out_metadata.get("verified", False):
+                        logger.warning(f"User is swapping to an unverified contract address: {token_out}")
+                        # We'll allow the swap but add a warning to the metadata
+                        token_out_metadata = token_out_metadata or {}
+                        token_out_metadata["warning"] = "This token was provided as a contract address and has not been verified. Please ensure you trust this token before proceeding."
+                        token_out_metadata["verified"] = False
+                        token_out_metadata["source"] = "user_provided"
+                        
+                elif token_out_metadata and not token_out_metadata.get("verified", False):
+                    # Include any metadata we found about the token
+                    token_info = ""
+                    if token_out_symbol:
+                        token_info += f" Symbol: {token_out_symbol}."
+                    if token_out_name:
+                        token_info += f" Name: {token_out_name}."
+                    if token_out_metadata and token_out_metadata.get("warning"):
+                        token_info += f" {token_out_metadata.get('warning')}"
+                        
+                    raise ValueError(
+                        f"Cannot proceed with swap to {swap_command.token_out}.{token_info} "
+                        "This token requires a contract address. Please try again with the token's contract address. "
+                        "For example: 'swap ETH for 0x1234...abcd'"
+                    )
                 else:
                     # For NURI token on Scroll, provide the contract address
                     if swap_command.token_out.upper() in ["NURI", "$NURI"] and tx_request.chain_id == 534352:
                         nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
                         logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
                         token_out = nuri_address
+                    # For custom tokens with $ prefix, provide a more helpful error
+                    elif swap_command.token_out.startswith('$'):
+                        raise ValueError(
+                            f"Cannot proceed with swap to custom token {swap_command.token_out}. "
+                            f"This appears to be a custom or new token that we couldn't verify. "
+                            f"For safety, please provide the contract address directly. "
+                            f"You can find contract addresses on sites like Etherscan, Basescan, or other block explorers."
+                        )
                     else:
                         # Include any metadata we found about the token
                         token_info = ""
@@ -452,14 +432,27 @@ async def execute_transaction(
                     "token_in_address": token_in,
                     "token_in_symbol": token_in_symbol,
                     "token_in_name": token_in_name,
-                    "token_in_verified": token_in_metadata.get("verified", False) if token_in_metadata else False,
-                    "token_in_source": token_in_metadata.get("source", "") if token_in_metadata else "",
+                    "token_in_verified": token_in_metadata.get("verified", True) if token_in_metadata else True,
+                    "token_in_source": token_in_metadata.get("source", "unknown") if token_in_metadata else "unknown",
                     "token_out_address": token_out,
                     "token_out_symbol": token_out_symbol,
                     "token_out_name": token_out_name,
-                    "token_out_verified": token_out_metadata.get("verified", False) if token_out_metadata else False,
-                    "token_out_source": token_out_metadata.get("source", "") if token_out_metadata else ""
+                    "token_out_verified": token_out_metadata.get("verified", True) if token_out_metadata else True,
+                    "token_out_source": token_out_metadata.get("source", "unknown") if token_out_metadata else "unknown",
                 }
+                
+                # Add warnings for unverified tokens
+                if token_out_metadata and not token_out_metadata.get("verified", True):
+                    metadata["token_out_warning"] = token_out_metadata.get("warning", 
+                        "This token has not been verified. Please ensure you trust this token before proceeding."
+                    )
+                
+                # Add warnings for custom tokens (tokens with $ prefix)
+                if swap_command.token_out.startswith('$'):
+                    metadata["token_out_warning"] = (
+                        f"'{swap_command.token_out}' appears to be a custom token. "
+                        f"Please verify the contract address ({token_out}) before proceeding with the swap."
+                    )
                 
                 # Return the transaction data
                 return TransactionResponse(
@@ -546,6 +539,23 @@ async def execute_transaction(
                     raise ValueError(
                         "NURI token swaps are not currently supported through our service. "
                         "Please use SyncSwap or ScrollSwap directly to swap for NURI tokens on Scroll."
+                    )
+                # Special handling for Scroll network
+                elif "scroll" in error_str.lower() or tx_request.chain_id == 534352:
+                    raise ValueError(
+                        f"Swap failed on Scroll network: {str(e)}. "
+                        f"Scroll is a newer network and may have limited liquidity or token support. "
+                        f"Try a different token pair or use ScrollSwap directly."
+                    )
+                # Special handling for custom tokens (tokens with $ prefix)
+                elif "token not found" in error_str and (
+                    (swap_command.token_in and swap_command.token_in.startswith("$")) or 
+                    (swap_command.token_out and swap_command.token_out.startswith("$"))
+                ):
+                    custom_token = swap_command.token_in if swap_command.token_in.startswith("$") else swap_command.token_out
+                    raise ValueError(
+                        f"Custom token '{custom_token}' not supported by KyberSwap. "
+                        f"For custom tokens, please use a dedicated DEX that supports this token."
                     )
                 else:
                     raise ValueError(f"Failed to build swap transaction: {str(e)}")
@@ -656,6 +666,16 @@ async def execute_transaction(
                 if is_address(swap_command.token_out):
                     token_out = Web3.to_checksum_address(swap_command.token_out)
                     logger.info(f"Using provided contract address for token_out: {token_out}")
+                    
+                    # Add a warning for direct contract address usage
+                    if not token_out_metadata or not token_out_metadata.get("verified", False):
+                        logger.warning(f"User is swapping to an unverified contract address: {token_out}")
+                        # We'll allow the swap but add a warning to the metadata
+                        token_out_metadata = token_out_metadata or {}
+                        token_out_metadata["warning"] = "This token was provided as a contract address and has not been verified. Please ensure you trust this token before proceeding."
+                        token_out_metadata["verified"] = False
+                        token_out_metadata["source"] = "user_provided"
+                        
                 elif token_out_metadata and not token_out_metadata.get("verified", False):
                     # Include any metadata we found about the token
                     token_info = ""
@@ -677,6 +697,14 @@ async def execute_transaction(
                         nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
                         logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
                         token_out = nuri_address
+                    # For custom tokens with $ prefix, provide a more helpful error
+                    elif swap_command.token_out.startswith('$'):
+                        raise ValueError(
+                            f"Cannot proceed with swap to custom token {swap_command.token_out}. "
+                            f"This appears to be a custom or new token that we couldn't verify. "
+                            f"For safety, please provide the contract address directly. "
+                            f"You can find contract addresses on sites like Etherscan, Basescan, or other block explorers."
+                        )
                     else:
                         # Include any metadata we found about the token
                         token_info = ""
@@ -731,6 +759,19 @@ async def execute_transaction(
                     "token_out_verified": token_out_metadata.get("verified", True) if token_out_metadata else True,
                     "token_out_source": token_out_metadata.get("source", "unknown") if token_out_metadata else "unknown",
                 }
+                
+                # Add warnings for unverified tokens
+                if token_out_metadata and not token_out_metadata.get("verified", True):
+                    metadata["token_out_warning"] = token_out_metadata.get("warning", 
+                        "This token has not been verified. Please ensure you trust this token before proceeding."
+                    )
+                
+                # Add warnings for custom tokens (tokens with $ prefix)
+                if swap_command.token_out.startswith('$'):
+                    metadata["token_out_warning"] = (
+                        f"'{swap_command.token_out}' appears to be a custom token. "
+                        f"Please verify the contract address ({token_out}) before proceeding with the swap."
+                    )
                 
                 # Return the transaction data
                 return TransactionResponse(
@@ -807,6 +848,23 @@ async def execute_transaction(
                     raise ValueError(
                         "NURI token swaps are not currently supported through our service. "
                         "Please use SyncSwap or ScrollSwap directly to swap for NURI tokens on Scroll."
+                    )
+                # Special handling for Scroll network
+                elif "scroll" in error_str.lower() or tx_request.chain_id == 534352:
+                    raise ValueError(
+                        f"Swap failed on Scroll network: {str(e)}. "
+                        f"Scroll is a newer network and may have limited liquidity or token support. "
+                        f"Try a different token pair or use ScrollSwap directly."
+                    )
+                # Special handling for custom tokens (tokens with $ prefix)
+                elif "token not found" in error_str and (
+                    (swap_command.token_in and swap_command.token_in.startswith("$")) or 
+                    (swap_command.token_out and swap_command.token_out.startswith("$"))
+                ):
+                    custom_token = swap_command.token_in if swap_command.token_in.startswith("$") else swap_command.token_out
+                    raise ValueError(
+                        f"Custom token '{custom_token}' not supported by KyberSwap. "
+                        f"For custom tokens, please use a dedicated DEX that supports this token."
                     )
                 else:
                     raise ValueError(f"Failed to build swap transaction: {str(e)}")

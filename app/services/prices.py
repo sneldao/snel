@@ -17,6 +17,9 @@ MORALIS_API_KEY = os.environ.get("MORALIS_API_KEY")
 if not MORALIS_API_KEY:
     raise ValueError("MORALIS_API_KEY environment variable is required")
 
+QUICKNODE_API_KEY = os.environ.get("QUICKNODE_API_KEY")
+QUICKNODE_ENDPOINT = os.environ.get("QUICKNODE_ENDPOINT")
+
 # Check if SSL verification should be disabled (for development only)
 DISABLE_SSL_VERIFY = os.environ.get("DISABLE_SSL_VERIFY", "").lower() == "true"
 if DISABLE_SSL_VERIFY:
@@ -57,7 +60,7 @@ def _add_to_cache(token: str, chain_id: Optional[int], is_valid: bool) -> None:
     _token_cache[cache_key] = (datetime.now(), is_valid)
 
 async def get_token_metadata(token_address: str, chain_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
-    """Get token metadata from Moralis."""
+    """Get token metadata from Moralis, with fallbacks to CoinGecko and QuickNode."""
     if not _is_valid_contract_address(token_address):
         return None
         
@@ -81,52 +84,97 @@ async def get_token_metadata(token_address: str, chain_id: Optional[int] = None)
             logger.warning(f"Unsupported chain ID for Moralis: {chain_id}")
             return None
             
-        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
-            response = await client.get(
-                f"https://deep-index.moralis.io/api/v2.2/erc20/metadata",
-                params={
-                    "chain": chain,
-                    "addresses": [token_address]
-                },
-                headers={
-                    "Accept": "application/json",
-                    "X-API-Key": MORALIS_API_KEY
-                },
-                timeout=10.0  # Add explicit timeout for serverless
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list) and len(data) > 0:
-                    logger.info(f"Got token metadata from Moralis: {data[0]}")
-                    return data[0]
-            else:
-                logger.warning(f"Moralis metadata request failed: {response.status_code} - {response.text}")
-                    
-    except Exception as e:
-        logger.warning(f"Failed to get token metadata from Moralis: {e}")
+        # Try Moralis first
+        try:
+            async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
+                response = await client.get(
+                    f"https://deep-index.moralis.io/api/v2.2/erc20/metadata",
+                    params={
+                        "chain": chain,
+                        "addresses": [token_address]
+                    },
+                    headers={
+                        "Accept": "application/json",
+                        "X-API-Key": MORALIS_API_KEY
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        logger.info(f"Got token metadata from Moralis: {data[0]}")
+                        return data[0]
+                else:
+                    logger.warning(f"Moralis metadata request failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            logger.warning(f"Failed to get token metadata from Moralis: {e}")
         
-    # Fallback to CoinGecko
-    try:
-        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
-            response = await client.get(
-                f"https://api.coingecko.com/api/v3/coins/ethereum/contract/{token_address}"
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                logger.info(f"Got token metadata from CoinGecko: {data}")
-                return {
-                    "address": token_address,
-                    "symbol": data.get("symbol", "").upper(),
-                    "name": data.get("name", "Unknown Token"),
-                    "decimals": 18  # Default to 18 for ERC20
-                }
-            else:
-                logger.warning(f"CoinGecko metadata request failed: {response.status_code} - {response.text}")
+        # Fallback to CoinGecko
+        try:
+            async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
+                response = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/ethereum/contract/{token_address}",
+                    headers={"x-cg-demo-api-key": os.environ.get("COINGECKO_API_KEY", "")}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(f"Got token metadata from CoinGecko: {data}")
+                    return {
+                        "address": token_address,
+                        "symbol": data.get("symbol", "").upper(),
+                        "name": data.get("name", "Unknown Token"),
+                        "decimals": 18  # Default to 18 for ERC20
+                    }
+                else:
+                    logger.warning(f"CoinGecko metadata request failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            logger.warning(f"Failed to get token metadata from CoinGecko: {e}")
+        
+        # Fallback to QuickNode if available
+        if QUICKNODE_API_KEY and QUICKNODE_ENDPOINT and chain_id in [1, 8453, 42161, 10, 137, 43114, 534352]:
+            try:
+                # Use QuickNode's RPC endpoint to get token metadata
+                async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
+                    # Prepare JSON-RPC request for token metadata
+                    payload = {
+                        "id": 1,
+                        "jsonrpc": "2.0",
+                        "method": "qn_getTokenMetadataByContractAddress",
+                        "params": {
+                            "contract": token_address
+                        }
+                    }
+                    
+                    response = await client.post(
+                        QUICKNODE_ENDPOINT,
+                        json=payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "Accept": "application/json"
+                        },
+                        timeout=10.0
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if "result" in data and data["result"]:
+                            result = data["result"]
+                            logger.info(f"Got token metadata from QuickNode: {result}")
+                            return {
+                                "address": token_address,
+                                "symbol": result.get("symbol", "").upper(),
+                                "name": result.get("name", "Unknown Token"),
+                                "decimals": int(result.get("decimals", 18))
+                            }
+                    else:
+                        logger.warning(f"QuickNode metadata request failed: {response.status_code} - {response.text}")
+            except Exception as e:
+                logger.warning(f"Failed to get token metadata from QuickNode: {e}")
                 
     except Exception as e:
-        logger.warning(f"Failed to get token metadata from CoinGecko: {e}")
+        logger.warning(f"Failed to get token metadata: {e}")
         
     return None
 
@@ -271,6 +319,8 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
     3. Check well-known tokens
     4. Try CoinGecko
     5. Try Moralis
+    6. Try QuickNode
+    7. Be permissive with $ prefixed tokens
     
     This function is intentionally permissive to allow users to swap any token
     that exists on the blockchain. Safety measures are implemented at the UI level
@@ -291,7 +341,7 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
     
     # Check well-known tokens
     normalized_token = _normalize_token(token_id)
-    well_known_tokens = {"ETH", "WETH", "USDC", "USDT", "DAI", "UNI", "LINK", "AAVE", "SNX", "COMP", "SCR", "OP", "ARB", "BASE", "MATIC"}
+    well_known_tokens = {"ETH", "WETH", "USDC", "USDT", "DAI", "UNI", "LINK", "AAVE", "SNX", "COMP", "SCR", "OP", "ARB", "BASE", "MATIC", "SCROLL"}
     if normalized_token in {_normalize_token(t) for t in well_known_tokens}:
         logger.info(f"Token {token_id} is a well-known token")
         _add_to_cache(token_id, chain_id, True)
@@ -317,6 +367,17 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
                 return True
         except Exception as e:
             logger.warning(f"Moralis validation failed for {token_id}: {e}")
+    
+    # Try QuickNode as another fallback if chain_id is provided
+    if chain_id and QUICKNODE_API_KEY and QUICKNODE_ENDPOINT:
+        try:
+            quicknode_valid = await _validate_with_quicknode(token_id, chain_id)
+            if quicknode_valid:
+                logger.info(f"Token {token_id} validated by QuickNode")
+                _add_to_cache(token_id, chain_id, True)
+                return True
+        except Exception as e:
+            logger.warning(f"QuickNode validation failed for {token_id}: {e}")
     
     # If token starts with $ or has other special formatting, try to clean it and validate again
     if any(c in token_id for c in "$_."):
@@ -348,18 +409,53 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
                     return True
             except Exception as e:
                 logger.warning(f"Moralis validation failed for cleaned token {clean_token}: {e}")
+            
+            # Try QuickNode with cleaned token
+            if QUICKNODE_API_KEY and QUICKNODE_ENDPOINT:
+                try:
+                    quicknode_valid = await _validate_with_quicknode(clean_token, chain_id)
+                    if quicknode_valid:
+                        logger.info(f"Cleaned token {clean_token} validated by QuickNode")
+                        _add_to_cache(token_id, chain_id, True)
+                        return True
+                except Exception as e:
+                    logger.warning(f"QuickNode validation failed for cleaned token {clean_token}: {e}")
     
-    # For tokens with $ prefix that aren't in our well-known list, we'll be permissive
+    # For tokens with $ prefix, we'll be more permissive
     # This allows users to swap new or less common tokens
     if token_id.startswith('$'):
         clean_token = token_id[1:]
         logger.info(f"Permissively allowing $ prefixed token: {token_id} -> {clean_token}")
+        
+        # Add a warning in the logs but allow the token
+        logger.warning(
+            f"CAUTION: Allowing unverified token with $ prefix: {token_id}. "
+            f"This token has not been validated through standard methods. "
+            f"Users should verify the contract address before swapping."
+        )
+        
+        _add_to_cache(token_id, chain_id, True)
+        return True
+    
+    # Be more permissive with any token that looks like a valid token symbol
+    # This is a heuristic approach - we'll allow tokens that follow typical naming patterns
+    if re.match(r'^[A-Za-z0-9]{2,10}$', token_id):
+        logger.info(f"Permissively allowing token with valid symbol pattern: {token_id}")
+        logger.warning(
+            f"CAUTION: Allowing unverified token with valid symbol pattern: {token_id}. "
+            f"This token has not been validated through standard methods. "
+            f"Users should verify the contract address before swapping."
+        )
         _add_to_cache(token_id, chain_id, True)
         return True
     
     # If we reach here, token is not valid by our standards
     # But we'll log a warning rather than completely blocking it
-    logger.warning(f"Token {token_id} could not be validated through standard methods")
+    logger.warning(
+        f"Token {token_id} could not be validated through standard methods. "
+        f"This token will be rejected for safety reasons. "
+        f"If this is a legitimate token, consider using its contract address directly."
+    )
     _add_to_cache(token_id, chain_id, False)
     return False
 
@@ -472,5 +568,86 @@ async def _validate_with_moralis(token_id: str, chain_id: int) -> bool:
                     
     except Exception as e:
         logger.warning(f"Moralis validation failed for {token_id}: {e}")
+        
+    return False 
+
+async def _validate_with_quicknode(token_id: str, chain_id: int) -> bool:
+    """Validate token using QuickNode's API."""
+    if not QUICKNODE_API_KEY or not QUICKNODE_ENDPOINT:
+        logger.warning("QuickNode API key or endpoint not configured")
+        return False
+        
+    try:
+        # First try to search by symbol
+        payload = {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "method": "qn_searchTokens",
+            "params": {
+                "query": token_id,
+                "chainId": str(chain_id),
+                "limit": 10
+            }
+        }
+        
+        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
+            response = await client.post(
+                QUICKNODE_ENDPOINT,
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                timeout=10.0
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "result" in data and data["result"] and len(data["result"]) > 0:
+                    # Check if any of the results match our token
+                    normalized_token = _normalize_token(token_id)
+                    for token in data["result"]:
+                        if (_normalize_token(token.get("symbol", "")) == normalized_token or
+                            _normalize_token(token.get("name", "")) == normalized_token):
+                            return True
+                            
+        # If symbol search fails, try to get token metadata by name
+        # This is a more permissive approach
+        variations = [
+            token_id,
+            token_id.lower(),
+            token_id.upper(),
+            token_id.capitalize()
+        ]
+        
+        for variation in variations:
+            payload = {
+                "id": 1,
+                "jsonrpc": "2.0",
+                "method": "qn_getTokenMetadataByName",
+                "params": {
+                    "name": variation,
+                    "chainId": str(chain_id)
+                }
+            }
+            
+            async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
+                response = await client.post(
+                    QUICKNODE_ENDPOINT,
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if "result" in data and data["result"] and len(data["result"]) > 0:
+                        return True
+                        
+    except Exception as e:
+        logger.warning(f"QuickNode validation failed: {e}")
         
     return False 

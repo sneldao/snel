@@ -88,6 +88,9 @@ async def get_quote(
         if chain_name == "unknown":
             raise KyberSwapError(f"Unsupported chain ID: {chain_id}")
 
+        # Special case for Scroll chain
+        is_scroll_chain = chain_id == 534352
+        
         # Special case for NURI token on Scroll chain
         is_nuri_on_scroll = (
             chain_id == 534352 and 
@@ -142,6 +145,17 @@ async def get_quote(
             if route_response.status_code != 200:
                 error_msg = route_data.get('message', route_response.text)
                 logger.error(f"Route request failed: {error_msg}")
+                
+                # Special handling for Scroll chain
+                if is_scroll_chain and "token not found" in error_msg.lower():
+                    logger.warning(f"KyberSwap failed to find token on Scroll chain. Token in: {token_in}, Token out: {token_out}")
+                    
+                    # Suggest alternative DEXs for Scroll
+                    raise KyberSwapError(
+                        f"KyberSwap doesn't support this token pair on Scroll. "
+                        f"Please try using ScrollSwap or SyncSwap directly for this swap. "
+                        f"Token in: {token_in}, Token out: {token_out}"
+                    )
                 
                 # Special handling for NURI token on Scroll
                 if is_nuri_on_scroll and "token not found" in error_msg.lower():
