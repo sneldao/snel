@@ -6,11 +6,8 @@ export const metadata: Metadata = {
   title: "SNEL",
   description: "Super pointless agent",
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.png", type: "image/png" },
-    ],
-    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
+    icon: [{ url: "/favicon.ico" }, { url: "/icon.png", type: "image/png" }],
+    apple: { url: "/apple-icon.png", sizes: "180x180" },
   },
 };
 
@@ -22,7 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Remove the manual link tags since they're handled by metadata */}
+        {/* Add explicit favicon link for compatibility */}
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" href="/icon.png" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
       </head>
       <body>
         <Providers>{children}</Providers>

@@ -1,6 +1,7 @@
 from typing import Optional, Literal, Dict, Any, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from eth_typing import HexAddress
+from datetime import datetime
 from dowse.models import Tweet, AgentMessage
 
 class UserMessage(Tweet):
@@ -80,6 +81,7 @@ class TransactionRequest(BaseModel):
     command: str
     wallet_address: HexAddress
     chain_id: int
+    metadata: Optional[Dict[str, Any]] = None
 
 class TransactionResponse(BaseModel):
     """API response for a transaction execution."""

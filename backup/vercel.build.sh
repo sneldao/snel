@@ -9,9 +9,8 @@ unset NEXT_PUBLIC_API_URL
 # Install Python packages from requirements.txt
 pip install -r requirements.txt
 
-# Install additional packages with specific versions if needed
-# Update these versions to match your current requirements
-pip install dowse==0.1.6.post1 emp-agents==0.3.0 eth-rpc-py==0.1.26
+# Install additional packages with specific versions
+pip install dowse==0.1.0 emp-agents==0.2.0.post1 eth-rpc==0.1.26
 
 # Print installed packages for debugging
 pip freeze > installed_packages.txt

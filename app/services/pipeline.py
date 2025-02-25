@@ -466,7 +466,7 @@ class UnknownExecutor(Executor[TweetWithChain, TweetWithChain]):
         )
 
 # Global pipeline instance
-pipeline: Optional[Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]] = None
+pipeline = None
 
 def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]:
     """Initialize the Dowse pipeline with specialized agents."""
@@ -505,4 +505,11 @@ def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["s
             }
         )
     
+    return pipeline
+
+def get_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["swap", "price", "unknown"]]:
+    """Get the Dowse pipeline instance, initializing it if necessary."""
+    global pipeline
+    if pipeline is None:
+        return init_pipeline(openai_key)
     return pipeline 

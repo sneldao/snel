@@ -1,6 +1,5 @@
 {
     "version": 2,
-    "buildCommand": "chmod +x vercel.build.sh && ./vercel.build.sh",
     "builds": [
         {
             "src": "api/index.py",
@@ -38,22 +37,6 @@
         }
     ],
     "routes": [
-        {
-            "src": "/favicon.ico",
-            "dest": "/frontend/public/favicon.ico"
-        },
-        {
-            "src": "/icon.png",
-            "dest": "/frontend/public/icon.png"
-        },
-        {
-            "src": "/apple-icon.png",
-            "dest": "/frontend/public/apple-icon.png"
-        },
-        {
-            "src": "/manifest.json",
-            "dest": "/frontend/public/manifest.json"
-        },
         {
             "src": "/api/(.*)",
             "dest": "/api/index.py"

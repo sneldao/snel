@@ -263,6 +263,10 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
     3. Check well-known tokens
     4. Try CoinGecko
     5. Try Moralis
+    
+    This function is intentionally permissive to allow users to swap any token
+    that exists on the blockchain. Safety measures are implemented at the UI level
+    by showing users the contract address and advising them to verify before swapping.
     """
     logger.info(f"Validating token: {token_id} for chain {chain_id}")
     
@@ -279,7 +283,7 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
     
     # Check well-known tokens
     normalized_token = _normalize_token(token_id)
-    well_known_tokens = {"ETH", "WETH", "USDC", "USDT", "DAI", "UNI", "LINK", "AAVE", "SNX", "COMP"}
+    well_known_tokens = {"ETH", "WETH", "USDC", "USDT", "DAI", "UNI", "LINK", "AAVE", "SNX", "COMP", "SCR", "OP", "ARB", "BASE", "MATIC"}
     if normalized_token in {_normalize_token(t) for t in well_known_tokens}:
         logger.info(f"Token {token_id} is a well-known token")
         _add_to_cache(token_id, chain_id, True)
@@ -306,8 +310,48 @@ async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
         except Exception as e:
             logger.warning(f"Moralis validation failed for {token_id}: {e}")
     
-    # If we reach here, token is not valid
-    logger.warning(f"Token {token_id} could not be validated")
+    # If token starts with $ or has other special formatting, try to clean it and validate again
+    if any(c in token_id for c in "$_."):
+        clean_token = ''.join(c for c in token_id if c.isalnum())
+        logger.info(f"Trying validation with cleaned token: {clean_token}")
+        
+        # Check if cleaned token is in well-known tokens
+        if _normalize_token(clean_token) in {_normalize_token(t) for t in well_known_tokens}:
+            logger.info(f"Cleaned token {clean_token} is a well-known token")
+            _add_to_cache(token_id, chain_id, True)
+            return True
+            
+        # Try external validation with cleaned token
+        try:
+            coingecko_valid = await _validate_with_coingecko(clean_token)
+            if coingecko_valid:
+                logger.info(f"Cleaned token {clean_token} validated by CoinGecko")
+                _add_to_cache(token_id, chain_id, True)
+                return True
+        except Exception as e:
+            logger.warning(f"CoinGecko validation failed for cleaned token {clean_token}: {e}")
+        
+        if chain_id:
+            try:
+                moralis_valid = await _validate_with_moralis(clean_token, chain_id)
+                if moralis_valid:
+                    logger.info(f"Cleaned token {clean_token} validated by Moralis")
+                    _add_to_cache(token_id, chain_id, True)
+                    return True
+            except Exception as e:
+                logger.warning(f"Moralis validation failed for cleaned token {clean_token}: {e}")
+    
+    # For tokens with $ prefix that aren't in our well-known list, we'll be permissive
+    # This allows users to swap new or less common tokens
+    if token_id.startswith('$'):
+        clean_token = token_id[1:]
+        logger.info(f"Permissively allowing $ prefixed token: {token_id} -> {clean_token}")
+        _add_to_cache(token_id, chain_id, True)
+        return True
+    
+    # If we reach here, token is not valid by our standards
+    # But we'll log a warning rather than completely blocking it
+    logger.warning(f"Token {token_id} could not be validated through standard methods")
     _add_to_cache(token_id, chain_id, False)
     return False
 

@@ -11,4 +11,8 @@ dowse==0.1.6.post1
 emp-agents>=0.3.0,<0.4.0
 upstash-redis==1.2.0
 aiohttp==3.10.5
-requests==2.32.3 
+requests==2.32.3
+redis==5.0.1
+web3==6.15.1
+python-multipart==0.0.9
+loguru==0.7.2 

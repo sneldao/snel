@@ -5,6 +5,4 @@ __pycache__/
 .git/
 .env.local
 .venv/
-node_modules/
-tests/
-backup/ 
+node_modules/ 
