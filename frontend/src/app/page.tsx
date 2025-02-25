@@ -343,7 +343,7 @@ export default function Home() {
         timestamp: new Date().toLocaleTimeString(),
         isCommand: true,
         status: "success",
-        agentType: "default", // User messages are always attributed to the user, not an agent
+        agentType: "default", // User messages are always default
       },
     ]);
 
@@ -492,13 +492,11 @@ export default function Home() {
         {
           content: data.content,
           timestamp: new Date().toLocaleTimeString(),
-          isCommand: !isQuestion,
+          isCommand: false, // Bot responses are never commands
           pendingCommand: data.pending_command,
-          awaitingConfirmation: !isQuestion && data.pending_command,
-          status: !isQuestion && data.pending_command ? "pending" : "success",
-          agentType:
-            data.agent_type ||
-            (data.pending_command?.startsWith("swap") ? "swap" : "default"),
+          awaitingConfirmation: data.pending_command,
+          status: data.pending_command ? "pending" : "success",
+          agentType: data.agent_type || "default", // Use the agent_type from the response
           metadata: data.metadata,
         },
       ]);
@@ -514,7 +512,7 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
           status: "error",
-          agentType: "swap",
+          agentType: "default", // Use default agent (SNEL) for general errors
         },
       ]);
 

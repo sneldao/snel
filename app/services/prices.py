@@ -1,18 +1,26 @@
 import os
 import logging
 import httpx
+import json
 from fastapi import HTTPException
-from typing import Optional, Dict, Tuple, Set, Any
+from typing import Optional, Dict, Tuple, Set, Any, List
 import re
 from datetime import datetime, timedelta
 import asyncio
 from eth_utils import is_address, to_checksum_address
+from app.config.chains import TOKEN_ADDRESSES
+from app.services.token_service import TokenService
 
 logger = logging.getLogger(__name__)
 
 MORALIS_API_KEY = os.environ.get("MORALIS_API_KEY")
 if not MORALIS_API_KEY:
     raise ValueError("MORALIS_API_KEY environment variable is required")
+
+# Check if SSL verification should be disabled (for development only)
+DISABLE_SSL_VERIFY = os.environ.get("DISABLE_SSL_VERIFY", "").lower() == "true"
+if DISABLE_SSL_VERIFY:
+    logger.warning("SSL certificate verification is disabled in prices.py. This should only be used in development.")
 
 # Cache for validated tokens to reduce API calls
 # Structure: {(token_id, chain_id): (timestamp, is_valid)}
@@ -73,7 +81,7 @@ async def get_token_metadata(token_address: str, chain_id: Optional[int] = None)
             logger.warning(f"Unsupported chain ID for Moralis: {chain_id}")
             return None
             
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
             response = await client.get(
                 f"https://deep-index.moralis.io/api/v2.2/erc20/metadata",
                 params={
@@ -100,7 +108,7 @@ async def get_token_metadata(token_address: str, chain_id: Optional[int] = None)
         
     # Fallback to CoinGecko
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
             response = await client.get(
                 f"https://api.coingecko.com/api/v3/coins/ethereum/contract/{token_address}"
             )
@@ -142,7 +150,7 @@ async def get_token_price_moralis(token_address: str, chain_id: int) -> float:
     params = {"chain": chain}
     
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
             response = await client.get(
                 url,
                 params=params,
@@ -194,7 +202,7 @@ async def get_token_price_coingecko(token_id: str) -> float:
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
     
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
             response = await client.get(
                 url,
                 headers={
@@ -369,7 +377,7 @@ async def _validate_with_coingecko(token_id: str) -> bool:
             url = f"https://api.coingecko.com/api/v3/search"
             params = {"query": variation}
             
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
                 response = await client.get(
                     url,
                     params=params,
@@ -424,7 +432,7 @@ async def _validate_with_moralis(token_id: str, chain_id: int) -> bool:
             "symbols": [token_id.upper()]
         }
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=not DISABLE_SSL_VERIFY) as client:
             response = await client.get(
                 url,
                 params=params,

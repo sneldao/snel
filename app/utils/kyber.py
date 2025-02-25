@@ -18,6 +18,11 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 logger.propagate = False  # Prevent propagation to root logger
 
+# Check if SSL verification should be disabled (for development only)
+DISABLE_SSL_VERIFY = os.environ.get("DISABLE_SSL_VERIFY", "").lower() == "true"
+if DISABLE_SSL_VERIFY:
+    logger.warning("SSL certificate verification is disabled. This should only be used in development.")
+
 class KyberSwapError(Exception):
     """Base exception for KyberSwap errors"""
     pass
@@ -75,6 +80,7 @@ async def get_quote(
     amount: int,
     chain_id: int,
     recipient: HexAddress,
+    token_in_decimals: int = 18,  # Default to 18 decimals for most tokens
 ) -> KyberQuote:
     """Get a swap quote from KyberSwap using APIv1."""
     try:
@@ -88,13 +94,27 @@ async def get_quote(
             token_out.lower() == "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dc7cc"
         )
         
+        # Convert amount to the smallest token unit based on decimals
+        # ETH placeholder address used for native tokens
+        if token_in.lower() == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
+            # For ETH, always use 18 decimals
+            decimals = 18
+        else:
+            # For other tokens, use the provided decimals
+            decimals = token_in_decimals
+            
+        # Convert the amount to the smallest unit
+        amount_in_smallest_unit = int(amount * 10**decimals)
+        logger.info(f"Converting amount {amount} to smallest unit with {decimals} decimals: {amount_in_smallest_unit}")
+        amount_str = str(amount_in_smallest_unit)
+        
         # Step 1: Get route using APIv1
         route_url = f"https://aggregator-api.kyberswap.com/{chain_name}/api/v1/routes"
         
         route_params = {
             "tokenIn": token_in,
             "tokenOut": token_out,
-            "amountIn": str(amount),
+            "amountIn": amount_str,
             "saveGas": "0",
             "gasInclude": "1"
         }
@@ -108,7 +128,7 @@ async def get_quote(
         logger.info(f"Requesting route from KyberSwap API: {route_url}")
         logger.info(f"Route params: {route_params}")
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=not DISABLE_SSL_VERIFY) as client:
             route_response = await client.get(route_url, params=route_params, headers=headers)
             logger.info(f"KyberSwap route API response status: {route_response.status_code}")
             
@@ -246,7 +266,7 @@ def get_kyber_quote(
     }
     
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=30.0, verify=not DISABLE_SSL_VERIFY) as client:
             response = client.get(
                 url,
                 params=params,
@@ -315,7 +335,7 @@ def build_kyber_transaction(
         body["deadline"] = deadline
     
     try:
-        with httpx.Client(timeout=30.0) as client:
+        with httpx.Client(timeout=30.0, verify=not DISABLE_SSL_VERIFY) as client:
             response = client.post(
                 url,
                 json=body,

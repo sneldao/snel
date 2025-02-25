@@ -9,6 +9,16 @@ from eth_utils import is_address, to_checksum_address
 
 logger = logging.getLogger(__name__)
 
+# Token decimals mapping
+TOKEN_DECIMALS = {
+    "ETH": 18,
+    "WETH": 18,
+    "USDC": 6,
+    "USDT": 6,
+    "DAI": 18,
+    "NURI": 18,  # Adding NURI token with default 18 decimals
+}
+
 # Token aliases mapping
 TOKEN_ALIASES = {
     # Common aliases
@@ -178,14 +188,14 @@ class TokenService:
             if (checksum_address, chain_id) in CONTRACT_CACHE:
                 symbol, name = CONTRACT_CACHE[(checksum_address, chain_id)]
                 logger.info(f"Found cached contract info: {checksum_address} -> {symbol} ({name})")
-                return checksum_address, symbol, name, {"verified": True, "source": "cache"}
+                return checksum_address, symbol, name, {"verified": True, "source": "cache", "decimals": TOKEN_DECIMALS.get(symbol, 18)}
             
             # Look up the token metadata to get the symbol
             metadata = await self._get_token_metadata_by_address(checksum_address, chain_id)
             if metadata:
                 symbol = metadata.get("symbol", "").upper()
                 name = metadata.get("name", "Unknown Token")
-                decimals = metadata.get("decimals")
+                decimals = metadata.get("decimals", 18)  # Default to 18 decimals if not provided
                 # Cache the result
                 CONTRACT_CACHE[(checksum_address, chain_id)] = (symbol, name)
                 logger.info(f"Found token metadata for {checksum_address}: {symbol} ({name})")
@@ -206,6 +216,7 @@ class TokenService:
             return checksum_address, None, None, {
                 "verified": False,
                 "source": "address_only",
+                "decimals": 18,  # Default to 18 decimals
                 "warning": "This token address could not be verified. Please ensure it is the correct contract address."
             }
         
@@ -259,7 +270,7 @@ class TokenService:
             return address, symbol, name, {
                 "verified": True,
                 "source": "moralis",
-                "decimals": None,  # We don't get decimals from this API call
+                "decimals": TOKEN_DECIMALS.get(symbol, 18),  # Default to 18 decimals
                 "warning": None
             }
         
@@ -271,7 +282,7 @@ class TokenService:
             return address, symbol, name, {
                 "verified": True,
                 "source": "quicknode",
-                "decimals": None,  # We don't get decimals from this API call
+                "decimals": TOKEN_DECIMALS.get(symbol, 18),  # Default to 18 decimals
                 "warning": None
             }
             
@@ -283,7 +294,7 @@ class TokenService:
             return address, symbol, name, {
                 "verified": True,
                 "source": "coingecko",
-                "decimals": None,
+                "decimals": TOKEN_DECIMALS.get(symbol, 18),  # Default to 18 decimals
                 "warning": None
             }
             
@@ -317,7 +328,7 @@ class TokenService:
                 return address, symbol, name, {
                     "verified": True,
                     "source": "moralis",
-                    "decimals": None,
+                    "decimals": TOKEN_DECIMALS.get(symbol, 18),
                     "warning": None
                 }
             
@@ -328,7 +339,7 @@ class TokenService:
                 return address, symbol, name, {
                     "verified": True,
                     "source": "quicknode",
-                    "decimals": None,
+                    "decimals": TOKEN_DECIMALS.get(symbol, 18),
                     "warning": None
                 }
                 
@@ -339,7 +350,7 @@ class TokenService:
                 return address, symbol, name, {
                     "verified": True,
                     "source": "coingecko",
-                    "decimals": None,
+                    "decimals": TOKEN_DECIMALS.get(symbol, 18),
                     "warning": None
                 }
         
@@ -357,7 +368,7 @@ class TokenService:
                 return address, symbol, name, {
                     "verified": True,
                     "source": "moralis_name_search",
-                    "decimals": None,
+                    "decimals": TOKEN_DECIMALS.get(symbol, 18),
                     "warning": None
                 }
             

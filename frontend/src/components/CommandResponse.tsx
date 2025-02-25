@@ -366,8 +366,19 @@ export const CommandResponse = ({
       borderRadius="lg"
       p={{ base: 2, sm: 4 }}
       position="relative"
+      borderWidth="1px"
+      shadow="sm"
+      borderColor={
+        isError
+          ? "red.200"
+          : needsConfirmation
+          ? "orange.200"
+          : isSuccess
+          ? "green.200"
+          : undefined
+      }
     >
-      <HStack align="start" spacing={4} w="full">
+      <HStack align="start" spacing={{ base: 2, sm: 3 }}>
         <Avatar
           size={{ base: "xs", sm: "sm" }}
           name={isCommand ? "You" : name}

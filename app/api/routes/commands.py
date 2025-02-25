@@ -134,6 +134,10 @@ async def process_command(
             # For non-pending commands, set agent type based on content
             response.agent_type = "swap" if is_swap_related else "default"
             
+        # For initial greetings, always use SNEL
+        if content in ["gm", "hello", "hi", "hey", "good morning", "good afternoon", "good evening"]:
+            response.agent_type = "default"
+            
         return response
             
     except Exception as e:
