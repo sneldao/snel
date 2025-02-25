@@ -45,16 +45,26 @@ logger = logging.getLogger(__name__)
 
 def parse_redis_url(url):
     """Parse Redis URL to get Upstash REST URL and token."""
+    if not url or not isinstance(url, str):
+        raise ValueError(f"Invalid Redis URL: {url}. Expected a string URL, got {type(url)}")
+        
     parsed = urlparse(url)
     hostname = parsed.hostname
+    
+    if not hostname:
+        raise ValueError(f"Invalid Redis URL: {url}. Could not parse hostname.")
     
     # Handle both URL formats (redis:// and https://)
     if url.startswith('redis://') or url.startswith('rediss://'):
         rest_url = f"https://{hostname}"
         token = parsed.password
+        if not token:
+            raise ValueError(f"Invalid Redis URL: {url}. No password/token found.")
     else:
         rest_url = url
         token = os.environ.get("UPSTASH_REDIS_TOKEN") or parsed.password
+        if not token:
+            raise ValueError(f"Invalid Redis URL: {url}. No UPSTASH_REDIS_TOKEN environment variable or password in URL.")
     
     logger.info(f"Parsed Redis URL: {rest_url} (hostname: {hostname})")
     return rest_url, token
@@ -63,22 +73,31 @@ class RedisPendingCommandStore:
     """Store pending commands in Redis."""
     def __init__(self):
         # Check for either Redis URL format
-        if not (os.getenv("REDIS_URL") or (os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN"))):
-            raise ValueError("Either REDIS_URL or both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required")
+        redis_url = os.getenv("REDIS_URL")
+        upstash_url = os.getenv("UPSTASH_REDIS_REST_URL")
+        upstash_token = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+        
+        # Validate that we have valid connection parameters
+        if not ((redis_url and isinstance(redis_url, str)) or 
+                (upstash_url and upstash_token and isinstance(upstash_url, str) and isinstance(upstash_token, str))):
+            raise ValueError("Either REDIS_URL (as string) or both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (as strings) are required")
 
         # Initialize Redis client
-        if os.getenv("UPSTASH_REDIS_REST_URL") and os.getenv("UPSTASH_REDIS_REST_TOKEN"):
+        if upstash_url and upstash_token and isinstance(upstash_url, str) and isinstance(upstash_token, str):
             self._redis = Redis(
-                url=os.getenv("UPSTASH_REDIS_REST_URL"),
-                token=os.getenv("UPSTASH_REDIS_REST_TOKEN")
+                url=upstash_url,
+                token=upstash_token
             )
-        else:
+        elif redis_url and isinstance(redis_url, str):
             # Parse Redis URL for Upstash REST format
             from urllib.parse import urlparse
-            parsed = urlparse(os.getenv("REDIS_URL"))
+            parsed = urlparse(redis_url)
             rest_url = f"https://{parsed.hostname}"
             token = parsed.password
             self._redis = Redis(url=rest_url, token=token)
+        else:
+            # This should never happen due to the validation above
+            raise ValueError("No valid Redis connection parameters found")
 
         self._ttl = 1800  # 30 minutes
 
@@ -86,39 +105,39 @@ class RedisPendingCommandStore:
         """Create a Redis key for a user's pending command."""
         return f"pending_command:{user_id}"
 
-    async def store_command(self, user_id: str, command: str, chain_id: int) -> None:
+    def store_command(self, user_id: str, command: str, chain_id: int) -> None:
         """Store a pending command for a user."""
         key = self._make_key(user_id)
-        await self._redis.set(
+        self._redis.set(
             key,
             json.dumps({
                 "command": command,
                 "chain_id": chain_id,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.datetime.now().isoformat()
             }),
             ex=self._ttl
         )
 
-    async def get_command(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_command(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a pending command for a user."""
         key = self._make_key(user_id)
-        value = await self._redis.get(key)
+        value = self._redis.get(key)
         if value:
             return json.loads(value)
         return None
 
-    async def clear_command(self, user_id: str) -> None:
+    def clear_command(self, user_id: str) -> None:
         """Clear a pending command for a user."""
         key = self._make_key(user_id)
-        await self._redis.delete(key)
+        self._redis.delete(key)
 
-    async def list_all_commands(self) -> List[Dict[str, Any]]:
+    def list_all_commands(self) -> List[Dict[str, Any]]:
         """List all pending commands."""
-        keys = await self._redis.keys("pending_command:*")
+        keys = self._redis.keys("pending_command:*")
         if not keys:
             return []
         
-        values = await self._redis.mget(*keys)
+        values = self._redis.mget(*keys)
         commands = []
         for key, value in zip(keys, values):
             if value:
@@ -223,18 +242,18 @@ async def startup_event():
         test_command = "test_command"
         
         # Store test command
-        await command_store.store_command(test_user_id, test_command, chain_id=1)  # Use chain_id=1 for testing
+        command_store.store_command(test_user_id, test_command, chain_id=1)  # Use chain_id=1 for testing
         logger.info("Test command stored successfully")
         
         # Retrieve test command
-        stored_command = await command_store.get_command(test_user_id)
+        stored_command = command_store.get_command(test_user_id)
         if stored_command and stored_command["command"] == test_command:
             logger.info("Test command retrieved successfully")
         else:
             logger.error("Test command retrieval failed")
             
         # Clear test command
-        await command_store.clear_command(test_user_id)
+        command_store.clear_command(test_user_id)
         logger.info("Test command cleared successfully")
         
     except Exception as e:
@@ -271,7 +290,7 @@ async def process_command(
         content = command_request.content.lower().strip()
         if content in ["yes", "y", "confirm"]:
             # List all commands for debugging
-            all_keys = await command_store.list_all_commands()
+            all_keys = command_store.list_all_commands()
             logger.info(f"All pending command keys: {all_keys}")
             
             # Get pending command
@@ -281,10 +300,10 @@ async def process_command(
                 logger.info(f"Looking up command with key: {key}")
                 
                 # Get raw data first
-                raw_data = await command_store._redis.get(key)
+                raw_data = command_store._redis.get(key)
                 logger.info(f"Raw Redis data: {raw_data}")
                 
-                pending_data = await command_store.get_command(user_id)
+                pending_data = command_store.get_command(user_id)
                 logger.info(f"Parsed pending data: {pending_data}")
                 
                 if not pending_data:
@@ -317,7 +336,7 @@ async def process_command(
                         )
                         
                         # Clear the command only after successful creation of tx request
-                        await command_store.clear_command(user_id)
+                        command_store.clear_command(user_id)
                         
                         # Return success response
                         return CommandResponse(
@@ -362,14 +381,14 @@ async def process_command(
         # Store pending command if one was generated
         if bot_message.metadata and "pending_command" in bot_message.metadata:
             logger.info(f"Storing pending command for user {user_id}: {bot_message.metadata['pending_command']}")
-            await command_store.store_command(
+            command_store.store_command(
                 user_id,
                 bot_message.metadata["pending_command"],
                 command_request.chain_id
             )
             
             # Verify storage immediately
-            stored = await command_store.get_command(user_id)
+            stored = command_store.get_command(user_id)
             if not stored:
                 logger.error(f"Failed to verify command storage for user {user_id}")
                 raise RuntimeError("Failed to store command")
@@ -639,18 +658,24 @@ async def health_check():
         try:
             # Test basic Redis operations
             test_key = "health_check_test"
-            await command_store._redis.set(test_key, "test")
-            await command_store._redis.delete(test_key)
-            redis_status = "connected"
+            # Check if Redis is properly initialized
+            if hasattr(command_store, '_redis') and command_store._redis is not None:
+                command_store._redis.set(test_key, "test")
+                command_store._redis.delete(test_key)
+                redis_status = "connected"
+            else:
+                redis_status = "error"
+                redis_error = "Redis client not properly initialized"
         except Exception as e:
             redis_status = "error"
             redis_error = str(e)
+            logger.error(f"Redis health check failed: {e}")
 
         # Check if required environment variables are set
         env_vars = {
-            "REDIS_URL": bool(os.environ.get("REDIS_URL")),
-            "UPSTASH_REDIS_REST_URL": bool(os.environ.get("UPSTASH_REDIS_REST_URL")),
-            "UPSTASH_REDIS_REST_TOKEN": bool(os.environ.get("UPSTASH_REDIS_REST_TOKEN")),
+            "REDIS_URL": os.environ.get("REDIS_URL") and isinstance(os.environ.get("REDIS_URL"), str),
+            "UPSTASH_REDIS_REST_URL": os.environ.get("UPSTASH_REDIS_REST_URL") and isinstance(os.environ.get("UPSTASH_REDIS_REST_URL"), str),
+            "UPSTASH_REDIS_REST_TOKEN": os.environ.get("UPSTASH_REDIS_REST_TOKEN") and isinstance(os.environ.get("UPSTASH_REDIS_REST_TOKEN"), str),
             "MORALIS_API_KEY": bool(os.environ.get("MORALIS_API_KEY")),
             "ALCHEMY_KEY": bool(os.environ.get("ALCHEMY_KEY")),
             "COINGECKO_API_KEY": bool(os.environ.get("COINGECKO_API_KEY")),
