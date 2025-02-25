@@ -5,7 +5,7 @@ This file should be imported before any other Dowse imports.
 
 import logging
 import os
-import sys
+import sys as system_module  # Rename to avoid shadowing
 from pathlib import Path
 
 def patch_dowse_logger():
@@ -23,7 +23,7 @@ def patch_dowse_logger():
             logger.removeHandler(handler)
     
     # Add stdout handler
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(system_module.stdout)
     handler.setFormatter(
         logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
@@ -41,11 +41,19 @@ def patch_dowse_logger():
     
     # Monkey patch the dowse.logger module to use our logger
     try:
+        # Import dowse here to avoid circular imports
         import dowse
-        sys.modules["dowse.logger"] = type("LoggerModule", (), {"logger": logger})
         
-        # Also patch the logger in the dowse module itself
-        dowse.logger = logger
+        # Create a fake module to replace dowse.logger
+        class LoggerModule:
+            logger = logger
+        
+        # Replace the module in sys.modules
+        system_module.modules["dowse.logger"] = LoggerModule()
+        
+        # Also patch the logger in the dowse module itself if it exists
+        if hasattr(dowse, "logger"):
+            dowse.logger = logger
     except ImportError:
         # Dowse not installed yet, which is fine
         pass
