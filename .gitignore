@@ -56,6 +56,9 @@ scratch.py
 docs/site/*
 scratch*.py
 
+# SSL certificates
+cacert.pem
+
 # Frontend / Next.js
 node_modules/
 frontend/node_modules/

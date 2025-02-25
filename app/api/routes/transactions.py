@@ -20,6 +20,14 @@ TOKEN_DECIMALS = {
     "USDC": 6,
     "USDT": 6,
     "DAI": 18,
+    "NURI": 18,  # Adding NURI token with default 18 decimals
+}
+
+# Special token addresses that we know about but might not be in the main config
+SPECIAL_TOKEN_ADDRESSES = {
+    534352: {  # Scroll
+        "NURI": "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc",
+    }
 }
 
 async def parse_swap_command(
@@ -285,6 +293,15 @@ async def execute_transaction(
             if swap_command.token_out == "ETH":
                 token_out = token_addresses["ETH"]  # Use WETH address
             
+            # Check for special tokens in our hardcoded list
+            if not is_address(token_in) and swap_command.token_in.upper() in SPECIAL_TOKEN_ADDRESSES.get(tx_request.chain_id, {}):
+                token_in = SPECIAL_TOKEN_ADDRESSES[tx_request.chain_id][swap_command.token_in.upper()]
+                logger.info(f"Using special token address for {swap_command.token_in}: {token_in}")
+                
+            if not is_address(token_out) and swap_command.token_out.upper() in SPECIAL_TOKEN_ADDRESSES.get(tx_request.chain_id, {}):
+                token_out = SPECIAL_TOKEN_ADDRESSES[tx_request.chain_id][swap_command.token_out.upper()]
+                logger.info(f"Using special token address for {swap_command.token_out}: {token_out}")
+            
             # Verify that we have valid contract addresses for both tokens
             if not is_address(token_in) and token_in != "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE":
                 raise ValueError(
@@ -298,17 +315,29 @@ async def execute_transaction(
                 # they want to use this token (by responding 'yes' to the confirmation prompt),
                 # we'll show a more specific error message
                 if swap_command.token_out.startswith('$') and is_post_approval:
-                    raise ValueError(
-                        f"Cannot proceed with swap to {swap_command.token_out}. "
-                        "This token requires a contract address. Please try again with the token's contract address. "
-                        "For example: 'swap ETH for 0x1234...abcd'"
-                    )
+                    # For NURI token on Scroll, provide the contract address
+                    if swap_command.token_out.upper() == "$NURI" and tx_request.chain_id == 534352:
+                        nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
+                        logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
+                        token_out = nuri_address
+                    else:
+                        raise ValueError(
+                            f"Cannot proceed with swap to {swap_command.token_out}. "
+                            "This token requires a contract address. Please try again with the token's contract address. "
+                            "For example: 'swap ETH for 0x1234...abcd'"
+                        )
                 else:
-                    raise ValueError(
-                        f"Could not find contract address for token {swap_command.token_out}. "
-                        "Please use a valid contract address directly in your swap command. "
-                        "For example: 'swap ETH for 0x1234...abcd'"
-                    )
+                    # For NURI token on Scroll, provide the contract address
+                    if swap_command.token_out.upper() in ["NURI", "$NURI"] and tx_request.chain_id == 534352:
+                        nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
+                        logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
+                        token_out = nuri_address
+                    else:
+                        raise ValueError(
+                            f"Could not find contract address for token {swap_command.token_out}. "
+                            "Please use a valid contract address directly in your swap command. "
+                            "For example: 'swap ETH for 0x1234...abcd'"
+                        )
             
             logger.info(f"Preparing Kyber quote with token_in: {token_in}, token_out: {token_out}")
             

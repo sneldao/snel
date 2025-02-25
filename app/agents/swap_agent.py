@@ -2,13 +2,20 @@ from typing import Optional, Dict, Any
 import logging
 import json
 from pydantic import Field
-from emp_agents.providers import OpenAIProvider
+from emp_agents import OpenAIProvider
 from app.agents.base import PointlessAgent
 from app.services.token_service import TokenService
 from app.services.prices import get_token_price
 from eth_utils import is_address
 
 logger = logging.getLogger(__name__)
+
+# Special token addresses that we know about but might not be in the main config
+SPECIAL_TOKEN_ADDRESSES = {
+    534352: {  # Scroll
+        "NURI": "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc",
+    }
+}
 
 class SwapAgent(PointlessAgent):
     """Agent for handling token swaps."""
@@ -77,17 +84,35 @@ class SwapAgent(PointlessAgent):
                     }
                 
                 token_out_address, token_out_symbol, token_out_name = await self.token_service.lookup_token(token_out, chain_id)
+                
+                # Special case for NURI token on Scroll
+                if (not token_out_symbol and not token_out_address) and token_out.upper() in ["NURI", "$NURI"] and chain_id == 534352:
+                    token_out_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
+                    token_out_symbol = "NURI"
+                    token_out_name = "NURI Token"
+                    logger.info(f"Using hardcoded address for NURI token on Scroll: {token_out_address}")
+                
                 if not token_out_symbol and not token_out_address:
                     # For tokens with $ prefix, we'll allow them even without an address
                     if token_out.startswith('$'):
                         logger.warning(f"Token {token_out} not found, but allowing it as a special token")
                         token_out_symbol = token_out.lstrip('$')
-                        warning_msg = (
-                            f"⚠️ Warning: The token '{token_out}' could not be verified. "
-                            "To proceed with the swap, please provide the contract address directly. "
-                            "For example: 'swap ETH for 0x1234...abcd'. "
-                            "You can find contract addresses on sites like Etherscan, CoinGecko, or the token's official website."
-                        )
+                        
+                        # Check if it's in our special token addresses
+                        if token_out_symbol.upper() in SPECIAL_TOKEN_ADDRESSES.get(chain_id, {}):
+                            token_out_address = SPECIAL_TOKEN_ADDRESSES[chain_id][token_out_symbol.upper()]
+                            logger.info(f"Found special token address for {token_out_symbol}: {token_out_address}")
+                            warning_msg = (
+                                f"I found the contract address for {token_out}. "
+                                "I'll use this address for the swap."
+                            )
+                        else:
+                            warning_msg = (
+                                f"⚠️ Warning: The token '{token_out}' could not be verified. "
+                                "To proceed with the swap, please provide the contract address directly. "
+                                "For example: 'swap ETH for 0x1234...abcd'. "
+                                "You can find contract addresses on sites like Etherscan, CoinGecko, or the token's official website."
+                            )
                     else:
                         error_msg = (
                             f"The token '{token_out}' is not recognized as a valid cryptocurrency or contract address. "

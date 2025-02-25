@@ -57,6 +57,7 @@ TOKEN_ADDRESSES: Dict[int, Dict[str, HexAddress]] = {
         "USDC": HexAddress("0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"),
         "UNI": HexAddress("0x0000000000000000000000000000000000000000"),
         "SCR": HexAddress("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"),  # Scroll token
+        "NURI": HexAddress("0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"),  # NURI token
     }
 }
 
