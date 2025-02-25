@@ -103,28 +103,73 @@ class RedisPendingCommandStore:
 
     def _make_key(self, user_id: str) -> str:
         """Create a Redis key for a user's pending command."""
-        return f"pending_command:{user_id}"
+        # Ensure consistent formatting of user_id
+        if user_id.startswith("0x"):
+            # For Ethereum addresses, always use lowercase to ensure consistency
+            normalized_id = user_id.lower()
+        else:
+            # For other IDs, also use lowercase for consistency
+            normalized_id = user_id.lower()
+            
+        logger.info(f"Normalized user ID from {user_id} to {normalized_id}")
+        return f"pending_command:{normalized_id}"
 
     def store_command(self, user_id: str, command: str, chain_id: int) -> None:
         """Store a pending command for a user."""
         key = self._make_key(user_id)
-        self._redis.set(
-            key,
-            json.dumps({
-                "command": command,
-                "chain_id": chain_id,
-                "timestamp": datetime.datetime.now().isoformat()
-            }),
-            ex=self._ttl
-        )
+        logger.info(f"Storing command with key: {key}, command: {command}, chain_id: {chain_id}")
+        
+        # Log all existing keys for debugging
+        try:
+            all_keys = self._redis.keys("pending_command:*")
+            logger.info(f"All existing keys before storing: {all_keys}")
+        except Exception as e:
+            logger.error(f"Error listing keys: {e}")
+        
+        try:
+            self._redis.set(
+                key,
+                json.dumps({
+                    "command": command,
+                    "chain_id": chain_id,
+                    "timestamp": datetime.datetime.now().isoformat()
+                }),
+                ex=self._ttl
+            )
+            logger.info(f"Command stored successfully for key: {key}")
+            
+            # Verify storage immediately
+            value = self._redis.get(key)
+            if value:
+                logger.info(f"Verified command storage: {value}")
+            else:
+                logger.error(f"Failed to verify command storage for key: {key}")
+        except Exception as e:
+            logger.error(f"Error storing command: {e}")
 
     def get_command(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a pending command for a user."""
         key = self._make_key(user_id)
-        value = self._redis.get(key)
-        if value:
-            return json.loads(value)
-        return None
+        logger.info(f"Getting command with key: {key}")
+        
+        # Log all existing keys for debugging
+        try:
+            all_keys = self._redis.keys("pending_command:*")
+            logger.info(f"All existing keys when retrieving: {all_keys}")
+        except Exception as e:
+            logger.error(f"Error listing keys: {e}")
+        
+        try:
+            value = self._redis.get(key)
+            if value:
+                logger.info(f"Found command for key {key}: {value}")
+                return json.loads(value)
+            else:
+                logger.info(f"No command found for key: {key}")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting command: {e}")
+            return None
 
     def clear_command(self, user_id: str) -> None:
         """Clear a pending command for a user."""
@@ -275,12 +320,24 @@ async def process_command(
         from eth_utils import to_checksum_address
         try:
             if command_request.creator_id.startswith("0x"):
-                user_id = to_checksum_address(command_request.creator_id)
+                # Store the original ID for logging
+                original_id = command_request.creator_id
+                
+                # For Redis operations, we'll use lowercase for consistency
+                user_id = command_request.creator_id.lower()
+                
+                # For display and other operations, we can use checksum
+                checksum_id = to_checksum_address(command_request.creator_id)
+                
+                logger.info(f"User ID normalization: Original: {original_id}, Lowercase: {user_id}, Checksum: {checksum_id}")
             else:
                 user_id = command_request.creator_id.lower()
+                logger.info(f"User ID normalized to lowercase: {user_id}")
         except ValueError:
             user_id = command_request.creator_id.lower()
+            logger.info(f"User ID normalized to lowercase (after ValueError): {user_id}")
             
+        # Update the request with normalized ID
         command_request.creator_id = user_id
         
         logger.info(f"Processing command: {command_request.content} on chain {command_request.chain_id}")
@@ -289,6 +346,8 @@ async def process_command(
         # Handle confirmations
         content = command_request.content.lower().strip()
         if content in ["yes", "y", "confirm"]:
+            logger.info(f"Confirmation received from user {user_id}")
+            
             # List all commands for debugging
             all_keys = command_store.list_all_commands()
             logger.info(f"All pending command keys: {all_keys}")
@@ -301,7 +360,24 @@ async def process_command(
                 
                 # Get raw data first
                 raw_data = command_store._redis.get(key)
-                logger.info(f"Raw Redis data: {raw_data}")
+                logger.info(f"Raw Redis data for key {key}: {raw_data}")
+                
+                # Try direct Redis get with different key formats for debugging
+                try:
+                    # Try with lowercase user ID
+                    lowercase_key = f"pending_command:{user_id.lower()}"
+                    if lowercase_key != key:
+                        lowercase_data = command_store._redis.get(lowercase_key)
+                        logger.info(f"Raw Redis data for lowercase key {lowercase_key}: {lowercase_data}")
+                    
+                    # Try with non-checksum address
+                    if user_id.startswith("0x"):
+                        non_checksum_key = f"pending_command:{user_id.lower()}"
+                        if non_checksum_key != key and non_checksum_key != lowercase_key:
+                            non_checksum_data = command_store._redis.get(non_checksum_key)
+                            logger.info(f"Raw Redis data for non-checksum key {non_checksum_key}: {non_checksum_data}")
+                except Exception as e:
+                    logger.error(f"Error checking alternative keys: {e}")
                 
                 pending_data = command_store.get_command(user_id)
                 logger.info(f"Parsed pending data: {pending_data}")
