@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import NextLink from "next/link";
 import {
   Box,
   Container,
@@ -14,7 +15,7 @@ import {
   AlertTitle,
   AlertDescription,
   HStack,
-  Link,
+  Link as ChakraLink,
   Button,
   Icon,
   Badge,

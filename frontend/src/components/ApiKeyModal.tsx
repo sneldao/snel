@@ -14,10 +14,12 @@ import {
   VStack,
   Text,
   useToast,
-  Link,
+  Link as ChakraLink,
   Alert,
   AlertIcon,
+  Box,
 } from "@chakra-ui/react";
+import NextLink from "next/link";
 
 type ApiKeyModalProps = {
   isOpen: boolean;
@@ -69,13 +71,13 @@ export const ApiKeyModal = ({ isOpen, onClose }: ApiKeyModalProps) => {
               />
               <Text fontSize="sm" color="gray.500" mt={1}>
                 Get your key from{" "}
-                <Link
+                <ChakraLink
                   href="https://platform.openai.com/api-keys"
                   isExternal
                   color="blue.500"
                 >
                   OpenAI Dashboard
-                </Link>
+                </ChakraLink>
               </Text>
             </FormControl>
 
@@ -83,6 +85,21 @@ export const ApiKeyModal = ({ isOpen, onClose }: ApiKeyModalProps) => {
               Your API key is stored securely in your browser's local storage.
               You can update or remove it at any time.
             </Text>
+
+            <Box mt={4} pt={4} borderTop="1px" borderColor="gray.200">
+              <Text fontSize="sm" color="gray.600">
+                By using this service, you agree to our{" "}
+                <ChakraLink
+                  as={NextLink}
+                  href="/terms"
+                  color="blue.500"
+                  onClick={onClose}
+                >
+                  terms & conditions
+                </ChakraLink>
+                .
+              </Text>
+            </Box>
           </VStack>
         </ModalBody>
 

@@ -18,9 +18,11 @@ import {
   ListItem,
   ListIcon,
   Badge,
+  Link,
 } from "@chakra-ui/react";
 import { InfoIcon, ChatIcon } from "@chakra-ui/icons";
 import { useAccount, useChainId } from "wagmi";
+import NextLink from "next/link";
 
 type CommandInputProps = {
   onSubmit: (command: string) => Promise<void>;
@@ -208,6 +210,14 @@ export const CommandInput = ({
                 Send
               </Button>
             </HStack>
+            <Text fontSize="xs" color="gray.500" textAlign="center">
+              By using Snel, you agree to our{" "}
+              <NextLink href="/terms" passHref>
+                <Link color="blue.500" textDecoration="underline">
+                  terms
+                </Link>
+              </NextLink>
+            </Text>
           </VStack>
         </HStack>
       </VStack>

@@ -1,4 +1,11 @@
-import { Box, Link, Text } from "@chakra-ui/react";
+import {
+  Box,
+  Link as ChakraLink,
+  Text,
+  HStack,
+  Divider,
+} from "@chakra-ui/react";
+import NextLink from "next/link";
 
 export const Footer = () => {
   return (
@@ -19,27 +26,38 @@ export const Footer = () => {
       backgroundColor="rgba(255, 255, 255, 0.9)"
       zIndex="banner"
     >
-      <Text>
-        <Link
-          href="https://hey.xyz/u/papajams"
-          isExternal
-          color="blue.500"
-          _hover={{ textDecoration: "none", color: "blue.600" }}
-        >
-          papa
-        </Link>
-        <Text as="span" mx={2} color="gray.400">
-          |
+      <HStack spacing={2} justify="center" wrap="wrap">
+        <Text>
+          <ChakraLink
+            href="https://hey.xyz/u/papajams"
+            isExternal
+            color="blue.500"
+            _hover={{ textDecoration: "none", color: "blue.600" }}
+          >
+            papa
+          </ChakraLink>
+          <Text as="span" mx={2} color="gray.400">
+            |
+          </Text>
+          <ChakraLink
+            href="https://hey.xyz/u/pointless"
+            isExternal
+            color="blue.500"
+            _hover={{ textDecoration: "none", color: "blue.600" }}
+          >
+            pointless
+          </ChakraLink>
         </Text>
-        <Link
-          href="https://hey.xyz/u/pointless"
-          isExternal
+        <Divider orientation="vertical" height="20px" />
+        <ChakraLink
+          as={NextLink}
+          href="/terms"
           color="blue.500"
           _hover={{ textDecoration: "none", color: "blue.600" }}
         >
-          pointless
-        </Link>
-      </Text>
+          terms
+        </ChakraLink>
+      </HStack>
     </Box>
   );
 };
