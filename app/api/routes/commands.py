@@ -50,6 +50,22 @@ async def process_command(
                 all_commands = command_store.list_all_commands()
                 logger.warning(f"No pending command found for user {user_id}. All pending commands: {all_commands}")
                 
+                # Try to find a command with a similar user ID (case-insensitive)
+                similar_command = None
+                for cmd in all_commands:
+                    if cmd.get("user_id", "").lower() == user_id.lower():
+                        similar_command = cmd
+                        logger.info(f"Found command with similar user ID: {similar_command}")
+                        break
+                
+                if similar_command:
+                    # Use the command with the similar user ID
+                    logger.info(f"Using command with similar user ID: {similar_command}")
+                    return CommandResponse(
+                        content=f"Great! I'll execute your swap. Please approve the transaction in your wallet.",
+                        pending_command=similar_command["command"]
+                    )
+                
                 return CommandResponse(
                     content="I don't have any pending commands to confirm. Please submit a new swap request.",
                     error_message="No pending command found"

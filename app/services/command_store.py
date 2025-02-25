@@ -76,6 +76,7 @@ class CommandStore:
                 return json.loads(value)
             else:
                 logger.info(f"No command found for key: {key}")
+                
                 # Debug: Try to find the command with a different case
                 for existing_key in all_keys:
                     if existing_key.lower() == key.lower():
@@ -83,6 +84,18 @@ class CommandStore:
                         if value:
                             logger.info(f"Found command with case-insensitive match for key {existing_key}: {value}")
                             return json.loads(value)
+                
+                # Fallback: Try to find a command by user ID prefix
+                user_id_part = user_id.lower()
+                for existing_key in all_keys:
+                    existing_user_id = existing_key.split(":", 1)[1].lower()
+                    if existing_user_id.startswith(user_id_part) or user_id_part.startswith(existing_user_id):
+                        logger.info(f"Found command with user ID prefix match: {existing_key}")
+                        value = self._redis.get(existing_key)
+                        if value:
+                            logger.info(f"Found command with user ID prefix match for key {existing_key}: {value}")
+                            return json.loads(value)
+                
                 return None
         except Exception as e:
             logger.error(f"Error getting command: {e}", exc_info=True)
@@ -100,14 +113,19 @@ class CommandStore:
         if not keys:
             return []
         
+        logger.info(f"Found {len(keys)} pending commands: {keys}")
+        
         values = self._redis.mget(*keys)
         commands = []
         for key, value in zip(keys, values):
             if value:
                 try:
                     command_data = json.loads(value)
-                    command_data["user_id"] = key.split(":", 1)[1]
+                    user_id = key.split(":", 1)[1]
+                    command_data["user_id"] = user_id
+                    command_data["key"] = key
                     commands.append(command_data)
+                    logger.info(f"Command for key {key}: {command_data}")
                 except Exception as e:
                     logger.error(f"Error parsing command data for key {key}: {e}")
         return commands 

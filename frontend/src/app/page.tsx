@@ -337,99 +337,18 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      const isConfirmation = /^(yes|confirm|no|cancel)$/i.test(command.trim());
+      // Always add the user's command to the responses
+      setResponses((prev) => [
+        ...prev,
+        {
+          content: command,
+          timestamp: new Date().toLocaleTimeString(),
+          isCommand: true,
+          status: "success",
+        },
+      ]);
 
-      if (isConfirmation) {
-        const pendingResponse = responses.find((r) => r.awaitingConfirmation);
-        if (!pendingResponse?.pendingCommand) {
-          throw new Error("No pending command found");
-        }
-
-        // Add confirmation response
-        setResponses((prev) => [
-          ...prev,
-          {
-            content: command,
-            timestamp: new Date().toLocaleTimeString(),
-            isCommand: true,
-            status: "success",
-          },
-        ]);
-
-        const shouldExecute = /^(yes|confirm)$/i.test(command.trim());
-        if (shouldExecute) {
-          try {
-            const response = await fetch(`/api/execute-transaction`, {
-              method: "POST",
-              headers: getApiHeaders(),
-              body: JSON.stringify({
-                command: pendingResponse.pendingCommand,
-                wallet_address: address,
-                chain_id: chainId,
-                creator_id: address ? address.toLowerCase() : "anonymous",
-              }),
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-              throw new Error(data.detail || "Failed to prepare transaction");
-            }
-
-            // Clear the pending command before executing the transaction
-            setResponses((prev) =>
-              prev.map((r) =>
-                r.awaitingConfirmation
-                  ? { ...r, awaitingConfirmation: false }
-                  : r
-              )
-            );
-
-            await executeTransaction({
-              to: data.to,
-              data: data.data,
-              value: data.value,
-              chainId: chainId,
-              method: data.method,
-              gasLimit: data.gas_limit,
-              gasPrice: data.gas_price,
-              maxFeePerGas: data.max_fee_per_gas,
-              maxPriorityFeePerGas: data.max_priority_fee_per_gas,
-              needs_approval: data.needs_approval,
-              token_to_approve: data.token_to_approve,
-              spender: data.spender,
-              pending_command: data.pending_command,
-            });
-          } catch (error) {
-            console.error("Transaction error:", error);
-            setResponses((prev) => [
-              ...prev,
-              {
-                content: `Transaction failed: ${
-                  error instanceof Error ? error.message : "Unknown error"
-                }`,
-                timestamp: new Date().toLocaleTimeString(),
-                isCommand: false,
-                status: "error",
-              },
-            ]);
-          }
-        } else {
-          // Handle cancellation
-          setResponses((prev) => [
-            ...prev.map((r) =>
-              r.awaitingConfirmation ? { ...r, awaitingConfirmation: false } : r
-            ),
-            {
-              content: "Transaction cancelled.",
-              timestamp: new Date().toLocaleTimeString(),
-              isCommand: false,
-              status: "error",
-            },
-          ]);
-        }
-        return;
-      }
-
+      // Always send the command to the backend, even if it's a confirmation
       const response = await fetch(`/api/process-command`, {
         method: "POST",
         headers: getApiHeaders(),
@@ -447,37 +366,101 @@ export default function Home() {
         throw new Error(data.detail || "Failed to process command");
       }
 
+      // If this is a confirmation and we have a pending command from the backend
+      if (data.pending_command && /^(yes|confirm)$/i.test(command.trim())) {
+        try {
+          // Clear any existing pending commands in the UI
+          setResponses((prev) =>
+            prev.map((r) =>
+              r.awaitingConfirmation ? { ...r, awaitingConfirmation: false } : r
+            )
+          );
+
+          // Execute the transaction
+          const txResponse = await fetch(`/api/execute-transaction`, {
+            method: "POST",
+            headers: getApiHeaders(),
+            body: JSON.stringify({
+              command: data.pending_command,
+              wallet_address: address,
+              chain_id: chainId,
+              creator_id: address ? address.toLowerCase() : "anonymous",
+            }),
+          });
+
+          const txData = await txResponse.json();
+          if (!txResponse.ok) {
+            throw new Error(txData.detail || "Failed to prepare transaction");
+          }
+
+          await executeTransaction({
+            to: txData.to,
+            data: txData.data,
+            value: txData.value,
+            chainId: chainId,
+            method: txData.method,
+            gasLimit: txData.gas_limit,
+            gasPrice: txData.gas_price,
+            maxFeePerGas: txData.max_fee_per_gas,
+            maxPriorityFeePerGas: txData.max_priority_fee_per_gas,
+            needs_approval: txData.needs_approval,
+            token_to_approve: txData.token_to_approve,
+            spender: txData.spender,
+            pending_command: txData.pending_command,
+          });
+        } catch (error) {
+          console.error("Transaction error:", error);
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: `Transaction failed: ${
+                error instanceof Error ? error.message : "Unknown error"
+              }`,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "error",
+            },
+          ]);
+        }
+        return;
+      }
+      // If this is a cancellation
+      else if (/^(no|cancel)$/i.test(command.trim())) {
+        // Clear any existing pending commands in the UI
+        setResponses((prev) => [
+          ...prev.map((r) =>
+            r.awaitingConfirmation ? { ...r, awaitingConfirmation: false } : r
+          ),
+          {
+            content: data.content || "Transaction cancelled.",
+            timestamp: new Date().toLocaleTimeString(),
+            isCommand: false,
+            status: "success",
+          },
+        ]);
+        return;
+      }
+
       const isQuestion =
         command.toLowerCase().startsWith("what") ||
         command.toLowerCase().startsWith("how");
 
+      // Add the bot's response
       setResponses((prev) => [
         ...prev,
-        {
-          content: command,
-          timestamp: new Date().toLocaleTimeString(),
-          isCommand: true,
-          status: "success",
-        },
         {
           content: data.content,
           timestamp: new Date().toLocaleTimeString(),
           isCommand: !isQuestion,
           pendingCommand: data.pending_command,
-          awaitingConfirmation: !isQuestion && data.content !== "None",
-          status: !isQuestion ? "pending" : "success",
+          awaitingConfirmation: !isQuestion && data.pending_command,
+          status: !isQuestion && data.pending_command ? "pending" : "success",
         },
       ]);
     } catch (error) {
       console.error("Error:", error);
       setResponses((prev) => [
         ...prev,
-        {
-          content: command,
-          timestamp: new Date().toLocaleTimeString(),
-          isCommand: true,
-          status: "error",
-        },
         {
           content:
             error instanceof Error
