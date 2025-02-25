@@ -149,16 +149,25 @@ class TokenService:
             # Use default SSL context
             return None
     
-    async def lookup_token(self, token_symbol: str, chain_id: int) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    async def lookup_token(self, token_symbol: str, chain_id: int) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[Dict]]:
         """
-        Look up a token by symbol or alias and return its address, canonical symbol, and name.
+        Look up a token by symbol or alias and return its address, canonical symbol, name, and additional metadata.
         
         Args:
             token_symbol: The token symbol, alias, or contract address to look up
             chain_id: The chain ID to look up the token on
             
         Returns:
-            Tuple of (token_address, canonical_symbol, token_name) or (None, None, None) if not found
+            Tuple of (token_address, canonical_symbol, token_name, metadata) or (None, None, None, None) if not found
+            metadata is a dictionary containing additional information about the token:
+            {
+                "verified": bool,  # Whether the token is verified
+                "source": str,     # Where the token info was found (e.g., "predefined", "moralis", "quicknode", "coingecko")
+                "decimals": int,   # Token decimals if available
+                "logo_url": str,   # URL to token logo if available
+                "description": str, # Token description if available
+                "warning": str,    # Warning message if any
+            }
         """
         # Check if it's a contract address first
         if is_address(token_symbol):
@@ -169,20 +178,36 @@ class TokenService:
             if (checksum_address, chain_id) in CONTRACT_CACHE:
                 symbol, name = CONTRACT_CACHE[(checksum_address, chain_id)]
                 logger.info(f"Found cached contract info: {checksum_address} -> {symbol} ({name})")
-                return checksum_address, symbol, name
+                return checksum_address, symbol, name, {"verified": True, "source": "cache"}
             
             # Look up the token metadata to get the symbol
             metadata = await self._get_token_metadata_by_address(checksum_address, chain_id)
             if metadata:
                 symbol = metadata.get("symbol", "").upper()
                 name = metadata.get("name", "Unknown Token")
+                decimals = metadata.get("decimals")
                 # Cache the result
                 CONTRACT_CACHE[(checksum_address, chain_id)] = (symbol, name)
                 logger.info(f"Found token metadata for {checksum_address}: {symbol} ({name})")
-                return checksum_address, symbol, name
+                
+                # Create metadata dictionary
+                token_metadata = {
+                    "verified": True,
+                    "source": "api",
+                    "decimals": decimals,
+                    "logo_url": None,
+                    "description": None,
+                    "warning": None
+                }
+                
+                return checksum_address, symbol, name, token_metadata
             
-            # If we couldn't get metadata, just return the address
-            return checksum_address, None, None
+            # If we couldn't get metadata, just return the address with a warning
+            return checksum_address, None, None, {
+                "verified": False,
+                "source": "address_only",
+                "warning": "This token address could not be verified. Please ensure it is the correct contract address."
+            }
         
         # Clean up the token symbol
         clean_symbol = token_symbol.upper().strip()
@@ -208,31 +233,59 @@ class TokenService:
         chain_tokens = TOKEN_ADDRESSES.get(chain_id, {})
         if clean_symbol in chain_tokens:
             logger.info(f"Found token {clean_symbol} in predefined addresses")
-            return chain_tokens[clean_symbol], clean_symbol, None
+            return chain_tokens[clean_symbol], clean_symbol, None, {
+                "verified": True,
+                "source": "predefined",
+                "decimals": TOKEN_DECIMALS.get(clean_symbol, 18),
+                "warning": None
+            }
         
         # Check if it's in our known token addresses
         if clean_symbol in KNOWN_TOKEN_ADDRESSES and chain_id in KNOWN_TOKEN_ADDRESSES[clean_symbol]:
             address = KNOWN_TOKEN_ADDRESSES[clean_symbol][chain_id]
             logger.info(f"Found token {clean_symbol} in known token addresses: {address}")
-            return address, clean_symbol, None
+            return address, clean_symbol, None, {
+                "verified": True,
+                "source": "known_addresses",
+                "decimals": TOKEN_DECIMALS.get(clean_symbol, 18),
+                "warning": None
+            }
         
         # Try Moralis API
         result = await self._lookup_token_moralis(clean_symbol, chain_id)
         if result[0]:
             logger.info(f"Found token {clean_symbol} via Moralis")
-            return result
+            address, symbol, name = result
+            return address, symbol, name, {
+                "verified": True,
+                "source": "moralis",
+                "decimals": None,  # We don't get decimals from this API call
+                "warning": None
+            }
         
         # Try QuickNode API
         result = await self._lookup_token_quicknode(clean_symbol, chain_id)
         if result[0]:
             logger.info(f"Found token {clean_symbol} via QuickNode")
-            return result
+            address, symbol, name = result
+            return address, symbol, name, {
+                "verified": True,
+                "source": "quicknode",
+                "decimals": None,  # We don't get decimals from this API call
+                "warning": None
+            }
             
         # Try CoinGecko as fallback
         result = await self._lookup_token_coingecko(clean_symbol)
         if result[0]:
             logger.info(f"Found token {clean_symbol} via CoinGecko")
-            return result
+            address, symbol, name = result
+            return address, symbol, name, {
+                "verified": True,
+                "source": "coingecko",
+                "decimals": None,
+                "warning": None
+            }
             
         # If we still haven't found it, try with a more aggressive cleaning
         # Remove all non-alphanumeric characters
@@ -249,23 +302,46 @@ class TokenService:
             # Check predefined addresses again
             if alphanumeric_symbol in chain_tokens:
                 logger.info(f"Found token {alphanumeric_symbol} in predefined addresses after aggressive cleaning")
-                return chain_tokens[alphanumeric_symbol], alphanumeric_symbol, None
+                return chain_tokens[alphanumeric_symbol], alphanumeric_symbol, None, {
+                    "verified": True,
+                    "source": "predefined",
+                    "decimals": TOKEN_DECIMALS.get(alphanumeric_symbol, 18),
+                    "warning": None
+                }
                 
             # Try Moralis, QuickNode, and CoinGecko again with cleaned symbol
             result = await self._lookup_token_moralis(alphanumeric_symbol, chain_id)
             if result[0]:
                 logger.info(f"Found token {alphanumeric_symbol} via Moralis after aggressive cleaning")
-                return result
+                address, symbol, name = result
+                return address, symbol, name, {
+                    "verified": True,
+                    "source": "moralis",
+                    "decimals": None,
+                    "warning": None
+                }
             
             result = await self._lookup_token_quicknode(alphanumeric_symbol, chain_id)
             if result[0]:
                 logger.info(f"Found token {alphanumeric_symbol} via QuickNode after aggressive cleaning")
-                return result
+                address, symbol, name = result
+                return address, symbol, name, {
+                    "verified": True,
+                    "source": "quicknode",
+                    "decimals": None,
+                    "warning": None
+                }
                 
             result = await self._lookup_token_coingecko(alphanumeric_symbol)
             if result[0]:
                 logger.info(f"Found token {alphanumeric_symbol} via CoinGecko after aggressive cleaning")
-                return result
+                address, symbol, name = result
+                return address, symbol, name, {
+                    "verified": True,
+                    "source": "coingecko",
+                    "decimals": None,
+                    "warning": None
+                }
         
         # For tokens with $ prefix that we couldn't find, we'll try to look them up by name
         if original_symbol.startswith('$'):
@@ -277,21 +353,39 @@ class TokenService:
             result = await self._search_token_by_name(clean_name, chain_id)
             if result[0]:
                 logger.info(f"Found token {clean_name} via name search")
-                return result
+                address, symbol, name = result
+                return address, symbol, name, {
+                    "verified": True,
+                    "source": "moralis_name_search",
+                    "decimals": None,
+                    "warning": None
+                }
             
             # Special case for NURI token on Scroll
             if clean_symbol == "NURI" and chain_id == 534352:
                 nuri_address = "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dC7cc"
                 logger.info(f"Using hardcoded address for NURI token on Scroll: {nuri_address}")
-                return nuri_address, "NURI", "NURI Token"
+                return nuri_address, "NURI", "NURI Token", {
+                    "verified": True,
+                    "source": "hardcoded",
+                    "decimals": 18,
+                    "warning": None
+                }
             
             logger.warning(f"Could not find token {original_symbol}, but allowing it as a special token")
-            # Return the clean symbol as both address and symbol
-            # The UI should handle this special case and warn the user
-            return None, clean_symbol, f"Unverified token: {clean_symbol}"
+            # Return the clean symbol as both address and symbol with a warning
+            return None, clean_symbol, f"Unverified token: {clean_symbol}", {
+                "verified": False,
+                "source": "unverified",
+                "warning": f"The token '{original_symbol}' could not be verified. If you want to proceed, you'll need to provide the contract address."
+            }
             
         logger.warning(f"Could not find token {original_symbol} through any method")
-        return None, None, None
+        return None, None, None, {
+            "verified": False,
+            "source": "not_found",
+            "warning": f"The token '{original_symbol}' could not be found. Please check the spelling or provide the contract address."
+        }
     
     async def _lookup_token_moralis(self, symbol: str, chain_id: int) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """Look up token using Moralis API."""

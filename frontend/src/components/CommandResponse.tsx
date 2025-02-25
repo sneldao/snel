@@ -12,6 +12,11 @@ import {
   ListIcon,
   Spinner,
   Link,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Divider,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -19,7 +24,17 @@ import {
   WarningIcon,
   TimeIcon,
   ChatIcon,
+  InfoIcon,
 } from "@chakra-ui/icons";
+
+type TokenInfo = {
+  address?: string;
+  symbol?: string;
+  name?: string;
+  verified?: boolean;
+  source?: string;
+  warning?: string;
+};
 
 type CommandResponseProps = {
   content: string;
@@ -27,6 +42,19 @@ type CommandResponseProps = {
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
+  agentType?: "default" | "swap";
+  metadata?: {
+    token_in_address?: string;
+    token_in_symbol?: string;
+    token_in_name?: string;
+    token_in_verified?: boolean;
+    token_in_source?: string;
+    token_out_address?: string;
+    token_out_symbol?: string;
+    token_out_name?: string;
+    token_out_verified?: boolean;
+    token_out_source?: string;
+  };
 };
 
 const LoadingSteps = [
@@ -69,12 +97,35 @@ export const CommandResponse = ({
   isCommand,
   status = "pending",
   awaitingConfirmation,
+  agentType = "default",
+  metadata,
 }: CommandResponseProps) => {
   const [currentStep, setCurrentStep] = React.useState(0);
   const isError = status === "error";
   const isLoading = status === "processing";
   const isSuccess = status === "success";
   const needsConfirmation = awaitingConfirmation;
+
+  // Extract token information from metadata
+  const tokenInInfo: TokenInfo = metadata
+    ? {
+        address: metadata.token_in_address,
+        symbol: metadata.token_in_symbol,
+        name: metadata.token_in_name,
+        verified: metadata.token_in_verified,
+        source: metadata.token_in_source,
+      }
+    : {};
+
+  const tokenOutInfo: TokenInfo = metadata
+    ? {
+        address: metadata.token_out_address,
+        symbol: metadata.token_out_symbol,
+        name: metadata.token_out_name,
+        verified: metadata.token_out_verified,
+        source: metadata.token_out_source,
+      }
+    : {};
 
   // Simulate progress through steps when loading
   React.useEffect(() => {
@@ -104,6 +155,23 @@ export const CommandResponse = ({
       }
       if (content.includes("Failed to execute swap")) {
         return "Failed to execute the swap. Please try again.";
+      }
+      // Handle token not found errors
+      if (content.includes("Could not find contract address for token")) {
+        return (
+          <Box>
+            <Text>{content}</Text>
+            {content.includes("NURI") && (
+              <Alert status="info" mt={2} borderRadius="md">
+                <AlertIcon />
+                <AlertDescription>
+                  NURI token swaps are not supported through our service. Please
+                  use SyncSwap or ScrollSwap directly.
+                </AlertDescription>
+              </Alert>
+            )}
+          </Box>
+        );
       }
       // For other errors, clean up and return a user-friendly message
       if (content.includes("Transaction failed:")) {
@@ -188,30 +256,121 @@ export const CommandResponse = ({
     };
   };
 
+  // Get agent name and avatar based on agent type
+  const getAgentInfo = () => {
+    if (agentType === "swap") {
+      return {
+        name: "Wheeler-Dealer",
+        handle: "@wheeler_dealer",
+        avatarSrc: "/avatars/🕴️.png",
+      };
+    }
+    return {
+      name: "SNEL",
+      handle: "@snel_agent",
+      avatarSrc: "/avatars/🐌.png",
+    };
+  };
+
+  const { name, handle, avatarSrc } = getAgentInfo();
+
+  // Render token information if available
+  const renderTokenInfo = () => {
+    if (!metadata || isCommand || !isSuccess) return null;
+
+    // Only show token info for swap transactions
+    if (!content.includes("swap") && !content.includes("Swap")) return null;
+
+    return (
+      <Box mt={3} fontSize="sm">
+        <Divider mb={2} />
+        <Text fontWeight="bold" mb={1}>
+          Token Information:
+        </Text>
+
+        {tokenInInfo.symbol && (
+          <Box mb={2}>
+            <Text fontWeight="semibold">From: {tokenInInfo.symbol}</Text>
+            {tokenInInfo.name && (
+              <Text color="gray.600">{tokenInInfo.name}</Text>
+            )}
+            {tokenInInfo.address && (
+              <Text fontSize="xs" color="gray.500" wordBreak="break-all">
+                Address: {tokenInInfo.address}
+              </Text>
+            )}
+            {tokenInInfo.verified && (
+              <Badge colorScheme="green" fontSize="xs">
+                Verified
+              </Badge>
+            )}
+            {tokenInInfo.source && (
+              <Text fontSize="xs" color="gray.500">
+                Source: {tokenInInfo.source}
+              </Text>
+            )}
+          </Box>
+        )}
+
+        {tokenOutInfo.symbol && (
+          <Box>
+            <Text fontWeight="semibold">To: {tokenOutInfo.symbol}</Text>
+            {tokenOutInfo.name && (
+              <Text color="gray.600">{tokenOutInfo.name}</Text>
+            )}
+            {tokenOutInfo.address && (
+              <Text fontSize="xs" color="gray.500" wordBreak="break-all">
+                Address: {tokenOutInfo.address}
+              </Text>
+            )}
+            {tokenOutInfo.verified ? (
+              <Badge colorScheme="green" fontSize="xs">
+                Verified
+              </Badge>
+            ) : (
+              <Badge colorScheme="yellow" fontSize="xs">
+                Unverified
+              </Badge>
+            )}
+            {tokenOutInfo.source && (
+              <Text fontSize="xs" color="gray.500">
+                Source: {tokenOutInfo.source}
+              </Text>
+            )}
+          </Box>
+        )}
+
+        {(!tokenInInfo.verified || !tokenOutInfo.verified) && (
+          <Alert status="warning" mt={2} size="sm" borderRadius="md">
+            <AlertIcon />
+            <Box>
+              <AlertTitle fontSize="xs">Caution</AlertTitle>
+              <AlertDescription fontSize="xs">
+                One or more tokens in this transaction are unverified. Always
+                double-check contract addresses before proceeding.
+              </AlertDescription>
+            </Box>
+          </Alert>
+        )}
+      </Box>
+    );
+  };
+
   const badge = getBadgeProps();
   const formattedContent = formatContent(content);
 
   return (
     <Box
-      borderWidth="1px"
+      w="full"
+      bg={isCommand ? "gray.50" : "white"}
       borderRadius="lg"
       p={{ base: 2, sm: 4 }}
-      bg="white"
-      shadow="sm"
-      borderColor={
-        isError
-          ? "red.200"
-          : needsConfirmation
-          ? "orange.200"
-          : isSuccess
-          ? "green.200"
-          : undefined
-      }
+      position="relative"
     >
-      <HStack align="start" spacing={{ base: 2, sm: 3 }}>
+      <HStack align="start" spacing={4} w="full">
         <Avatar
           size={{ base: "xs", sm: "sm" }}
-          name={isCommand && !isSuccess ? "You" : "Pointless"}
+          name={isCommand ? "You" : name}
           bg={
             isError
               ? "red.500"
@@ -224,19 +383,12 @@ export const CommandResponse = ({
               : "twitter.500"
           }
           color="white"
+          src={!isCommand ? avatarSrc : undefined}
         />
         <VStack align="stretch" flex={1} spacing={{ base: 1, sm: 2 }}>
-          <HStack
-            flexWrap="wrap"
-            spacing={{ base: 1, sm: 2 }}
-            fontSize={{ base: "xs", sm: "sm" }}
-          >
-            <Text fontWeight="bold">
-              {isCommand && !isSuccess ? "You" : "Pointless"}
-            </Text>
-            <Text color="gray.500">
-              {isCommand && !isSuccess ? "@user" : "@pointless_agent"}
-            </Text>
+          <HStack spacing={2} fontSize={{ base: "xs", sm: "sm" }}>
+            <Text fontWeight="bold">{isCommand ? "You" : name}</Text>
+            <Text color="gray.500">{isCommand ? "@user" : handle}</Text>
             <Text color="gray.500">·</Text>
             <Text color="gray.500">{timestamp}</Text>
             <Badge
@@ -253,12 +405,13 @@ export const CommandResponse = ({
             </Badge>
           </HStack>
           <Box
-            whiteSpace="pre-wrap"
-            color={isError ? "red.600" : "gray.700"}
             fontSize={{ base: "sm", sm: "md" }}
+            whiteSpace="pre-wrap"
+            wordBreak="break-word"
           >
             {formattedContent}
           </Box>
+          {renderTokenInfo()}
           {isLoading && (
             <List spacing={1} mt={2} fontSize={{ base: "xs", sm: "sm" }}>
               {LoadingSteps.map((step, index) => (

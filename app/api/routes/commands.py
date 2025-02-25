@@ -114,9 +114,25 @@ async def process_command(
         # Convert BotMessage to API response
         response = CommandResponse.from_bot_message(bot_message)
         
+        # Set agent type based on content and command type
+        response_content = response.content.lower() if response.content else ""
+        
+        # Check if this is a swap-related query
+        is_swap_related = any(word in content for word in ["swap", "token", "price", "approve", "allowance", "liquidity"]) or \
+                         any(word in response_content for word in ["swap", "token", "price", "approve", "allowance", "liquidity"])
+        
         # Add pending command to response if it exists
         if bot_message.metadata and "pending_command" in bot_message.metadata:
             response.pending_command = bot_message.metadata["pending_command"]
+            # If it's a swap command, set agent type to swap
+            if response.pending_command.startswith("swap"):
+                response.agent_type = "swap"
+            else:
+                # For non-swap pending commands, use default agent
+                response.agent_type = "default"
+        else:
+            # For non-pending commands, set agent type based on content
+            response.agent_type = "swap" if is_swap_related else "default"
             
         return response
             

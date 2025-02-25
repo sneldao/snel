@@ -363,7 +363,6 @@ async def execute_transaction(
                     method="swap",
                     gas_limit=hex(int(float(quote.gas) * 1.1)),  # Add 10% buffer for gas
                     needs_approval=False,
-                    agent_type="swap",  # Always swap for transactions
                     metadata={
                         "token_in_address": token_in,
                         "token_in_symbol": token_in_symbol,
@@ -433,8 +432,7 @@ async def execute_transaction(
                         needs_approval=True,
                         token_to_approve=token_in,
                         spender=spender,
-                        pending_command=f"approved:{tx_request.command}",
-                        agent_type="swap"  # Always swap for transactions
+                        pending_command=f"approved:{tx_request.command}"
                     )
                 elif "no route found" in error_str:
                     raise ValueError(f"No swap route found between {swap_command.token_in} and {swap_command.token_out}")
@@ -454,6 +452,13 @@ async def execute_transaction(
                     )
                 else:
                     raise ValueError(f"Failed to build swap transaction: {str(e)}")
+                
+        except Exception as e:
+            logger.error(f"Error executing transaction: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=400,
+                detail=str(e)
+            )
             
     except Exception as e:
         logger.error(f"Error executing transaction: {e}", exc_info=True)

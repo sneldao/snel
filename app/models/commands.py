@@ -66,14 +66,27 @@ class CommandResponse(BaseModel):
     content: Optional[str] = None
     error_message: Optional[str] = None
     pending_command: Optional[str] = None
+    agent_type: Optional[str] = "default"  # Can be "default" or "swap"
 
     @classmethod
     def from_bot_message(cls, msg: BotMessage) -> 'CommandResponse':
         """Create a CommandResponse from a BotMessage."""
+        # Determine agent type based on content and metadata
+        agent_type = "default"
+        content = msg.content.lower() if msg.content else ""
+        metadata = msg.metadata or {}
+        
+        # Check if this is a swap-related message
+        if any(word in content for word in ["swap", "token", "approve", "allowance", "liquidity"]) or \
+           metadata.get("method") == "swap" or \
+           metadata.get("pending_command", "").startswith("swap"):
+            agent_type = "swap"
+        
         return cls(
             content=msg.content,
             error_message=msg.error_message,
-            pending_command=msg.metadata.get("pending_command") if msg.metadata else None
+            pending_command=msg.metadata.get("pending_command") if msg.metadata else None,
+            agent_type=agent_type
         )
 
 class TransactionRequest(BaseModel):
@@ -98,6 +111,8 @@ class TransactionResponse(BaseModel):
     token_to_approve: Optional[HexAddress] = None
     spender: Optional[HexAddress] = None
     pending_command: Optional[str] = None
+    agent_type: Optional[str] = "default"  # Can be "default" or "swap"
+    metadata: Optional[Dict[str, Any]] = None
 
 class SwapDetails(BaseModel):
     """Structured swap command details."""

@@ -17,6 +17,7 @@ import {
   Link,
   Button,
   Icon,
+  Badge,
 } from "@chakra-ui/react";
 import {
   useAccount,
@@ -38,6 +39,19 @@ type Response = {
   pendingCommand?: string;
   awaitingConfirmation?: boolean;
   status?: "pending" | "processing" | "success" | "error";
+  agentType?: "default" | "swap";
+  metadata?: {
+    token_in_address?: string;
+    token_in_symbol?: string;
+    token_in_name?: string;
+    token_in_verified?: boolean;
+    token_in_source?: string;
+    token_out_address?: string;
+    token_out_symbol?: string;
+    token_out_name?: string;
+    token_out_verified?: boolean;
+    token_out_source?: string;
+  };
 };
 
 type TransactionData = {
@@ -54,6 +68,18 @@ type TransactionData = {
   token_to_approve?: string;
   spender?: string;
   pending_command?: string;
+  metadata?: {
+    token_in_address?: string;
+    token_in_symbol?: string;
+    token_in_name?: string;
+    token_in_verified?: boolean;
+    token_in_source?: string;
+    token_out_address?: string;
+    token_out_symbol?: string;
+    token_out_name?: string;
+    token_out_verified?: boolean;
+    token_out_source?: string;
+  };
 };
 
 // Add supported chains constant
@@ -163,6 +189,7 @@ export default function Home() {
             timestamp: new Date().toLocaleTimeString(),
             isCommand: false,
             status: "processing",
+            agentType: "swap",
           },
         ]);
 
@@ -190,6 +217,7 @@ export default function Home() {
             timestamp: new Date().toLocaleTimeString(),
             isCommand: false,
             status: "success",
+            agentType: "swap",
           },
         ]);
 
@@ -237,6 +265,8 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
           status: "processing",
+          agentType: "swap",
+          metadata: txData.metadata,
         },
       ]);
 
@@ -261,6 +291,8 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
           status: isSuccess ? "success" : "error",
+          agentType: "swap",
+          metadata: txData.metadata,
         },
       ]);
 
@@ -289,6 +321,7 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
           status: "error",
+          agentType: "swap",
         },
       ]);
 
@@ -297,6 +330,23 @@ export default function Home() {
   };
 
   const processCommand = async (command: string) => {
+    // Determine if this is a swap-related query
+    const isSwapRelated =
+      /\b(swap|token|price|approve|allowance|liquidity)\b/i.test(command);
+    const agentType = isSwapRelated ? "swap" : "default";
+
+    // Add the user's command to the responses
+    setResponses((prev) => [
+      ...prev,
+      {
+        content: command,
+        timestamp: new Date().toLocaleTimeString(),
+        isCommand: true,
+        status: "success",
+        agentType: "default", // User messages are always attributed to the user, not an agent
+      },
+    ]);
+
     if (
       !isConnected &&
       !command.toLowerCase().startsWith("what") &&
@@ -322,8 +372,7 @@ export default function Home() {
       return;
     }
 
-    const isSwapCommand = command.toLowerCase().includes("swap");
-    if (isSwapCommand && !(chainId in SUPPORTED_CHAINS)) {
+    if (isSwapRelated && !(chainId in SUPPORTED_CHAINS)) {
       toast({
         title: "Unsupported Network",
         description: `Please switch to a supported network: ${Object.values(
@@ -337,17 +386,6 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      // Always add the user's command to the responses
-      setResponses((prev) => [
-        ...prev,
-        {
-          content: command,
-          timestamp: new Date().toLocaleTimeString(),
-          isCommand: true,
-          status: "success",
-        },
-      ]);
-
       // Always send the command to the backend, even if it's a confirmation
       const response = await fetch(`/api/process-command`, {
         method: "POST",
@@ -407,6 +445,7 @@ export default function Home() {
             token_to_approve: txData.token_to_approve,
             spender: txData.spender,
             pending_command: txData.pending_command,
+            metadata: txData.metadata,
           });
         } catch (error) {
           console.error("Transaction error:", error);
@@ -419,6 +458,7 @@ export default function Home() {
               timestamp: new Date().toLocaleTimeString(),
               isCommand: false,
               status: "error",
+              agentType: "swap",
             },
           ]);
         }
@@ -436,6 +476,7 @@ export default function Home() {
             timestamp: new Date().toLocaleTimeString(),
             isCommand: false,
             status: "success",
+            agentType: "swap",
           },
         ]);
         return;
@@ -455,6 +496,10 @@ export default function Home() {
           pendingCommand: data.pending_command,
           awaitingConfirmation: !isQuestion && data.pending_command,
           status: !isQuestion && data.pending_command ? "pending" : "success",
+          agentType:
+            data.agent_type ||
+            (data.pending_command?.startsWith("swap") ? "swap" : "default"),
+          metadata: data.metadata,
         },
       ]);
     } catch (error) {
@@ -469,6 +514,7 @@ export default function Home() {
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
           status: "error",
+          agentType: "swap",
         },
       ]);
 
@@ -598,6 +644,8 @@ export default function Home() {
                   isCommand={response.isCommand}
                   status={response.status}
                   awaitingConfirmation={response.awaitingConfirmation}
+                  agentType={response.agentType}
+                  metadata={response.metadata}
                 />
               ))}
               <div ref={responsesEndRef} />

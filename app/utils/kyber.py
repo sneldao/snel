@@ -82,6 +82,12 @@ async def get_quote(
         if chain_name == "unknown":
             raise KyberSwapError(f"Unsupported chain ID: {chain_id}")
 
+        # Special case for NURI token on Scroll chain
+        is_nuri_on_scroll = (
+            chain_id == 534352 and 
+            token_out.lower() == "0x0261c29c68a85c1d9f9d2dc0c02b1f9e8e0dc7cc"
+        )
+        
         # Step 1: Get route using APIv1
         route_url = f"https://aggregator-api.kyberswap.com/{chain_name}/api/v1/routes"
         
@@ -116,6 +122,18 @@ async def get_quote(
             if route_response.status_code != 200:
                 error_msg = route_data.get('message', route_response.text)
                 logger.error(f"Route request failed: {error_msg}")
+                
+                # Special handling for NURI token on Scroll
+                if is_nuri_on_scroll and "token not found" in error_msg.lower():
+                    logger.warning("NURI token not found in KyberSwap. Using alternative swap method.")
+                    # For NURI token, we'll use a different DEX or method
+                    # This is a placeholder - in a real implementation, you would integrate with another DEX
+                    # For now, we'll raise a more specific error
+                    raise KyberSwapError(
+                        "NURI token swaps are not currently supported through KyberSwap. "
+                        "Please use SyncSwap or ScrollSwap directly to swap for NURI tokens."
+                    )
+                
                 if route_response.status_code == 404:
                     raise NoRouteFoundError("No valid route found for this swap")
                 raise KyberSwapError(f"Route request failed: {error_msg}")
