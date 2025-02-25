@@ -112,6 +112,10 @@ class SwapCommand(BaseModel):
     token_in: Optional[str] = None
     token_out: Optional[str] = None
     is_target_amount: bool = False  # True if amount refers to token_out
+    amount_is_usd: bool = False  # True if amount is in USD
+    natural_command: Optional[str] = None  # The original command text
+    token_in_name: Optional[str] = None  # Full name of token_in
+    token_out_name: Optional[str] = None  # Full name of token_out
     
     @property
     def amount_in(self) -> Optional[float]:

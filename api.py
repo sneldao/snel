@@ -6,10 +6,11 @@ from dotenv import load_dotenv
 import datetime
 import sys
 import json
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List, Any, Tuple, Union
 from urllib.parse import urlparse
 from upstash_redis import Redis
 import asyncio
+import aiohttp
 
 # Load environment variables from .env file BEFORE importing dowse
 env_path = Path(__file__).parent / '.env'
@@ -248,15 +249,27 @@ def init_services():
 openai_key_header = APIKeyHeader(name="X-OpenAI-Key", auto_error=False)
 
 def get_openai_key(api_key: str = Depends(openai_key_header)) -> str:
-    # First try to get from header (production)
+    # Check if we're in development mode
+    is_development = os.environ.get("ENVIRONMENT") == "development"
+    
+    # First try to get from header (user-provided key)
     if api_key:
         return api_key
 
-    # Then try environment variable (development)
+    # Then try environment variable (only in development)
     env_key = os.environ.get("OPENAI_API_KEY")
-    if env_key:
+    if env_key and is_development:
+        logger.info("Using development OpenAI API key from environment")
         return env_key
-
+    
+    # In production, require user-provided key
+    if not is_development:
+        raise HTTPException(
+            status_code=401,
+            detail="OpenAI API Key is required in the X-OpenAI-Key header for production use"
+        )
+    
+    # If we're in development but no key is available
     raise HTTPException(
         status_code=401,
         detail="OpenAI API Key is required (either in header or environment)"
@@ -278,6 +291,10 @@ def get_pipeline(openai_key: str) -> Pipeline:
 @app.on_event("startup")
 async def startup_event():
     """Initialize services."""
+    # Log environment
+    environment = os.environ.get("ENVIRONMENT", "production")
+    logger.info(f"Starting API in {environment} environment")
+    
     init_services()
     
     # Test Redis connection
@@ -492,29 +509,113 @@ async def parse_swap_command(command: str, chain_id: Optional[int] = None) -> Sw
         if command.startswith("approved:"):
             command = command[9:]  # Remove 'approved:' prefix
             
-        parts = command.split()  # Don't convert to lower case here
+        # Check for dollar amount format
+        is_dollar_amount = False
+        
+        # First, try to parse as a regular swap command
+        parts = command.split()
+        if len(parts) >= 5:
+            # Check for dollar amount format: "swap eth for usdc, $1 worth"
+            # or "swap $1 worth of eth for usdc"
+            dollar_indicators = ["$", "dollar", "dollars", "usd", "worth"]
+            
+            command_str = command.lower()
+            if any(indicator in command_str for indicator in dollar_indicators):
+                is_dollar_amount = True
+                logger.info(f"Detected dollar amount format in command: {command}")
+                
+                # Try to extract the dollar amount
+                dollar_amount = None
+                
+                # Pattern: "swap eth for usdc, $1 worth"
+                if "," in command_str and "$" in command_str:
+                    # Extract the part after the comma
+                    after_comma = command_str.split(",", 1)[1].strip()
+                    # Extract the number after the $ sign
+                    if "$" in after_comma:
+                        try:
+                            dollar_amount = float(after_comma.split("$")[1].split()[0])
+                            logger.info(f"Extracted dollar amount: ${dollar_amount}")
+                        except (ValueError, IndexError):
+                            logger.error("Failed to extract dollar amount after comma")
+                
+                # Pattern: "swap $1 worth of eth for usdc"
+                elif "$" in command_str and "worth" in command_str and "of" in command_str:
+                    try:
+                        # Extract the part between $ and "worth"
+                        dollar_part = command_str.split("$")[1].split("worth")[0].strip()
+                        dollar_amount = float(dollar_part)
+                        logger.info(f"Extracted dollar amount from 'worth of' pattern: ${dollar_amount}")
+                    except (ValueError, IndexError):
+                        logger.error("Failed to extract dollar amount from 'worth of' pattern")
+                
+                # If we found a dollar amount, we need to determine the tokens
+                if dollar_amount is not None:
+                    # Extract token_in and token_out
+                    token_in = None
+                    token_out = None
+                    
+                    # Pattern: "swap eth for usdc, $1 worth"
+                    if "for" in command_str:
+                        parts = command_str.split("for")
+                        if len(parts) >= 2:
+                            # Extract token_in from the part before "for"
+                            before_for = parts[0].strip()
+                            if "swap" in before_for:
+                                token_in_part = before_for.split("swap")[1].strip()
+                                if "worth of" in token_in_part:
+                                    token_in = token_in_part.split("worth of")[1].strip()
+                                else:
+                                    token_in = token_in_part
+                            
+                            # Extract token_out from the part after "for"
+                            after_for = parts[1].strip()
+                            if "," in after_for:
+                                token_out = after_for.split(",")[0].strip()
+                            else:
+                                token_out = after_for.split()[0].strip()
+                    
+                    if token_in and token_out:
+                        logger.info(f"Extracted tokens from dollar amount command: {token_in} -> {token_out}")
+                        
+                        # Look up tokens
+                        token_in_address, token_in_symbol = await lookup_token(token_in, chain_id)
+                        token_out_address, token_out_symbol = await lookup_token(token_out, chain_id)
+                        
+                        # Use the canonical symbols if found
+                        if token_in_symbol:
+                            token_in = token_in_symbol
+                        if token_out_symbol:
+                            token_out = token_out_symbol
+                        
+                        # For dollar amount swaps, we need to calculate the token amount
+                        # This will be handled by the pipeline, so we just set is_target_amount=False
+                        # and amount_is_usd=True
+                        return SwapCommand(
+                            action="swap",
+                            amount=dollar_amount,
+                            token_in=token_in.upper(),
+                            token_out=token_out.upper(),
+                            is_target_amount=False,
+                            amount_is_usd=True
+                        )
+        
+        # If not a dollar amount format, proceed with regular parsing
         if len(parts) == 5 and parts[0].lower() == "swap" and (parts[3].lower() == "for" or parts[3].lower() == "to"):
-            # Get tokens preserving case
+            # Get tokens
             token_in = parts[2]
             token_out = parts[4]
             
-            # Only convert to upper case if they're not contract addresses
-            from app.services.prices import _is_valid_contract_address
-            if not _is_valid_contract_address(token_in):
-                token_in = token_in.upper()
-            if not _is_valid_contract_address(token_out):
-                token_out = token_out.upper()
+            # Look up tokens
+            token_in_address, token_in_symbol = await lookup_token(token_in, chain_id)
+            token_out_address, token_out_symbol = await lookup_token(token_out, chain_id)
             
-            # Handle token aliases
-            if token_in in ["ETH", "WETH"]:
-                token_in = "ETH"
-            if token_out in ["ETH", "WETH"]:
-                token_out = "ETH"
-            if token_in in ["USD", "USDC"]:
-                token_in = "USDC"
-            if token_out in ["USD", "USDC"]:
-                token_out = "USDC"
-                
+            # Use the canonical symbols if found
+            if token_in_symbol:
+                token_in = token_in_symbol
+            if token_out_symbol:
+                token_out = token_out_symbol
+            
             try:
                 # Try to parse amount as float
                 amount = float(parts[1])
@@ -527,15 +628,15 @@ async def parse_swap_command(command: str, chain_id: Optional[int] = None) -> Sw
                         action="swap",
                         amount=amount,
                         token_in=token_in,
-                        token_out=token_out,  # Preserve case for contract address
-                        is_target_amount=False  # We're using the calculated amount directly
+                        token_out=token_out,
+                        is_target_amount=False
                     )
                     
                 return SwapCommand(
                     action="swap",
                     amount=amount,
                     token_in=token_in,
-                    token_out=token_out,  # Preserve case for contract address
+                    token_out=token_out,
                     is_target_amount=False
                 )
             except ValueError:
@@ -555,6 +656,135 @@ TOKEN_DECIMALS = {
     "USDT": 6,
     "DAI": 18,
 }
+
+# Add token aliases mapping
+TOKEN_ALIASES = {
+    # Common aliases
+    "ETH": ["WETH", "ETHEREUM"],
+    "USDC": ["USD", "USDC.E"],
+    "USDT": ["TETHER"],
+    "BTC": ["WBTC", "BITCOIN"],
+    
+    # Chain-specific tokens
+    "SCR": ["$SCR", "SCROLL"],  # Scroll token
+    "OP": ["$OP", "OPTIMISM"],  # Optimism token
+    "ARB": ["$ARB", "ARBITRUM"],  # Arbitrum token
+    "BASE": ["$BASE"],  # Base token
+    "MATIC": ["$MATIC", "POLYGON"],  # Polygon token
+}
+
+# Reverse lookup for aliases
+REVERSE_ALIASES = {}
+for main_token, aliases in TOKEN_ALIASES.items():
+    for alias in aliases:
+        REVERSE_ALIASES[alias] = main_token
+
+async def lookup_token(token_symbol: str, chain_id: int) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Look up a token by symbol or alias and return its address and canonical symbol.
+    
+    Args:
+        token_symbol: The token symbol or alias to look up
+        chain_id: The chain ID to look up the token on
+        
+    Returns:
+        Tuple of (token_address, canonical_symbol) or (None, None) if not found
+    """
+    # Clean up the token symbol
+    clean_symbol = token_symbol.upper().strip()
+    if clean_symbol.startswith("$"):
+        clean_symbol = clean_symbol[1:]  # Remove $ prefix
+    
+    logger.info(f"Looking up token: {clean_symbol} on chain {chain_id}")
+    
+    # Check if it's a known alias
+    if clean_symbol in REVERSE_ALIASES:
+        canonical_symbol = REVERSE_ALIASES[clean_symbol]
+        logger.info(f"Found alias {clean_symbol} -> {canonical_symbol}")
+        clean_symbol = canonical_symbol
+    
+    # Check if it's in our predefined token addresses
+    chain_tokens = TOKEN_ADDRESSES.get(chain_id, {})
+    if clean_symbol in chain_tokens:
+        logger.info(f"Found token {clean_symbol} in predefined addresses")
+        return chain_tokens[clean_symbol], clean_symbol
+    
+    # Try to look up using Moralis API
+    moralis_api_key = os.environ.get("MORALIS_API_KEY")
+    if not moralis_api_key:
+        logger.warning("Moralis API key not found, skipping token lookup")
+        return None, None
+    
+    try:
+        # Map chain ID to Moralis chain name
+        chain_mapping = {
+            1: "eth",
+            10: "optimism",
+            56: "bsc",
+            137: "polygon",
+            42161: "arbitrum",
+            8453: "base",
+            534352: "scroll"
+        }
+        
+        moralis_chain = chain_mapping.get(chain_id)
+        if not moralis_chain:
+            logger.warning(f"Chain {chain_id} not supported by Moralis")
+            return None, None
+        
+        # Query Moralis API
+        async with aiohttp.ClientSession() as session:
+            url = f"https://deep-index.moralis.io/api/v2/erc20/metadata/symbols"
+            params = {
+                "chain": moralis_chain,
+                "symbols": clean_symbol
+            }
+            headers = {
+                "accept": "application/json",
+                "X-API-Key": moralis_api_key
+            }
+            
+            async with session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data and len(data) > 0:
+                        # Return the first match
+                        token_data = data[0]
+                        logger.info(f"Found token via Moralis: {token_data}")
+                        return token_data.get("address"), token_data.get("symbol")
+                else:
+                    logger.warning(f"Moralis API returned status {response.status}")
+    
+    except Exception as e:
+        logger.error(f"Error looking up token with Moralis: {e}")
+    
+    # If all else fails, try CoinGecko as a last resort
+    try:
+        coingecko_api_key = os.environ.get("COINGECKO_API_KEY")
+        if not coingecko_api_key:
+            return None, None
+            
+        async with aiohttp.ClientSession() as session:
+            url = "https://pro-api.coingecko.com/api/v3/search"
+            params = {
+                "query": clean_symbol,
+                "x_cg_pro_api_key": coingecko_api_key
+            }
+            
+            async with session.get(url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data and "coins" in data and len(data["coins"]) > 0:
+                        # Get the first match
+                        coin = data["coins"][0]
+                        logger.info(f"Found token via CoinGecko: {coin}")
+                        # CoinGecko doesn't provide addresses directly, but we can return the symbol
+                        return None, coin.get("symbol").upper()
+    
+    except Exception as e:
+        logger.error(f"Error looking up token with CoinGecko: {e}")
+    
+    return None, None
 
 @app.post("/api/execute-transaction")
 @limiter.limit("10/minute")
@@ -590,17 +820,39 @@ async def execute_transaction(
             raise ValueError(f"No token addresses configured for chain {tx_request.chain_id}")
         
         try:
-            # Get token decimals - first try hardcoded values, then fallback to price API
-            token_in_upper = swap_command.token_in.upper()
-            if token_in_upper in TOKEN_DECIMALS:
-                token_in_decimals = TOKEN_DECIMALS[token_in_upper]
-                logger.info(f"Using hardcoded decimals for {token_in_upper}: {token_in_decimals}")
-            else:
-                _, token_in_decimals = await get_token_price(
+            # Handle dollar amount swaps
+            if swap_command.amount_is_usd:
+                logger.info(f"Processing dollar amount swap: ${swap_command.amount} worth of {swap_command.token_in} for {swap_command.token_out}")
+                
+                # Get token price to convert USD to token amount
+                from app.services.prices import get_token_price
+                price_per_token, token_in_decimals = await get_token_price(
                     swap_command.token_in,
                     token_addresses.get(swap_command.token_in),
                     tx_request.chain_id
                 )
+                
+                if not price_per_token:
+                    raise ValueError(f"Could not get price for {swap_command.token_in}")
+                
+                # Calculate token amount from USD amount
+                token_amount = swap_command.amount / price_per_token
+                logger.info(f"Converted ${swap_command.amount} to {token_amount} {swap_command.token_in} at price ${price_per_token}")
+                
+                # Update the swap command with the calculated token amount
+                swap_command.amount = token_amount
+            else:
+                # Get token decimals - first try hardcoded values, then fallback to price API
+                token_in_upper = swap_command.token_in.upper()
+                if token_in_upper in TOKEN_DECIMALS:
+                    token_in_decimals = TOKEN_DECIMALS[token_in_upper]
+                    logger.info(f"Using hardcoded decimals for {token_in_upper}: {token_in_decimals}")
+                else:
+                    _, token_in_decimals = await get_token_price(
+                        swap_command.token_in,
+                        token_addresses.get(swap_command.token_in),
+                        tx_request.chain_id
+                    )
             
             # Calculate amount_in based on decimals
             if swap_command.token_in == "ETH":
