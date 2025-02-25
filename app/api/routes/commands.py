@@ -21,20 +21,13 @@ async def process_command(
         # Get pipeline instance
         pipeline = get_pipeline(openai_key)
         
-        # Normalize user ID
-        try:
-            if command_request.creator_id.startswith("0x"):
-                original_id = command_request.creator_id
-                user_id = command_request.creator_id.lower()
-                checksum_id = to_checksum_address(command_request.creator_id)
-                logger.info(f"User ID normalization: Original: {original_id}, Lowercase: {user_id}, Checksum: {checksum_id}")
-            else:
-                user_id = command_request.creator_id.lower()
-                logger.info(f"User ID normalized to lowercase: {user_id}")
-        except ValueError:
-            user_id = command_request.creator_id.lower()
-            logger.info(f"User ID normalized to lowercase (after ValueError): {user_id}")
-            
+        # Normalize user ID - ALWAYS use lowercase for consistency
+        original_id = command_request.creator_id
+        user_id = command_request.creator_id.lower()
+        
+        # Log the normalization for debugging
+        logger.info(f"User ID normalization: Original: {original_id}, Normalized: {user_id}")
+        
         # Update the request with normalized ID
         command_request.creator_id = user_id
         
@@ -53,7 +46,10 @@ async def process_command(
                     pending_command=pending_command["command"]
                 )
             else:
-                logger.warning(f"No pending command found for user {user_id}")
+                # Debug: List all pending commands to help diagnose the issue
+                all_commands = command_store.list_all_commands()
+                logger.warning(f"No pending command found for user {user_id}. All pending commands: {all_commands}")
+                
                 return CommandResponse(
                     content="I don't have any pending commands to confirm. Please submit a new swap request.",
                     error_message="No pending command found"

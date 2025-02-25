@@ -202,7 +202,7 @@ export default function Home() {
               command: txData.pending_command,
               wallet_address: address,
               chain_id: chainId,
-              creator_id: address || "anonymous",
+              creator_id: address ? address.toLowerCase() : "anonymous",
             }),
           });
 
@@ -366,7 +366,7 @@ export default function Home() {
                 command: pendingResponse.pendingCommand,
                 wallet_address: address,
                 chain_id: chainId,
-                creator_id: address || "anonymous",
+                creator_id: address ? address.toLowerCase() : "anonymous",
               }),
             });
 
@@ -436,7 +436,7 @@ export default function Home() {
         body: JSON.stringify({
           content: command,
           creator_name: "@user",
-          creator_id: address || "anonymous",
+          creator_id: address ? address.toLowerCase() : "anonymous",
           chain_id: chainId,
         }),
       });

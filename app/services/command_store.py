@@ -15,7 +15,8 @@ class CommandStore:
     
     def _make_key(self, user_id: str) -> str:
         """Create a Redis key for a user's pending command."""
-        normalized_id = self._redis.normalize_key(user_id)
+        # Always normalize to lowercase for consistency
+        normalized_id = user_id.lower()
         logger.info(f"Normalized user ID from {user_id} to {normalized_id}")
         return f"pending_command:{normalized_id}"
     
@@ -46,7 +47,7 @@ class CommandStore:
             else:
                 logger.error(f"Failed to verify command storage for key: {key}")
         except Exception as e:
-            logger.error(f"Error storing command: {e}")
+            logger.error(f"Error storing command: {e}", exc_info=True)
     
     def get_command(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get a pending command for a user."""
@@ -57,20 +58,40 @@ class CommandStore:
             all_keys = self._redis.keys("pending_command:*")
             logger.info(f"All existing keys when retrieving: {all_keys}")
             
+            # Debug: Check if the key exists in a case-insensitive way
+            if all_keys:
+                lower_key = key.lower()
+                lower_all_keys = [k.lower() for k in all_keys]
+                if lower_key in lower_all_keys:
+                    idx = lower_all_keys.index(lower_key)
+                    actual_key = all_keys[idx]
+                    if actual_key != key:
+                        logger.warning(f"Key case mismatch: requested '{key}', found '{actual_key}'")
+                        # Use the actual key from Redis
+                        key = actual_key
+            
             value = self._redis.get(key)
             if value:
                 logger.info(f"Found command for key {key}: {value}")
                 return json.loads(value)
             else:
                 logger.info(f"No command found for key: {key}")
+                # Debug: Try to find the command with a different case
+                for existing_key in all_keys:
+                    if existing_key.lower() == key.lower():
+                        value = self._redis.get(existing_key)
+                        if value:
+                            logger.info(f"Found command with case-insensitive match for key {existing_key}: {value}")
+                            return json.loads(value)
                 return None
         except Exception as e:
-            logger.error(f"Error getting command: {e}")
+            logger.error(f"Error getting command: {e}", exc_info=True)
             return None
     
     def clear_command(self, user_id: str) -> None:
         """Clear a pending command for a user."""
         key = self._make_key(user_id)
+        logger.info(f"Clearing command with key: {key}")
         self._redis.delete(key)
     
     def list_all_commands(self) -> List[Dict[str, Any]]:
@@ -83,7 +104,10 @@ class CommandStore:
         commands = []
         for key, value in zip(keys, values):
             if value:
-                command_data = json.loads(value)
-                command_data["user_id"] = key.split(":", 1)[1]
-                commands.append(command_data)
+                try:
+                    command_data = json.loads(value)
+                    command_data["user_id"] = key.split(":", 1)[1]
+                    commands.append(command_data)
+                except Exception as e:
+                    logger.error(f"Error parsing command data for key {key}: {e}")
         return commands 

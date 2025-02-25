@@ -36,10 +36,14 @@ class RedisService:
         self._ttl = 1800  # 30 minutes default TTL
     
     def normalize_key(self, key: str) -> str:
-        """Normalize a key for consistent storage."""
-        if key.startswith("0x"):
-            return key.lower()
-        return key.lower()
+        """Normalize a key for consistent storage.
+        
+        Always converts to lowercase for consistency.
+        """
+        # Always convert to lowercase for consistency
+        normalized = key.lower()
+        logger.debug(f"Normalized key from '{key}' to '{normalized}'")
+        return normalized
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Set a value in Redis with optional TTL."""
