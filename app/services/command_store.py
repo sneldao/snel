@@ -29,13 +29,22 @@ class CommandStore:
             all_keys = self._redis.keys("pending_command:*")
             logger.info(f"All existing keys before storing: {all_keys}")
             
+            # Store the command with additional metadata
+            command_data = {
+                "command": command,
+                "chain_id": chain_id,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "user_id": user_id,  # Store the user_id for reference
+                "status": "pending"  # Add a status field
+            }
+            
+            # Serialize the command data
+            serialized_data = json.dumps(command_data)
+            logger.info(f"Storing command data: {serialized_data}")
+            
             self._redis.set(
                 key,
-                json.dumps({
-                    "command": command,
-                    "chain_id": chain_id,
-                    "timestamp": datetime.datetime.now().isoformat()
-                }),
+                serialized_data,
                 self._ttl
             )
             logger.info(f"Command stored successfully for key: {key}")
@@ -58,45 +67,46 @@ class CommandStore:
             all_keys = self._redis.keys("pending_command:*")
             logger.info(f"All existing keys when retrieving: {all_keys}")
             
-            # Debug: Check if the key exists in a case-insensitive way
-            if all_keys:
-                lower_key = key.lower()
-                lower_all_keys = [k.lower() for k in all_keys]
-                if lower_key in lower_all_keys:
-                    idx = lower_all_keys.index(lower_key)
-                    actual_key = all_keys[idx]
-                    if actual_key != key:
-                        logger.warning(f"Key case mismatch: requested '{key}', found '{actual_key}'")
-                        # Use the actual key from Redis
-                        key = actual_key
-            
+            # First try the exact key
             value = self._redis.get(key)
             if value:
                 logger.info(f"Found command for key {key}: {value}")
-                return json.loads(value)
-            else:
-                logger.info(f"No command found for key: {key}")
-                
-                # Debug: Try to find the command with a different case
-                for existing_key in all_keys:
-                    if existing_key.lower() == key.lower():
-                        value = self._redis.get(existing_key)
-                        if value:
-                            logger.info(f"Found command with case-insensitive match for key {existing_key}: {value}")
+                try:
+                    return json.loads(value)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing command data for key {key}: {e}")
+                    return None
+            
+            # If not found, try case-insensitive matching
+            for existing_key in all_keys:
+                if existing_key.lower() == key.lower():
+                    value = self._redis.get(existing_key)
+                    if value:
+                        logger.info(f"Found command with case-insensitive match for key {existing_key}: {value}")
+                        try:
                             return json.loads(value)
-                
-                # Fallback: Try to find a command by user ID prefix
-                user_id_part = user_id.lower()
-                for existing_key in all_keys:
-                    existing_user_id = existing_key.split(":", 1)[1].lower()
-                    if existing_user_id.startswith(user_id_part) or user_id_part.startswith(existing_user_id):
-                        logger.info(f"Found command with user ID prefix match: {existing_key}")
-                        value = self._redis.get(existing_key)
-                        if value:
-                            logger.info(f"Found command with user ID prefix match for key {existing_key}: {value}")
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error parsing command data for key {existing_key}: {e}")
+                            continue
+            
+            # If still not found, try prefix matching
+            user_id_part = user_id.lower()
+            for existing_key in all_keys:
+                existing_user_id = existing_key.split(":", 1)[1].lower() if ":" in existing_key else ""
+                if existing_user_id and (existing_user_id.startswith(user_id_part) or user_id_part.startswith(existing_user_id)):
+                    logger.info(f"Found command with user ID prefix match: {existing_key}")
+                    value = self._redis.get(existing_key)
+                    if value:
+                        logger.info(f"Found command with user ID prefix match for key {existing_key}: {value}")
+                        try:
                             return json.loads(value)
-                
-                return None
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error parsing command data for key {existing_key}: {e}")
+                            continue
+            
+            # If we get here, no command was found
+            logger.info(f"No command found for user ID: {user_id}")
+            return None
         except Exception as e:
             logger.error(f"Error getting command: {e}", exc_info=True)
             return None

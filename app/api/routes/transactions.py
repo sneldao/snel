@@ -606,6 +606,14 @@ async def execute_transaction(
         # Parse the command
         swap_command = await parse_swap_command(tx_request.command, tx_request.chain_id, token_service)
         
+        # Check if swap_command is None
+        if swap_command is None:
+            logger.error(f"Failed to parse swap command: {tx_request.command}")
+            raise ValueError(f"Failed to parse swap command: {tx_request.command}. Please try again with a valid command.")
+        
+        # Log the swap command for debugging
+        logger.info(f"Parsed swap command: {swap_command}")
+        
         # Get token details for metadata
         token_in_address, token_in_symbol, token_in_name = await token_service.lookup_token(
             swap_command.token_in, tx_request.chain_id

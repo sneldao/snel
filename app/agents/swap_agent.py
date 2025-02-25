@@ -381,10 +381,22 @@ class SwapAgent(PointlessAgent):
             
         # Handle token symbols
         else:
+            # Clean the token symbol (remove $ prefix if present)
+            clean_token = token.lstrip('$')
+            token_lower = clean_token.lower()
+            
             # For well-known tokens, add CoinGecko
-            token_lower = token.lower()
             if token_lower in ["eth", "weth", "usdc", "usdt", "dai"]:
                 links["coingecko"] = f"https://www.coingecko.com/en/coins/{token_lower}"
                 links["dexscreener"] = f"https://dexscreener.com/search?q={token_lower}"
+            # For custom tokens, add search links
+            else:
+                # Add search links for any token, including custom tokens
+                links["coingecko"] = f"https://www.coingecko.com/en/search?query={token_lower}"
+                links["dexscreener"] = f"https://dexscreener.com/search?q={token_lower}"
+                
+                # If it's a token with $ prefix, add a link to search for it on DEX aggregators
+                if token.startswith('$'):
+                    links["explorer"] = f"https://etherscan.io/search?q={clean_token}"
         
         return links 
