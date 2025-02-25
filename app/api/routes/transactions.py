@@ -557,6 +557,35 @@ async def execute_transaction(
                         f"Custom token '{custom_token}' not supported by KyberSwap. "
                         f"For custom tokens, please use a dedicated DEX that supports this token."
                     )
+                elif "return amount is too low" in error_str.lower():
+                    raise ValueError(
+                        f"The swap cannot be completed because the return amount is too low. "
+                        f"This usually happens when there is high price impact or slippage. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "execution reverted: return amount is not enough" in error_str.lower() or "code 4227" in error_str.lower() or "code: 4227" in error_str.lower():
+                    raise ValueError(
+                        f"The swap cannot be completed because the return amount is too low. "
+                        f"This usually happens when there is high price impact or slippage. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "estimate gas" in error_str.lower() and "failed" in error_str.lower():
+                    raise ValueError(
+                        f"Failed to estimate gas for this transaction. "
+                        f"This usually happens with high price impact swaps or tokens with special transfer mechanics. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "price impact too high" in error_str.lower():
+                    raise ValueError(
+                        f"The price impact for this swap is too high, which could result in significant loss. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "slippage" in error_str.lower():
+                    raise ValueError(
+                        f"The swap failed due to slippage tolerance. "
+                        f"This happens when the price moves unfavorably during transaction confirmation. "
+                        f"Try again or swap a smaller amount."
+                    )
                 else:
                     raise ValueError(f"Failed to build swap transaction: {str(e)}")
             
@@ -865,6 +894,35 @@ async def execute_transaction(
                     raise ValueError(
                         f"Custom token '{custom_token}' not supported by KyberSwap. "
                         f"For custom tokens, please use a dedicated DEX that supports this token."
+                    )
+                elif "return amount is too low" in error_str.lower():
+                    raise ValueError(
+                        f"The swap cannot be completed because the return amount is too low. "
+                        f"This usually happens when there is high price impact or slippage. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "execution reverted: return amount is not enough" in error_str.lower() or "code 4227" in error_str.lower() or "code: 4227" in error_str.lower():
+                    raise ValueError(
+                        f"The swap cannot be completed because the return amount is too low. "
+                        f"This usually happens when there is high price impact or slippage. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "estimate gas" in error_str.lower() and "failed" in error_str.lower():
+                    raise ValueError(
+                        f"Failed to estimate gas for this transaction. "
+                        f"This usually happens with high price impact swaps or tokens with special transfer mechanics. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "price impact too high" in error_str.lower():
+                    raise ValueError(
+                        f"The price impact for this swap is too high, which could result in significant loss. "
+                        f"Try swapping a smaller amount or using a different token pair."
+                    )
+                elif "slippage" in error_str.lower():
+                    raise ValueError(
+                        f"The swap failed due to slippage tolerance. "
+                        f"This happens when the price moves unfavorably during transaction confirmation. "
+                        f"Try again or swap a smaller amount."
                     )
                 else:
                     raise ValueError(f"Failed to build swap transaction: {str(e)}")

@@ -196,6 +196,15 @@ async def get_quote(
             try:
                 build_data = build_response.json()
                 logger.info(f"Build response data: {build_data}")
+                
+                # Log more details about the error if present
+                if build_response.status_code != 200:
+                    error_msg = build_data.get('message', build_response.text)
+                    error_code = build_data.get('code', 'unknown')
+                    error_details = build_data.get('details', [])
+                    logger.error(f"Build request failed with code {error_code}: {error_msg}")
+                    if error_details:
+                        logger.error(f"Error details: {error_details}")
             except Exception as json_error:
                 logger.error(f"Failed to parse build response as JSON: {build_response.text}")
                 raise BuildTransactionError("Failed to parse build response")
@@ -207,13 +216,31 @@ async def get_quote(
                 # Check for TRANSFER_FROM_FAILED in the error message or code
                 if (
                     "TRANSFER_FROM_FAILED" in error_msg or 
-                    build_data.get('code') == 4227 or  # Add specific error code check
                     "TransferHelper: TRANSFER_FROM_FAILED" in error_msg
                 ):
                     logger.info("Transfer failed, needs approval")
                     raise TransferFromFailedError(
                         "Token transfer failed. Please ensure you have sufficient balance and have approved the router."
                     )
+                elif "Return amount is not enough" in error_msg or "return amount is not enough" in error_msg.lower() or "execution reverted: Return amount is not enough" in error_msg or "estimate gas failed: execution reverted: Return amount is not enough" in error_msg:
+                    logger.info(f"Return amount is not enough error detected: {error_msg}")
+                    raise BuildTransactionError(
+                        "The swap cannot be executed because the return amount is too low. "
+                        "This may be due to high price impact or slippage. "
+                        "Try a smaller amount (e.g., $0.5 instead of $1) or a different token pair."
+                    )
+                elif build_data.get('code') == 4227:
+                    logger.info(f"Error code 4227 detected: {error_msg}")
+                    if "gas" in error_msg.lower() or "estimate" in error_msg.lower():
+                        raise BuildTransactionError(
+                            "Failed to estimate gas for this transaction. "
+                            "This usually happens with high price impact swaps or tokens with special transfer mechanics. "
+                            "Try a smaller amount or a different token pair."
+                        )
+                    else:
+                        raise BuildTransactionError(
+                            f"Failed to build transaction: {error_msg}"
+                        )
                 elif "No valid route found" in error_msg:
                     raise NoRouteFoundError("No valid route found for this swap")
                 elif "insufficient liquidity" in error_msg.lower():
