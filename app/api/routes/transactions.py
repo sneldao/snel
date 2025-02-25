@@ -5,7 +5,15 @@ from typing import Dict, Optional, Tuple, Any
 from web3 import Web3
 from eth_utils import is_address
 from app.models.commands import TransactionRequest, TransactionResponse, SwapCommand
-from app.config.chains import ChainConfig, TOKEN_ADDRESSES, NATIVE_TOKENS
+from app.config.chains import (
+    ChainConfig, 
+    TOKEN_ADDRESSES, 
+    NATIVE_TOKENS, 
+    get_token_address,
+    get_native_token_address,
+    is_native_token,
+    get_chain_specific_address
+)
 from app.services.token_service import TokenService
 from app.services.prices import get_token_price
 from app.api.dependencies import get_openai_key, get_token_service
@@ -246,6 +254,153 @@ async def parse_swap_command(
         logger.error(f"Failed to parse swap command: {e}")
         return None
 
+async def build_swap_transaction(
+    swap_command: SwapCommand,
+    wallet_address: str,
+    chain_id: int,
+    token_service: TokenService
+) -> Dict[str, Any]:
+    """
+    Build a swap transaction based on the swap command.
+    
+    Args:
+        swap_command: The parsed swap command
+        wallet_address: The wallet address to swap from/to
+        chain_id: The chain ID to execute the swap on
+        token_service: The token service for looking up token details
+        
+    Returns:
+        A dictionary with transaction data
+    """
+    logger.info(f"Building swap transaction for command: {swap_command}")
+    
+    # Get token details
+    token_in_result = await token_service.lookup_token(swap_command.token_in, chain_id)
+    token_out_result = await token_service.lookup_token(swap_command.token_out, chain_id)
+    
+    # Safely unpack the results
+    token_in_address = token_in_symbol = token_in_name = None
+    token_in_metadata = {}
+    token_out_address = token_out_symbol = token_out_name = None
+    token_out_metadata = {}
+    
+    # Safely unpack token_in_result
+    if token_in_result:
+        if len(token_in_result) >= 1:
+            token_in_address = token_in_result[0]
+        if len(token_in_result) >= 2:
+            token_in_symbol = token_in_result[1]
+        if len(token_in_result) >= 3:
+            token_in_name = token_in_result[2]
+        if len(token_in_result) >= 4:
+            token_in_metadata = token_in_result[3] or {}
+    
+    # Safely unpack token_out_result
+    if token_out_result:
+        if len(token_out_result) >= 1:
+            token_out_address = token_out_result[0]
+        if len(token_out_result) >= 2:
+            token_out_symbol = token_out_result[1]
+        if len(token_out_result) >= 3:
+            token_out_name = token_out_result[2]
+        if len(token_out_result) >= 4:
+            token_out_metadata = token_out_result[3] or {}
+    
+    # Handle token_in
+    token_in = token_in_address
+    # Check if token_in_address is in NATIVE_TOKENS or if token_in_symbol is 'ETH'
+    if is_native_token(token_in_address) or token_in_symbol == 'ETH':
+        # Use the helper function to get the chain-specific ETH address
+        token_in = get_native_token_address(chain_id)
+        logger.info(f"Using chain-specific ETH address for {token_in_symbol}: {token_in}")
+    
+    # Handle token_out
+    token_out = token_out_address
+    
+    # Import Kyber functions
+    from app.utils.kyber import (
+        get_quote as kyber_quote,
+        KyberSwapError,
+        NoRouteFoundError,
+        InsufficientLiquidityError,
+        InvalidTokenError,
+        BuildTransactionError,
+        get_chain_from_chain_id,
+        TransferFromFailedError,
+    )
+    
+    try:
+        # Preserve case for contract addresses in Kyber API call
+        quote = await kyber_quote(
+            token_in=token_in,
+            token_out=token_out,
+            amount=swap_command.amount,
+            chain_id=chain_id,
+            recipient=wallet_address,
+            token_in_decimals=token_in_metadata.get("decimals", 18) if token_in_metadata else 18
+        )
+        
+        # Return the transaction data
+        return {
+            "to": quote.router_address,
+            "data": quote.data,
+            "value": hex(int(swap_command.amount * 10**18)) if swap_command.token_in == "ETH" else "0x0",
+            "chain_id": chain_id,
+            "method": "swap",
+            "gas_limit": quote.gas,
+        }
+    except Exception as e:
+        error_str = str(e).lower()
+        logger.error(f"Kyber quote error: {error_str}")
+        
+        # Handle specific errors
+        if "transferfrom failed" in error_str or "allowance" in error_str:
+            # Need token approval
+            logger.info(f"Token approval required for {token_in}")
+            
+            # Get spender address from error message
+            spender = None
+            if "allowance" in error_str and "spender" in error_str:
+                try:
+                    spender_part = error_str.split("spender: ")[1]
+                    spender = spender_part.split(",")[0].strip()
+                    logger.info(f"Extracted spender from error: {spender}")
+                except (IndexError, ValueError):
+                    logger.error("Failed to extract spender from error message")
+            
+            # If we couldn't extract spender, use router address
+            if not spender:
+                # Import Kyber router addresses
+                from app.utils.kyber import get_chain_name
+                chain_name = get_chain_name(chain_id)
+                
+                # Construct router address based on chain
+                router_addresses = {
+                    1: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Ethereum
+                    137: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Polygon
+                    42161: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Arbitrum
+                    10: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Optimism
+                    8453: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Base
+                    534352: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Scroll
+                }
+                spender = router_addresses.get(chain_id)
+                logger.info(f"Using default router address as spender: {spender}")
+            
+            return {
+                "to": token_in,  # Token contract address
+                "data": "0x",  # Will be filled by frontend
+                "value": "0x0",
+                "chain_id": chain_id,
+                "method": "approve",
+                "gas_limit": "0x186a0",  # 100,000 gas
+                "needs_approval": True,
+                "token_to_approve": token_in,
+                "spender": spender,
+            }
+        
+        # Re-raise the exception for other errors
+        raise
+
 @router.post("/execute", response_model=TransactionResponse)
 async def execute_transaction(
     tx_request: TransactionRequest,
@@ -324,9 +479,10 @@ async def execute_transaction(
             # Handle token_in
             token_in = token_in_address
             # Check if token_in_address is in NATIVE_TOKENS or if token_in_symbol is 'ETH'
-            if token_in_address in NATIVE_TOKENS or token_in_symbol == 'ETH':
-                token_in = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"  # ETH placeholder address
-                logger.info(f"Using ETH placeholder address for {token_in_symbol}")
+            if is_native_token(token_in_address) or token_in_symbol == 'ETH':
+                # Use the helper function to get the chain-specific ETH address
+                token_in = get_native_token_address(tx_request.chain_id)
+                logger.info(f"Using chain-specific ETH address for {token_in_symbol}: {token_in}")
             
             # Handle token_out
             token_out = token_out_address
@@ -405,26 +561,12 @@ async def execute_transaction(
             logger.info(f"Preparing Kyber quote with token_in: {token_in}, token_out: {token_out}")
             
             try:
-                # Import Kyber functions
-                from app.utils.kyber import (
-                    get_quote as kyber_quote,
-                    KyberSwapError,
-                    NoRouteFoundError,
-                    InsufficientLiquidityError,
-                    InvalidTokenError,
-                    BuildTransactionError,
-                    get_chain_from_chain_id,
-                    TransferFromFailedError,
-                )
-                
-                # Preserve case for contract addresses in Kyber API call
-                quote = await kyber_quote(
-                    token_in=token_in,
-                    token_out=token_out,
-                    amount=swap_command.amount,
-                    chain_id=tx_request.chain_id,
-                    recipient=tx_request.wallet_address,
-                    token_in_decimals=token_in_metadata.get("decimals", 18) if token_in_metadata else 18
+                # Build the transaction
+                tx_data = await build_swap_transaction(
+                    swap_command,
+                    tx_request.wallet_address,
+                    tx_request.chain_id,
+                    token_service
                 )
                 
                 # Prepare metadata for the response
@@ -456,12 +598,12 @@ async def execute_transaction(
                 
                 # Return the transaction data
                 return TransactionResponse(
-                    to=quote.router_address,
-                    data=quote.data,
-                    value=hex(int(swap_command.amount * 10**18)) if swap_command.token_in == "ETH" else "0x0",
+                    to=tx_data["to"],
+                    data=tx_data["data"],
+                    value=tx_data["value"],
                     chain_id=tx_request.chain_id,
                     method="swap",
-                    gas_limit=quote.gas,
+                    gas_limit=tx_data["gas_limit"],
                     metadata=metadata,
                     agent_type="swap"  # Always swap for transactions
                 )
@@ -615,10 +757,10 @@ async def execute_transaction(
         logger.info(f"Parsed swap command: {swap_command}")
         
         # Get token details for metadata
-        token_in_address, token_in_symbol, token_in_name = await token_service.lookup_token(
+        token_in_address, token_in_symbol, token_in_name, token_in_metadata = await token_service.lookup_token(
             swap_command.token_in, tx_request.chain_id
         )
-        token_out_address, token_out_symbol, token_out_name = await token_service.lookup_token(
+        token_out_address, token_out_symbol, token_out_name, token_out_metadata = await token_service.lookup_token(
             swap_command.token_out, tx_request.chain_id
         )
         

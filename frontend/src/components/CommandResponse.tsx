@@ -352,7 +352,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         )}
         <Box pt={1}>{renderStatusIcon()}</Box>
         <VStack spacing={1} align="stretch" flex={1}>
-          <HStack justify="space-between">
+          <HStack
+            justify="space-between"
+            align="center"
+            spacing={2}
+            width="100%"
+          >
             <Badge
               colorScheme={
                 isCommand ? "blue" : agentType === "swap" ? "purple" : "gray"
@@ -365,7 +370,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 ? "@wheeler_dealer"
                 : "@snel"}
             </Badge>
-            <Text fontSize="xs" color="gray.500">
+            <Text
+              fontSize="xs"
+              color="gray.500"
+              flexShrink={0}
+              ml={1}
+              noOfLines={1}
+            >
               {timestamp}
             </Text>
           </HStack>
@@ -377,7 +388,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               onCancel={handleCancel}
             />
           ) : (
-            <Text fontSize="sm" color={textColor}>
+            <Text
+              fontSize="sm"
+              color={textColor}
+              wordBreak="break-word"
+              overflowWrap="break-word"
+              whiteSpace="pre-wrap"
+            >
               {typeof content === "string"
                 ? formatLinks(content)
                 : JSON.stringify(content)}

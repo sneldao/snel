@@ -7,6 +7,7 @@ import sys
 import json
 import time
 import os
+from app.config.chains import get_native_token_address, is_native_token
 
 # Configure logger to use stdout
 logger = logging.getLogger(__name__)
@@ -98,8 +99,8 @@ async def get_quote(
         )
         
         # Convert amount to the smallest token unit based on decimals
-        # ETH placeholder address used for native tokens
-        if token_in.lower() == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
+        # Use helper function to check if this is a native token
+        if is_native_token(token_in.lower()):
             # For ETH, always use 18 decimals
             decimals = 18
         else:

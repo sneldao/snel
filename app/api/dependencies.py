@@ -47,7 +47,7 @@ def get_openai_provider(openai_key: str = Depends(get_openai_key)) -> OpenAIProv
     """Get an OpenAI provider instance."""
     return OpenAIProvider(
         api_key=openai_key,
-        default_model=OpenAIModelType.gpt4o_mini
+        default_model=OpenAIModelType.gpt4o
     )
 
 def get_redis_service() -> RedisService:

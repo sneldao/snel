@@ -1,5 +1,5 @@
 from eth_typing import HexAddress
-from typing import Dict
+from typing import Dict, Optional
 
 class ChainConfig:
     """Configuration for supported chains."""
@@ -15,12 +15,16 @@ class ChainConfig:
 
     @staticmethod
     def is_supported(chain_id: int) -> bool:
+        """Check if a chain ID is supported by the application."""
         return chain_id in ChainConfig.SUPPORTED_CHAINS
 
     @staticmethod
     def get_chain_name(chain_id: int) -> str:
+        """Get the human-readable name for a chain ID."""
         return ChainConfig.SUPPORTED_CHAINS.get(chain_id, "Unknown")
 
+# Token address mapping for each chain
+# This is the source of truth for token addresses across all supported chains
 TOKEN_ADDRESSES: Dict[int, Dict[str, HexAddress]] = {
     1: {  # Ethereum
         "ETH": HexAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE"),
@@ -61,8 +65,72 @@ TOKEN_ADDRESSES: Dict[int, Dict[str, HexAddress]] = {
     }
 }
 
+# Set of all native token addresses across all chains
+# Used to quickly check if an address represents a native token
 NATIVE_TOKENS = {
     "0x4200000000000000000000000000000000000006",  # WETH on OP/Base
     "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # ETH
     "0x5300000000000000000000000000000000000004",  # ETH on Scroll
-} 
+}
+
+# Helper functions for token address management
+
+def get_token_address(token_symbol: str, chain_id: int) -> Optional[HexAddress]:
+    """
+    Get the address for a token on a specific chain.
+    
+    Args:
+        token_symbol: The token symbol (e.g., 'ETH', 'USDC')
+        chain_id: The chain ID to get the address for
+        
+    Returns:
+        The token address for the specified chain, or None if not found
+    """
+    if not ChainConfig.is_supported(chain_id):
+        return None
+        
+    chain_tokens = TOKEN_ADDRESSES.get(chain_id, {})
+    return chain_tokens.get(token_symbol.upper())
+
+def get_native_token_address(chain_id: int) -> Optional[HexAddress]:
+    """
+    Get the native token address for a specific chain.
+    
+    Args:
+        chain_id: The chain ID to get the native token address for
+        
+    Returns:
+        The native token address for the specified chain, or None if not found
+    """
+    return get_token_address("ETH", chain_id)
+
+def is_native_token(address: str) -> bool:
+    """
+    Check if an address represents a native token.
+    
+    Args:
+        address: The token address to check
+        
+    Returns:
+        True if the address represents a native token, False otherwise
+    """
+    return address in NATIVE_TOKENS
+
+def get_chain_specific_address(token_symbol: str, chain_id: int, default_address: Optional[str] = None) -> str:
+    """
+    Get the chain-specific address for a token, with fallback to a default address.
+    
+    This is particularly useful for protocols that expect specific addresses for native tokens.
+    
+    Args:
+        token_symbol: The token symbol (e.g., 'ETH', 'USDC')
+        chain_id: The chain ID to get the address for
+        default_address: A default address to return if the token is not found
+        
+    Returns:
+        The chain-specific token address, or the default address if not found
+    """
+    address = get_token_address(token_symbol, chain_id)
+    if address:
+        return address
+    return default_address 

@@ -45,10 +45,10 @@ async def process_command(
         # If it's a confirmation or cancellation, handle it differently
         if is_confirmation:
             # Get the pending command from the store
-            pending_command_data = command_store.get_command(command.user_id)
+            pending_command_data = command_store.get_command(command.creator_id)
             
             if pending_command_data:
-                logger.info(f"Found pending command for user {command.user_id}: {pending_command_data}")
+                logger.info(f"Confirming pending command for user {command.creator_id}: {pending_command_data}")
                 
                 # Extract the command and chain_id
                 pending_command = pending_command_data.get("command")
@@ -57,7 +57,7 @@ async def process_command(
                 if pending_command and chain_id:
                     # Update the command status
                     command_store.store_command(
-                        command.user_id, 
+                        command.creator_id, 
                         pending_command, 
                         chain_id
                     )
@@ -81,7 +81,7 @@ async def process_command(
                         agent_type="swap"
                     )
             else:
-                logger.error(f"No pending command found for user {command.user_id}")
+                logger.error(f"No pending command found for user {command.creator_id}")
                 return CommandResponse(
                     content="Sorry, I couldn't find a pending command to confirm. Please try your request again.",
                     error="No pending command found",
@@ -89,20 +89,20 @@ async def process_command(
                 )
         elif is_cancellation:
             # Get the pending command from the store
-            pending_command_data = command_store.get_command(command.user_id)
+            pending_command_data = command_store.get_command(command.creator_id)
             
             if pending_command_data:
-                logger.info(f"Cancelling pending command for user {command.user_id}: {pending_command_data}")
+                logger.info(f"Cancelling pending command for user {command.creator_id}: {pending_command_data}")
                 
                 # Clear the command from the store
-                command_store.clear_command(command.user_id)
+                command_store.clear_command(command.creator_id)
                 
                 return CommandResponse(
                     content="Transaction cancelled. Is there anything else you'd like to do?",
                     agent_type="swap"
                 )
             else:
-                logger.warning(f"No pending command found to cancel for user {command.user_id}")
+                logger.warning(f"No pending command found to cancel for user {command.creator_id}")
                 return CommandResponse(
                     content="There's no pending transaction to cancel. Is there anything else you'd like to do?",
                     agent_type="swap"
@@ -111,7 +111,7 @@ async def process_command(
         # Process the command based on its type
         if command.content.lower().startswith("swap"):
             # Process as a swap command
-            provider = OpenAIProvider(api_key=openai_key, model=OpenAIModelType.GPT4_TURBO)
+            provider = OpenAIProvider(api_key=openai_key, model=OpenAIModelType.gpt4o)
             swap_agent = SwapAgent(provider=provider)
             
             # Process the swap request
@@ -130,9 +130,9 @@ async def process_command(
                 pending_command = result["metadata"].get("pending_command")
                 if pending_command:
                     # Store the command in Redis
-                    logger.info(f"Storing pending swap command for user {command.user_id}: {pending_command}")
+                    logger.info(f"Storing pending swap command for user {command.creator_id}: {pending_command}")
                     command_store.store_command(
-                        command.user_id,
+                        command.creator_id,
                         pending_command,
                         command.chain_id
                     )

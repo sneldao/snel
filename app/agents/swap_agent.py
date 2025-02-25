@@ -376,8 +376,24 @@ class SwapAgent(PointlessAgent):
             # Add CoinGecko if we have a contract address
             links["coingecko"] = f"https://www.coingecko.com/en/coins/{token}"
             
-            # Add Dexscreener for price charts
-            links["dexscreener"] = f"https://dexscreener.com/ethereum/{token}"
+            # Add Dexscreener for price charts with the correct chain
+            if chain_id == 1:  # Ethereum
+                links["dexscreener"] = f"https://dexscreener.com/ethereum/{token}"
+            elif chain_id == 137:  # Polygon
+                links["dexscreener"] = f"https://dexscreener.com/polygon/{token}"
+            elif chain_id == 42161:  # Arbitrum
+                links["dexscreener"] = f"https://dexscreener.com/arbitrum/{token}"
+            elif chain_id == 10:  # Optimism
+                links["dexscreener"] = f"https://dexscreener.com/optimism/{token}"
+            elif chain_id == 8453:  # Base
+                links["dexscreener"] = f"https://dexscreener.com/base/{token}"
+            elif chain_id == 534352:  # Scroll
+                links["dexscreener"] = f"https://dexscreener.com/scroll/{token}"
+            elif chain_id == 43114:  # Avalanche
+                links["dexscreener"] = f"https://dexscreener.com/avalanche/{token}"
+            else:
+                # Default to search if chain not specifically handled
+                links["dexscreener"] = f"https://dexscreener.com/search?q={token}"
             
         # Handle token symbols
         else:

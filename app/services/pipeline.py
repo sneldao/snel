@@ -518,7 +518,7 @@ def init_pipeline(openai_key: str) -> Pipeline[Tweet, TweetWithChain, Literal["s
         # Create OpenAI provider with specific model
         provider = OpenAIProvider(
             api_key=openai_key,
-            default_model=OpenAIModelType.gpt4o_mini
+            default_model=OpenAIModelType.gpt4o
         )
         
         # Create pipeline with routing and effects
