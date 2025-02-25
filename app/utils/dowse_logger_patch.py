@@ -41,7 +41,6 @@ def patch_dowse_logger():
     
     # Monkey patch the dowse.logger module to use our logger
     try:
-        import sys
         import dowse
         sys.modules["dowse.logger"] = type("LoggerModule", (), {"logger": logger})
         
