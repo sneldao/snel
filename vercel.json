@@ -12,6 +12,7 @@
                 "handler": "app",
                 "includeFiles": [
                     "app/**",
+                    "api/**",
                     "src/**",
                     "requirements.txt",
                     "*.py",
