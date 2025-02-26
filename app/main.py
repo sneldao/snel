@@ -27,6 +27,18 @@ def create_app() -> FastAPI:
     )
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    
+    # Add serverless compatibility middleware
+    # Only apply in Vercel environment
+    if os.environ.get("VERCEL", "0") == "1":
+        try:
+            from api.middleware import add_serverless_compatibility
+            app = add_serverless_compatibility(app)
+            logger.info("Added serverless compatibility middleware")
+        except ImportError:
+            logger.warning("Serverless compatibility middleware not found, skipping")
+        except Exception as e:
+            logger.error(f"Error adding serverless compatibility middleware: {e}")
 
     # Add CORS middleware
     app.add_middleware(
