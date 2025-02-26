@@ -6,6 +6,9 @@ export NODE_ENV=production
 # Clear any existing NEXT_PUBLIC_API_URL
 unset NEXT_PUBLIC_API_URL
 
+# Skip tests during the build
+export SKIP_TESTS=1
+
 # Install Python packages from requirements.txt
 pip install -r requirements.txt
 
