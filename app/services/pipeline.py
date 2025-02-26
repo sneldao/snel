@@ -152,9 +152,16 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
                 # Special handling for custom tokens with $ prefix
                 is_custom_token_in = token_in.startswith('$')
                 is_custom_token_out = token_out.startswith('$')
+            
                 
-                # Validate input token (skip validation for custom tokens with $ prefix)
-                token_in_valid = is_custom_token_in or _is_valid_contract_address(token_in) or await validate_token(token_in, tweet.chain_id)
+                # Check if tokens are known special tokens
+                if is_custom_token_in and token_in.lower() in known_special_tokens:
+                    logger.info(f"Recognized special token {token_in}")
+                    token_in_valid = True
+                else:
+                    # Validate input token (skip validation for custom tokens with $ prefix)
+                    token_in_valid = is_custom_token_in or _is_valid_contract_address(token_in) or await validate_token(token_in, tweet.chain_id)
+                
                 if not token_in_valid:
                     error_msg = (
                         f"The token '{token_in}' is not recognized as a valid cryptocurrency or contract address. "
@@ -166,8 +173,14 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
                         error_message=error_msg
                     )
                 
-                # Validate output token (skip validation for custom tokens with $ prefix)
-                token_out_valid = is_custom_token_out or _is_valid_contract_address(token_out) or await validate_token(token_out, tweet.chain_id)
+                # Check if tokens are known special tokens
+                if is_custom_token_out and token_out.lower() in known_special_tokens:
+                    logger.info(f"Recognized special token {token_out}")
+                    token_out_valid = True
+                else:
+                    # Validate output token (skip validation for custom tokens with $ prefix)
+                    token_out_valid = is_custom_token_out or _is_valid_contract_address(token_out) or await validate_token(token_out, tweet.chain_id)
+                
                 if not token_out_valid:
                     error_msg = (
                         f"The token '{token_out}' is not recognized as a valid cryptocurrency or contract address. "
@@ -178,6 +191,15 @@ class SwapCommandExtractor(Processor[TweetWithChain, ProcessedSwapCommand]):
                         content=None,
                         error_message=error_msg
                     )
+                
+                # For special tokens, replace with known contract address if needed
+                if is_custom_token_in and token_in.lower() in known_special_tokens:
+                    logger.info(f"Replacing {token_in} with contract address {known_special_tokens[token_in.lower()]}")
+                    token_in = known_special_tokens[token_in.lower()]
+                
+                if is_custom_token_out and token_out.lower() in known_special_tokens:
+                    logger.info(f"Replacing {token_out} with contract address {known_special_tokens[token_out.lower()]}")
+                    token_out = known_special_tokens[token_out.lower()]
                 
                 # Create the command object
                 command_obj = ProcessedSwapCommand(

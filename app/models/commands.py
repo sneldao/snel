@@ -97,6 +97,7 @@ class TransactionRequest(BaseModel):
     wallet_address: HexAddress
     chain_id: int
     metadata: Optional[Dict[str, Any]] = None
+    skip_approval: Optional[bool] = False
 
 class TransactionResponse(BaseModel):
     """API response for a transaction execution."""

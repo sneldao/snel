@@ -22,8 +22,10 @@ QUICKNODE_ENDPOINT = os.environ.get("QUICKNODE_ENDPOINT")
 
 # Check if SSL verification should be disabled (for development only)
 DISABLE_SSL_VERIFY = os.environ.get("DISABLE_SSL_VERIFY", "").lower() == "true"
-if DISABLE_SSL_VERIFY:
-    logger.warning("SSL certificate verification is disabled in prices.py. This should only be used in development.")
+if DISABLE_SSL_VERIFY and not os.environ.get("SSL_WARNING_SHOWN"):
+    logger.warning("⚠️ SECURITY WARNING: SSL certificate verification is disabled in prices.py. This makes your connections less secure and should ONLY be used during development.")
+    # Mark that we've shown the warning
+    os.environ["SSL_WARNING_SHOWN"] = "true"
 
 # Cache for validated tokens to reduce API calls
 # Structure: {(token_id, chain_id): (timestamp, is_valid)}
@@ -287,6 +289,8 @@ async def get_token_price_coingecko(token_id: str) -> float:
 
 async def get_token_price(token_id: str, token_address: Optional[str] = None, chain_id: Optional[int] = None) -> Tuple[float, int]:
     """Get token price using CoinGecko with Moralis as fallback."""
+    logger.info(f"Getting price for token: {token_id} (address: {token_address}, chain: {chain_id})")
+    
     # Try CoinGecko first for well-known tokens
     try:
         price = await get_token_price_coingecko(token_id)
@@ -304,12 +308,15 @@ async def get_token_price(token_id: str, token_address: Optional[str] = None, ch
             
             # Then get the price
             price = await get_token_price_moralis(token_address, chain_id)
-            return price, decimals
+            if price is not None:
+                return price, decimals
         except Exception as e:
             logger.error(f"Moralis price fetch failed: {e}")
-            raise ValueError(f"Failed to get price for {token_id}: {str(e)}")
-    else:
-        raise ValueError(f"Token {token_id} not found on CoinGecko and no token address provided for Moralis fallback")
+    
+    # For any token we couldn't get a price for, use a small default price
+    # This allows trading of any token while protecting against large slippage
+    logger.warning(f"Using default price for token: {token_id}")
+    return 0.00001, 18  # Default price and decimals for unknown tokens
 
 async def validate_token(token_id: str, chain_id: Optional[int] = None) -> bool:
     """

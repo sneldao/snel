@@ -5,19 +5,76 @@ This file is used to run the application locally.
 
 import os
 import sys
+import logging
 from pathlib import Path
 
 # Add the current directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Patch the Dowse logger before importing any Dowse modules
-from app.utils.dowse_logger_patch import patch_dowse_logger
-logger = patch_dowse_logger()
-logger.info("Dowse logger patched successfully for local environment")
+# Configure logging before anything else
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
 
-# Now it's safe to import the app
+# Create a logger for this module
+logger = logging.getLogger(__name__)
+logger.info("Starting Dowse Pointless application")
+
+# Configure SSL verification for development
+if os.getenv("DISABLE_SSL_VERIFY", "").lower() == "true":
+    # Set a global environment variable to prevent duplicate warnings
+    os.environ["SSL_WARNING_SHOWN"] = "true"
+    
+    # Display a more user-friendly warning
+    logger.warning("⚠️ SECURITY WARNING: SSL certificate verification is disabled. This makes your connections less secure and should ONLY be used during development.")
+    
+    # Disable urllib3 warnings
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Load environment variables
+from dotenv import load_dotenv
+env_path = Path(__file__).parent / '.env'
+load_dotenv(env_path)
+
+# Validate required environment variables
+required_vars = [
+    "ALCHEMY_KEY",
+    "COINGECKO_API_KEY",
+    "MORALIS_API_KEY",
+    "OPENAI_API_KEY"
+]
+
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+    sys.exit(1)
+
+# Import the app
 from app.main import app
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    
+    # Configure uvicorn logging to match our format
+    log_config = uvicorn.config.LOGGING_CONFIG
+    log_config["formatters"]["access"]["fmt"] = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    log_config["formatters"]["default"]["fmt"] = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    
+    # Get port from environment or use default
+    port = int(os.getenv("PORT", "8000"))
+    
+    logger.info(f"Starting server on port {port}")
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=True,
+        log_config=log_config,
+        log_level="info"
+    )

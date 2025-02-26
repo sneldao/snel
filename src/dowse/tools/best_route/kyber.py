@@ -29,6 +29,7 @@ class Quote(BaseModel):
     gas: int
     data: str  # The encoded swap data
     router_address: str = Field(alias="routerAddress")
+    transaction_value: str = Field(default="0", alias="transactionValue")
     aggregator: str = "kyber"
 
 
@@ -163,6 +164,15 @@ async def get_quote(
                     logger.error(f"Response structure: {json.dumps(build_data, indent=2)}")
                     raise BuildTransactionError(f"Could not find transaction data in response")
                 
+                # Extract transaction value for native token swaps
+                transaction_value = "0"
+                if "transactionValue" in build_data.get("data", {}):
+                    transaction_value = build_data["data"]["transactionValue"]
+                elif "tx" in tx_data and isinstance(tx_data["tx"], dict):
+                    transaction_value = tx_data["tx"].get("value", "0")
+                
+                logger.info(f"Transaction value for swap: {transaction_value}")
+                
                 return Quote(
                     tokenIn=route_summary["tokenIn"],
                     tokenOut=route_summary["tokenOut"],
@@ -170,7 +180,8 @@ async def get_quote(
                     amountOut=int(route_summary["amountOut"]),
                     gas=int(route_summary["gas"]),
                     data=encoded_data,
-                    routerAddress=router_address
+                    routerAddress=router_address,
+                    transactionValue=transaction_value
                 )
                 
         except (NoRouteFoundError, InsufficientLiquidityError, InvalidTokenError) as e:

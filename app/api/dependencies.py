@@ -1,11 +1,13 @@
 import os
 import logging
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import APIKeyHeader
 from emp_agents.providers import OpenAIProvider, OpenAIModelType
 from app.services.redis_service import RedisService
 from app.services.command_store import CommandStore
 from app.services.token_service import TokenService
+from app.services.swap_service import SwapService
+from app.agents.swap_agent import SwapAgent
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +64,45 @@ def get_token_service() -> TokenService:
     """Get a token service instance."""
     return TokenService()
 
-def get_pipeline(openai_key: str = Depends(get_openai_key)):
-    """Get the Dowse pipeline instance."""
-    # Import here to avoid circular imports
-    from app.services.pipeline import get_pipeline as get_dowse_pipeline
-    return get_dowse_pipeline(openai_key) 
+def get_swap_agent(openai_key: str = Depends(get_openai_key)) -> SwapAgent:
+    """Get a swap agent instance."""
+    provider = OpenAIProvider(api_key=openai_key)
+    return SwapAgent(provider=provider)
+
+def get_swap_service(
+    token_service: TokenService = Depends(get_token_service),
+    swap_agent: SwapAgent = Depends(get_swap_agent)
+) -> SwapService:
+    """Get a swap service instance."""
+    return SwapService(token_service=token_service, swap_agent=swap_agent)
+
+# For backward compatibility, we'll keep a simplified version of get_pipeline
+# that returns our swap service instead
+def get_pipeline(openai_key: str = Depends(get_openai_key), request: Request = None):
+    """
+    Legacy function to maintain backward compatibility.
+    
+    This now returns a simple object with a process method that delegates to the swap service.
+    """
+    logger.warning("get_pipeline is deprecated, use get_swap_service instead")
+    
+    # Create services
+    provider = OpenAIProvider(api_key=openai_key)
+    swap_agent = SwapAgent(provider=provider)
+    token_service = TokenService()
+    swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
+    
+    # Create a simple object that mimics the pipeline interface
+    class LegacyPipeline:
+        async def process(self, tweet):
+            """Process a tweet using the swap agent."""
+            # Extract the command from the tweet
+            command = tweet.text if hasattr(tweet, 'text') else str(tweet)
+            
+            # Use the swap agent to process the command
+            result = await swap_agent.process_swap(command)
+            
+            # Return the result
+            return result
+    
+    return LegacyPipeline() 

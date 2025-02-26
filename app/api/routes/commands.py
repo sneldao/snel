@@ -3,8 +3,8 @@ import logging
 from eth_utils import to_checksum_address
 from app.models.commands import CommandRequest, CommandResponse, BotMessage
 from app.services.command_store import CommandStore
-from app.api.dependencies import get_openai_key, get_pipeline, get_command_store, get_token_service
-from app.agents.swap_agent import SwapAgent
+from app.api.dependencies import get_openai_key, get_pipeline, get_command_store, get_token_service, get_swap_service
+from app.services.swap_service import SwapService
 from app.agents.price_agent import PriceAgent
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
@@ -31,7 +31,8 @@ async def process_command(
     command: CommandRequest,
     request: Request,
     token_service: TokenService = Depends(get_token_service),
-    command_store: CommandStore = Depends(get_command_store)
+    command_store: CommandStore = Depends(get_command_store),
+    swap_service: SwapService = Depends(get_swap_service)
 ):
     """Process a command and return a response."""
     try:
@@ -110,12 +111,9 @@ async def process_command(
         
         # Process the command based on its type
         if command.content.lower().startswith("swap"):
-            # Process as a swap command
-            provider = OpenAIProvider(api_key=openai_key, model=OpenAIModelType.gpt4o)
-            swap_agent = SwapAgent(provider=provider)
-            
-            # Process the swap request
-            result = await swap_agent.process_swap(command.content, command.chain_id)
+            # Process as a swap command using the swap service
+            # Use the swap agent from our dependency
+            result = await swap_service.swap_agent.process_swap(command.content, command.chain_id)
             
             if result["error"]:
                 return CommandResponse(

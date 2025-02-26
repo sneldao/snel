@@ -69,6 +69,7 @@ type TransactionData = {
   token_to_approve?: string;
   spender?: string;
   pending_command?: string;
+  skip_approval?: boolean;
   metadata?: {
     token_in_address?: string;
     token_in_symbol?: string;
@@ -81,6 +82,11 @@ type TransactionData = {
     token_out_verified?: boolean;
     token_out_source?: string;
   };
+  // Add properties that might come from API responses
+  gas_limit?: string;
+  gas_price?: string;
+  max_fee_per_gas?: string;
+  max_priority_fee_per_gas?: string;
 };
 
 // Add supported chains constant
@@ -182,11 +188,18 @@ export default function Home() {
 
     try {
       // If approval is needed, handle it first
-      if (txData.needs_approval && txData.token_to_approve && txData.spender) {
+      if (
+        txData.needs_approval &&
+        txData.token_to_approve &&
+        txData.spender &&
+        !txData.skip_approval
+      ) {
+        const tokenSymbol = txData.metadata?.token_in_symbol || "Token";
+
         setResponses((prev) => [
           ...prev,
           {
-            content: "Please approve USDC spending for the swap...",
+            content: `Please approve ${tokenSymbol} spending for the swap...`,
             timestamp: new Date().toLocaleTimeString(),
             isCommand: false,
             status: "processing",
@@ -194,15 +207,26 @@ export default function Home() {
           },
         ]);
 
-        const approveData = {
+        // Generate proper ERC20 approve function data
+        // Function signature: approve(address,uint256)
+        const approveSignature = "0x095ea7b3"; // approve(address,uint256) function selector
+        // Pad the address to 32 bytes (remove 0x prefix first)
+        const paddedSpender = txData.spender.slice(2).padStart(64, "0");
+        // Use a very large value to approve (uint256 max value to approve "unlimited")
+        const maxUint256 =
+          "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+        const approveData = `${approveSignature}${paddedSpender}${maxUint256}`;
+
+        const approveParams = {
           to: txData.token_to_approve as `0x${string}`,
-          data: txData.data as `0x${string}`,
+          data: approveData as `0x${string}`,
           value: BigInt(0),
           chainId: txData.chainId,
           gas: BigInt(100000),
         };
 
-        const approveHash = await walletClient.sendTransaction(approveData);
+        const approveHash = await walletClient.sendTransaction(approveParams);
         const approveReceipt = await publicClient?.waitForTransactionReceipt({
           hash: approveHash,
         });
@@ -214,7 +238,7 @@ export default function Home() {
         setResponses((prev) => [
           ...prev,
           {
-            content: "USDC approved successfully! Proceeding with swap...",
+            content: `${tokenSymbol} approved successfully! Proceeding with swap...`,
             timestamp: new Date().toLocaleTimeString(),
             isCommand: false,
             status: "success",
@@ -232,6 +256,7 @@ export default function Home() {
               wallet_address: address,
               chain_id: chainId,
               creator_id: address ? address.toLowerCase() : "anonymous",
+              skip_approval: txData.pending_command.startsWith("approved:"),
             }),
           });
 
@@ -242,7 +267,25 @@ export default function Home() {
           }
 
           const swapData = await response.json();
-          return executeTransaction(swapData); // Execute the swap transaction
+          // Convert snake_case to camelCase for proper execution
+          const mappedData: TransactionData = {
+            to: swapData.to,
+            data: swapData.data,
+            value: swapData.value,
+            chainId: chainId,
+            method: swapData.method,
+            gasLimit: swapData.gas_limit,
+            gasPrice: swapData.gas_price,
+            maxFeePerGas: swapData.max_fee_per_gas,
+            maxPriorityFeePerGas: swapData.max_priority_fee_per_gas,
+            needs_approval: false, // Skip approval since we just did it
+            token_to_approve: swapData.token_to_approve,
+            spender: swapData.spender,
+            pending_command: swapData.pending_command,
+            skip_approval: true,
+            metadata: swapData.metadata,
+          };
+          return executeTransaction(mappedData);
         }
       }
 
@@ -250,9 +293,9 @@ export default function Home() {
       const transaction = {
         to: txData.to as `0x${string}`,
         data: txData.data as `0x${string}`,
-        value: BigInt(txData.value),
+        value: BigInt(txData.value || "0"),
         chainId: txData.chainId,
-        gas: BigInt(txData.gasLimit),
+        gas: BigInt(txData.gasLimit || txData.gas_limit || "300000"),
       };
 
       const hash = await walletClient.sendTransaction(transaction);
@@ -303,15 +346,48 @@ export default function Home() {
       let errorMessage = "Transaction failed";
 
       if (error instanceof Error) {
-        if (error.message.includes("user rejected")) {
-          errorMessage = "Transaction was cancelled";
+        if (
+          error.message.includes("user rejected") ||
+          error.message.includes("User rejected")
+        ) {
+          errorMessage = "Transaction was cancelled by user";
         } else if (error.message.includes("insufficient funds")) {
           errorMessage = "Insufficient funds for transaction";
         } else if (error.message.includes("TRANSFER_FROM_FAILED")) {
           errorMessage =
             "Failed to transfer USDC. Please make sure you have enough USDC and have approved the swap.";
         } else {
-          errorMessage = error.message;
+          // For other errors, extract a more readable message
+          const message = error.message;
+
+          // If the error contains transaction data (which is very long), simplify it
+          if (
+            message.includes("Request Arguments:") &&
+            message.includes("data:")
+          ) {
+            // Extract just the basic information
+            const fromMatch = message.match(/from:\s+([0-9a-fA-Fx]+)/);
+            const toMatch = message.match(/to:\s+([0-9a-fA-Fx]+)/);
+            const valueMatch = message.match(/value:\s+([\d.]+\s+ETH)/);
+
+            const from = fromMatch ? fromMatch[1] : "unknown";
+            const to = toMatch ? toMatch[1] : "unknown";
+            const value = valueMatch ? valueMatch[1] : "unknown amount";
+
+            errorMessage = `Transaction failed: ${message
+              .split("Request Arguments:")[0]
+              .trim()}`;
+            errorMessage += `\nTransaction details: ${value} from ${from.substring(
+              0,
+              8
+            )}... to ${to.substring(0, 8)}...`;
+          } else {
+            // For other errors, use the first line or first 100 characters
+            errorMessage = message.split("\n")[0];
+            if (errorMessage.length > 100) {
+              errorMessage = errorMessage.substring(0, 100) + "...";
+            }
+          }
         }
       }
 
@@ -424,6 +500,7 @@ export default function Home() {
               wallet_address: address,
               chain_id: chainId,
               creator_id: address ? address.toLowerCase() : "anonymous",
+              skip_approval: data.pending_command.startsWith("approved:"),
             }),
           });
 
@@ -446,6 +523,9 @@ export default function Home() {
             token_to_approve: txData.token_to_approve,
             spender: txData.spender,
             pending_command: txData.pending_command,
+            skip_approval:
+              txData.skip_approval ||
+              data.pending_command.startsWith("approved:"),
             metadata: txData.metadata,
           });
         } catch (error) {

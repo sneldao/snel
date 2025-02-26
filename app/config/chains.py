@@ -35,6 +35,8 @@ TOKEN_ADDRESSES: Dict[int, Dict[str, HexAddress]] = {
         "ETH": HexAddress("0x4200000000000000000000000000000000000006"),
         "USDC": HexAddress("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"),
         "UNI": HexAddress("0x0000000000000000000000000000000000000000"),
+        "DICKBUTT": HexAddress("0x92d90f7f8413749bd4bea26dde4e29efc9e9a0b6"),
+        "$DICKBUTT": HexAddress("0x92d90f7f8413749bd4bea26dde4e29efc9e9a0b6"),
     },
     10: {  # Optimism
         "ETH": HexAddress("0x4200000000000000000000000000000000000006"),
