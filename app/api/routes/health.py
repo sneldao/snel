@@ -1,58 +1,75 @@
-from fastapi import APIRouter, Depends
-import datetime
-import sys
+"""
+Health check endpoints for monitoring the API status.
+"""
+
 import os
-import logging
-from app.services.redis_service import RedisService
-from app.api.dependencies import get_redis_service
+import sys
+import time
+from typing import Dict, Any
 
-logger = logging.getLogger(__name__)
-router = APIRouter()
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
-@router.get("/api/health")
-async def health_check(redis_service: RedisService = Depends(get_redis_service)):
-    """Health check endpoint."""
+router = APIRouter(tags=["health"])
+
+# Model for health check response
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+    timestamp: float
+    uptime: float
+    environment: str
+    python_version: str
+    services: Dict[str, Any]
+
+# Track startup time
+START_TIME = time.time()
+
+# API version
+VERSION = "1.0.0"
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check():
+    """
+    Health check endpoint to verify API status and dependencies.
+    """
+    # Check Redis connection
+    redis_status = "unknown"
+    redis_error = None
+    
     try:
-        # Check Redis connection
-        redis_status = "unknown"
-        redis_error = None
-        try:
-            redis_connected = redis_service.test_connection()
-            redis_status = "connected" if redis_connected else "error"
-            if not redis_connected:
-                redis_error = "Redis connection test failed"
-        except Exception as e:
-            redis_status = "error"
-            redis_error = str(e)
-            logger.error(f"Redis health check failed: {e}")
-
-        # Check environment variables
-        env_vars = {
-            "REDIS_URL": os.environ.get("REDIS_URL") and isinstance(os.environ.get("REDIS_URL"), str),
-            "UPSTASH_REDIS_REST_URL": os.environ.get("UPSTASH_REDIS_REST_URL") and isinstance(os.environ.get("UPSTASH_REDIS_REST_URL"), str),
-            "UPSTASH_REDIS_REST_TOKEN": os.environ.get("UPSTASH_REDIS_REST_TOKEN") and isinstance(os.environ.get("UPSTASH_REDIS_REST_TOKEN"), str),
-            "MORALIS_API_KEY": bool(os.environ.get("MORALIS_API_KEY")),
-            "ALCHEMY_KEY": bool(os.environ.get("ALCHEMY_KEY")),
-            "COINGECKO_API_KEY": bool(os.environ.get("COINGECKO_API_KEY")),
-        }
-        
-        return {
-            "status": "healthy" if redis_status == "connected" else "unhealthy",
-            "timestamp": datetime.datetime.now().isoformat(),
-            "services": {
-                "redis": {
-                    "status": redis_status,
-                    "error": redis_error
-                }
-            },
-            "environment": {
-                "python_version": sys.version,
-                "environment_variables": env_vars
+        from app.utils.cache import redis
+        if redis:
+            await redis.ping()
+            redis_status = "ok"
+        else:
+            redis_status = "not_configured"
+    except Exception as e:
+        redis_status = "error"
+        redis_error = str(e)
+    
+    # Get environment
+    environment = os.environ.get("VERCEL_ENV", os.environ.get("ENVIRONMENT", "development"))
+    
+    # Build response
+    return HealthResponse(
+        status="ok",
+        version=VERSION,
+        timestamp=time.time(),
+        uptime=time.time() - START_TIME,
+        environment=environment,
+        python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        services={
+            "redis": {
+                "status": redis_status,
+                "error": redis_error
             }
         }
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e)
-        } 
+    )
+
+@router.get("/ping")
+async def ping():
+    """
+    Simple ping endpoint for basic health checks.
+    """
+    return {"status": "ok", "timestamp": time.time()} 

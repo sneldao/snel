@@ -6,7 +6,7 @@ A friendly crypto command interpreter that helps users swap tokens and answers q
 
 - Token swaps across multiple chains (Optimism, Base, Scroll)
 - Natural language command processing
-- Automatic token approval handling
+- Automatic token approval handling with skip approval option
 - Multi-chain support with automatic chain detection
 - Persistent command storage with Redis
 
@@ -15,6 +15,10 @@ A friendly crypto command interpreter that helps users swap tokens and answers q
 - Optimism
 - Base
 - Scroll
+- Ethereum
+- Arbitrum
+- Polygon
+- Avalanche
 - (More coming soon)
 
 ## Local Development Setup
@@ -37,6 +41,7 @@ ALCHEMY_KEY=your_alchemy_key
 COINGECKO_API_KEY=your_coingecko_key
 MORALIS_API_KEY=your_moralis_key
 REDIS_URL=your_upstash_redis_url  # Format: rediss://default:token@hostname:port
+ZEROX_API_KEY=your_0x_api_key
 ```
 
 For local development, if you encounter SSL certificate verification issues with the API services, you can set:
@@ -172,6 +177,7 @@ Set these in your Vercel project settings:
 - `ALCHEMY_KEY`
 - `COINGECKO_API_KEY`
 - `MORALIS_API_KEY`
+- `ZEROX_API_KEY` (for 0x API access)
 - `NEXT_PUBLIC_API_URL` (set to your production domain)
 - `REDIS_URL` (your Upstash Redis URL)
 
@@ -204,6 +210,17 @@ allow_origins=[
 ]
 ```
 
+## Transaction Features
+
+### Token Approval Management
+
+The application now supports automatic token approval management with these features:
+
+- **Automatic Approval Detection**: The system automatically detects when token approvals are needed
+- **Skip Approval Option**: Commands prefixed with "approved:" will skip the approval check
+- **Approval Transaction Tracking**: Track the status of approval transactions with clear feedback
+- **Smart Retry Logic**: After successful approval, the system automatically continues with the original transaction
+
 ## Troubleshooting
 
 ### Common Issues
@@ -231,7 +248,9 @@ allow_origins=[
 
 ## Recent Updates
 
+- Added skip approval functionality to streamline token swaps after approval
 - Added SSL certificate verification bypass option for local development
+- Added support for 0x API as the default swap aggregator
 - Enhanced token lookup functionality to better handle contract addresses
 - Improved error messages for token lookup failures
 - Added support for direct contract address input in swap commands
