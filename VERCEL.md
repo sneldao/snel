@@ -121,7 +121,7 @@ export SKIP_TESTS=1
 pip install -r requirements.txt
 
 # Install additional packages with specific versions if needed
-pip install dowse==0.1.6.post1 emp-agents==0.3.0 eth-rpc-py==0.1.26
+pip install dowse==0.1.6.post1 emp-agents==0.3.0 eth-rpc-py==0.1.26 pydantic_settings==2.2.1
 
 # Print installed packages for debugging
 pip freeze > installed_packages.txt
@@ -174,6 +174,23 @@ These environment variables should be set in the Vercel project settings:
 - `ZEROX_API_KEY`: API key for 0x API
 - `REDIS_URL`: URL for Upstash Redis database
 - `NEXT_PUBLIC_API_URL`: URL for the API in production (automatically set by Vercel)
+
+## Required Dependencies
+
+The application requires the following key dependencies:
+
+- `pydantic`: Data validation library
+- `pydantic_settings`: Settings management for pydantic (required for app/config/settings.py)
+- `fastapi`: Web framework
+- `dowse`: Core library for crypto operations
+- `emp-agents`: Agent framework for natural language processing
+
+If you encounter a `ModuleNotFoundError` for any of these dependencies, make sure they are properly installed in your `vercel.build.sh` script:
+
+```bash
+# Install additional packages with specific versions if needed
+pip install dowse==0.1.6.post1 emp-agents==0.3.0 eth-rpc-py==0.1.26 pydantic_settings==2.2.1
+```
 
 ## Serverless Compatibility Layer
 
@@ -232,67 +249,194 @@ from app.main import app
 A middleware layer catches and handles common serverless errors:
 
 ```python
-class ServerlessCompatibilityMiddleware(BaseHTTPMiddleware):
-    """Middleware for handling common serverless deployment issues."""
+from fastapi import Request, Response
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+import logging
+import os
 
+logger = logging.getLogger(__name__)
+
+class ServerlessCompatibilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         try:
-            # Call the next middleware/route handler
             response = await call_next(request)
             return response
         except OSError as e:
-            # Catch file system errors
+            # Check if this is a read-only filesystem error
             if "Read-only file system" in str(e):
-                logger.error(f"Read-only file system error: {e}")
+                logger.error(f"Serverless filesystem error: {e}")
                 return JSONResponse(
                     status_code=500,
                     content={
-                        "detail": "Server error: Unable to write to file system",
-                        "error_type": "read_only_fs",
-                        "error": str(e)
+                        "error": "Serverless environment error",
+                        "message": "The application attempted to write to the filesystem in a read-only environment",
+                        "detail": str(e)
                     }
                 )
             # Re-raise other OS errors
             raise
         except Exception as e:
-            # Log all other exceptions
-            logger.error(f"Unhandled exception: {e}")
-            logger.error(traceback.format_exc())
+            logger.exception(f"Unhandled exception in request: {e}")
             raise
 ```
 
-### 3. Configuration for Serverless Environments
+### 3. Comprehensive Dowse Logger Patch
 
-In `app/main.py`, the middleware is conditionally applied in serverless environments:
-
-```python
-# Only apply in Vercel environment
-if os.environ.get("VERCEL", "0") == "1":
-    try:
-        from api.middleware import add_serverless_compatibility
-        app = add_serverless_compatibility(app)
-        logger.info("Added serverless compatibility middleware")
-    except ImportError:
-        logger.warning("Serverless compatibility middleware not found, skipping")
-    except Exception as e:
-        logger.error(f"Error adding serverless compatibility middleware: {e}")
-```
-
-### 4. Logging Configuration
-
-The logging configuration in `app/utils/configure_logging.py` is adapted for serverless environments:
+A more comprehensive patch for the Dowse logger is implemented in `app/utils/dowse_logger_patch.py`:
 
 ```python
-# Configure file handler if LOG_FILE is set
-log_file = os.environ.get("LOG_FILE")
-if log_file:
-    # Check if we're in a serverless environment (Vercel)
+import logging
+import os
+import sys
+import types
+
+def patch_dowse_logger():
+    """
+    Patch Dowse's logger module to prevent file system access in serverless environments.
+    This function creates a mock logger class that mimics the Dowse logger's methods
+    but only logs to stdout, avoiding file system operations.
+    """
+    # Check if we're in a serverless environment
     is_serverless = os.environ.get("VERCEL", "").lower() == "1"
+    enable_file_logging = os.environ.get("ENABLE_FILE_LOGGING", "").lower() == "true"
 
-    # If in serverless, use /tmp directory which is writable
-    if is_serverless and not log_file.startswith("/tmp/"):
-        log_file = f"/tmp/{os.path.basename(log_file)}"
+    # Only disable file logging in serverless environments unless explicitly enabled
+    if is_serverless and not enable_file_logging:
+        # Create a mock logger class
+        class MockLogger:
+            def __init__(self):
+                self._logger = logging.getLogger("dowse")
+                self._logger.setLevel(logging.INFO)
+
+                # Remove any existing handlers
+                for handler in self._logger.handlers[:]:
+                    # Only remove FileHandlers
+                    if isinstance(handler, logging.FileHandler):
+                        self._logger.removeHandler(handler)
+
+                # Ensure we have a stdout handler
+                has_stdout_handler = False
+                for handler in self._logger.handlers:
+                    if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+                        has_stdout_handler = True
+                        break
+
+                if not has_stdout_handler:
+                    handler = logging.StreamHandler(sys.stdout)
+                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    handler.setFormatter(formatter)
+                    self._logger.addHandler(handler)
+
+                self._logger.info("File logging disabled")
+
+            def debug(self, msg, *args, **kwargs):
+                self._logger.debug(msg, *args, **kwargs)
+
+            def info(self, msg, *args, **kwargs):
+                self._logger.info(msg, *args, **kwargs)
+
+            def warning(self, msg, *args, **kwargs):
+                self._logger.warning(msg, *args, **kwargs)
+
+            def error(self, msg, *args, **kwargs):
+                self._logger.error(msg, *args, **kwargs)
+
+            def critical(self, msg, *args, **kwargs):
+                self._logger.critical(msg, *args, **kwargs)
+
+            def exception(self, msg, *args, **kwargs):
+                self._logger.exception(msg, *args, **kwargs)
+
+        # Create a mock module
+        mock_logger_module = types.ModuleType("dowse.logger")
+        mock_logger_module.logger = MockLogger()
+
+        # Monkey patch sys.modules
+        sys.modules["dowse.logger"] = mock_logger_module
+
+        logging.getLogger("app").info("Patched dowse.logger in sys.modules")
 ```
+
+## Testing Serverless Compatibility
+
+Before deploying to Vercel, you can test serverless compatibility locally using the provided test script:
+
+```bash
+# Make the test script executable
+chmod +x tests/test_serverless.py
+
+# Run the test
+poetry run python tests/test_serverless.py
+```
+
+The test script checks:
+
+1. Python version compatibility
+2. Read-only filesystem handling
+3. Dowse logger patching
+4. Application startup in a simulated serverless environment
+5. Health check endpoint functionality
+6. Installed packages verification (including pydantic_settings)
+
+## Common Serverless Errors
+
+### Missing Dependencies
+
+If you encounter an error like:
+
+```
+ModuleNotFoundError: No module named 'pydantic_settings'
+```
+
+This indicates that a required package is missing from your deployment. To fix this:
+
+1. Add the missing package to your `requirements.txt` file
+2. Explicitly install it in your `vercel.build.sh` script:
+   ```bash
+   pip install pydantic_settings==2.2.1
+   ```
+3. Check the "Required Dependencies" section above for common packages
+
+### Checking Installed Packages
+
+To verify which packages are installed in your Vercel deployment:
+
+1. Add this line to your `vercel.build.sh` script to output installed packages:
+
+   ```bash
+   pip freeze > installed_packages.txt
+   ```
+
+2. Check the build logs after deployment to view the contents of this file, or
+
+3. Create an API endpoint to list installed packages:
+
+   ```python
+   @app.get("/api/debug/packages")
+   def list_packages():
+       import pkg_resources
+       packages = [
+           {"name": pkg.key, "version": pkg.version}
+           for pkg in pkg_resources.working_set
+       ]
+       return {"packages": packages}
+   ```
+
+4. Compare the list against your requirements to identify any missing dependencies.
+
+## Troubleshooting
+
+If you encounter issues with the deployment, follow these steps:
+
+1. Check the Vercel deployment logs for error messages
+2. Verify all required environment variables are set
+3. Ensure the `vercel.build.sh` script is executable and includes all necessary dependencies
+4. Run the serverless compatibility test locally to identify potential issues
+5. Check for file system access attempts in your code that might fail in a read-only environment
+6. Verify that the Dowse logger patch is being applied correctly
+
+For persistent issues, you can enable debug logging by setting the `LOG_LEVEL` environment variable to `DEBUG` in your Vercel project settings.
 
 ## Additional Vercel Environment Variables
 
@@ -361,6 +505,39 @@ If Redis connection fails in production:
 
 8. **Cold Start Optimization**: Minimize dependencies and code size to reduce cold start times.
 
+## Testing Serverless Compatibility
+
+Before deploying to Vercel, it's recommended to test your application for serverless compatibility locally. A test script has been provided to simulate a serverless environment:
+
+```bash
+python tests/test_serverless.py
+```
+
+This script:
+
+1. Checks your environment for compatibility issues (Python version, architecture, dependencies)
+2. Creates a read-only directory to simulate Vercel's `/var/task` environment
+3. Tests importing the Dowse logger to ensure it doesn't attempt to write to the filesystem
+4. Tests importing the application with the patched logger
+5. Verifies that the health endpoints work correctly
+6. Checks for the presence of required dependencies like `pydantic_settings`
+
+If the script runs successfully, your application should work properly in a serverless environment. If it fails, review the error messages and make the necessary adjustments before deploying.
+
+### Using Poetry for Local Development
+
+If you encounter architecture compatibility issues with dependencies like `pydantic_core`, it's recommended to use Poetry for local development:
+
+```bash
+# Install dependencies with Poetry
+poetry install
+
+# Run the serverless test with Poetry
+poetry run python tests/test_serverless.py
+```
+
+This ensures that the correct architecture-specific packages are installed for your system.
+
 ## Troubleshooting
 
 ### Log Access
@@ -372,6 +549,29 @@ Access logs through the Vercel dashboard:
 3. Navigate to "Functions" tab
 4. Click on a function to view its logs
 
+### Checking Installed Packages
+
+To verify which packages are installed in your Vercel deployment, you can:
+
+1. Check the build logs after deployment to view the contents of `installed_packages.txt` which is generated during the build process.
+
+2. **Use the Debug Endpoint**: A debug endpoint has been added to easily check installed packages:
+
+   ```
+   GET /debug/packages
+   ```
+
+   This endpoint returns:
+
+   - Current environment
+   - Python version
+   - Total package count
+   - Complete list of installed packages with versions
+
+   Note: This endpoint is disabled in production environments for security reasons.
+
+3. Compare the list against your requirements to identify any missing dependencies.
+
 ### Common Error Codes
 
 - **500**: Internal server error, check function logs
@@ -380,6 +580,20 @@ Access logs through the Vercel dashboard:
 - **403**: Forbidden, check authentication settings
 
 ### Common Serverless Errors
+
+#### Missing Dependencies
+
+If you encounter errors like:
+
+```
+ModuleNotFoundError: No module named 'pydantic_settings'
+```
+
+This indicates that a required Python package is missing from your deployment:
+
+1. Add the missing package to your `requirements.txt` file
+2. Explicitly install the package in your `vercel.build.sh` script
+3. Check the "Required Dependencies" section above for common packages
 
 #### Read-only File System
 

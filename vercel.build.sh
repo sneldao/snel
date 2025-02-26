@@ -16,6 +16,9 @@ pip install -r requirements.txt
 # Using versions from pyproject.toml
 pip install dowse==0.1.6.post1 emp-agents==0.3.0 eth-rpc-py==0.1.26
 
+# Install pydantic_settings which is missing from requirements.txt
+pip install pydantic_settings==2.2.1
+
 # Print installed packages for debugging
 pip freeze > installed_packages.txt
 

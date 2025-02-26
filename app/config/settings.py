@@ -1,7 +1,16 @@
 import os
 from typing import Dict, Any
-from pydantic_settings import BaseSettings
-from pydantic import Field
+
+# Try to import pydantic_settings, fall back to pydantic if not available
+try:
+    from pydantic_settings import BaseSettings
+    from pydantic import Field
+except ImportError:
+    # Fallback to using pydantic directly
+    import logging
+    logging.warning("pydantic_settings not found, falling back to pydantic")
+    from pydantic import BaseModel as BaseSettings
+    from pydantic import Field
 
 class KyberSettings(BaseSettings):
     """Kyber Swap API configuration."""
@@ -16,10 +25,17 @@ class KyberSettings(BaseSettings):
         description="Disable SSL verification (development only)"
     )
     
-    model_config = {
-        "env_prefix": "KYBER_",
-        "extra": "allow"
-    }
+    # Make model_config compatible with both pydantic v2 and pydantic_settings
+    try:
+        model_config = {
+            "env_prefix": "KYBER_",
+            "extra": "allow"
+        }
+    except:
+        # Fallback for older pydantic versions
+        class Config:
+            env_prefix = "KYBER_"
+            extra = "allow"
 
 class TokenSettings(BaseSettings):
     """Token-related configuration."""
@@ -28,20 +44,34 @@ class TokenSettings(BaseSettings):
     usdt_decimals: int = 6
     dai_decimals: int = 18
     
-    model_config = {
-        "env_prefix": "TOKEN_",
-        "extra": "allow"
-    }
+    # Make model_config compatible with both pydantic v2 and pydantic_settings
+    try:
+        model_config = {
+            "env_prefix": "TOKEN_",
+            "extra": "allow"
+        }
+    except:
+        # Fallback for older pydantic versions
+        class Config:
+            env_prefix = "TOKEN_"
+            extra = "allow"
 
 class APISettings(BaseSettings):
     """API-related configuration."""
     default_gas_limit: str = "0x186a0"  # 100,000 gas
     default_timeout: float = 30.0  # seconds
     
-    model_config = {
-        "env_prefix": "API_",
-        "extra": "allow"
-    }
+    # Make model_config compatible with both pydantic v2 and pydantic_settings
+    try:
+        model_config = {
+            "env_prefix": "API_",
+            "extra": "allow"
+        }
+    except:
+        # Fallback for older pydantic versions
+        class Config:
+            env_prefix = "API_"
+            extra = "allow"
 
 class Settings(BaseSettings):
     """Main application settings."""
@@ -84,11 +114,19 @@ class Settings(BaseSettings):
     quicknode_api_key: str = Field(default="", env="QUICKNODE_API_KEY")
     disable_ssl_verify: bool = Field(default=False, env="DISABLE_SSL_VERIFY")
     
-    model_config = {
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "extra": "allow"  # Allow extra fields from environment variables
-    }
+    # Make model_config compatible with both pydantic v2 and pydantic_settings
+    try:
+        model_config = {
+            "env_file": ".env",
+            "env_file_encoding": "utf-8",
+            "extra": "allow"  # Allow extra fields from environment variables
+        }
+    except:
+        # Fallback for older pydantic versions
+        class Config:
+            env_file = ".env"
+            env_file_encoding = "utf-8"
+            extra = "allow"
 
 # Create a global settings instance
 settings = Settings() 
