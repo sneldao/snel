@@ -6,6 +6,7 @@ import os
 from app.agents.base import PointlessAgent
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.price_agent import PriceAgent
+from app.agents.dca_agent import DCAAgent
 from app.services.token_service import TokenService
 from app.services.redis_service import RedisService
 from app.api.dependencies import get_redis_service
@@ -37,9 +38,11 @@ class AgentFactory:
             return SimpleSwapAgent()
         elif agent_type == "price":
             return PriceAgent(provider="openai")
+        elif agent_type == "dca":
+            return DCAAgent(token_service=self.token_service)
         else:
             # Default agent
-            return PointlessAgent(prompt="", model="gpt-4-turbo-preview")
+            return PointlessAgent(prompt=BASE_PROMPT, model="gpt-4-turbo-preview")
 
     @staticmethod
     async def process_command(
@@ -84,6 +87,8 @@ class AgentFactory:
             return await agent.process_swap_command(command, chain_id)
         elif agent_type == "price":
             return await agent.process_price_query(command, chain_id)
+        elif agent_type == "dca":
+            return await agent.process_dca_command(command, chain_id)
         else:
             return await agent.process(command, metadata)
 

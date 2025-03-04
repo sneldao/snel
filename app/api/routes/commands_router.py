@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional, Literal
-from app.api.dependencies import get_redis_service
+from app.api.dependencies import get_redis_service, get_token_service
 from app.agents.agent_factory import AgentFactory, get_agent_factory
 from app.agents.simple_swap_agent import SimpleSwapAgent
 import logging
 from datetime import datetime
+import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["commands"])
@@ -38,7 +39,8 @@ async def process_command(
     command: Command,
     request: Request,
     redis_service = Depends(get_redis_service),
-    agent_factory: AgentFactory = Depends(get_agent_factory)
+    agent_factory: AgentFactory = Depends(get_agent_factory),
+    token_service = Depends(get_token_service)
 ):
     """
     Process a command from the user.
@@ -60,11 +62,36 @@ async def process_command(
             if pending_command:
                 logger.info(f"Found pending command for user {user_id}: {pending_command}")
                 
-                # Use the pending command instead
-                command.content = pending_command
-                
-                # Clear the pending command
-                await redis_service.clear_pending_command(user_id)
+                # Check command type to route to correct agent
+                if pending_command.lower().startswith(("dca ", "dollar cost average ")):
+                    logger.info("Processing as DCA confirmation")
+                    # Forward to DCA router
+                    from app.agents.dca_agent import DCAAgent
+                    
+                    dca_agent = DCAAgent(token_service=token_service)
+                    # Use the pending command
+                    command.content = pending_command
+                    result = await dca_agent.process_dca_command(
+                        command.content,
+                        chain_id=command.chain_id,
+                        wallet_address=command.wallet_address
+                    )
+                    
+                    # Clear the pending command
+                    await redis_service.clear_pending_command(user_id)
+                    
+                    return CommandResponse(
+                        content=result.get("content", {}),
+                        error_message=result.get("error"),
+                        metadata=result.get("metadata", {}),
+                        agent_type="dca"
+                    )
+                else:
+                    # Use the pending command (likely a swap command)
+                    command.content = pending_command
+                    
+                    # Clear the pending command
+                    await redis_service.clear_pending_command(user_id)
         
         # Store the command for reference
         timestamp = datetime.now().isoformat()
@@ -98,6 +125,30 @@ async def process_command(
                 error_message=result.get("error"),
                 metadata=result.get("metadata", {}),
                 agent_type="swap"
+            )
+        
+        elif command.content.lower().startswith(("dca ", "dollar cost average ")) or re.search(r"\b(please|can you|can we|can i|could you|i want to|setup|set up)\s+dca\b", command.content.lower()):
+            logger.info("Processing as DCA command")
+            # Forward to the DCA API
+            from app.agents.dca_agent import DCAAgent
+            
+            dca_agent = DCAAgent(token_service=token_service)
+            result = await dca_agent.process_dca_command(
+                command.content,
+                chain_id=command.chain_id,
+                wallet_address=command.wallet_address
+            )
+            
+            # Store the DCA confirmation state if needed
+            if result.get("content") and result["content"].get("type") == "dca_confirmation":
+                logger.info(f"Storing DCA confirmation state for user {user_id}: {command.content}")
+                await redis_service.set_pending_command(user_id, command.content)
+            
+            return CommandResponse(
+                content=result.get("content", {}),
+                error_message=result.get("error"),
+                metadata=result.get("metadata", {}),
+                agent_type="dca"
             )
         
         elif command.content.lower().startswith(("price ", "p ")):

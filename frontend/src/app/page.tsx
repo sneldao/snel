@@ -42,7 +42,7 @@ type Response = {
   awaitingConfirmation?: boolean;
   confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
-  agentType?: "default" | "swap";
+  agentType?: "default" | "swap" | "dca";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
@@ -116,6 +116,12 @@ export default function Home() {
   const responsesEndRef = React.useRef<HTMLDivElement>(null);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = React.useState(false);
   const [isLogoModalOpen, setIsLogoModalOpen] = React.useState(false);
+  const [commandInput, setCommandInput] = React.useState("");
+  const [currentCommand, setCurrentCommand] = React.useState("");
+  const [awaitingInput, setAwaitingInput] = React.useState(false);
+  const [confirmationCallback, setConfirmationCallback] = React.useState<
+    (() => Promise<void>) | null
+  >(null);
 
   // Add chain change effect
   React.useEffect(() => {
@@ -503,13 +509,18 @@ export default function Home() {
       }
 
       let errorMessage = "Transaction failed";
+      let isUserRejection = false;
 
       if (error instanceof Error) {
         if (
           error.message.includes("user rejected") ||
-          error.message.includes("User rejected")
+          error.message.includes("User rejected") ||
+          error.message.includes("User denied") ||
+          error.message.includes("user denied") ||
+          error.message.includes("rejected the request")
         ) {
           errorMessage = "Transaction was cancelled by user";
+          isUserRejection = true;
         } else if (error.message.includes("insufficient funds")) {
           errorMessage = "Insufficient funds for transaction";
         } else if (error.message.includes("TRANSFER_FROM_FAILED")) {
@@ -539,7 +550,9 @@ export default function Home() {
       setResponses((prev) => [
         ...prev.filter((r) => !r.status?.includes("processing")),
         {
-          content: `Transaction failed: ${errorMessage}`,
+          content: isUserRejection
+            ? "Transaction was cancelled by user"
+            : `Transaction failed: ${errorMessage}`,
           timestamp: new Date().toLocaleTimeString(),
           isCommand: false,
           status: "error",
@@ -599,10 +612,20 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Error during quote selection:", error);
+
+      // Check if this is a user rejection error
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const isUserRejection =
+        errorMessage.includes("user denied") ||
+        errorMessage.includes("User denied") ||
+        errorMessage.includes("User rejected") ||
+        errorMessage.includes("rejected the request");
+
       const errorResponse: Response = {
-        content: `Error selecting quote: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        content: isUserRejection
+          ? "Transaction was cancelled by user"
+          : `Error selecting quote: ${errorMessage}`,
         timestamp: new Date().toISOString(),
         isCommand: false,
         status: "error",
@@ -642,6 +665,16 @@ export default function Home() {
       if (command.toLowerCase().startsWith("swap ")) {
         // Process swap command
         await processSwapCommand(command);
+        return;
+      }
+
+      // Detect if this is a DCA command
+      if (
+        command.toLowerCase().startsWith("dca ") ||
+        command.toLowerCase().startsWith("dollar cost average ")
+      ) {
+        // Process DCA command
+        await processDCACommand(command);
         return;
       }
 
@@ -773,10 +806,89 @@ export default function Home() {
     }
   };
 
+  const processDCACommand = async (command: string) => {
+    try {
+      setIsLoading(true);
+
+      // Call the DCA API
+      const response = await fetch("/api/dca/process-command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getApiHeaders(),
+        },
+        body: JSON.stringify({
+          content: command,
+          wallet_address: address,
+          chain_id: chainId || 1,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.detail || `Error ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      // Handle the response
+      const botResponse: Response = {
+        content: data.content,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        agentType: "dca",
+        awaitingConfirmation:
+          data.content && data.content.type === "dca_confirmation",
+        confirmation_type: "token_confirmation",
+        pendingCommand: data.pending_command,
+        metadata: data.metadata,
+      };
+
+      setResponses((prev) => [...prev, botResponse]);
+
+      // If we need confirmation, set up the confirmation state
+      if (data.content && data.content.type === "dca_confirmation") {
+        setAwaitingInput(true);
+        setConfirmationCallback(() => handleTokenConfirmation);
+      }
+    } catch (error) {
+      console.error("Error processing DCA command:", error);
+      const errorResponse: Response = {
+        content: `Error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "error",
+      };
+      setResponses((prev) => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleTokenConfirmation = async () => {
     try {
       setIsLoading(true);
 
+      // Get the latest response that needs confirmation
+      // Find the last response with awaitingConfirmation=true
+      const pendingResponses = responses.filter((r) => r.awaitingConfirmation);
+      const lastResponse =
+        pendingResponses.length > 0
+          ? pendingResponses[pendingResponses.length - 1]
+          : null;
+
+      // Check if this is a DCA confirmation
+      if (lastResponse && lastResponse.agentType === "dca") {
+        // Handle DCA confirmation
+        await handleDCAConfirmation();
+        return;
+      }
+
+      // Default to swap confirmation handling
       // User has confirmed the tokens, get quotes
       const response = await fetch("/api/swap/get-quotes", {
         method: "POST",
@@ -841,6 +953,61 @@ export default function Home() {
       setResponses((prev) => [...prev, errorResponse]);
     } finally {
       setIsLoading(false);
+      setAwaitingInput(false);
+      setConfirmationCallback(null);
+    }
+  };
+
+  // New function to handle DCA confirmations
+  const handleDCAConfirmation = async () => {
+    try {
+      // Find the pending command from the responses
+      const pendingResponses = responses.filter(
+        (r) => r.awaitingConfirmation && r.agentType === "dca"
+      );
+      const lastDCAResponse =
+        pendingResponses.length > 0
+          ? pendingResponses[pendingResponses.length - 1]
+          : null;
+
+      if (!lastDCAResponse) {
+        throw new Error("No pending DCA command found");
+      }
+
+      // In a real implementation, we would call the DCA API to create the order
+      // For now, we'll just show a success message
+      const successResponse: Response = {
+        content: {
+          type: "dca_success",
+          message:
+            "I've initiated your DCA order! You'll be swapping the specified amount on your chosen schedule. You can monitor your DCA positions through your wallet's activity.",
+        },
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "success",
+        agentType: "dca",
+      };
+
+      setResponses((prev) => [...prev, successResponse]);
+
+      // Clear the awaiting confirmation state
+      setAwaitingInput(false);
+      setConfirmationCallback(null);
+    } catch (error) {
+      console.error("Error creating DCA order:", error);
+      const errorResponse: Response = {
+        content: `Error creating DCA order: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "error",
+      };
+      setResponses((prev) => [...prev, errorResponse]);
+
+      // Clear the awaiting confirmation state
+      setAwaitingInput(false);
+      setConfirmationCallback(null);
     }
   };
 

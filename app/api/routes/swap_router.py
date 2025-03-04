@@ -9,7 +9,7 @@ from app.services.swap_service import SwapService
 from app.services.redis_service import RedisService, get_redis_service
 from app.agents.simple_swap_agent import SimpleSwapAgent
 
-router = APIRouter(prefix="/swap", tags=["swap"])
+router = APIRouter(tags=["swap"])
 logger = logging.getLogger(__name__)
 
 # Model for swap quote selection
@@ -19,6 +19,12 @@ class QuoteSelectionRequest(BaseModel):
     quote_index: int
     pending_command: str
 
+# Model for swap command
+class SwapCommand(BaseModel):
+    command: str
+    wallet_address: str
+    chain_id: int = 1
+
 def create_swap_services(token_service: TokenService) -> SwapService:
     """Create and return SwapService instance with dependencies."""
     swap_agent = SimpleSwapAgent()
@@ -26,7 +32,7 @@ def create_swap_services(token_service: TokenService) -> SwapService:
 
 @router.post("/process-command", response_model=Dict[str, Any])
 async def process_swap_command(
-    request: dict, 
+    swap_command: SwapCommand, 
     redis_service: RedisService = Depends(get_redis_service)
 ) -> Dict[str, Any]:
     """
@@ -34,9 +40,9 @@ async def process_swap_command(
     Returns token information for confirmation.
     """
     try:
-        command = request.get("command", "")
-        wallet_address = request.get("wallet_address", "")
-        chain_id = request.get("chain_id", 1)
+        command = swap_command.command
+        wallet_address = swap_command.wallet_address
+        chain_id = swap_command.chain_id
         
         logger.info(f"Processing swap command: {command} for wallet {wallet_address} on chain {chain_id}")
         

@@ -7,6 +7,7 @@ from contextvars import ContextVar
 
 from app.api.routes.commands_router import router as commands_router
 from app.api.routes.swap_router import router as swap_router
+from app.api.routes.dca_router import router as dca_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.utils.configure_logging import configure_logging
 from app.services.redis_service import get_redis_service, RedisService
@@ -40,7 +41,8 @@ app.add_middleware(ErrorHandlerMiddleware)
 
 # Include routers
 app.include_router(commands_router, prefix="/api")
-app.include_router(swap_router, prefix="/api")
+app.include_router(swap_router, prefix="/api/swap")
+app.include_router(dca_router, prefix="/api/dca")
 
 # Add request ID middleware
 request_id_contextvar = ContextVar("request_id", default=None)

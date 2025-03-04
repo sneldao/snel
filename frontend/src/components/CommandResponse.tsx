@@ -19,6 +19,7 @@ import {
   Divider,
   useColorModeValue,
   Button,
+  UnorderedList,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -29,6 +30,7 @@ import {
   InfoIcon,
 } from "@chakra-ui/icons";
 import { SwapConfirmation } from "./SwapConfirmation";
+import { DCAConfirmation } from "./DCAConfirmation";
 import AggregatorSelection from "./AggregatorSelection";
 
 interface CommandResponseProps {
@@ -37,7 +39,7 @@ interface CommandResponseProps {
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
-  agentType?: "default" | "swap";
+  agentType?: "default" | "swap" | "dca";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
@@ -154,11 +156,18 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     }
   }, [isLoading]);
 
-  // Check if content is a structured swap confirmation
-  const isStructuredSwapConfirmation =
+  // Check for various response types
+  const isConfirmation =
+    typeof content === "object" && content?.type === "confirmation";
+  const isSwapConfirmation =
+    typeof content === "object" && content?.type === "swap_confirmation";
+  const isDCAConfirmation =
+    typeof content === "object" && content?.type === "dca_confirmation";
+  const isSwapSuccess =
+    typeof content === "object" && content?.type === "swap_success";
+  const isDCASuccess =
     typeof content === "object" &&
-    content !== null &&
-    content.type === "swap_confirmation";
+    (content?.type === "dca_success" || content?.type === "dca_order_created");
 
   // Handle confirmation actions
   const handleConfirm = () => {
@@ -269,6 +278,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         name: "Wheeler-Dealer",
         handle: "@wheeler_dealer",
         avatarSrc: "/avatars/🕴️.png",
+      };
+    }
+    if (agentType === "dca") {
+      return {
+        name: "DCA Planner",
+        handle: "@dca_planner",
+        avatarSrc: "/avatars/📊.png",
       };
     }
     return {
@@ -410,12 +426,65 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
             </Text>
           </HStack>
 
-          {isStructuredSwapConfirmation ? (
+          {isSwapConfirmation ? (
             <SwapConfirmation
               message={content}
               onConfirm={handleConfirm}
               onCancel={handleCancel}
             />
+          ) : isDCAConfirmation ? (
+            <DCAConfirmation
+              message={content}
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+            />
+          ) : isDCASuccess ? (
+            <Box mt={2} mb={2}>
+              <Alert status="success" rounded="md">
+                <AlertIcon />
+                <AlertTitle>Success!</AlertTitle>
+                <AlertDescription>
+                  {content.type === "dca_order_created"
+                    ? "DCA order successfully created. You'll be swapping the specified amount on your chosen schedule."
+                    : content.message || "DCA order setup complete."}
+                  {content?.type === "error" &&
+                    content?.content?.includes("minimum") && (
+                      <Box mt={2}>
+                        <Alert status="warning" rounded="md" size="sm">
+                          <AlertIcon />
+                          <Box>
+                            <AlertTitle fontSize="sm">
+                              DCA Requirements:
+                            </AlertTitle>
+                            <AlertDescription fontSize="xs">
+                              <UnorderedList spacing={1} pl={4}>
+                                <ListItem>
+                                  Only available on Base chain
+                                </ListItem>
+                                <ListItem>Minimum $5 per swap</ListItem>
+                                <ListItem>Uses WETH instead of ETH</ListItem>
+                              </UnorderedList>
+                            </AlertDescription>
+                          </Box>
+                        </Alert>
+                      </Box>
+                    )}
+                  {metadata?.order_id && (
+                    <Box mt={1}>
+                      <Text>Order ID: {metadata.order_id}</Text>
+                    </Box>
+                  )}
+                  {metadata?.details?.duration && (
+                    <Box mt={1}>
+                      <Text>
+                        Schedule: {metadata.details.frequency} for{" "}
+                        {metadata.details.duration} days
+                      </Text>
+                    </Box>
+                  )}
+                </AlertDescription>
+              </Alert>
+            </Box>
           ) : needsSelection ? (
             <Box mt={2} width="100%">
               <AggregatorSelection
@@ -434,12 +503,28 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               whiteSpace="pre-wrap"
             >
               {typeof content === "string"
-                ? formatLinks(content)
+                ? formatLinks(
+                    content.startsWith('{"response":')
+                      ? JSON.parse(content).response
+                      : content
+                  )
                 : typeof content === "object" &&
                   content !== null &&
                   content.text
                 ? formatLinks(content.text)
-                : formatLinks(JSON.stringify(content, null, 2))}
+                : typeof content === "object" &&
+                  content !== null &&
+                  content.message
+                ? formatLinks(content.message)
+                : typeof content === "object" &&
+                  content !== null &&
+                  content.response
+                ? formatLinks(content.response)
+                : formatLinks(
+                    typeof content === "string"
+                      ? content
+                      : JSON.stringify(content, null, 2)
+                  )}
             </Text>
           )}
 
@@ -472,7 +557,9 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
           {status === "success" &&
             !isCommand &&
-            !isStructuredSwapConfirmation && (
+            !isSwapConfirmation &&
+            !isDCAConfirmation &&
+            !isDCASuccess && (
               <Badge colorScheme="green" alignSelf="flex-start" mt={2}>
                 Success
               </Badge>
