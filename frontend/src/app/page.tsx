@@ -653,7 +653,7 @@ export default function Home() {
           ...getApiHeaders(),
         },
         body: JSON.stringify({
-          command,
+          content: command,
           wallet_address: address,
           chain_id: chainId || 1,
         }),

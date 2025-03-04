@@ -1,3 +1,4 @@
+import contextlib
 from typing import Dict, Any, Optional, Tuple, List, Union
 import logging
 from app.agents.simple_swap_agent import SimpleSwapAgent
@@ -41,12 +42,10 @@ from src.dowse.tools.best_route.uniswap import (
 )
 from src.dowse.tools.best_route.uniswap import get_router_address as get_uniswap_router_address
 
-# Define TransferFromFailedError since it's not in the Dowse implementation
 class TransferFromFailedError(Exception):
     """Raised when the token transfer fails, likely due to insufficient balance or allowance"""
     pass
 
-# Define generic error classes for the get_quote function
 class NoRouteFoundError(Exception):
     """Raised when no swap route is found across all aggregators"""
     pass
@@ -59,6 +58,7 @@ class InvalidTokenError(Exception):
     """Raised when token is not supported or invalid across all aggregators"""
     pass
 
+# Define router addresses by chain for Kyber
 # Define router addresses by chain for Kyber
 KYBER_ROUTER_ADDRESSES = {
     1: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Ethereum
@@ -451,7 +451,7 @@ class SwapService:
             # Extract addresses
             token_in_address = token_in["address"] if isinstance(token_in, dict) else token_in
             token_out_address = token_out["address"] if isinstance(token_out, dict) else token_out
-            
+
             # Check if chain is supported by 0x
             supported_chains = [1, 10, 56, 137, 8453, 42161, 43114, 59144, 534352, 5000, 34443, 81457, 10143]
             if chain_id not in supported_chains:
@@ -462,13 +462,13 @@ class SwapService:
             api_key = os.getenv("ZEROX_API_KEY", "")
             if not api_key:
                 logger.warning("No 0x API key found in environment variables. This may lead to rate limiting or failures.")
-                
+
             # Determine base URL based on chain
             base_url = "https://api.0x.org"
 
             # Use the permit2 quote endpoint for v2 API
             endpoint = "/swap/permit2/quote"
-            
+
             params = {
                 "sellToken": token_in_address,
                 "buyToken": token_out_address,
@@ -490,18 +490,18 @@ class SwapService:
                 params=params,
                 headers=headers
             )
-            
+
             response.raise_for_status()
             data = response.json()
-            
+
             # Log the full response for debugging
             logger.debug(f"0x response: {data}")
-            
+
             # Check if we have the required fields
             if 'buyAmount' not in data or 'transaction' not in data:
                 logger.error(f"Missing required fields in 0x response: {data}")
                 raise ValueError("Invalid 0x response format")
-            
+
             # Get a reasonable gas estimate
             gas_estimate = data['transaction'].get('gas', '300000')
             if gas_estimate:
@@ -515,15 +515,15 @@ class SwapService:
                 except (ValueError, TypeError):
                     logger.warning(f"Could not parse 0x gas estimate: {gas_estimate}, using default")
                     gas_estimate = "300000"  # Fallback to a reasonable value
-            
+
             # Ensure value field is properly formatted 
             value = data['transaction'].get('value', '0')
             if value == '' or value is None:
                 value = '0'
-                
+
             # Extract min_buy_amount (minBuyAmount or guaranteedPrice * sellAmount)
             min_buy_amount = data.get('minBuyAmount')
-            
+
             # If minBuyAmount is not available, use guaranteedPrice calculation
             if not min_buy_amount and 'guaranteedPrice' in data and data['guaranteedPrice']:
                 try:
@@ -534,11 +534,11 @@ class SwapService:
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Error calculating min_buy_amount from guaranteedPrice: {e}")
                     min_buy_amount = data.get('buyAmount', '0')  # Fallback to buyAmount
-            
+
             # If both methods fail, fall back to buyAmount
             if not min_buy_amount:
                 min_buy_amount = data.get('buyAmount', '0')
-                
+
             # Get protocol/source information
             protocol = "0x"
             if 'route' in data:
@@ -551,7 +551,7 @@ class SwapService:
                         if source.get('proportion', 0) > max_proportion:
                             protocol = source.get('name', '0x')
                             max_proportion = source.get('proportion', 0)
-                
+
             # Format response for frontend consumption
             return {
                 "to": data['transaction']['to'],
@@ -574,18 +574,15 @@ class SwapService:
                     error_msg = f"{error_msg}: {e.response.text}"
                 if hasattr(e.response, 'status_code'):
                     error_msg = f"Status {e.response.status_code} - {error_msg}"
-                    
+
                 # If there was a JSON response with more details, try to extract it
                 if hasattr(e.response, 'json'):
-                    try:
+                    with contextlib.suppress(Exception):
                         error_json = e.response.json()
                         logger.error(f"0x API error details: {error_json}")
                         if 'validationErrors' in error_json:
                             for err in error_json['validationErrors']:
                                 logger.error(f"Validation error: {err.get('reason', 'Unknown')}")
-                    except Exception:
-                        pass
-                        
             logger.error(f"0x API error: {error_msg}")
             raise
 
@@ -694,10 +691,7 @@ class SwapService:
             if 'routeSummary' not in route_data['data']:
                 raise ValueError(f"Missing 'routeSummary' in Kyber response data: {route_data['data']}")
                 
-            router_address = route_data['data'].get('routerAddress')
-            if not router_address:
-                # Fallback to the chain's default router address
-                router_address = get_router_address(chain_id, "kyber")
+            router_address = route_data['data'].get('routerAddress') or get_router_address(chain_id, "kyber")
                 
             # Step 2: Get the encoded swap data using the routeSummary
             # FIXED: Use the correct endpoint from the documentation

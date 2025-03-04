@@ -133,15 +133,22 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
         </Box>
       ))}
 
-      <Button
-        colorScheme="blue"
-        isDisabled={selectedIndex === null}
-        onClick={() =>
-          selectedIndex !== null && onSelect(sortedQuotes[selectedIndex])
-        }
+      <Box
+        p={3}
+        borderRadius="md"
+        borderWidth="1px"
+        bg="yellow.50"
+        borderColor="yellow.300"
       >
-        Confirm Selection
-      </Button>
+        <HStack spacing={2} align="flex-start">
+          <Box>⚠️</Box>
+          <Text fontSize="sm">
+            <strong>Important:</strong> Please carefully review the transaction
+            details in your wallet before confirming. Verify the token amounts
+            match your expectations.
+          </Text>
+        </HStack>
+      </Box>
     </VStack>
   );
 };

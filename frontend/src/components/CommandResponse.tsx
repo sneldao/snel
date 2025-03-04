@@ -434,26 +434,29 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               whiteSpace="pre-wrap"
             >
               {typeof content === "string"
-                ? content.startsWith('{"response":')
-                  ? formatLinks(JSON.parse(content).response)
-                  : formatLinks(content)
-                : JSON.stringify(content)}
+                ? formatLinks(content)
+                : typeof content === "object" &&
+                  content !== null &&
+                  content.text
+                ? formatLinks(content.text)
+                : formatLinks(JSON.stringify(content, null, 2))}
             </Text>
           )}
 
-          {awaitingConfirmation && (
-            <HStack spacing={2} mt={2}>
-              <Badge colorScheme="yellow" alignSelf="flex-start">
-                Needs Confirmation
-              </Badge>
-              <Button size="xs" colorScheme="green" onClick={handleConfirm}>
-                Confirm
-              </Button>
-              <Button size="xs" colorScheme="red" onClick={handleCancel}>
-                Cancel
-              </Button>
-            </HStack>
-          )}
+          {awaitingConfirmation &&
+            false && ( // Disabling this confirmation section as requested
+              <HStack spacing={2} mt={2}>
+                <Badge colorScheme="yellow" alignSelf="flex-start">
+                  Needs Confirmation
+                </Badge>
+                <Button size="xs" colorScheme="green" onClick={handleConfirm}>
+                  Confirm
+                </Button>
+                <Button size="xs" colorScheme="red" onClick={handleCancel}>
+                  Cancel
+                </Button>
+              </HStack>
+            )}
 
           {status === "processing" && (
             <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
