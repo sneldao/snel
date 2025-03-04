@@ -3,9 +3,6 @@ import os
 import sys
 from pathlib import Path
 
-# Import the dowse logger patch
-from app.utils.dowse_logger_patch import patch_dowse_logger
-
 def configure_logging():
     """Configure logging for the application."""
     # Get log level from environment variable or default to INFO
@@ -46,9 +43,6 @@ def configure_logging():
     # Set specific loggers to different levels if needed
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
-    
-    # Apply the dowse logger patch
-    patch_dowse_logger()
     
     # Create logger for this module
     logger = logging.getLogger(__name__)

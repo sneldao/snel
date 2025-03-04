@@ -1,128 +1,68 @@
-from app.utils.configure_logging import configure_logging  # This must be the first import
-
-import os
-from pathlib import Path
-from dotenv import load_dotenv
-import logging
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
+import os
+import time
+import logging
+from contextvars import ContextVar
 
-# Initialize logger
+from app.api.routes.commands_router import router as commands_router
+from app.api.routes.swap_router import router as swap_router
+from app.middleware.error_handler import ErrorHandlerMiddleware
+from app.utils.configure_logging import configure_logging
+from app.services.redis_service import get_redis_service, RedisService
+
+# Configure logging
 configure_logging()
 logger = logging.getLogger(__name__)
 
+# Set environment variables
+environment = os.getenv("ENVIRONMENT", "production")
+is_dev = environment == "development"
+
 # Create FastAPI app
-def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
-    # Set up rate limiter
-    limiter = Limiter(key_func=get_remote_address)
-    app = FastAPI(
-        title="Dowse Pointless API",
-        description="API for Dowse Pointless, a crypto transaction assistant",
-        version="1.0.0"
-    )
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    
-    # Add serverless compatibility middleware
-    # Only apply in Vercel environment
-    if os.environ.get("VERCEL", "0") == "1":
-        try:
-            from api.middleware import add_serverless_compatibility
-            app = add_serverless_compatibility(app)
-            logger.info("Added serverless compatibility middleware")
-        except ImportError:
-            logger.warning("Serverless compatibility middleware not found, skipping")
-        except Exception as e:
-            logger.error(f"Error adding serverless compatibility middleware: {e}")
+app = FastAPI(
+    title="Dowse Pointless API",
+    description="API for the Dowse Pointless app",
+    version="0.1.0",
+)
 
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "https://snel-pointless.vercel.app",
-            "https://snel-pointless-git-main-papas-projects-5b188431.vercel.app"
-        ],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    # Import and include routers
-    from app.api.routes import health, commands, transactions, swap_router
-    app.include_router(health.router)
-    app.include_router(commands.router)
-    app.include_router(transactions.router)
-    app.include_router(swap_router.router)
+# Add error handler middleware
+app.add_middleware(ErrorHandlerMiddleware)
 
-    # Add startup event
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize services on startup."""
-        # Log environment
-        environment = os.environ.get("ENVIRONMENT", "production")
-        logger.info(f"Starting API in {environment} environment")
-        
-        # Initialize services
-        try:
-            # Get environment variables
-            alchemy_key = os.environ.get("ALCHEMY_KEY")
-            coingecko_key = os.environ.get("COINGECKO_API_KEY")
-            moralis_key = os.environ.get("MORALIS_API_KEY")
-            openai_key = os.environ.get("OPENAI_API_KEY")
+# Include routers
+app.include_router(commands_router, prefix="/api")
+app.include_router(swap_router, prefix="/api")
 
-            if not all([alchemy_key, coingecko_key, moralis_key, openai_key]):
-                missing_keys = []
-                if not alchemy_key:
-                    missing_keys.append("ALCHEMY_KEY")
-                if not coingecko_key:
-                    missing_keys.append("COINGECKO_API_KEY")
-                if not moralis_key:
-                    missing_keys.append("MORALIS_API_KEY")
-                if not openai_key:
-                    missing_keys.append("OPENAI_API_KEY")
-                    
-                logger.error(f"Missing required environment variables: {', '.join(missing_keys)}")
-                raise ValueError(f"Missing required environment variables: {', '.join(missing_keys)}")
+# Add request ID middleware
+request_id_contextvar = ContextVar("request_id", default=None)
 
-            # Set Alchemy key for eth_rpc
-            from eth_rpc import set_alchemy_key
-            set_alchemy_key(alchemy_key)
-            
-            # Initialize token service
-            from app.services.token_service import TokenService
-            token_service = TokenService()
-            
-            # Initialize swap service
-            from app.services.swap_service import SwapService
-            from app.agents.swap_agent import SwapAgent
-            from emp_agents.providers import OpenAIProvider
-            
-            provider = OpenAIProvider(api_key=openai_key)
-            swap_agent = SwapAgent(provider=provider)
-            swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
-            
-            # Store services in app state for dependency injection
-            app.state.token_service = token_service
-            app.state.swap_service = swap_service
-            
-            logger.info("Services initialized successfully")
-                
-        except Exception as e:
-            logger.error(f"Failed to initialize services: {e}")
-            raise
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
 
-    return app
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
-# Create the FastAPI application
-app = create_app()
+@app.get("/")
+async def root():
+    return {"message": "Welcome to Dowse Pointless API"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    logger.info(f"Starting server on port {port}")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=is_dev)

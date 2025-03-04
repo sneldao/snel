@@ -1,6 +1,27 @@
 from eth_typing import HexAddress
 from typing import Dict, Optional
 
+# Token decimals mapping
+TOKEN_DECIMALS = {
+    "ETH": 18,
+    "WETH": 18,
+    "USDC": 6,
+    "USDT": 6,
+    "DAI": 18,
+    "UNI": 18,
+    "LINK": 18,
+    "AAVE": 18,
+    "SNX": 18,
+    "COMP": 18,
+    "SCR": 18,
+    "OP": 18,
+    "ARB": 18,
+    "MATIC": 18,
+    "BTC": 8,
+    "WBTC": 8,
+    "NURI": 18
+}
+
 class ChainConfig:
     """Configuration for supported chains."""
     SUPPORTED_CHAINS = {
@@ -133,6 +154,4 @@ def get_chain_specific_address(token_symbol: str, chain_id: int, default_address
         The chain-specific token address, or the default address if not found
     """
     address = get_token_address(token_symbol, chain_id)
-    if address:
-        return address
-    return default_address 
+    return address or default_address 

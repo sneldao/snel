@@ -18,6 +18,7 @@ import {
   AlertDescription,
   Divider,
   useColorModeValue,
+  Button,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -28,6 +29,7 @@ import {
   InfoIcon,
 } from "@chakra-ui/icons";
 import { SwapConfirmation } from "./SwapConfirmation";
+import AggregatorSelection from "./AggregatorSelection";
 
 interface CommandResponseProps {
   content: string | any; // Updated to accept structured content
@@ -37,6 +39,9 @@ interface CommandResponseProps {
   awaitingConfirmation?: boolean;
   agentType?: "default" | "swap";
   metadata?: any;
+  requires_selection?: boolean;
+  all_quotes?: any[];
+  onQuoteSelect?: (response: any, quote: any) => void;
 }
 
 type TokenInfo = {
@@ -90,12 +95,19 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   awaitingConfirmation = false,
   agentType = "default",
   metadata,
+  requires_selection = false,
+  all_quotes = [],
+  onQuoteSelect,
 }) => {
   const [currentStep, setCurrentStep] = React.useState(0);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [showTokenInfo, setShowTokenInfo] = React.useState(false);
+
   const isError = status === "error";
-  const isLoading = status === "processing";
   const isSuccess = status === "success";
   const needsConfirmation = awaitingConfirmation;
+  const needsSelection =
+    requires_selection && all_quotes && all_quotes.length > 0;
 
   const bgColor = useColorModeValue(
     isCommand ? "blue.50" : "gray.50",
@@ -186,6 +198,26 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         bubbles: true,
       });
       inputElement.dispatchEvent(enterEvent);
+    }
+  };
+
+  // Handle quote selection
+  const handleQuoteSelect = (quote: any) => {
+    if (onQuoteSelect) {
+      onQuoteSelect(
+        {
+          content,
+          timestamp,
+          isCommand,
+          status,
+          awaitingConfirmation,
+          agentType,
+          metadata,
+          requires_selection,
+          all_quotes,
+        },
+        quote
+      );
     }
   };
 
@@ -332,37 +364,34 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
   return (
     <Box
+      p={3}
+      borderRadius="md"
       borderWidth="1px"
-      borderRadius="lg"
       borderColor={borderColor}
       bg={bgColor}
-      p={3}
+      mb={3}
       position="relative"
-      width="100%"
+      maxW="100%"
     >
-      <HStack spacing={3} align="flex-start">
-        {!isCommand && (
-          <Avatar
-            src={avatarSrc}
-            name={name}
-            size="sm"
-            bg="transparent"
-            fontSize="xl"
-          />
-        )}
-        <Box pt={1}>{renderStatusIcon()}</Box>
-        <VStack spacing={1} align="stretch" flex={1}>
-          <HStack
-            justify="space-between"
-            align="center"
-            spacing={2}
-            width="100%"
-          >
+      <HStack spacing={2} mb={2} alignItems="flex-start">
+        <Avatar
+          size="sm"
+          name={
+            isCommand
+              ? "User"
+              : agentType === "swap"
+              ? "Wheeler-Dealer"
+              : "SNEL"
+          }
+          src={isCommand ? undefined : avatarSrc}
+          bg={isCommand ? "blue.500" : "gray.500"}
+        />
+        <VStack spacing={1} align="flex-start" flex={1}>
+          <HStack spacing={2} width="100%" justifyContent="space-between">
             <Badge
-              colorScheme={
-                isCommand ? "blue" : agentType === "swap" ? "purple" : "gray"
-              }
+              colorScheme={isCommand ? "blue" : "gray"}
               fontSize="xs"
+              fontWeight="bold"
             >
               {isCommand
                 ? "@user"
@@ -387,6 +416,15 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               onConfirm={handleConfirm}
               onCancel={handleCancel}
             />
+          ) : needsSelection ? (
+            <Box mt={2} width="100%">
+              <AggregatorSelection
+                quotes={all_quotes}
+                tokenSymbol={metadata?.token_out_symbol || "tokens"}
+                tokenDecimals={metadata?.token_out_decimals || 18}
+                onSelect={handleQuoteSelect}
+              />
+            </Box>
           ) : (
             <Text
               fontSize="sm"
@@ -396,15 +434,25 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               whiteSpace="pre-wrap"
             >
               {typeof content === "string"
-                ? formatLinks(content)
+                ? content.startsWith('{"response":')
+                  ? formatLinks(JSON.parse(content).response)
+                  : formatLinks(content)
                 : JSON.stringify(content)}
             </Text>
           )}
 
           {awaitingConfirmation && (
-            <Badge colorScheme="yellow" alignSelf="flex-start" mt={2}>
-              Needs Confirmation
-            </Badge>
+            <HStack spacing={2} mt={2}>
+              <Badge colorScheme="yellow" alignSelf="flex-start">
+                Needs Confirmation
+              </Badge>
+              <Button size="xs" colorScheme="green" onClick={handleConfirm}>
+                Confirm
+              </Button>
+              <Button size="xs" colorScheme="red" onClick={handleCancel}>
+                Cancel
+              </Button>
+            </HStack>
           )}
 
           {status === "processing" && (

@@ -7,15 +7,19 @@
         "@chakra-ui/react": "2.8.2",
         "@emotion/react": "11.11.3",
         "@emotion/styled": "11.11.0",
+        "@heroicons/react": "^2.2.0",
         "@tanstack/react-query": "^5.0.0",
         "axios": "^1.6.7",
         "connectkit": "^1.7.1",
         "framer-motion": "10.18.0",
         "next": "^14.1.0",
         "pino-pretty": "^13.0.0",
-        "react": "^18.2.0",
+        "react": "^18.3.1",
         "react-dom": "^18.2.0",
-        "viem": "^2.7.9",
+        "react-markdown": "^10.0.1",
+        "react-syntax-highlighter": "^15.6.1",
+        "remark-gfm": "^4.0.1",
+        "viem": "^2.23.6",
         "wagmi": "^2.5.7"
     },
     "scripts": {
@@ -45,6 +49,7 @@
         "@types/node": "^22.13.5",
         "@types/react": "^19.0.10",
         "@types/react-dom": "^19.0.4",
+        "@types/react-syntax-highlighter": "^15.5.13",
         "typescript": "5.7.3"
     }
 }

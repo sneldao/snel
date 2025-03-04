@@ -212,11 +212,14 @@ export const CommandInput = ({
             </HStack>
             <Text fontSize="xs" color="gray.500" textAlign="center">
               By using Snel, you agree to our{" "}
-              <NextLink href="/terms" passHref>
-                <Link color="blue.500" textDecoration="underline">
-                  terms
-                </Link>
-              </NextLink>
+              <Link
+                as={NextLink}
+                href="/terms"
+                color="blue.500"
+                textDecoration="underline"
+              >
+                terms
+              </Link>
             </Text>
           </VStack>
         </HStack>

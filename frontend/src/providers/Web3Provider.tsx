@@ -65,7 +65,17 @@ export const Web3Provider = ({ children }: Web3ProviderProps) => {
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <ConnectKitProvider theme="soft">{children}</ConnectKitProvider>
+        <ConnectKitProvider
+          theme="soft"
+          options={{
+            hideNoWalletCTA: true,
+            hideBalance: false,
+            embedGoogleFonts: true,
+            initialChainId: base.id,
+          }}
+        >
+          {children}
+        </ConnectKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

@@ -331,6 +331,28 @@ During our attempt to integrate Dowse for natural language command processing, w
 
 These notes are provided to help future development decisions and to document why we chose a custom implementation over the Dowse framework.
 
+## Configuration
+
+### Environment Variables
+
+The application requires several environment variables to be set:
+
+- `REDIS_URL`: URL for the Redis instance
+- `REDIS_PASSWORD`: Password for Redis (if using Upstash)
+- `OPENAI_API_KEY`: API key for OpenAI services
+- `ZEROX_API_KEY`: API key for 0x Protocol swap functionality (get one at https://dashboard.0x.org)
+
+## Setting Up Swap Functionality
+
+To enable swap functionality through the 0x protocol, you need to:
+
+1. Visit the [0x Dashboard](https://dashboard.0x.org) and create an account
+2. Generate an API key for your application
+3. Add the key to your environment variables as `ZEROX_API_KEY`
+4. Restart the application to ensure the key is loaded
+
+Without a valid 0x API key, swap functionality may be rate-limited or fail.
+
 ```
 
 ```

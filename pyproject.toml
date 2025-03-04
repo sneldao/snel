@@ -23,6 +23,7 @@ upstash-redis = "^1.2.0"
 pydantic = "2.10.6"
 pycryptodome = "^3.21.0"
 pydantic-settings = "^2.2.1"
+openai = "^1.65.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"

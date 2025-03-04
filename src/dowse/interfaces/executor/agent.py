@@ -117,6 +117,4 @@ class AgentExecutor(
     __str__ = __repr__
 
     def token_count(self) -> int:
-        if self.prompt is None:
-            return 0
-        return count_tokens(self.prompt)
+        return 0 if self.prompt is None else count_tokens(self.prompt)

@@ -156,10 +156,10 @@ class TransactionExecutor:
             Dictionary with gas parameters
         """
         gas_params = {}
-        
+
         try:
             # Handle gas price parameters for different chains
-            if chain_id in [1, 137]:  # Ethereum, Polygon
+            if chain_id in {1, 137}:  # Ethereum, Polygon
                 if tx_data and "gas_price" in tx_data:
                     gas_price = tx_data["gas_price"]
                     if isinstance(gas_price, str) and gas_price.startswith("0x"):
@@ -171,37 +171,36 @@ class TransactionExecutor:
                     gas_price = web3.eth.gas_price
                     gas_params["gasPrice"] = int(gas_price * 1.1)
                     logger.info(f"Using network gas price with buffer: {gas_params['gasPrice']}")
-                    
-            else:  # EIP-1559 chains
-                if tx_data and "max_fee_per_gas" in tx_data and "max_priority_fee_per_gas" in tx_data:
-                    max_fee = tx_data["max_fee_per_gas"]
-                    max_priority_fee = tx_data["max_priority_fee_per_gas"]
-                    
-                    if isinstance(max_fee, str) and max_fee.startswith("0x"):
-                        max_fee = int(max_fee, 16)
-                    if isinstance(max_priority_fee, str) and max_priority_fee.startswith("0x"):
-                        max_priority_fee = int(max_priority_fee, 16)
-                        
-                    gas_params["maxFeePerGas"] = max_fee
-                    gas_params["maxPriorityFeePerGas"] = max_priority_fee
-                    logger.info(f"Using provided EIP-1559 gas params: maxFee={max_fee}, maxPriorityFee={max_priority_fee}")
-                else:
-                    try:
-                        # Get fee data from the network
-                        fee_data = web3.eth.fee_history(1, 'latest', [50])
-                        base_fee = fee_data["baseFeePerGas"][-1]
-                        
-                        # Set max fee and priority fee
-                        priority_fee = web3.eth.max_priority_fee
-                        gas_params["maxFeePerGas"] = base_fee * 2 + priority_fee
-                        gas_params["maxPriorityFeePerGas"] = priority_fee
-                        logger.info(f"Using network EIP-1559 gas params: maxFee={gas_params['maxFeePerGas']}, maxPriorityFee={priority_fee}")
-                    except Exception as e:
-                        logger.warning(f"Failed to get EIP-1559 fee data: {e}. Falling back to legacy gas price.")
-                        gas_price = web3.eth.gas_price
-                        gas_params["gasPrice"] = int(gas_price * 1.1)
-                        logger.info(f"Fallback to legacy gas price: {gas_params['gasPrice']}")
-            
+
+            elif tx_data and "max_fee_per_gas" in tx_data and "max_priority_fee_per_gas" in tx_data:
+                max_priority_fee = tx_data["max_priority_fee_per_gas"]
+
+                max_fee = tx_data["max_fee_per_gas"]
+                if isinstance(max_fee, str) and max_fee.startswith("0x"):
+                    max_fee = int(max_fee, 16)
+                if isinstance(max_priority_fee, str) and max_priority_fee.startswith("0x"):
+                    max_priority_fee = int(max_priority_fee, 16)
+
+                gas_params["maxFeePerGas"] = max_fee
+                gas_params["maxPriorityFeePerGas"] = max_priority_fee
+                logger.info(f"Using provided EIP-1559 gas params: maxFee={max_fee}, maxPriorityFee={max_priority_fee}")
+            else:
+                try:
+                    # Get fee data from the network
+                    fee_data = web3.eth.fee_history(1, 'latest', [50])
+                    base_fee = fee_data["baseFeePerGas"][-1]
+
+                    # Set max fee and priority fee
+                    priority_fee = web3.eth.max_priority_fee
+                    gas_params["maxFeePerGas"] = base_fee * 2 + priority_fee
+                    gas_params["maxPriorityFeePerGas"] = priority_fee
+                    logger.info(f"Using network EIP-1559 gas params: maxFee={gas_params['maxFeePerGas']}, maxPriorityFee={priority_fee}")
+                except Exception as e:
+                    logger.warning(f"Failed to get EIP-1559 fee data: {e}. Falling back to legacy gas price.")
+                    gas_price = web3.eth.gas_price
+                    gas_params["gasPrice"] = int(gas_price * 1.1)
+                    logger.info(f"Fallback to legacy gas price: {gas_params['gasPrice']}")
+
             return gas_params
         except Exception as e:
             logger.error(f"Error getting gas parameters: {e}")
@@ -231,7 +230,7 @@ class TransactionExecutor:
             ValueError: If the transaction fails
         """
         logger.info(f"Executing transaction on chain {chain_id} to {tx_data.get('to', 'unknown')}")
-        
+
         # For testing purposes, if no private key is provided, return a mock transaction hash
         if not private_key:
             import hashlib
@@ -239,20 +238,20 @@ class TransactionExecutor:
             tx_hash = f"0x{mock_hash}"
             logger.info(f"No private key provided, returning mock transaction hash: {tx_hash}")
             return tx_hash
-        
+
         try:
             # Get Web3 instance
             web3 = self.get_web3(chain_id)
-            
+
             # Create account from private key
             account: LocalAccount = Account.from_key(private_key)
-            
+
             # Ensure wallet address matches account address
             if account.address.lower() != wallet_address.lower():
                 error_msg = "Private key does not match wallet address"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-            
+
             # Prepare transaction
             tx = {
                 "from": wallet_address,
@@ -261,10 +260,10 @@ class TransactionExecutor:
                 "chainId": chain_id,
                 "nonce": web3.eth.get_transaction_count(wallet_address),
             }
-            
+
             # Determine transaction type
             tx_type = tx_data.get("method", "swap")
-            
+
             # Handle gas parameters
             if "gas_limit" in tx_data:
                 gas_limit = tx_data["gas_limit"]
@@ -284,44 +283,41 @@ class TransactionExecutor:
                     tx_type=tx_type,
                     token_address=token_address
                 )
-            
+
             # Get gas parameters (gasPrice or maxFeePerGas/maxPriorityFeePerGas)
             gas_params = await self.get_gas_parameters(web3, chain_id, tx_data)
-            tx.update(gas_params)
-            
+            tx |= gas_params
+
             # Handle value field for native token transactions
             if "value" in tx_data and tx_data["value"]:
                 # Ensure value is in the correct format
                 value = tx_data["value"]
                 if isinstance(value, str):
-                    if value.startswith("0x"):
-                        value = int(value, 16)
-                    else:
-                        value = int(value)
+                    value = int(value, 16) if value.startswith("0x") else int(value)
                 tx["value"] = value
                 logger.info(f"Transaction includes value: {value}")
             else:
                 tx["value"] = 0
-            
+
             # Log transaction details
             logger.info(f"Transaction details: {json.dumps({k: str(v) for k, v in tx.items()})}")
-            
+
             # Sign transaction
             signed_tx = account.sign_transaction(tx)
-            
+
             # Send transaction
             tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
             tx_hash_hex = tx_hash.hex()
-            
+
             logger.info(f"Transaction sent successfully! Hash: {tx_hash_hex}")
-            
+
             # Return transaction hash
             return tx_hash_hex
-        
+
         except ContractLogicError as e:
             error_msg = str(e).lower()
             logger.error(f"Contract logic error: {error_msg}")
-            
+
             if "insufficient allowance" in error_msg:
                 raise ValueError("Token approval needed before swap")
             elif "transfer amount exceeds balance" in error_msg:
@@ -331,8 +327,21 @@ class TransactionExecutor:
             else:
                 raise ValueError(f"Transaction failed: {str(e)}")
         except Exception as e:
-            logger.error(f"Error executing transaction: {str(e)}")
-            raise ValueError(f"Failed to execute transaction: {str(e)}")
+            error_msg = str(e).lower()
+            logger.error(f"Error executing transaction: {error_msg}")
+            
+            # Handle user rejection errors
+            if any(msg in error_msg for msg in [
+                "user rejected",
+                "user denied",
+                "transaction was cancelled",
+                "rejected transaction",
+                "user cancelled"
+            ]):
+                raise ValueError("Transaction was cancelled by user")
+                
+            # For other errors, provide a clean error message
+            raise ValueError(f"Transaction failed: {str(e).split('\n')[0]}")  # Only take first line of error
     
     async def build_approval_transaction(
         self,
@@ -357,29 +366,27 @@ class TransactionExecutor:
         """
         # ERC20 approve function signature
         function_signature = "0x095ea7b3"
-        
+
         # Default to max uint256 if no amount specified
         if amount is None:
             # Max uint256 value
             amount_hex = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        elif isinstance(amount, int):
+            amount_hex = hex(amount)
+        elif isinstance(amount, str) and amount.startswith("0x"):
+            amount_hex = amount
         else:
-            # Convert amount to hex
-            if isinstance(amount, int):
-                amount_hex = hex(amount)
-            elif isinstance(amount, str) and amount.startswith("0x"):
-                amount_hex = amount
-            else:
-                amount_hex = hex(int(amount))
-        
+            amount_hex = hex(int(amount))
+
         # Pad addresses to 32 bytes
         spender_address_padded = Web3.to_checksum_address(spender_address).lower().replace("0x", "").zfill(64)
         amount_padded = amount_hex.replace("0x", "").zfill(64)
-        
+
         # Construct the data field
         data = f"{function_signature}{spender_address_padded}{amount_padded}"
-        
+
         logger.info(f"Built approval transaction for token {token_address} with spender {spender_address}")
-        
+
         return {
             "to": token_address,
             "data": data,
@@ -404,18 +411,18 @@ class TransactionExecutor:
             The transaction hash if successful, None otherwise
         """
         logger.info(f"Executing swap for {swap_command.amount_in} {swap_command.token_in} to {swap_command.token_out}")
-        
+
         try:
             # Implementation needs to be added according to your specific requirements
             # This would interact with your chosen DEX aggregator or router
-            
+
             # For now, we'll return None to indicate this needs implementation
             logger.warning("execute_swap method needs implementation specific to your chosen DEX integration")
             return None
-            
+
         except Exception as e:
             logger.exception(f"Error executing swap: {e}")
-            raise ValueError(f"Failed to execute swap: {str(e)}")
+            raise ValueError(f"Failed to execute swap: {str(e)}") from e
 
 # Create a singleton instance
 transaction_executor = TransactionExecutor()

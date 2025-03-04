@@ -15,7 +15,7 @@ import {
   AlertTitle,
   AlertDescription,
   HStack,
-  Link as ChakraLink,
+  Link,
   Button,
   Icon,
   Badge,
@@ -32,26 +32,29 @@ import { WalletButton } from "../components/WalletButton";
 import { ExternalLinkIcon, SettingsIcon } from "@chakra-ui/icons";
 import { ApiKeyModal } from "../components/ApiKeyModal";
 import { LogoModal } from "../components/LogoModal";
+import { formatTokenAmount, smallestUnitsToAmount } from "../utils/tokenUtils";
 
 type Response = {
-  content: string;
+  content: string | any;
   timestamp: string;
   isCommand: boolean;
   pendingCommand?: string;
   awaitingConfirmation?: boolean;
+  confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
   agentType?: "default" | "swap";
-  metadata?: {
-    token_in_address?: string;
-    token_in_symbol?: string;
-    token_in_name?: string;
-    token_in_verified?: boolean;
-    token_in_source?: string;
-    token_out_address?: string;
-    token_out_symbol?: string;
-    token_out_name?: string;
-    token_out_verified?: boolean;
-    token_out_source?: string;
+  metadata?: any;
+  requires_selection?: boolean;
+  all_quotes?: any[];
+  selected_quote?: {
+    to: string;
+    data: string;
+    value: string;
+    gas: string;
+    buy_amount: string;
+    sell_amount: string;
+    protocol: string;
+    aggregator: string;
   };
 };
 
@@ -65,6 +68,8 @@ type TransactionData = {
   gasPrice?: string;
   maxFeePerGas?: string;
   maxPriorityFeePerGas?: string;
+  error?: string;
+  error_code?: string;
   needs_approval?: boolean;
   token_to_approve?: string;
   spender?: string;
@@ -186,6 +191,41 @@ export default function Home() {
       throw new Error("Wallet not connected");
     }
 
+    // Check if the transaction data contains an error
+    if ("error" in txData && txData.error) {
+      setResponses((prev) => [
+        ...prev,
+        {
+          content: `Transaction failed: ${txData.error}`,
+          timestamp: new Date().toLocaleTimeString(),
+          isCommand: false,
+          status: "error",
+          agentType: "swap",
+        },
+      ]);
+      // Set a flag to indicate this error has been handled
+      const handledError = new Error(txData.error);
+      (handledError as any).handled = true;
+      throw handledError;
+    }
+
+    // Validate required transaction fields
+    if (!txData.to || !txData.data) {
+      const errorMsg = `Invalid transaction data: missing required fields (to: ${txData.to}, data: ${txData.data})`;
+      console.error("Invalid transaction data:", txData);
+      setResponses((prev) => [
+        ...prev,
+        {
+          content: errorMsg,
+          timestamp: new Date().toLocaleTimeString(),
+          isCommand: false,
+          status: "error",
+          agentType: "swap",
+        },
+      ]);
+      throw new Error(errorMsg);
+    }
+
     try {
       // If approval is needed, handle it first
       if (
@@ -248,44 +288,126 @@ export default function Home() {
 
         // Retry the original transaction after approval
         if (txData.pending_command) {
-          const response = await fetch(`/api/execute-transaction`, {
-            method: "POST",
-            headers: getApiHeaders(),
-            body: JSON.stringify({
-              command: txData.pending_command,
-              wallet_address: address,
-              chain_id: chainId,
-              creator_id: address ? address.toLowerCase() : "anonymous",
-              skip_approval: txData.pending_command.startsWith("approved:"),
-            }),
-          });
+          try {
+            const response = await fetch(`/api/execute-transaction`, {
+              method: "POST",
+              headers: getApiHeaders(),
+              body: JSON.stringify({
+                command: txData.pending_command,
+                wallet_address: address,
+                chain_id: chainId,
+                creator_id: address ? address.toLowerCase() : "anonymous",
+                skip_approval: txData.pending_command.startsWith("approved:"),
+              }),
+            });
 
-          if (!response.ok) {
-            throw new Error(
-              `Failed to execute swap after approval: ${await response.text()}`
-            );
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error("API error response:", errorText);
+              let errorMessage = "Failed to execute swap after approval";
+
+              try {
+                const errorJson = JSON.parse(errorText);
+                if (errorJson.detail) {
+                  if (typeof errorJson.detail === "object") {
+                    errorMessage = JSON.stringify(errorJson.detail);
+                  } else {
+                    errorMessage = errorJson.detail;
+                  }
+                }
+              } catch (e) {
+                errorMessage = errorText;
+              }
+
+              throw new Error(errorMessage);
+            }
+
+            const swapData = await response.json();
+            console.log("Swap data from API after approval:", swapData);
+
+            // Check if the response needs clarification
+            if (swapData.status === "needs_clarification") {
+              setResponses((prev) => [
+                ...prev,
+                {
+                  content:
+                    swapData.clarification_prompt ||
+                    "I need more information to process your request.",
+                  timestamp: new Date().toLocaleTimeString(),
+                  isCommand: false,
+                  status: "pending",
+                  agentType: "swap",
+                  metadata: {
+                    missing_info: swapData.missing_info,
+                    original_command: txData.pending_command,
+                  },
+                },
+              ]);
+              return;
+            }
+
+            // Check for errors in the response
+            if (swapData.error || swapData.status === "error") {
+              const errorMsg = `Transaction failed: ${
+                swapData.error || "Unknown error"
+              }`;
+              setResponses((prev) => [
+                ...prev,
+                {
+                  content: errorMsg,
+                  timestamp: new Date().toLocaleTimeString(),
+                  isCommand: false,
+                  status: "error",
+                  agentType: "swap",
+                },
+              ]);
+              throw new Error(errorMsg);
+            }
+
+            // Check if we have valid transaction data
+            const hasValidData = swapData.to && swapData.data;
+            if (!hasValidData) {
+              const errorMsg =
+                "Invalid transaction data returned from API: missing required fields";
+              console.error("Invalid transaction data:", swapData);
+              setResponses((prev) => [
+                ...prev,
+                {
+                  content: errorMsg,
+                  timestamp: new Date().toLocaleTimeString(),
+                  isCommand: false,
+                  status: "error",
+                  agentType: "swap",
+                },
+              ]);
+              throw new Error(errorMsg);
+            }
+
+            // Convert snake_case to camelCase for proper execution
+            const mappedData: TransactionData = {
+              to: swapData.to,
+              data: swapData.data,
+              value: swapData.value || "0",
+              chainId: chainId,
+              method: swapData.method || "unknown",
+              gasLimit: swapData.gas_limit || "300000",
+              gasPrice: swapData.gas_price,
+              maxFeePerGas: swapData.max_fee_per_gas,
+              maxPriorityFeePerGas: swapData.max_priority_fee_per_gas,
+              error: swapData.error,
+              error_code: swapData.error_code,
+              needs_approval: false, // Skip approval since we just did it
+              token_to_approve: swapData.token_to_approve,
+              spender: swapData.spender,
+              pending_command: swapData.pending_command,
+              skip_approval: true,
+              metadata: swapData.metadata || {},
+            };
+            return executeTransaction(mappedData);
+          } catch (error) {
+            console.error("Error executing transaction after approval:", error);
+            throw error;
           }
-
-          const swapData = await response.json();
-          // Convert snake_case to camelCase for proper execution
-          const mappedData: TransactionData = {
-            to: swapData.to,
-            data: swapData.data,
-            value: swapData.value,
-            chainId: chainId,
-            method: swapData.method,
-            gasLimit: swapData.gas_limit,
-            gasPrice: swapData.gas_price,
-            maxFeePerGas: swapData.max_fee_per_gas,
-            maxPriorityFeePerGas: swapData.max_priority_fee_per_gas,
-            needs_approval: false, // Skip approval since we just did it
-            token_to_approve: swapData.token_to_approve,
-            spender: swapData.spender,
-            pending_command: swapData.pending_command,
-            skip_approval: true,
-            metadata: swapData.metadata,
-          };
-          return executeTransaction(mappedData);
         }
       }
 
@@ -294,9 +416,40 @@ export default function Home() {
         to: txData.to as `0x${string}`,
         data: txData.data as `0x${string}`,
         value: BigInt(txData.value || "0"),
-        chainId: txData.chainId,
+        chainId: txData.chainId || chainId, // Use current chainId as fallback
         gas: BigInt(txData.gasLimit || txData.gas_limit || "300000"),
       };
+
+      // Ensure the transaction value is properly formatted
+      if (transaction.value < BigInt(0)) {
+        transaction.value = BigInt(0);
+      }
+
+      // Ensure the transaction address is properly formatted
+      if (!transaction.to.startsWith("0x")) {
+        transaction.to = `0x${transaction.to}` as `0x${string}`;
+      }
+
+      // Ensure the transaction data is properly formatted
+      if (!transaction.data.startsWith("0x")) {
+        transaction.data = `0x${transaction.data}` as `0x${string}`;
+      }
+
+      // Log transaction details for debugging
+      console.log("Executing transaction:", {
+        to: transaction.to,
+        value: transaction.value.toString(),
+        chainId: transaction.chainId,
+        gas: transaction.gas.toString(),
+      });
+
+      // Verify that the chain ID matches the current chain
+      if (transaction.chainId !== chainId) {
+        console.warn(
+          `Transaction chain ID (${transaction.chainId}) doesn't match current chain (${chainId}). Updating to current chain.`
+        );
+        transaction.chainId = chainId;
+      }
 
       const hash = await walletClient.sendTransaction(transaction);
 
@@ -343,6 +496,12 @@ export default function Home() {
       return hash;
     } catch (error) {
       console.error("Transaction error:", error);
+
+      // Skip adding an error message if this error was already handled
+      if ((error as any).handled) {
+        throw error;
+      }
+
       let errorMessage = "Transaction failed";
 
       if (error instanceof Error) {
@@ -365,22 +524,8 @@ export default function Home() {
             message.includes("Request Arguments:") &&
             message.includes("data:")
           ) {
-            // Extract just the basic information
-            const fromMatch = message.match(/from:\s+([0-9a-fA-Fx]+)/);
-            const toMatch = message.match(/to:\s+([0-9a-fA-Fx]+)/);
-            const valueMatch = message.match(/value:\s+([\d.]+\s+ETH)/);
-
-            const from = fromMatch ? fromMatch[1] : "unknown";
-            const to = toMatch ? toMatch[1] : "unknown";
-            const value = valueMatch ? valueMatch[1] : "unknown amount";
-
-            errorMessage = `Transaction failed: ${message
-              .split("Request Arguments:")[0]
-              .trim()}`;
-            errorMessage += `\nTransaction details: ${value} from ${from.substring(
-              0,
-              8
-            )}... to ${to.substring(0, 8)}...`;
+            // Extract just the first part before the technical details
+            errorMessage = message.split("Request Arguments:")[0].trim();
           } else {
             // For other errors, use the first line or first 100 characters
             errorMessage = message.split("\n")[0];
@@ -406,213 +551,345 @@ export default function Home() {
     }
   };
 
-  const processCommand = async (command: string) => {
-    // Determine if this is a swap-related query
-    const isSwapRelated =
-      /\b(swap|token|price|approve|allowance|liquidity)\b/i.test(command);
-    const agentType = isSwapRelated ? "swap" : "default";
-
-    // Add the user's command to the responses
-    setResponses((prev) => [
-      ...prev,
-      {
-        content: command,
-        timestamp: new Date().toLocaleTimeString(),
-        isCommand: true,
-        status: "success",
-        agentType: "default", // User messages are always default
-      },
-    ]);
-
-    if (
-      !isConnected &&
-      !command.toLowerCase().startsWith("what") &&
-      !command.toLowerCase().startsWith("how")
-    ) {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your wallet to execute transactions",
-        status: "warning",
-        duration: 5000,
-      });
-      return;
-    }
-
-    if (!chainId) {
-      toast({
-        title: "Chain not detected",
-        description:
-          "Please make sure your wallet is connected to a supported network",
-        status: "warning",
-        duration: 5000,
-      });
-      return;
-    }
-
-    if (isSwapRelated && !(chainId in SUPPORTED_CHAINS)) {
-      toast({
-        title: "Unsupported Network",
-        description: `Please switch to a supported network: ${Object.values(
-          SUPPORTED_CHAINS
-        ).join(", ")}`,
-        status: "warning",
-        duration: 5000,
-      });
-      return;
-    }
-
-    setIsLoading(true);
+  const handleQuoteSelection = async (response: Response, quote: any) => {
     try {
-      // Always send the command to the backend, even if it's a confirmation
-      const response = await fetch(`/api/process-command`, {
+      setIsLoading(true);
+      const sessionApiKeys = getApiKeys();
+
+      // Call the backend to prepare the transaction with the selected quote
+      const result = await fetch("/api/swap/execute", {
         method: "POST",
-        headers: getApiHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+          ...getApiHeaders(),
+        },
         body: JSON.stringify({
-          content: command,
-          creator_name: "@user",
-          creator_id: address ? address.toLowerCase() : "anonymous",
-          chain_id: chainId,
+          wallet_address: walletClient?.account?.address,
+          chain_id: chainId || 1,
+          selected_quote: quote,
+        }),
+      });
+
+      const txData = await result.json();
+
+      if (txData.error) {
+        // Add the error response to the chat
+        const errorResponse: Response = {
+          content: `Error: ${txData.error}`,
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "error",
+        };
+        setResponses((prev) => [...prev, errorResponse]);
+        return;
+      }
+
+      // Execute the transaction
+      if (txData.to && txData.data) {
+        await executeTransaction(txData);
+      } else {
+        // Handle error
+        const errorResponse: Response = {
+          content: "Invalid transaction data received from API",
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "error",
+        };
+        setResponses((prev) => [...prev, errorResponse]);
+      }
+    } catch (error) {
+      console.error("Error during quote selection:", error);
+      const errorResponse: Response = {
+        content: `Error selecting quote: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "error",
+      };
+      setResponses((prev) => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processCommand = async (command: string) => {
+    try {
+      setIsLoading(true);
+
+      if (!walletClient || !address) {
+        // Handle case where wallet is not connected
+        const errorResponse: Response = {
+          content: "Please connect your wallet to continue.",
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "error",
+        };
+        setResponses((prev) => [...prev, errorResponse]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Add the user command to responses
+      const userCommand: Response = {
+        content: command,
+        timestamp: new Date().toISOString(),
+        isCommand: true,
+      };
+      setResponses((prev) => [...prev, userCommand]);
+
+      // Detect if this is a swap command
+      if (command.toLowerCase().startsWith("swap ")) {
+        // Process swap command
+        await processSwapCommand(command);
+        return;
+      }
+
+      // For other commands, use the general API
+      const response = await fetch("/api/process-command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getApiHeaders(),
+        },
+        body: JSON.stringify({
+          command,
+          wallet_address: address,
+          chain_id: chainId || 1,
         }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.detail || "Failed to process command");
-      }
-
-      // If this is a confirmation and we have a pending command from the backend
-      if (data.pending_command && /^(yes|confirm)$/i.test(command.trim())) {
-        try {
-          // Clear any existing pending commands in the UI
-          setResponses((prev) =>
-            prev.map((r) =>
-              r.awaitingConfirmation ? { ...r, awaitingConfirmation: false } : r
-            )
-          );
-
-          // Execute the transaction
-          const txResponse = await fetch(`/api/execute-transaction`, {
-            method: "POST",
-            headers: getApiHeaders(),
-            body: JSON.stringify({
-              command: data.pending_command,
-              wallet_address: address,
-              chain_id: chainId,
-              creator_id: address ? address.toLowerCase() : "anonymous",
-              skip_approval: data.pending_command.startsWith("approved:"),
-            }),
-          });
-
-          const txData = await txResponse.json();
-          if (!txResponse.ok) {
-            throw new Error(txData.detail || "Failed to prepare transaction");
-          }
-
-          await executeTransaction({
-            to: txData.to,
-            data: txData.data,
-            value: txData.value,
-            chainId: chainId,
-            method: txData.method,
-            gasLimit: txData.gas_limit,
-            gasPrice: txData.gas_price,
-            maxFeePerGas: txData.max_fee_per_gas,
-            maxPriorityFeePerGas: txData.max_priority_fee_per_gas,
-            needs_approval: txData.needs_approval,
-            token_to_approve: txData.token_to_approve,
-            spender: txData.spender,
-            pending_command: txData.pending_command,
-            skip_approval:
-              txData.skip_approval ||
-              data.pending_command.startsWith("approved:"),
-            metadata: txData.metadata,
-          });
-        } catch (error) {
-          console.error("Transaction error:", error);
-          setResponses((prev) => [
-            ...prev,
-            {
-              content: `Transaction failed: ${
-                error instanceof Error ? error.message : "Unknown error"
-              }`,
-              timestamp: new Date().toLocaleTimeString(),
-              isCommand: false,
-              status: "error",
-              agentType: "swap",
-            },
-          ]);
-        }
-        return;
-      }
-      // If this is a cancellation
-      else if (/^(no|cancel)$/i.test(command.trim())) {
-        // Clear any existing pending commands in the UI
-        setResponses((prev) => [
-          ...prev.map((r) =>
-            r.awaitingConfirmation ? { ...r, awaitingConfirmation: false } : r
-          ),
-          {
-            content: data.content || "Transaction cancelled.",
-            timestamp: new Date().toLocaleTimeString(),
-            isCommand: false,
-            status: "success",
-            agentType: "swap",
-          },
-        ]);
-        return;
-      }
-
-      const isQuestion =
-        command.toLowerCase().startsWith("what") ||
-        command.toLowerCase().startsWith("how");
-
-      // Add the bot's response
-      setResponses((prev) => [
-        ...prev,
-        {
-          content: data.content,
-          timestamp: new Date().toLocaleTimeString(),
-          isCommand: false, // Bot responses are never commands
-          pendingCommand: data.pending_command,
-          awaitingConfirmation: Boolean(data.pending_command),
-          status: data.pending_command ? "pending" : "success",
-          agentType: data.agent_type || "default", // Use the agent_type from the response
-          metadata: data.metadata,
-        },
-      ]);
-    } catch (error) {
-      console.error("Error:", error);
-      setResponses((prev) => [
-        ...prev,
-        {
-          content:
-            error instanceof Error
-              ? `Sorry, I encountered an error: ${error.message}`
-              : "An unknown error occurred. Please try again.",
-          timestamp: new Date().toLocaleTimeString(),
+      if (data.error) {
+        const errorResponse: Response = {
+          content: `Error: ${data.error}`,
+          timestamp: new Date().toISOString(),
           isCommand: false,
           status: "error",
-          agentType: "default", // Use default agent (SNEL) for general errors
-        },
-      ]);
+        };
+        setResponses((prev) => [...prev, errorResponse]);
+        return;
+      }
 
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to process command. Please try again.",
+      // Process the response
+      const botResponse: Response = {
+        content: data.content || data,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        agentType: data.agent_type || "default",
+        metadata: data.metadata,
+      };
+
+      // Handle special response types
+      if (data.status) {
+        botResponse.status = data.status;
+      }
+
+      // Add the response
+      setResponses((prev) => [...prev, botResponse]);
+    } catch (error) {
+      console.error("Error processing command:", error);
+      const errorResponse: Response = {
+        content: `Error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
         status: "error",
-        duration: 5000,
-        isClosable: true,
+      };
+      setResponses((prev) => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processSwapCommand = async (command: string) => {
+    try {
+      // Process the initial swap command to get token information
+      const response = await fetch("/api/swap/process-command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getApiHeaders(),
+        },
+        body: JSON.stringify({
+          command,
+          wallet_address: address,
+          chain_id: chainId || 1,
+        }),
       });
+
+      const data = await response.json();
+
+      if (data.error) {
+        const errorResponse: Response = {
+          content: `Error: ${data.error}`,
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "error",
+        };
+        setResponses((prev) => [...prev, errorResponse]);
+        return;
+      }
+
+      // Check if we have a swap confirmation
+      if (data.content && data.content.type === "swap_confirmation") {
+        // Add the swap confirmation to the responses
+        const swapConfirmationResponse: Response = {
+          content: data.content,
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          awaitingConfirmation: true,
+          confirmation_type: "token_confirmation",
+          metadata: data.metadata,
+          status: "success",
+        };
+
+        setResponses((prev) => [...prev, swapConfirmationResponse]);
+      } else {
+        // Regular response
+        const botResponse: Response = {
+          content: data.content || data,
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          metadata: data.metadata,
+          status: "success",
+        };
+
+        setResponses((prev) => [...prev, botResponse]);
+      }
+    } catch (error) {
+      console.error("Error processing swap command:", error);
+      const errorResponse: Response = {
+        content: `Error processing swap: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "error",
+      };
+      setResponses((prev) => [...prev, errorResponse]);
+    }
+  };
+
+  const handleTokenConfirmation = async () => {
+    try {
+      setIsLoading(true);
+
+      // User has confirmed the tokens, get quotes
+      const response = await fetch("/api/swap/get-quotes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getApiHeaders(),
+        },
+        body: JSON.stringify({
+          wallet_address: address,
+          chain_id: chainId || 1,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        const errorResponse: Response = {
+          content: `Error: ${data.error}`,
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "error",
+        };
+        setResponses((prev) => [...prev, errorResponse]);
+        return;
+      }
+
+      // Check if we have quotes
+      if (data.quotes && data.quotes.length > 0) {
+        // Add the quotes to the responses for selection
+        const quotesResponse: Response = {
+          content: "Here are the available quotes. Please select one:",
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "success",
+          requires_selection: true,
+          all_quotes: data.quotes,
+        };
+
+        setResponses((prev) => [...prev, quotesResponse]);
+      } else {
+        // No quotes available
+        const errorResponse: Response = {
+          content:
+            "No quotes available for this swap. Please try a different pair or amount.",
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "error",
+        };
+
+        setResponses((prev) => [...prev, errorResponse]);
+      }
+    } catch (error) {
+      console.error("Error getting quotes:", error);
+      const errorResponse: Response = {
+        content: `Error getting quotes: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "error",
+      };
+      setResponses((prev) => [...prev, errorResponse]);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSubmit = async (command: string) => {
+    // Check if we're awaiting a confirmation
+    const lastResponse = responses[responses.length - 1];
+
+    if (lastResponse && lastResponse.awaitingConfirmation) {
+      // If user confirms with "yes", "confirm", etc.
+      if (
+        ["yes", "confirm", "proceed", "ok", "go ahead"].includes(
+          command.toLowerCase()
+        )
+      ) {
+        // Add the confirmation to the responses
+        const userConfirmation: Response = {
+          content: command,
+          timestamp: new Date().toISOString(),
+          isCommand: true,
+        };
+        setResponses((prev) => [...prev, userConfirmation]);
+
+        // Process based on confirmation type
+        if (lastResponse.confirmation_type === "token_confirmation") {
+          await handleTokenConfirmation();
+        }
+        return;
+      } else if (["no", "cancel", "stop"].includes(command.toLowerCase())) {
+        // User has declined
+        const userDecline: Response = {
+          content: command,
+          timestamp: new Date().toISOString(),
+          isCommand: true,
+        };
+
+        const botResponse: Response = {
+          content: "Swap cancelled. How else can I help you?",
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "success",
+        };
+
+        setResponses((prev) => [...prev, userDecline, botResponse]);
+        return;
+      }
+    }
+
+    // If we're not awaiting confirmation or the user didn't confirm/decline,
+    // process as a regular command
     await processCommand(command);
   };
 
@@ -717,7 +994,7 @@ export default function Home() {
             >
               {responses.map((response, index) => (
                 <CommandResponse
-                  key={`response-${index}`}
+                  key={index}
                   content={response.content}
                   timestamp={response.timestamp}
                   isCommand={response.isCommand}
@@ -725,6 +1002,9 @@ export default function Home() {
                   awaitingConfirmation={response.awaitingConfirmation}
                   agentType={response.agentType}
                   metadata={response.metadata}
+                  requires_selection={response.requires_selection}
+                  all_quotes={response.all_quotes}
+                  onQuoteSelect={handleQuoteSelection}
                 />
               ))}
               <div ref={responsesEndRef} />
