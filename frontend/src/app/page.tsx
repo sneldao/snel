@@ -33,6 +33,8 @@ import { ExternalLinkIcon, SettingsIcon } from "@chakra-ui/icons";
 import { ApiKeyModal } from "../components/ApiKeyModal";
 import { LogoModal } from "../components/LogoModal";
 import { formatTokenAmount, smallestUnitsToAmount } from "../utils/tokenUtils";
+import { openoceanLimitOrderSdk } from "@openocean.finance/limitorder-sdk";
+import { ethers } from "ethers";
 
 type Response = {
   content: string | any;
@@ -55,6 +57,14 @@ type Response = {
     sell_amount: string;
     protocol: string;
     aggregator: string;
+  };
+  transaction?: {
+    to: string;
+    data: string;
+    value?: string;
+    chainId?: number;
+    gasLimit?: string;
+    gas_limit?: string;
   };
 };
 
@@ -104,6 +114,205 @@ const SUPPORTED_CHAINS = {
   43114: "Avalanche",
   534352: "Scroll",
 } as const;
+
+async function createDCAOrderWithSDK(
+  provider: any,
+  chainId: number,
+  account: string,
+  makerToken: {
+    address: string;
+    decimals: number;
+    symbol: string;
+  },
+  takerToken: {
+    address: string;
+    decimals: number;
+    symbol: string;
+  },
+  makerAmount: string,
+  takerAmount: string,
+  frequency: string, // in seconds
+  times: number
+) {
+  try {
+    // Validate chain - OpenOcean DCA currently only works on Base (chainId 8453)
+    if (chainId !== 8453) {
+      return {
+        success: false,
+        error: "DCA functionality is currently only supported on Base chain",
+      };
+    }
+
+    // Validate minimum amount - $5 per transaction
+    const amountInDecimal = parseFloat(makerAmount) / 10 ** makerToken.decimals;
+    const totalAmount = amountInDecimal * times;
+
+    // Assuming USDC/USDT with 6 decimals, minimum $5 per transaction
+    const minimumPerDay = 5 * 10 ** (makerToken.decimals - 6); // Adjust for token decimals
+
+    if (amountInDecimal < minimumPerDay) {
+      return {
+        success: false,
+        error: `Minimum amount per transaction is $5 (${minimumPerDay} ${makerToken.symbol})`,
+      };
+    }
+
+    // Map chain ID to chain key
+    const chainKeyMap: Record<number, string> = {
+      1: "eth",
+      10: "optimism",
+      56: "bsc",
+      137: "polygon",
+      42161: "arbitrum",
+      8453: "base",
+      534352: "scroll",
+      43114: "avalanche",
+    };
+
+    const chainKey = chainKeyMap[chainId] || "base"; // Default to base
+
+    // Map frequency to expire option
+    const frequencyToExpire: Record<string, string> = {
+      "86400": "1D", // 1 day
+      "604800": "7D", // 7 days
+      "2592000": "30D", // 30 days
+    };
+
+    // Calculate total duration in seconds
+    const totalDurationSeconds = parseInt(frequency) * times;
+
+    // Choose appropriate expire option
+    let expireOption = "30D"; // Default to 30 days
+    if (totalDurationSeconds <= 86400) {
+      expireOption = "1D";
+    } else if (totalDurationSeconds <= 604800) {
+      expireOption = "7D";
+    } else if (totalDurationSeconds <= 2592000) {
+      expireOption = "30D";
+    } else {
+      expireOption = "1Y";
+    }
+
+    console.log("Creating DCA order with SDK:", {
+      chainKey,
+      chainId,
+      account,
+      makerToken,
+      takerToken,
+      makerAmount,
+      takerAmount,
+      frequency,
+      times,
+      expireOption,
+    });
+
+    // Convert viem provider to ethers provider
+    let ethersProvider;
+    try {
+      // Try to convert the provider to an ethers provider
+      if (provider && provider.request) {
+        // Create a provider adapter that matches what the SDK expects
+        const providerAdapter = {
+          request: provider.request,
+          send: provider.request,
+          sendAsync: provider.request,
+          // Add any other required properties
+        };
+        ethersProvider = new ethers.providers.Web3Provider(
+          providerAdapter as any
+        );
+      } else {
+        // Fallback to a window.ethereum provider if available
+        if (typeof window !== "undefined" && window.ethereum) {
+          ethersProvider = new ethers.providers.Web3Provider(
+            window.ethereum as any
+          );
+        } else {
+          // Last resort: create a minimal provider object
+          ethersProvider = {
+            getSigner: () => ({
+              getAddress: async () => account,
+              signMessage: async () => "0x",
+              _signTypedData: async () => "0x",
+            }),
+            getNetwork: async () => ({ chainId: chainId }),
+          } as any;
+        }
+      }
+      console.log("Ethers provider initialized:", ethersProvider);
+    } catch (error) {
+      console.error("Error initializing ethers provider:", error);
+      return {
+        success: false,
+        error: "Failed to initialize ethers provider",
+      };
+    }
+
+    // Create the order using the SDK
+    const order = await openoceanLimitOrderSdk.createLimitOrder(
+      {
+        provider: ethersProvider, // Use ethers provider
+        chainKey: chainKey,
+        account: account,
+        chainId: chainId.toString(), // Convert to string to fix type error
+        mode: "Dca", // Important: Use 'Dca' mode for DCA orders
+      },
+      {
+        makerTokenAddress: makerToken.address,
+        makerTokenDecimals: makerToken.decimals,
+        takerTokenAddress: takerToken.address,
+        takerTokenDecimals: takerToken.decimals,
+        makerAmount: makerAmount,
+        takerAmount: takerAmount,
+        gasPrice: 3000000000, // Default gas price as a number
+        expire: expireOption,
+        receiver: "0x0000000000000000000000000000000000000000", // Default receiver
+        receiverInputData: "0x", // Default receiver input data
+        mode: "Dca", // Mode for DCA orders
+      }
+    );
+
+    // Add DCA-specific parameters
+    const dcaOrder = {
+      ...order,
+      expireTime: (parseInt(frequency) * times).toString(),
+      time: parseInt(frequency).toString(),
+      times: Number(times), // Ensure times is a number
+      version: "v2",
+      minPrice: "0.9", // 10% price range
+      maxPrice: "1.1",
+    };
+
+    console.log("DCA order created:", dcaOrder);
+
+    // Submit the order to the OpenOcean API
+    const response = await fetch(
+      `https://open-api.openocean.finance/v1/${chainId}/dca/swap`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dcaOrder),
+      }
+    );
+
+    const result = await response.json();
+    console.log("DCA order submission result:", result);
+
+    return {
+      success: result.code === 200,
+      data: result,
+      order: dcaOrder,
+    };
+  } catch (error) {
+    console.error("Error creating DCA order:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 export default function Home() {
   const [responses, setResponses] = React.useState<Response[]>([]);
@@ -844,6 +1053,7 @@ export default function Home() {
         confirmation_type: "token_confirmation",
         pendingCommand: data.pending_command,
         metadata: data.metadata,
+        transaction: data.transaction,
       };
 
       setResponses((prev) => [...prev, botResponse]);
@@ -851,7 +1061,12 @@ export default function Home() {
       // If we need confirmation, set up the confirmation state
       if (data.content && data.content.type === "dca_confirmation") {
         setAwaitingInput(true);
-        setConfirmationCallback(() => handleTokenConfirmation);
+        setConfirmationCallback(() => handleDCAConfirmation);
+      }
+
+      // If there's transaction data, log it for debugging
+      if (data.transaction) {
+        console.log("DCA transaction data:", data.transaction);
       }
     } catch (error) {
       console.error("Error processing DCA command:", error);
@@ -869,96 +1084,6 @@ export default function Home() {
     }
   };
 
-  const handleTokenConfirmation = async () => {
-    try {
-      setIsLoading(true);
-
-      // Get the latest response that needs confirmation
-      // Find the last response with awaitingConfirmation=true
-      const pendingResponses = responses.filter((r) => r.awaitingConfirmation);
-      const lastResponse =
-        pendingResponses.length > 0
-          ? pendingResponses[pendingResponses.length - 1]
-          : null;
-
-      // Check if this is a DCA confirmation
-      if (lastResponse && lastResponse.agentType === "dca") {
-        // Handle DCA confirmation
-        await handleDCAConfirmation();
-        return;
-      }
-
-      // Default to swap confirmation handling
-      // User has confirmed the tokens, get quotes
-      const response = await fetch("/api/swap/get-quotes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getApiHeaders(),
-        },
-        body: JSON.stringify({
-          wallet_address: address,
-          chain_id: chainId || 1,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        const errorResponse: Response = {
-          content: `Error: ${data.error}`,
-          timestamp: new Date().toISOString(),
-          isCommand: false,
-          status: "error",
-        };
-        setResponses((prev) => [...prev, errorResponse]);
-        return;
-      }
-
-      // Check if we have quotes
-      if (data.quotes && data.quotes.length > 0) {
-        // Add the quotes to the responses for selection
-        const quotesResponse: Response = {
-          content: "Here are the available quotes. Please select one:",
-          timestamp: new Date().toISOString(),
-          isCommand: false,
-          status: "success",
-          requires_selection: true,
-          all_quotes: data.quotes,
-        };
-
-        setResponses((prev) => [...prev, quotesResponse]);
-      } else {
-        // No quotes available
-        const errorResponse: Response = {
-          content:
-            "No quotes available for this swap. Please try a different pair or amount.",
-          timestamp: new Date().toISOString(),
-          isCommand: false,
-          status: "error",
-        };
-
-        setResponses((prev) => [...prev, errorResponse]);
-      }
-    } catch (error) {
-      console.error("Error getting quotes:", error);
-      const errorResponse: Response = {
-        content: `Error getting quotes: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        timestamp: new Date().toISOString(),
-        isCommand: false,
-        status: "error",
-      };
-      setResponses((prev) => [...prev, errorResponse]);
-    } finally {
-      setIsLoading(false);
-      setAwaitingInput(false);
-      setConfirmationCallback(null);
-    }
-  };
-
-  // New function to handle DCA confirmations
   const handleDCAConfirmation = async () => {
     try {
       // Find the pending command from the responses
@@ -974,21 +1099,186 @@ export default function Home() {
         throw new Error("No pending DCA command found");
       }
 
-      // In a real implementation, we would call the DCA API to create the order
-      // For now, we'll just show a success message
-      const successResponse: Response = {
-        content: {
-          type: "dca_success",
-          message:
-            "I've initiated your DCA order! You'll be swapping the specified amount on your chosen schedule. You can monitor your DCA positions through your wallet's activity.",
-        },
-        timestamp: new Date().toISOString(),
-        isCommand: false,
-        status: "success",
-        agentType: "dca",
-      };
+      // Check if there's transaction data in the response
+      if (lastDCAResponse.transaction) {
+        // Execute the transaction
+        const txData = lastDCAResponse.transaction;
 
-      setResponses((prev) => [...prev, successResponse]);
+        // Log transaction details for debugging
+        console.log("Executing DCA transaction:", txData);
+
+        // Create transaction parameters
+        const transaction = {
+          to: txData.to as `0x${string}`,
+          data: txData.data as `0x${string}`,
+          value: BigInt(txData.value || "0"),
+          chainId: txData.chainId || chainId, // Use current chainId as fallback
+          gas: BigInt(txData.gas_limit || txData.gasLimit || "300000"),
+        };
+
+        // Ensure the transaction value is properly formatted
+        if (transaction.value < BigInt(0)) {
+          transaction.value = BigInt(0);
+        }
+
+        // Ensure the transaction address is properly formatted
+        if (!transaction.to.startsWith("0x")) {
+          transaction.to = `0x${transaction.to}` as `0x${string}`;
+        }
+
+        // Ensure the transaction data is properly formatted
+        if (!transaction.data.startsWith("0x")) {
+          transaction.data = `0x${transaction.data}` as `0x${string}`;
+        }
+
+        // Verify that the chain ID matches the current chain
+        if (transaction.chainId !== chainId) {
+          console.warn(
+            `Transaction chain ID (${transaction.chainId}) doesn't match current chain (${chainId}). Updating to current chain.`
+          );
+          transaction.chainId = chainId;
+        }
+
+        // Send the transaction
+        if (!walletClient) {
+          throw new Error("Wallet client not initialized");
+        }
+
+        const hash = await walletClient.sendTransaction(transaction);
+
+        setResponses((prev) => [
+          ...prev.filter((r) => !r.status?.includes("processing")),
+          {
+            content: `Transaction submitted!\nView on block explorer:\n${getBlockExplorerLink(
+              hash
+            )}`,
+            timestamp: new Date().toLocaleTimeString(),
+            isCommand: false,
+            status: "processing",
+            agentType: "dca",
+            metadata: lastDCAResponse.metadata,
+          },
+        ]);
+
+        const receipt = await publicClient?.waitForTransactionReceipt({
+          hash,
+        });
+
+        if (!receipt) {
+          throw new Error("Failed to get transaction receipt");
+        }
+
+        const isSuccess = Boolean(receipt.status);
+
+        // If the transaction was successful, create the DCA order using the SDK
+        if (isSuccess) {
+          // Show processing message
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: "Processing DCA order setup...",
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "processing",
+              agentType: "dca",
+            },
+          ]);
+
+          // Extract metadata from the response
+          const metadata = lastDCAResponse.metadata || {};
+          const walletAddress = metadata.wallet_address;
+          const currentChainId = metadata.chain_id || chainId;
+
+          // Check if user is on Base chain
+          if (currentChainId !== 8453) {
+            const errorResponse: Response = {
+              content: `Error: DCA functionality is currently only supported on Base chain. Please switch your wallet to Base.`,
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error",
+              agentType: "dca",
+            };
+            setResponses((prev) => [...prev, errorResponse]);
+            return;
+          }
+
+          if (!walletAddress) {
+            throw new Error("Wallet address not found in metadata");
+          }
+
+          // Extract token information
+          const makerAsset = metadata.maker_asset;
+          const takerAsset = metadata.taker_asset;
+          const makerAmount = metadata.maker_amount;
+          const takerAmount = metadata.taker_amount || "0";
+          const frequencySeconds =
+            metadata.frequency_seconds?.toString() || "86400";
+          const times = metadata.times || 1;
+
+          // Get token details
+          const makerToken = {
+            address: makerAsset,
+            decimals: metadata.token_in_decimals || 18,
+            symbol: metadata.token_in_symbol || "Unknown",
+          };
+
+          const takerToken = {
+            address: takerAsset,
+            decimals: metadata.token_out_decimals || 18,
+            symbol: metadata.token_out_symbol || "Unknown",
+          };
+
+          // Create the DCA order using the SDK
+          const dcaResult = await createDCAOrderWithSDK(
+            walletClient.transport,
+            currentChainId,
+            walletAddress,
+            makerToken,
+            takerToken,
+            makerAmount,
+            takerAmount,
+            frequencySeconds,
+            times
+          );
+
+          if (dcaResult.success) {
+            // DCA order created successfully
+            const successResponse: Response = {
+              content: {
+                type: "dca_success",
+                message:
+                  "I've successfully set up your DCA order! You'll be swapping the specified amount on your chosen schedule. You can monitor your DCA positions through your wallet's activity.",
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success",
+              agentType: "dca",
+            };
+
+            setResponses((prev) => [...prev, successResponse]);
+          } else {
+            // DCA order creation failed
+            throw new Error(`Failed to create DCA order: ${dcaResult.error}`);
+          }
+        } else {
+          throw new Error("Approval transaction failed");
+        }
+      } else {
+        // No transaction data, just show a success message
+        const successResponse: Response = {
+          content: {
+            type: "dca_success",
+            message:
+              "I've initiated your DCA order! You'll be swapping the specified amount on your chosen schedule. You can monitor your DCA positions through your wallet's activity.",
+          },
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "success",
+          agentType: "dca",
+        };
+
+        setResponses((prev) => [...prev, successResponse]);
+      }
 
       // Clear the awaiting confirmation state
       setAwaitingInput(false);
@@ -1002,6 +1292,7 @@ export default function Home() {
         timestamp: new Date().toISOString(),
         isCommand: false,
         status: "error",
+        agentType: "dca",
       };
       setResponses((prev) => [...prev, errorResponse]);
 
@@ -1032,7 +1323,7 @@ export default function Home() {
 
         // Process based on confirmation type
         if (lastResponse.confirmation_type === "token_confirmation") {
-          await handleTokenConfirmation();
+          await handleDCAConfirmation();
         }
         return;
       } else if (["no", "cancel", "stop"].includes(command.toLowerCase())) {

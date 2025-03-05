@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from app.agents.base import PointlessAgent
 from app.services.token_service import TokenService
+from app.services.redis_service import RedisService
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +34,50 @@ class DCAResponse:
             for prefix in ["dca ", "dollar cost average ", "please ", "can you ", "set up ", "setup "]:
                 if command.startswith(prefix):
                     command = command[len(prefix):]
+            
+            # Check for dollar sign format: "$5 of eth into usdc for 2 days"
+            dollar_match = re.search(r"\$([0-9.]+)\s+(?:of\s+)?([a-z0-9]+)\s+(?:into|for|to)\s+([a-z0-9]+)(?:\s+(?:for|over)\s+(\d+)\s+days)?", command)
+            if dollar_match:
+                amount = float(dollar_match.group(1))
+                token_in = dollar_match.group(2).upper()
+                token_out = dollar_match.group(3).upper()
+                duration = int(dollar_match.group(4)) if dollar_match.group(4) else 30
+                
+                return {
+                    "amount": amount,
+                    "token_in": token_in,
+                    "token_out": token_out,
+                    "frequency": "daily",
+                    "duration": duration,
+                    "amount_is_usd": True
+                }
 
-            # Now parse the components
-            # Format: "[amount] [token_in] [frequency] into [token_out]"
-
-            # Check for basic pattern - improved to handle different formats
-            m = re.search(r"([0-9.]+)\s+([a-z0-9]+)(?:\s+(?:per|a|every|each)\s+(?:day|week|month))?(?:\s+for\s+\d+\s+days)?\s+(?:into|for|to)\s+([a-z0-9]+)", command)
+            # Check for standard pattern
+            m = re.search(r"([0-9.]+)\s+([a-z0-9]+)(?:\s+(?:per|a|every|each)\s+(?:day|week|month))?(?:\s+(?:for|over)\s+(\d+)\s+days)?\s+(?:into|for|to)\s+([a-z0-9]+)(?:\s+(?:for|over)\s+(\d+)\s+days)?", command)
 
             if not m:
-                return {"error": "Invalid DCA format. Please use 'dca [amount] [token] per [day/week/month] into [token]'."}
+                return {"error": "Invalid DCA format. Please use 'dca [amount] [token] per [day/week/month] into [token]' or 'dca $[amount] of [token] into [token] for [days] days'."}
 
             amount = float(m.group(1))
             token_in = m.group(2).upper()
-            token_out = m.group(3).upper()
+            token_out = m.group(4).upper()  # Group 4 because group 3 might be the duration
+            
+            # Check for duration in two possible positions
+            duration = None
+            if m.group(3):  # Duration before "into"
+                duration = int(m.group(3))
+            elif m.group(5):  # Duration after "into"
+                duration = int(m.group(5))
+            
+            # Default to 30 days if no duration specified
+            if duration is None:
+                duration = 30
+
+            # Also check for duration in the full command
+            if duration == 30:  # Only if we're still using the default
+                duration_match = re.search(r"(?:for|over)\s+(\d+)\s+days", command)
+                if duration_match:
+                    duration = int(duration_match.group(1))
 
             # Check if frequency is specified
             freq_match = re.search(r"(?:per|a|every|each)\s+(day|week|month)", command)
@@ -58,14 +90,13 @@ class DCAResponse:
             elif frequency == "month":
                 frequency = "monthly"
 
-            duration_match = re.search(r"for\s+(\d+)\s+days", command)
-            duration = int(duration_match.group(1)) if duration_match else 30
             return {
                 "amount": amount,
                 "token_in": token_in,
                 "token_out": token_out,
                 "frequency": frequency,
-                "duration": duration  # Now correctly parsed from command
+                "duration": duration,
+                "amount_is_usd": "$" in command
             }
 
         except Exception as e:
@@ -109,7 +140,7 @@ class DCAResponse:
             "amount": parsed["amount"],
             "frequency": parsed["frequency"],
             "duration": parsed["duration"],
-            "warning": "Important: Please note that the OpenOcean DCA API is in beta. Always monitor your DCA orders regularly."
+            "warning": "Important: Please note that the DCA API is in beta. Always monitor your DCA orders regularly."
         }
 
 class DCAAgent(PointlessAgent):
@@ -117,17 +148,17 @@ class DCAAgent(PointlessAgent):
     Agent for handling DCA commands.
     """
     token_service: Optional[TokenService] = None
-    pending_commands: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
-    dca_service: Optional[TokenService] = None
+    redis_service: Optional[RedisService] = None
+    dca_service: Any = None  # Add this field to avoid the error
     
-    def __init__(self, token_service: Optional[TokenService] = None):
+    def __init__(self, token_service: Optional[TokenService] = None, redis_service: Optional[RedisService] = None):
         super().__init__(
             prompt="You are a DCA (Dollar Cost Average) Agent that helps users set up recurring cryptocurrency purchases.",
             model="gpt-4-turbo-preview"
         )
         self.token_service = token_service
-        self.dca_service = None  # Will be set after initialization to avoid circular imports
-        self.pending_commands = {}  # Store parsed commands for confirmation
+        self.redis_service = redis_service
+        logger.info("DCA Agent initialized")
     
     async def _lookup_token(self, symbol: str, chain_id: int) -> Optional[Dict[str, Any]]:
         """
@@ -143,7 +174,7 @@ class DCAAgent(PointlessAgent):
         if not self.token_service:
             return None
             
-        logger.info(f"Looking up token_in: {symbol}")
+        logger.info(f"Looking up token: {symbol}")
         try:
             result = await self.token_service.lookup_token(symbol, chain_id)
             
@@ -182,196 +213,145 @@ class DCAAgent(PointlessAgent):
             logger.error(f"Error looking up token {symbol}: {e}")
             return None
     
-    async def process_dca_command(
-        self,
-        command: str,
-        chain_id: int = 1,
-        wallet_address: Optional[str] = None
-    ) -> Dict[str, Any]:
+    async def _store_dca_state(self, wallet_address: str, chain_id: int, parsed_command: Dict[str, Any]) -> bool:
+        """
+        Store DCA state in Redis.
+        
+        Args:
+            wallet_address: The user's wallet address
+            chain_id: The blockchain chain ID
+            parsed_command: The parsed DCA command
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.redis_service:
+            logger.warning("Redis service not available for storing DCA state")
+            return False
+            
+        try:
+            key = f"dca_state:{wallet_address}"
+            state = {
+                "wallet_address": wallet_address,
+                "chain_id": chain_id,
+                "token_in": parsed_command["token_in"],
+                "token_out": parsed_command["token_out"],
+                "amount": parsed_command["amount"],
+                "frequency": parsed_command["frequency"],
+                "duration": parsed_command["duration"],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            await self.redis_service.set(key, state, expire=300)  # 5 minutes expiration
+            return True
+        except Exception as e:
+            logger.error(f"Error storing DCA state: {e}")
+            return False
+    
+    async def _get_dca_state(self, wallet_address: str) -> Optional[Dict[str, Any]]:
+        """
+        Get DCA state from Redis.
+        
+        Args:
+            wallet_address: The user's wallet address
+            
+        Returns:
+            DCA state if found, None otherwise
+        """
+        if not self.redis_service:
+            logger.warning("Redis service not available for getting DCA state")
+            return None
+            
+        try:
+            key = f"dca_state:{wallet_address}"
+            return await self.redis_service.get(key)
+        except Exception as e:
+            logger.error(f"Error getting DCA state: {e}")
+            return None
+    
+    async def _clear_dca_state(self, wallet_address: str) -> bool:
+        """
+        Clear DCA state from Redis.
+        
+        Args:
+            wallet_address: The user's wallet address
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.redis_service:
+            logger.warning("Redis service not available for clearing DCA state")
+            return False
+            
+        try:
+            key = f"dca_state:{wallet_address}"
+            await self.redis_service.delete(key)
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing DCA state: {e}")
+            return False
+    
+    async def parse_dca_command(self, command: str) -> Dict[str, Any]:
+        """
+        Parse a DCA command string into its components.
+        
+        Args:
+            command: The command string
+            
+        Returns:
+            Dictionary with parsed values
+        """
+        return DCAResponse.parse_command(command)
+        
+    async def process_dca_command(self, command: str, chain_id: Optional[int] = None, wallet_address: Optional[str] = None) -> Dict[str, Any]:
         """
         Process a DCA command.
         
         Args:
-            command: The DCA command to process
+            command: The command string
             chain_id: The blockchain chain ID
             wallet_address: The user's wallet address
             
         Returns:
-            A dictionary with the DCA confirmation or error details
+            Response dictionary
         """
-        logger.info(f"Processing DCA command: {command}")
-
         try:
-            # Check if this is a confirmation command (e.g., "yes", "confirm")
-            if command.lower() in {
-                "yes",
-                "confirm",
-                "proceed",
-                "continue",
-                "ok",
-                "okay",
-                "sure",
-                "y",
-            }:
-                if not wallet_address:
-                    return {
-                        "type": "error",
-                        "content": "Wallet address is required for DCA confirmation."
-                    }
-
-                # Check if there's a pending command for this wallet
-                pending_key = f"dca:{wallet_address}:{chain_id}"
-                if pending_key not in self.pending_commands:
-                    return {
-                        "type": "error",
-                        "content": "No pending DCA order found. Please enter a new DCA command."
-                    }
-
-                # Get the previously parsed command
-                parsed_command = self.pending_commands[pending_key]
-
-                # Create the DCA order
-                if not self.dca_service:
-                    return {
-                        "type": "error",
-                        "content": "DCA service not initialized."
-                    }
-
-                try:
-                    # Create the DCA order with OpenOcean API
-                    result = await self.dca_service.create_dca_order(
-                        wallet_address=wallet_address,
-                        chain_id=chain_id,
-                        token_in=parsed_command["token_in"],
-                        token_out=parsed_command["token_out"],
-                        amount=parsed_command["amount"],
-                        frequency=parsed_command["frequency"],
-                        duration=parsed_command["duration"]
-                    )
-
-                    if not result.get("success"):
-                        return {
-                            "type": "error",
-                            "content": f"Failed to create DCA order: {result.get('error', 'Unknown error')}",
-                            "status": "error"
-                        }
-
-                    # Clean up the pending command
-                    del self.pending_commands[pending_key]
-
-                    # Return a success response with the transaction
-                    return {
-                        "type": "dca_order_created",
-                        "content": "I've initiated your DCA order! You'll be swapping the specified amount on your chosen schedule. You can monitor your DCA positions through your wallet's activity.",
-                        "status": "success",
-                        "metadata": {
-                            "order_id": result.get("order_id"),
-                            "details": result.get("details"),
-                            **result.get("transaction", {})
-                        }
-                    }
-
-                except Exception as e:
-                    logger.error(f"Error creating DCA order: {e}")
-                    return {
-                        "type": "error",
-                        "content": f"Failed to create DCA order: {str(e)}",
-                        "status": "error"
-                    }
-
-            # If not a confirmation, parse the command as a new DCA request
-            try:
-                # Initialize token service if not already done
-                if not self.token_service and wallet_address:
-                    from app.services.token_service import TokenService
-                    self.token_service = TokenService()
-
-                # Parse the DCA command
-                try:
-                    parsed = DCAResponse.parse_command(command)
-                    if not parsed:
-                        return {
-                            "type": "error",
-                            "content": "Sorry, I couldn't understand your DCA command. Please use format like 'dca 1 ETH into BTC daily for 30 days'.",
-                            "status": "error"
-                        }
-
-                    # Check if there's an error in the parsed command
-                    if isinstance(parsed, dict) and "error" in parsed:
-                        return {
-                            "type": "error",
-                            "content": parsed["error"],
-                            "status": "error"
-                        }
-
-                    logger.info(f"Parsed DCA command: {parsed}")
-                except Exception as parse_error:
-                    logger.error(f"Error parsing DCA command: {parse_error}")
-                    return {
-                        "type": "error",
-                        "content": f"Failed to parse your DCA command: {str(parse_error)}. Please try the format 'dca 1 ETH into BTC daily for 30 days'.",
-                        "status": "error"
-                    }
-
-                if not wallet_address:
-                    return {
-                        "type": "error",
-                        "content": "Wallet address is required for DCA setup.",
-                        "status": "error"
-                    }
-
-                # Lookup token information
-                token_in_info = await self._lookup_token(parsed["token_in"], chain_id)
-                if not token_in_info:
-                    return {
-                        "type": "error",
-                        "content": f"Sorry, I couldn't find the token {parsed['token_in']}.",
-                        "status": "error"
-                    }
-
-                token_out_info = await self._lookup_token(parsed["token_out"], chain_id)
-                if not token_out_info:
-                    return {
-                        "type": "error",
-                        "content": f"Sorry, I couldn't find the token {parsed['token_out']}.",
-                        "status": "error"
-                    }
-
-                # Format response for confirmation
-                try:
-                    response_data = DCAResponse.format_response(parsed, token_in_info, token_out_info)
-
-                    # Store the command for confirmation
-                    self.pending_commands[f"dca:{wallet_address}:{chain_id}"] = {
-                        "token_in": token_in_info,
-                        "token_out": token_out_info,
-                        "amount": parsed["amount"],
-                        "frequency": parsed["frequency"],
-                        "duration": parsed["duration"]
-                    }
-
-                    # Return confirmation message
-                    return response_data
-                except Exception as format_error:
-                    logger.error(f"Error formatting DCA response: {format_error}")
-                    return {
-                        "type": "error",
-                        "content": f"Failed to format DCA response: {str(format_error)}",
-                        "status": "error"
-                    }
-
-            except Exception as e:
-                logger.error(f"Error processing DCA command: {e}")
-                return {
-                    "type": "error",
-                    "content": f"Sorry, I encountered an error processing your DCA command: {str(e)}",
-                    "status": "error"
-                }
-
-        except Exception as e:
-            logger.error(f"Unexpected error in DCA agent: {e}")
+            # Parse the command
+            parsed = await self.parse_dca_command(command)
+            if "error" in parsed:
+                return {"error": parsed["error"]}
+                
+            # Check if wallet address is provided
+            if not wallet_address:
+                return {"error": "Wallet address is required for DCA commands"}
+                
+            # Look up tokens
+            token_in_info = await self._lookup_token(parsed["token_in"], chain_id or 1)
+            if not token_in_info:
+                return {"error": f"Could not find token {parsed['token_in']}"}
+                
+            token_out_info = await self._lookup_token(parsed["token_out"], chain_id or 1)
+            if not token_out_info:
+                return {"error": f"Could not find token {parsed['token_out']}"}
+                
+            # Store DCA state
+            await self._store_dca_state(wallet_address, chain_id or 1, parsed)
+                
+            # Format response
+            response = DCAResponse.format_response(parsed, token_in_info, token_out_info)
+            
             return {
-                "type": "error",
-                "content": f"An unexpected error occurred: {str(e)}",
-                "status": "error"
-            } 
+                "content": response,
+                "metadata": {
+                    "command": command,
+                    "chain_id": chain_id or 1,
+                    "wallet_address": wallet_address,
+                    "token_in_info": token_in_info,
+                    "token_out_info": token_out_info,
+                    "dca_details": parsed
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing DCA command: {e}")
+            return {"error": f"Failed to process DCA command: {str(e)}"} 

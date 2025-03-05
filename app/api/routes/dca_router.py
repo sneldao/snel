@@ -4,10 +4,12 @@ from typing import Dict, Any, List, Optional
 import logging
 from datetime import datetime
 import re
+import json
 
 from app.api.dependencies import get_redis_service, get_token_service
 from app.agents.dca_agent import DCAAgent
 from app.services.dca_service import DCAService
+from app.models.transaction import TransactionRequest, TransactionResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["dca"])
@@ -63,6 +65,7 @@ class DCAResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     agent_type: Optional[str] = "dca"
     pending_command: Optional[str] = None
+    transaction: Optional[Dict[str, Any]] = None
 
 class DCAOrderRequest(BaseModel):
     """
@@ -122,14 +125,14 @@ async def process_dca_command(
     """
     try:
         logger.info(f"Processing DCA command: {command.content}")
-        
+
         # Check if wallet address is provided
         if not command.wallet_address:
             raise HTTPException(
                 status_code=400,
                 detail="Wallet address is required for DCA commands"
             )
-        
+
         # Store the command for reference
         timestamp = datetime.now().isoformat()
         user_id = command.wallet_address
@@ -142,71 +145,111 @@ async def process_dca_command(
             },
             expire=86400  # Store for 24 hours
         )
-        
+
         # Process the DCA command
         result = await dca_service.process_dca_command(
             command=command.content,
             chain_id=command.chain_id,
             wallet_address=command.wallet_address
         )
-        
-        # If it's an error, format it nicely
-        if isinstance(result, dict) and "error" in result:
-            return DCAResponse(
-                content=result.get("content", {"type": "error", "content": result["error"]}),
-                error_message=humanize_error(result.get("error")),
-                metadata=result.get("metadata", {}),
-            )
-        
-        # Handle string error responses
-        if isinstance(result, str):
-            logger.error(f"Error processing DCA command: {result}")
-            return DCAResponse(
-                content={"type": "error", "content": result},
-                error_message=humanize_error(result),
-            )
-            
-        # Handle dictionary responses with error key
-        if result.get("error"):
-            logger.error(f"Error processing DCA command: {result['error']}")
-            return DCAResponse(
-                content=result.get("content", {"type": "error", "content": result["error"]}),
-                error_message=humanize_error(result.get("error")),
-                metadata=result.get("metadata", {}),
-            )
-        
-        # Handle dictionary responses with type key (new format)
-        if isinstance(result, dict) and "type" in result:
-            # Store the confirmation state if it's a confirmation
-            if result["type"] == "dca_confirmation":
-                logger.info(f"Storing DCA confirmation state for user {user_id}: {command.content}")
-                await redis_service.set_pending_command(user_id, command.content)
-                
-            return DCAResponse(
-                content=result,
-                error_message=humanize_error(result.get("content")) if result["type"] == "error" and result.get("content") else None,
-                metadata=result.get("metadata", {}),
-                pending_command=command.content if result["type"] == "dca_confirmation" else None
-            )
-        
-        # Store the confirmation state (old format)
-        if result.get("content", {}).get("type") == "dca_confirmation":
-            logger.info(f"Storing DCA confirmation state for user {user_id}: {command.content}")
+
+        # If there's transaction data in the metadata, store the next step in Redis
+        if result.get("metadata", {}).get("next_step") and result.get("metadata", {}).get("transaction"):
             await redis_service.set_pending_command(user_id, command.content)
-        
-        # Return the response (old format)
-        return DCAResponse(
+            await redis_service.set(
+                f"dca_next_step:{user_id}",
+                result["metadata"]["next_step"],
+                expire=3600  # Store for 1 hour
+            )
+
+        # Return the response with transaction data if available
+        response = DCAResponse(
             content=result.get("content", {}),
             error_message=humanize_error(result.get("error")),
             metadata=result.get("metadata", {}),
-            pending_command=command.content if result.get("content", {}).get("type") == "dca_confirmation" else None
+            pending_command=command.content if "next_step" in result.get("metadata", {}) else None
         )
-            
+
+        # If there's transaction data, include it in the response
+        if result.get("metadata", {}).get("transaction"):
+            response.transaction = result["metadata"]["transaction"]
+
+        return response
+
     except Exception as e:
         logger.exception(f"Error processing DCA command: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process DCA command: {str(e)}"
+            status_code=500, detail=f"Failed to process DCA command: {str(e)}"
+        ) from e
+
+@router.post("/execute", response_model=TransactionResponse)
+async def execute_dca(
+    request: TransactionRequest,
+    redis_service=Depends(get_redis_service),
+    dca_service=Depends(get_dca_service)
+) -> TransactionResponse:
+    """
+    Execute the DCA setup after approval is granted.
+    """
+    try:
+        wallet_address = request.wallet_address
+        chain_id = request.chain_id
+        
+        if not wallet_address:
+            raise HTTPException(400, "Missing wallet address")
+            
+        # Get the next step data
+        next_step = await redis_service.get(f"dca_next_step:{wallet_address}")
+        if not next_step:
+            raise HTTPException(400, "No pending DCA setup found")
+        
+        # Execute DCA setup
+        result = await dca_service.setup_dca_order(
+            wallet_address=next_step["wallet_address"],
+            chain_id=next_step["chain_id"],
+            maker_amount=next_step["maker_amount"],
+            taker_amount=next_step["taker_amount"],
+            maker_asset=next_step["maker_asset"],
+            taker_asset=next_step["taker_asset"],
+            frequency_seconds=next_step["frequency_seconds"],
+            times=next_step["times"]
+        )
+        
+        if not result.get("success"):
+            # Handle error properly - convert dict to string if needed
+            error = result.get("error")
+            if isinstance(error, dict):
+                error = json.dumps(error)
+            elif error is None:
+                error = "Unknown error setting up DCA order"
+                
+            return TransactionResponse(
+                error=error,
+                chain_id=chain_id
+            )
+        
+        # Clean up Redis data
+        await redis_service.delete(f"dca_next_step:{wallet_address}")
+        
+        # Return the transaction response
+        return TransactionResponse(
+            to=result.get("transaction", {}).get("to"),
+            data=result.get("transaction", {}).get("data"),
+            value=result.get("transaction", {}).get("value", "0"),
+            chain_id=chain_id,
+            gas_limit=result.get("transaction", {}).get("gas_limit"),
+            gas_price=result.get("transaction", {}).get("gas_price"),
+            max_fee_per_gas=result.get("transaction", {}).get("max_fee_per_gas"),
+            max_priority_fee_per_gas=result.get("transaction", {}).get("max_priority_fee_per_gas"),
+            method="dca_setup",
+            metadata=result.get("metadata", {})
+        )
+        
+    except Exception as e:
+        logger.error(f"Error executing DCA setup: {str(e)}")
+        return TransactionResponse(
+            error=str(e),
+            chain_id=chain_id
         )
 
 @router.post("/create-order", response_model=DCAOrderResponse)

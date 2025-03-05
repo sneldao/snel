@@ -1,10 +1,13 @@
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from pydantic import BaseModel, Field, validator
 from .base import PointlessAgent, AgentMessage
 from app.services.token_service import TokenService
 from app.services.prices import get_token_price
 import logging
 import json
+import re
+import time
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +70,18 @@ class PriceAgent(PointlessAgent):
     async def process_price_query(self, input_text: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
         """Process a price query and return structured data."""
         try:
-            # Get raw response from LLM
+            # Extract tokens directly from the input text if possible
+            tokens = self._extract_tokens_from_text(input_text)
+            
+            if tokens:
+                # Use the first token found
+                token = tokens[0]
+                logger.info(f"Extracted token from text: {token}")
+                
+                # Get token price
+                return await self._get_token_price(token, chain_id or 1)
+            
+            # If no tokens found directly, try using the LLM
             response = await self.process(input_text, response_format=PriceResponse)
             if response.get("error"):
                 return response
@@ -83,231 +97,188 @@ class PriceAgent(PointlessAgent):
             # Extract token (preserve original case and $ prefix)
             original_token = data["tokens"][0]
             
-            # Check if it's a contract address
-            if original_token.startswith("0x"):
-                logger.info(f"Processing contract address: {original_token}")
-                token_info = await self.token_service.lookup_token(original_token, chain_id or 1)
-                address, symbol, name, metadata = token_info
-                
-                if not symbol:
-                    return AgentMessage(
-                        error=f"Could not find token information for contract address {original_token}",
-                        metadata={"query": input_text}
-                    ).model_dump()
-                
-                # Try to get the price using the contract address
-                try:
-                    price, _ = await get_token_price(symbol, address, chain_id)
-                    if price is not None:
-                        message = f"The current price of {symbol} ({name}) is ${price:.6f}"
-                        return AgentMessage(
-                            content=message,
-                            metadata={
-                                "token": symbol,
-                                "price": price,
-                                "token_info": metadata
-                            }
-                        ).model_dump()
-                    else:
-                        chain_name = self._get_chain_name(chain_id or 1)
-                        message = (
-                            f"Found token {symbol} ({name}) at {address} but couldn't get its current price on {chain_name}. "
-                            f"This could be because:\n"
-                            f"1. The token has low or no liquidity in DEX pools\n"
-                            f"2. The token is not yet listed on major exchanges\n"
-                            f"3. The token is too new or not actively traded"
-                        )
-                        return AgentMessage(
-                            content=message,
-                            metadata={
-                                "token": symbol,
-                                "address": address,
-                                "chain_id": chain_id,
-                                "error": "no_liquidity"
-                            }
-                        ).model_dump()
-                except Exception as e:
-                    logger.error(f"Error getting price for contract {address}: {e}")
-                    return AgentMessage(
-                        error=f"Failed to get price for token at {address}",
-                        metadata={"query": input_text}
-                    ).model_dump()
-            
-            token = original_token.upper()
-            
-            # Special handling for major cryptocurrencies that might not be on the current chain
-            major_cryptos = {
-                "BTC": "bitcoin", 
-                "BITCOIN": "bitcoin",
-                "ETH": "ethereum", 
-                "ETHEREUM": "ethereum",
-                "SOL": "solana",
-                "SOLANA": "solana",
-                "DOGE": "dogecoin",
-                "DOGECOIN": "dogecoin",
-                "XRP": "ripple",
-                "RIPPLE": "ripple",
-                "ADA": "cardano",
-                "CARDANO": "cardano"
-            }
-            
-            if token in major_cryptos:
-                try:
-                    # Use a direct price lookup for major cryptocurrencies
-                    logger.info(f"Using direct price lookup for major cryptocurrency: {token}")
-                    
-                    # Import the price service
-                    from app.services.prices import price_service
-                    
-                    # Get the price directly from CoinGecko
-                    price_data = await price_service._get_price_from_coingecko(token, "usd")
-                    if price_data and "price" in price_data:
-                        price = price_data["price"]
-                        
-                        message = f"The current price of {token} is ${price:.6f}"
-                        
-                        return AgentMessage(
-                            content=message,
-                            metadata={
-                                "token": token,
-                                "price": price,
-                                "source": "coingecko"
-                            }
-                        ).model_dump()
-                except Exception as e:
-                    logger.error(f"Failed to get price for major crypto {token}: {e}")
-            
-            # Regular token lookup for chain-specific tokens
-            logger.info(f"Looking up token {original_token} on chain {chain_id or 1}")
-            token_info = await self.token_service.lookup_token(original_token, chain_id or 1)
-            address, symbol, name, metadata = token_info
-            
-            if not address and original_token.startswith('$'):
-                # Try OpenOcean lookup for custom tokens
-                logger.info(f"Trying OpenOcean lookup for custom token: {original_token}")
-                from app.services.prices import price_service
-                
-                # First try to get the token info from OpenOcean
-                clean_symbol = original_token.lstrip('$').upper()
-                openocean_result = await self.token_service._lookup_token_by_symbol_openocean(clean_symbol, chain_id or 1)
-                if openocean_result[0]:  # If we found the token
-                    address = openocean_result[0]
-                    symbol = original_token  # Keep the original symbol with $
-                    name = openocean_result[2]
-                    metadata = {
-                        "verified": True,
-                        "source": "openocean",
-                        "links": self.token_service._get_verification_links(address, chain_id or 1)
-                    }
-                    
-                    # Try to get the price from OpenOcean
-                    price_data = await price_service._get_price_from_openocean(symbol, address, chain_id or 1)
-                    if price_data and "price" in price_data:
-                        message = f"The current price of {symbol} is ${price_data['price']:.6f}"
-                        return AgentMessage(
-                            content=message,
-                            metadata={
-                                "token": symbol,
-                                "price": price_data["price"],
-                                "token_info": metadata
-                            }
-                        ).model_dump()
-            
-            if not address:
-                # If token not found, provide a helpful message
-                chain_name = self._get_chain_name(chain_id or 1)
-                message = (
-                    f"I couldn't find the token '{original_token}' on the {chain_name} chain. "
-                    f"You can:\n"
-                    f"1. Try a different token symbol\n"
-                    f"2. Specify a different chain\n"
-                    f"3. Provide the contract address using: price [contract_address] on {chain_id or 1}"
-                )
-                
-                # Suggest some popular tokens on the current chain
-                popular_tokens = self._get_popular_tokens_for_chain(chain_id or 1)
-                if popular_tokens:
-                    tokens_str = ", ".join([f"${t}" for t in popular_tokens])
-                    message += f"\n\nPopular tokens on {chain_name} include: {tokens_str}."
-                
-                return AgentMessage(
-                    content=message,
-                    metadata={
-                        "query": input_text,
-                        "requires_contract": True,
-                        "chain_id": chain_id or 1,
-                        "chain_name": chain_name,
-                        "token_symbol": original_token
-                    }
-                ).model_dump()
-            
-            # Use canonical symbol if found
-            display_symbol = symbol or token
-            
             # Get token price
-            try:
-                # Try OpenOcean first for custom tokens
-                if original_token.startswith('$'):
-                    from app.services.prices import price_service
-                    price_data = await price_service._get_price_from_openocean(display_symbol, address, chain_id or 1)
-                    if price_data and "price" in price_data:
-                        price = price_data["price"]
-                    else:
-                        price, _ = await get_token_price(display_symbol, address, chain_id)
-                else:
-                    price, _ = await get_token_price(display_symbol, address, chain_id)
-                
-                if price is None:
-                    # If price not found, provide a helpful message
-                    chain_name = self._get_chain_name(chain_id or 1)
-                    message = (
-                        f"I found the token {display_symbol} but couldn't get its current price on the {chain_name} chain. "
-                        f"This could be because:\n"
-                        f"1. The token has low or no liquidity in DEX pools\n"
-                        f"2. The token is not yet listed on major exchanges\n"
-                        f"3. The token is too new or not actively traded\n\n"
-                        f"You can try checking DEX interfaces like Uniswap or Base Swap directly to see if there are any active trading pairs."
-                    )
-                    
-                    return AgentMessage(
-                        content=message,
-                        metadata={
-                            "query": input_text,
-                            "token": display_symbol,
-                            "address": address,
-                            "chain_id": chain_id,
-                            "error": "no_liquidity"
-                        }
-                    ).model_dump()
-                
-                # Format response message
-                message = f"The current price of {display_symbol} is ${price:.6f}"
-                
-                return AgentMessage(
-                    content=message,
-                    metadata={
-                        "token": display_symbol,
-                        "price": price,
-                        "token_info": metadata
-                    }
-                ).model_dump()
-                
-            except Exception as e:
-                logger.error(f"Failed to get price for {display_symbol}: {e}")
-                chain_name = self._get_chain_name(chain_id or 1)
-                message = f"I couldn't find the current price for {display_symbol} on the {chain_name} chain. Please try again later or try a different token."
-                
-                return AgentMessage(
-                    content=message,
-                    metadata={"query": input_text}
-                ).model_dump()
-                
+            return await self._get_token_price(original_token, chain_id or 1)
+            
         except Exception as e:
-            logger.error(f"Error processing price query: {e}", exc_info=True)
+            logger.error(f"Error processing price query: {str(e)}")
             return AgentMessage(
-                content="I'm having trouble processing your price query. Please try again with a different token or specify the chain explicitly.",
+                error=f"Failed to process price query: {str(e)}",
                 metadata={"query": input_text}
             ).model_dump()
+    
+    def _extract_tokens_from_text(self, text: str) -> List[str]:
+        """Extract potential token symbols from text."""
+        # Common tokens to look for
+        common_tokens = [
+            "ETH", "BTC", "USDC", "USDT", "DAI", "SOL", "AVAX", "MATIC", 
+            "LINK", "UNI", "AAVE", "SNX", "MKR", "COMP", "YFI", "SUSHI",
+            "DOGE", "SHIB", "ADA", "DOT", "XRP", "LTC", "BCH", "EOS",
+            "XLM", "TRX", "XTZ", "ATOM", "VET", "FIL", "THETA", "XMR",
+            "ALGO", "ETC", "ZEC", "DASH", "XEM", "NEO", "ONT", "BAT",
+            "ZRX", "REN", "KNC", "CRV", "BAL", "LRC", "MATIC", "GRT",
+            "1INCH", "CAKE", "LUNA", "FTM", "NEAR", "ATOM", "RUNE", "FLOW",
+            "HBAR", "ONE", "EGLD", "KAVA", "CELO", "ROSE", "MINA", "SCRT",
+            "BAND", "ANKR", "STORJ", "OCEAN", "NMR", "ALPHA", "SAND", "MANA",
+            "AXS", "ENJ", "CHZ", "ALICE", "GALA", "ILV", "YGG", "SLP",
+            "APE", "GMT", "IMX", "LOOKS", "LDO", "CVX", "RPL", "SPELL",
+            "PEOPLE", "BTRST", "FORTH", "TRIBE", "RAI", "FEI", "FRAX", "LUSD",
+            "GUSD", "BUSD", "TUSD", "USDP", "SUSD", "OUSD", "MUSD", "HUSD",
+            "DUSD", "NUSD", "CUSD", "ZUSD", "PUSD", "AUSD", "EUSD", "IUSD",
+            "JUSD", "KUSD", "LUSD", "MUSD", "NUSD", "OUSD", "PUSD", "QUSD",
+            "RUSD", "SUSD", "TUSD", "UUSD", "VUSD", "WUSD", "XUSD", "YUSD",
+            "ZUSD", "WETH", "WBTC", "WBNB", "WAVAX", "WMATIC", "WSOL", "WFTM",
+            "WONE", "WGLMR", "WMOVR", "WKAVA", "WCELO", "WROSE", "WMINA", "WSCRT",
+            "WBAND", "WANKR", "WSTORJ", "WOCEAN", "WNMR", "WALPHA", "WSAND", "WMANA",
+            "WAXS", "WENJ", "WCHZ", "WALICE", "WGALA", "WILV", "WYGG", "WSLP",
+            "WAPE", "WGMT", "WIMX", "WLOOKS", "WLDO", "WCVX", "WRPL", "WSPELL",
+            "WPEOPLE", "WBTRST", "WFORTH", "WTRIBE", "WRAI", "WFEI", "WFRAX", "WLUSD",
+            "BITCOIN", "ETHEREUM", "POLYGON", "AVALANCHE", "SOLANA", "CARDANO", "POLKADOT"
+        ]
+        
+        # Extract tokens from text
+        tokens = []
+        words = re.findall(r'\b[A-Za-z0-9$]+\b', text.upper())
+        
+        for word in words:
+            # Remove $ prefix if present
+            clean_word = word.lstrip('$')
+            
+            # Check if it's a common token
+            if clean_word in common_tokens:
+                tokens.append(clean_word)
+            
+            # Check if it's a contract address
+            if word.startswith('0X') and len(word) == 42:
+                tokens.append(word.lower())
+        
+        return tokens
+    
+    async def _get_token_price(self, token: str, chain_id: int) -> Dict[str, Any]:
+        """Get price data for a token."""
+        try:
+            # Check if it's a contract address
+            if token.startswith("0x"):
+                logger.info(f"Processing contract address: {token}")
+                token_info = await self.token_service.lookup_token(token, chain_id)
+                
+                if not token_info or not token_info[0]:
+                    return AgentMessage(
+                        error=f"Could not find token information for contract address {token}",
+                        metadata={"token": token}
+                    ).model_dump()
+                
+                address, symbol, name, metadata = token_info
+                
+                # Try to get the price using the contract address
+                price_data = await self._fetch_token_price(symbol, address, chain_id)
+                
+                return self._format_price_response(symbol, price_data, token_info)
+            
+            # Regular token symbol
+            logger.info(f"Processing token symbol: {token}")
+            token_info = await self.token_service.lookup_token(token, chain_id)
+            
+            if not token_info or not token_info[0]:
+                return AgentMessage(
+                    error=f"Could not find token information for {token}",
+                    metadata={"token": token}
+                ).model_dump()
+            
+            address, symbol, name, metadata = token_info
+            
+            # Get price data
+            price_data = await self._fetch_token_price(symbol, address, chain_id)
+            
+            return self._format_price_response(symbol, price_data, token_info)
+            
+        except Exception as e:
+            logger.error(f"Error getting token price: {str(e)}")
+            return AgentMessage(
+                error=f"Failed to get price for {token}: {str(e)}",
+                metadata={"token": token}
+            ).model_dump()
+    
+    async def _fetch_token_price(self, symbol: str, address: Optional[str] = None, chain_id: int = 1) -> Dict[str, Any]:
+        """Fetch price data for a token."""
+        try:
+            # Try to get price from token service
+            price, timestamp = await self.token_service.get_token_price(symbol, "usd", chain_id)
+            
+            if price is not None:
+                return {
+                    "price": price,
+                    "timestamp": timestamp,
+                    "source": "token_service"
+                }
+            
+            # Fallback to prices.py functions
+            if address:
+                price = await get_token_price(symbol, address, chain_id)
+                if price and price[0]:
+                    return {
+                        "price": price[0],
+                        "timestamp": int(time.time()),
+                        "source": "prices_module"
+                    }
+            
+            return {
+                "price": None,
+                "error": "Could not fetch price"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error fetching token price: {str(e)}")
+            return {
+                "price": None,
+                "error": str(e)
+            }
+    
+    def _format_price_response(self, symbol: str, price_data: Dict[str, Any], token_info: Tuple) -> Dict[str, Any]:
+        """Format the price response."""
+        address, _, name, metadata = token_info
+        
+        if price_data.get("price") is None:
+            return AgentMessage(
+                error=f"Could not fetch price for {symbol}",
+                metadata={"token": symbol}
+            ).model_dump()
+        
+        # Format the price message with personality
+        price_messages = [
+            f"The current price of {symbol} is ${price_data['price']:.2f}. Not that I care much, but thought you'd want to know.",
+            f"Looks like {symbol} is worth ${price_data['price']:.2f} right now. Do with that what you will.",
+            f"${price_data['price']:.2f} per {symbol}. That's what the internet tells me, anyway.",
+            f"{symbol} is trading at ${price_data['price']:.2f}. Buy high, sell low, right?",
+            f"I checked, and {symbol} is going for ${price_data['price']:.2f}. Not financial advice, obviously.",
+            f"The price of {symbol} is ${price_data['price']:.2f}. But prices are just, like, numbers, man.",
+            f"{symbol}: ${price_data['price']:.2f}. Do you want me to pretend to be excited about that?",
+            f"I dragged myself all the way to the price API, and {symbol} is at ${price_data['price']:.2f}.",
+            f"${price_data['price']:.2f} per {symbol}. I'm sure that means something to someone.",
+            f"After extensive research (one API call), I can tell you that {symbol} is worth ${price_data['price']:.2f}."
+        ]
+        
+        # Format the response
+        return {
+            "content": {
+                "type": "price",
+                "message": random.choice(price_messages),
+                "token": {
+                    "symbol": symbol,
+                    "name": name,
+                    "address": address,
+                    "metadata": metadata
+                },
+                "price": price_data["price"],
+                "source": price_data.get("source", "unknown"),
+                "timestamp": price_data.get("timestamp", int(time.time()))
+            },
+            "error": None,
+            "metadata": {
+                "token": symbol,
+                "chain_id": metadata.get("chain_id", 1) if metadata else 1
+            }
+        }
     
     def _get_chain_name(self, chain_id: int) -> str:
         """Get a human-readable chain name from a chain ID."""

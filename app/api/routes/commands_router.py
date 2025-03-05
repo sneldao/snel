@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional, Literal
 from app.api.dependencies import get_redis_service, get_token_service
 from app.agents.agent_factory import AgentFactory, get_agent_factory
-from app.agents.simple_swap_agent import SimpleSwapAgent
+from app.services.pipeline import Pipeline
+from app.services.token_service import TokenService
 import logging
 from datetime import datetime
 import re
@@ -33,6 +34,7 @@ class CommandResponse(BaseModel):
     requires_selection: bool = False
     all_quotes: Optional[List[Dict[str, Any]]] = None
     pending_command: Optional[str] = None
+    awaiting_confirmation: bool = False
 
 @router.post("/process-command", response_model=CommandResponse)
 async def process_command(
@@ -62,36 +64,11 @@ async def process_command(
             if pending_command:
                 logger.info(f"Found pending command for user {user_id}: {pending_command}")
                 
-                # Check command type to route to correct agent
-                if pending_command.lower().startswith(("dca ", "dollar cost average ")):
-                    logger.info("Processing as DCA confirmation")
-                    # Forward to DCA router
-                    from app.agents.dca_agent import DCAAgent
-                    
-                    dca_agent = DCAAgent(token_service=token_service)
-                    # Use the pending command
-                    command.content = pending_command
-                    result = await dca_agent.process_dca_command(
-                        command.content,
-                        chain_id=command.chain_id,
-                        wallet_address=command.wallet_address
-                    )
-                    
-                    # Clear the pending command
-                    await redis_service.clear_pending_command(user_id)
-                    
-                    return CommandResponse(
-                        content=result.get("content", {}),
-                        error_message=result.get("error"),
-                        metadata=result.get("metadata", {}),
-                        agent_type="dca"
-                    )
-                else:
-                    # Use the pending command (likely a swap command)
-                    command.content = pending_command
-                    
-                    # Clear the pending command
-                    await redis_service.clear_pending_command(user_id)
+                # Use the pending command
+                command.content = pending_command
+                
+                # Clear the pending command
+                await redis_service.clear_pending_command(user_id)
         
         # Store the command for reference
         timestamp = datetime.now().isoformat()
@@ -105,80 +82,38 @@ async def process_command(
             expire=86400  # Store for 24 hours
         )
         
-        # Process the command based on type
-        if command.content.lower().startswith("swap "):
-            logger.info("Processing as swap command")
-            # Use the simple swap agent
-            swap_agent = SimpleSwapAgent()
-            result = await swap_agent.process_swap_command(
-                command.content,
-                chain_id=command.chain_id
-            )
-            
-            # Store the swap confirmation state if needed
-            if result.get("content") and result["content"].get("type") == "swap_confirmation":
-                logger.info(f"Storing swap confirmation state for user {user_id}: {command.content}")
-                await redis_service.set_pending_command(user_id, command.content)
-            
-            return CommandResponse(
-                content=result.get("content", {}),
-                error_message=result.get("error"),
-                metadata=result.get("metadata", {}),
-                agent_type="swap"
-            )
+        # Create a pipeline to process the command
+        pipeline = Pipeline(
+            token_service=token_service,
+            swap_agent=agent_factory.create_agent("swap"),
+            price_agent=agent_factory.create_agent("price"),
+            dca_agent=agent_factory.create_agent("dca"),
+            redis_service=redis_service
+        )
         
-        elif command.content.lower().startswith(("dca ", "dollar cost average ")) or re.search(r"\b(please|can you|can we|can i|could you|i want to|setup|set up)\s+dca\b", command.content.lower()):
-            logger.info("Processing as DCA command")
-            # Forward to the DCA API
-            from app.agents.dca_agent import DCAAgent
-            
-            dca_agent = DCAAgent(token_service=token_service)
-            result = await dca_agent.process_dca_command(
-                command.content,
-                chain_id=command.chain_id,
-                wallet_address=command.wallet_address
-            )
-            
-            # Store the DCA confirmation state if needed
-            if result.get("content") and result["content"].get("type") == "dca_confirmation":
-                logger.info(f"Storing DCA confirmation state for user {user_id}: {command.content}")
-                await redis_service.set_pending_command(user_id, command.content)
-            
-            return CommandResponse(
-                content=result.get("content", {}),
-                error_message=result.get("error"),
-                metadata=result.get("metadata", {}),
-                agent_type="dca"
-            )
+        # Process the command using the pipeline
+        result = await pipeline.process(
+            command.content,
+            chain_id=command.chain_id,
+            wallet_address=command.wallet_address
+        )
         
-        elif command.content.lower().startswith(("price ", "p ")):
-            logger.info("Processing as price command")
-            # Use the price agent
-            price_agent = agent_factory.create_agent("price")
-            result = await price_agent.process_price_query(
-                command.content,
-                chain_id=command.chain_id
-            )
+        # Check if we need to store a pending command
+        if result.get("type") in ["swap_confirmation", "dca_confirmation"]:
+            logger.info(f"Storing pending command for user {user_id}: {command.content}")
+            await redis_service.set_pending_command(user_id, command.content)
             
-            return CommandResponse(
-                content=result.get("content", {}),
-                error_message=result.get("error"),
-                metadata=result.get("metadata", {}),
-                agent_type="price"
-            )
-        
-        else:
-            logger.info("Processing as default command")
-            # Use the default agent
-            default_agent = agent_factory.create_agent("default")
-            result = await default_agent.process(command.content)
-            
-            return CommandResponse(
-                content={"text": result.get("content", "I don't understand that command.")},
-                error_message=result.get("error"),
-                metadata=result.get("metadata", {}),
-                agent_type="default"
-            )
+        # Format the response
+        return CommandResponse(
+            content=result.get("content", {}),
+            error_message=result.get("error"),
+            metadata=result.get("metadata", {}),
+            agent_type=result.get("agent_type", "default"),
+            requires_selection=result.get("requires_selection", False),
+            all_quotes=result.get("all_quotes"),
+            pending_command=command.content if result.get("type") in ["swap_confirmation", "dca_confirmation"] else None,
+            awaiting_confirmation=result.get("type") in ["swap_confirmation", "dca_confirmation"]
+        )
             
     except Exception as e:
         logger.exception(f"Error processing command: {e}")

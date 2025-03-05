@@ -1,25 +1,45 @@
-# Pointless - AI Crypto Assistant
+# Snel - AI Crypto Assistant
 
-A friendly crypto command interpreter that helps users swap tokens and answers questions about crypto.
+A friendly crypto command interpreter that helps users swap tokens, set up DCA (Dollar Cost Average) orders, and answers questions about crypto.
 
 ## Features
 
-- Token swaps across multiple chains (Optimism, Base, Scroll)
-- Natural language command processing
-- Automatic token approval handling with skip approval option
-- Multi-chain support with automatic chain detection
-- Persistent command storage with Redis
+- **Token Swaps**: Execute token swaps across multiple chains
+- **DCA (Dollar Cost Average)**: Set up recurring purchases of crypto assets
+- **Price Queries**: Get real-time price information for tokens
+- **Natural Language Processing**: Understand and process commands in natural language
+- **Multi-Chain Support**: Works across Ethereum, Optimism, Base, Scroll, Arbitrum, Polygon, and Avalanche
+- **Automatic Token Approval**: Handles token approvals with skip approval option
+- **Quote Selection**: Compare quotes from different aggregators
+- **Persistent State**: Stores command history and pending operations with Redis
 
 ## Supported Chains
 
+- Ethereum
 - Optimism
 - Base
 - Scroll
-- Ethereum
 - Arbitrum
 - Polygon
 - Avalanche
 - (More coming soon)
+
+## Architecture
+
+Snel uses a pipeline architecture to process commands:
+
+1. **Command Input**: User enters a natural language command
+2. **Pipeline Processing**: The command is routed to the appropriate agent
+3. **Agent Processing**: Specialized agents handle different types of commands
+4. **State Management**: Redis stores command history and pending operations
+5. **Response Generation**: The response is formatted and returned to the user
+
+### Agent Types
+
+- **Swap Agent**: Handles token swap commands
+- **Price Agent**: Processes price queries
+- **DCA Agent**: Manages dollar cost averaging setups
+- **Default Agent**: Handles general queries
 
 ## Local Development Setup
 
@@ -42,6 +62,7 @@ COINGECKO_API_KEY=your_coingecko_key
 MORALIS_API_KEY=your_moralis_key
 REDIS_URL=your_upstash_redis_url  # Format: rediss://default:token@hostname:port
 ZEROX_API_KEY=your_0x_api_key
+OPENAI_API_KEY=your_openai_api_key
 ```
 
 For local development, if you encounter SSL certificate verification issues with the API services, you can set:
@@ -178,6 +199,7 @@ Set these in your Vercel project settings:
 - `COINGECKO_API_KEY`
 - `MORALIS_API_KEY`
 - `ZEROX_API_KEY` (for 0x API access)
+- `OPENAI_API_KEY` (for AI agent functionality)
 - `NEXT_PUBLIC_API_URL` (set to your production domain)
 - `REDIS_URL` (your Upstash Redis URL)
 
@@ -210,16 +232,60 @@ allow_origins=[
 ]
 ```
 
+## Command Types
+
+### Swap Commands
+
+Swap commands allow users to exchange one token for another. Examples:
+
+- `swap 1 ETH for USDC`
+- `convert 100 USDC to ETH`
+- `approved: swap 0.5 ETH for USDC` (skips approval check)
+
+### DCA Commands
+
+DCA (Dollar Cost Average) commands set up recurring purchases. Examples:
+
+- `dca 0.1 ETH daily into USDC`
+- `dollar cost average 50 USDC weekly into ETH`
+- `set up dca 100 USDC monthly into ETH for 90 days`
+
+### Price Queries
+
+Price queries get current token prices. Examples:
+
+- `price ETH`
+- `how much is 1 BTC worth?`
+- `what is the price of ETH in USDC?`
+
 ## Transaction Features
 
 ### Token Approval Management
 
-The application now supports automatic token approval management with these features:
+The application supports automatic token approval management with these features:
 
 - **Automatic Approval Detection**: The system automatically detects when token approvals are needed
 - **Skip Approval Option**: Commands prefixed with "approved:" will skip the approval check
 - **Approval Transaction Tracking**: Track the status of approval transactions with clear feedback
 - **Smart Retry Logic**: After successful approval, the system automatically continues with the original transaction
+
+### DCA Management
+
+The DCA functionality includes:
+
+- **Frequency Options**: Daily, weekly, or monthly purchases
+- **Duration Setting**: Specify how long the DCA should run
+- **Token Selection**: Use any supported token pair
+- **Approval Handling**: Automatic approval of token spending
+
+## State Management with Redis
+
+The application uses Redis for state management:
+
+- **Command History**: Stores user command history
+- **Pending Commands**: Tracks commands awaiting confirmation
+- **Swap Confirmation State**: Stores details about pending swaps
+- **DCA Configuration**: Stores DCA setup information
 
 ## Troubleshooting
 
@@ -248,6 +314,8 @@ The application now supports automatic token approval management with these feat
 
 ## Recent Updates
 
+- Added DCA (Dollar Cost Average) functionality
+- Implemented pipeline architecture for command routing
 - Added skip approval functionality to streamline token swaps after approval
 - Added SSL certificate verification bypass option for local development
 - Added support for 0x API as the default swap aggregator
@@ -265,32 +333,27 @@ The application now supports automatic token approval management with these feat
 
 MIT
 
-## Underpinned by Dowse
-
-Dowse is a Python library that enables you to build intelligent agents capable of:
-
-- Parsing natural language commands and questions
-- Classifying inputs into different types (e.g. commands vs questions)
-- Executing structured commands based on natural language requests
-- Responding to user queries with relevant information
-- Building complex pipelines for command processing
-
-## Key Features
-
-- **Natural Language Processing**: Convert human language into structured commands
-- **Flexible Pipeline Architecture**: Build custom processing flows with branching logic
-- **Built-in Command Handlers**: Ready-to-use handlers for common operations
-- **Extensible Design**: Easy to add new command types and handlers
-- **Async Support**: Built for high-performance async/await operations
-
 ## Project Structure
 
 ```
-dowse-pointless/
+snel/
 ├── api/              # API entry point for Vercel
 ├── app/              # Main application code
+│   ├── agents/       # Agent implementations
+│   │   ├── base.py   # Base agent class
+│   │   ├── dca_agent.py # DCA agent
+│   │   ├── price_agent.py # Price agent
+│   │   ├── simple_swap_agent.py # Swap agent
+│   │   └── agent_factory.py # Factory for creating agents
+│   ├── api/          # API routes
+│   │   └── routes/   # Route definitions
+│   ├── models/       # Data models
+│   │   └── commands.py # Command models
+│   └── services/     # Services
+│       ├── pipeline.py # Command pipeline
+│       ├── redis_service.py # Redis service
+│       └── token_service.py # Token service
 ├── frontend/         # Next.js frontend application
-├── backup/           # Backup of previous configurations (for reference only)
 ├── vercel.json       # Vercel deployment configuration
 ├── vercel.build.sh   # Build script for Vercel
 ├── runtime.txt       # Python runtime specification

@@ -29,17 +29,21 @@ class AgentFactory:
         self.token_service = token_service
         self.redis_service = redis_service
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        logger.info("AgentFactory initialized")
     
     def create_agent(self, agent_type: str) -> PointlessAgent:
         """Create an agent of the specified type."""
-        logger.info(f"Creating {agent_type} agent with openai provider")
-        
-        if agent_type == "swap":
-            return SimpleSwapAgent()
+        logger.info(f"Creating {agent_type} agent")
+
+        if agent_type == "dca":
+            return DCAAgent(
+                token_service=self.token_service,
+                redis_service=self.redis_service
+            )
         elif agent_type == "price":
             return PriceAgent(provider="openai")
-        elif agent_type == "dca":
-            return DCAAgent(token_service=self.token_service)
+        elif agent_type == "swap":
+            return SimpleSwapAgent()
         else:
             # Default agent
             return PointlessAgent(prompt=BASE_PROMPT, model="gpt-4-turbo-preview")
@@ -75,20 +79,27 @@ class AgentFactory:
         Returns:
             Result of processing the command
         """
-        # Create agent factory
+        # Create token service if not provided
         if not token_service:
             token_service = TokenService()
-            
+
+        # Create agent factory
+        factory = AgentFactory(token_service=token_service, redis_service=redis_service)
+
         # Create agent based on type
-        agent = AgentFactory(token_service=token_service, redis_service=redis_service).create_agent(agent_type)
-        
+        agent = factory.create_agent(agent_type)
+
         # Process command based on agent type
-        if agent_type == "swap":
-            return await agent.process_swap_command(command, chain_id)
+        if agent_type == "dca":
+            return await agent.process_dca_command(
+                command, 
+                chain_id=chain_id,
+                wallet_address=wallet_address
+            )
         elif agent_type == "price":
             return await agent.process_price_query(command, chain_id)
-        elif agent_type == "dca":
-            return await agent.process_dca_command(command, chain_id)
+        elif agent_type == "swap":
+            return await agent.process_swap_command(command, chain_id)
         else:
             return await agent.process(command, metadata)
 

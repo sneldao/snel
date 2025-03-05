@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Text,
@@ -8,8 +8,24 @@ import {
   Icon,
   Tooltip,
   useColorModeValue,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
+  Link,
+  Button,
+  Flex,
+  Divider,
 } from "@chakra-ui/react";
-import { InfoIcon, WarningIcon, CheckIcon } from "@chakra-ui/icons";
+import {
+  InfoIcon,
+  WarningIcon,
+  CheckIcon,
+  ExternalLinkIcon,
+} from "@chakra-ui/icons";
 
 interface TokenInfo {
   address?: string;
@@ -18,6 +34,12 @@ interface TokenInfo {
   verified?: boolean;
   source?: string;
   warning?: string;
+  decimals?: number;
+  links?: {
+    explorer?: string;
+    coingecko?: string;
+    dexscreener?: string;
+  };
 }
 
 interface DCAConfirmationProps {
@@ -33,10 +55,175 @@ interface DCAConfirmationProps {
     duration?: number;
     end_date?: string;
     warning?: string;
+    amount_is_usd?: boolean;
   };
   onConfirm: () => void;
   onCancel: () => void;
 }
+
+interface TokenDetailsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  token: TokenInfo;
+}
+
+const TokenDetailsModal: React.FC<TokenDetailsModalProps> = ({
+  isOpen,
+  onClose,
+  token,
+}) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>Token Details</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody pb={6}>
+          <VStack align="stretch" spacing={4}>
+            {token.name && (
+              <Box>
+                <Text fontWeight="bold">Name</Text>
+                <Text>{token.name}</Text>
+              </Box>
+            )}
+            {token.symbol && (
+              <Box>
+                <Text fontWeight="bold">Symbol</Text>
+                <Text>{token.symbol}</Text>
+              </Box>
+            )}
+            {token.address && (
+              <Box>
+                <Text fontWeight="bold">Contract Address</Text>
+                <Text fontSize="sm" wordBreak="break-all">
+                  {token.address}
+                </Text>
+              </Box>
+            )}
+            {token.decimals !== undefined && (
+              <Box>
+                <Text fontWeight="bold">Decimals</Text>
+                <Text>{token.decimals}</Text>
+              </Box>
+            )}
+            {token.verified !== undefined && (
+              <Box>
+                <Text fontWeight="bold">Verification Status</Text>
+                <HStack spacing={2}>
+                  <Text>{token.verified ? "Verified" : "Unverified"}</Text>
+                  {token.verified ? (
+                    <Icon as={CheckIcon} color="green.500" />
+                  ) : (
+                    <Icon as={WarningIcon} color="yellow.500" />
+                  )}
+                </HStack>
+              </Box>
+            )}
+            {token.links && (
+              <Box>
+                <Text fontWeight="bold" mb={2}>
+                  Verification Links
+                </Text>
+                <VStack align="stretch" spacing={2}>
+                  {token.links.dexscreener && (
+                    <Link
+                      href={token.links.dexscreener}
+                      isExternal
+                      color="blue.500"
+                      display="flex"
+                      alignItems="center"
+                    >
+                      <Icon as={ExternalLinkIcon} mr={2} />
+                      View on DexScreener
+                    </Link>
+                  )}
+                  {token.links.coingecko && (
+                    <Link
+                      href={token.links.coingecko}
+                      isExternal
+                      color="blue.500"
+                      display="flex"
+                      alignItems="center"
+                    >
+                      <Icon as={ExternalLinkIcon} mr={2} />
+                      View on CoinGecko
+                    </Link>
+                  )}
+                  {token.links.explorer && (
+                    <Link
+                      href={token.links.explorer}
+                      isExternal
+                      color="blue.500"
+                      display="flex"
+                      alignItems="center"
+                    >
+                      <Icon as={ExternalLinkIcon} mr={2} />
+                      View on Block Explorer
+                    </Link>
+                  )}
+                </VStack>
+              </Box>
+            )}
+            {token.warning && (
+              <Box
+                bg="yellow.50"
+                p={3}
+                borderRadius="md"
+                borderWidth="1px"
+                borderColor="yellow.200"
+              >
+                <HStack spacing={2}>
+                  <WarningIcon color="yellow.400" />
+                  <Text color="yellow.800">{token.warning}</Text>
+                </HStack>
+              </Box>
+            )}
+          </VStack>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
+  );
+};
+
+const TokenDisplay: React.FC<{
+  token: TokenInfo;
+  showInfoButton?: boolean;
+}> = ({ token, showInfoButton = true }) => {
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  return (
+    <>
+      <HStack spacing={2} align="center">
+        <Box>
+          <Text fontWeight="semibold">{token.symbol || "Unknown"}</Text>
+          <Text fontSize="xs" color="gray.500">
+            {token.name || "Unknown Token"}
+          </Text>
+        </Box>
+        {token.verified ? (
+          <Badge colorScheme="green" fontSize="xs">
+            Verified
+          </Badge>
+        ) : (
+          <Badge colorScheme="yellow" fontSize="xs">
+            Unverified
+          </Badge>
+        )}
+        {showInfoButton && (
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={onOpen}
+            aria-label="Token details"
+          >
+            <InfoIcon />
+          </Button>
+        )}
+      </HStack>
+      <TokenDetailsModal isOpen={isOpen} onClose={onClose} token={token} />
+    </>
+  );
+};
 
 export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
   message,
@@ -49,6 +236,19 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
   const amount = message.amount || 0;
   const frequency = message.frequency || "daily";
   const duration = message.duration || 30;
+  const amountIsUsd = message.amount_is_usd || false;
+
+  // Add useDisclosure hooks for both modals
+  const {
+    isOpen: isFromTokenModalOpen,
+    onOpen: onFromTokenModalOpen,
+    onClose: onFromTokenModalClose,
+  } = useDisclosure();
+  const {
+    isOpen: isToTokenModalOpen,
+    onOpen: onToTokenModalOpen,
+    onClose: onToTokenModalClose,
+  } = useDisclosure();
 
   const getFrequencyText = (freq: string) => {
     switch (freq) {
@@ -71,72 +271,7 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
   const infoBorderColor = useColorModeValue("blue.200", "blue.700");
   const infoTextColor = useColorModeValue("blue.800", "blue.200");
 
-  const renderTokenInfo = (token: TokenInfo, label: string) => (
-    <Box>
-      <Text fontWeight="semibold">
-        {label}: {token.symbol || "Unknown"}
-      </Text>
-      {token.name && <Text fontSize="sm">{token.name}</Text>}
-      <HStack spacing={2} mt={1}>
-        {token.verified ? (
-          <Badge colorScheme="green" fontSize="xs">
-            Verified
-          </Badge>
-        ) : (
-          <Badge colorScheme="yellow" fontSize="xs">
-            Unverified
-          </Badge>
-        )}
-        {token.source && (
-          <Text fontSize="xs" color="gray.500">
-            Source: {token.source}
-          </Text>
-        )}
-      </HStack>
-      {token.address && (
-        <Text fontSize="xs" color="gray.500" wordBreak="break-all">
-          {token.address}
-        </Text>
-      )}
-    </Box>
-  );
-
-  // Use the message text directly if available
-  if (message.message) {
-    return (
-      <VStack spacing={4} align="stretch">
-        <Text>{message.message}</Text>
-
-        <VStack align="stretch" spacing={3} pl={4}>
-          {fromToken.symbol && renderTokenInfo(fromToken, "From")}
-          {toToken.symbol && renderTokenInfo(toToken, "To")}
-        </VStack>
-
-        {/* Warning box */}
-        {message.warning && (
-          <Box
-            bg="yellow.50"
-            p={3}
-            borderRadius="md"
-            borderWidth="1px"
-            borderColor="yellow.300"
-          >
-            <HStack spacing={2} align="flex-start">
-              <Box>⚠️</Box>
-              <Text fontSize="sm">{message.warning}</Text>
-            </HStack>
-          </Box>
-        )}
-
-        <Text mt={2}>
-          Would you like to proceed with setting up this DCA? Type 'yes' to
-          continue or 'no' to cancel.
-        </Text>
-      </VStack>
-    );
-  }
-
-  // Fallback to original format
+  // Calculate end date
   const endDate = message.end_date
     ? new Date(message.end_date)
     : new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
@@ -147,12 +282,28 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
     day: "numeric",
   });
 
+  // Format amount with currency symbol if needed
+  const formattedAmount = amountIsUsd
+    ? `$${amount}`
+    : `${amount} ${fromToken.symbol || "tokens"}`;
+
+  // Generate explorer links
+  const getExplorerLink = (address: string) => {
+    // Base chain explorer by default
+    return `https://basescan.org/token/${address}`;
+  };
+
+  const getDexScreenerLink = (address: string) => {
+    // Base chain DexScreener by default
+    return `https://dexscreener.com/base/${address}`;
+  };
+
   return (
-    <VStack spacing={4} align="stretch">
-      <Text>
+    <VStack spacing={3} align="stretch">
+      <Text fontSize="md" fontWeight="medium">
         I'll set up a Dollar Cost Average (DCA) order to swap{" "}
         <Text as="span" fontWeight="bold">
-          {amount} {fromToken.symbol || "tokens"}
+          {formattedAmount}
         </Text>{" "}
         for{" "}
         <Text as="span" fontWeight="bold">
@@ -161,6 +312,261 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
         {getFrequencyText(frequency)} for {duration} days.
       </Text>
 
+      {/* Token information in a compact box */}
+      <Box borderWidth="1px" borderRadius="md" overflow="hidden">
+        <Box bg={useColorModeValue("gray.50", "gray.700")} px={4} py={2}>
+          <Text fontWeight="bold" fontSize="sm">
+            DCA Details
+          </Text>
+        </Box>
+
+        <VStack spacing={0} divider={<Divider />} align="stretch">
+          {/* Combined From/To Token Display */}
+          <Box p={3}>
+            <Flex justify="space-between" align="center">
+              <HStack spacing={4}>
+                <HStack>
+                  <Text fontSize="sm" fontWeight="medium">
+                    From:
+                  </Text>
+                  <Text fontWeight="semibold">
+                    {fromToken.symbol || "Unknown"}
+                  </Text>
+                  {fromToken.verified ? (
+                    <Badge colorScheme="green" fontSize="xs">
+                      Verified
+                    </Badge>
+                  ) : (
+                    <Badge colorScheme="yellow" fontSize="xs">
+                      Unverified
+                    </Badge>
+                  )}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={onFromTokenModalOpen}
+                    aria-label="From token details"
+                  >
+                    <InfoIcon />
+                  </Button>
+                </HStack>
+                <Text color="gray.500">→</Text>
+                <HStack>
+                  <Text fontSize="sm" fontWeight="medium">
+                    To:
+                  </Text>
+                  <Text fontWeight="semibold">
+                    {toToken.symbol || "Unknown"}
+                  </Text>
+                  {toToken.verified ? (
+                    <Badge colorScheme="green" fontSize="xs">
+                      Verified
+                    </Badge>
+                  ) : (
+                    <Badge colorScheme="yellow" fontSize="xs">
+                      Unverified
+                    </Badge>
+                  )}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={onToTokenModalOpen}
+                    aria-label="To token details"
+                  >
+                    <InfoIcon />
+                  </Button>
+                </HStack>
+              </HStack>
+            </Flex>
+          </Box>
+
+          {/* End Date */}
+          <Box p={3}>
+            <HStack justify="space-between">
+              <Text fontSize="sm" fontWeight="medium">
+                End Date:
+              </Text>
+              <Text fontSize="sm">{formattedEndDate}</Text>
+            </HStack>
+          </Box>
+        </VStack>
+      </Box>
+
+      {/* From Token Modal */}
+      <Modal
+        isOpen={isFromTokenModalOpen}
+        onClose={onFromTokenModalClose}
+        isCentered
+        size="md"
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Token Details - {fromToken.symbol}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              {fromToken.name && (
+                <Box>
+                  <Text fontWeight="bold">Name</Text>
+                  <Text>{fromToken.name}</Text>
+                </Box>
+              )}
+              {fromToken.symbol && (
+                <Box>
+                  <Text fontWeight="bold">Symbol</Text>
+                  <Text>{fromToken.symbol}</Text>
+                </Box>
+              )}
+              {fromToken.address && (
+                <Box>
+                  <Text fontWeight="bold">Contract Address</Text>
+                  <Text fontSize="sm" wordBreak="break-all">
+                    {fromToken.address}
+                  </Text>
+                </Box>
+              )}
+              {fromToken.decimals !== undefined && (
+                <Box>
+                  <Text fontWeight="bold">Decimals</Text>
+                  <Text>{fromToken.decimals}</Text>
+                </Box>
+              )}
+              {fromToken.verified !== undefined && (
+                <Box>
+                  <Text fontWeight="bold">Verification Status</Text>
+                  <HStack spacing={2}>
+                    <Text>
+                      {fromToken.verified ? "Verified" : "Unverified"}
+                    </Text>
+                    {fromToken.verified ? (
+                      <Icon as={CheckIcon} color="green.500" />
+                    ) : (
+                      <Icon as={WarningIcon} color="yellow.500" />
+                    )}
+                  </HStack>
+                </Box>
+              )}
+              {fromToken.address && (
+                <Box>
+                  <Text fontWeight="bold" mb={2}>
+                    Verification Links
+                  </Text>
+                  <VStack align="stretch" spacing={2}>
+                    <Link
+                      href={getExplorerLink(fromToken.address)}
+                      isExternal
+                      color="blue.500"
+                    >
+                      <HStack>
+                        <ExternalLinkIcon />
+                        <Text>View Contract on Basescan</Text>
+                      </HStack>
+                    </Link>
+                    <Link
+                      href={getDexScreenerLink(fromToken.address)}
+                      isExternal
+                      color="blue.500"
+                    >
+                      <HStack>
+                        <ExternalLinkIcon />
+                        <Text>View on DexScreener</Text>
+                      </HStack>
+                    </Link>
+                  </VStack>
+                </Box>
+              )}
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      {/* To Token Modal */}
+      <Modal
+        isOpen={isToTokenModalOpen}
+        onClose={onToTokenModalClose}
+        isCentered
+        size="md"
+      >
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Token Details - {toToken.symbol}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <VStack align="stretch" spacing={4}>
+              {toToken.name && (
+                <Box>
+                  <Text fontWeight="bold">Name</Text>
+                  <Text>{toToken.name}</Text>
+                </Box>
+              )}
+              {toToken.symbol && (
+                <Box>
+                  <Text fontWeight="bold">Symbol</Text>
+                  <Text>{toToken.symbol}</Text>
+                </Box>
+              )}
+              {toToken.address && (
+                <Box>
+                  <Text fontWeight="bold">Contract Address</Text>
+                  <Text fontSize="sm" wordBreak="break-all">
+                    {toToken.address}
+                  </Text>
+                </Box>
+              )}
+              {toToken.decimals !== undefined && (
+                <Box>
+                  <Text fontWeight="bold">Decimals</Text>
+                  <Text>{toToken.decimals}</Text>
+                </Box>
+              )}
+              {toToken.verified !== undefined && (
+                <Box>
+                  <Text fontWeight="bold">Verification Status</Text>
+                  <HStack spacing={2}>
+                    <Text>{toToken.verified ? "Verified" : "Unverified"}</Text>
+                    {toToken.verified ? (
+                      <Icon as={CheckIcon} color="green.500" />
+                    ) : (
+                      <Icon as={WarningIcon} color="yellow.500" />
+                    )}
+                  </HStack>
+                </Box>
+              )}
+              {toToken.address && (
+                <Box>
+                  <Text fontWeight="bold" mb={2}>
+                    Verification Links
+                  </Text>
+                  <VStack align="stretch" spacing={2}>
+                    <Link
+                      href={getExplorerLink(toToken.address)}
+                      isExternal
+                      color="blue.500"
+                    >
+                      <HStack>
+                        <ExternalLinkIcon />
+                        <Text>View Contract on Basescan</Text>
+                      </HStack>
+                    </Link>
+                    <Link
+                      href={getDexScreenerLink(toToken.address)}
+                      isExternal
+                      color="blue.500"
+                    >
+                      <HStack>
+                        <ExternalLinkIcon />
+                        <Text>View on DexScreener</Text>
+                      </HStack>
+                    </Link>
+                  </VStack>
+                </Box>
+              )}
+            </VStack>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      {/* Combined info and warning box */}
       <Box
         bg={infoBgColor}
         p={3}
@@ -168,29 +574,32 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
         borderWidth="1px"
         borderColor={infoBorderColor}
       >
-        <HStack spacing={2} align="flex-start">
-          <InfoIcon color="blue.500" mt={1} />
-          <VStack align="stretch" spacing={1}>
+        <VStack spacing={2} align="stretch">
+          <HStack spacing={2} align="flex-start">
+            <InfoIcon color="blue.500" mt={1} />
             <Text fontSize="sm" color={infoTextColor}>
               <Text as="span" fontWeight="bold">
-                DCA (Dollar Cost Averaging)
+                DCA
               </Text>{" "}
-              helps reduce the impact of volatility by spreading out your
-              purchases over time.
+              helps reduce the impact of volatility by spreading out purchases
+              over time.
             </Text>
-            <Text fontSize="sm" color={infoTextColor}>
-              Your order will run until {formattedEndDate}.
+          </HStack>
+
+          <HStack spacing={2} align="flex-start">
+            <WarningIcon color="yellow.500" mt={1} />
+            <Text fontSize="sm" color={warningTextColor}>
+              <Text as="span" fontWeight="bold">
+                Important:
+              </Text>{" "}
+              The OpenOcean DCA API is in beta. Always monitor your DCA orders
+              regularly.
             </Text>
-          </VStack>
-        </HStack>
+          </HStack>
+        </VStack>
       </Box>
 
-      <VStack align="stretch" spacing={3} pl={4}>
-        {fromToken.symbol && renderTokenInfo(fromToken, "From")}
-        {toToken.symbol && renderTokenInfo(toToken, "To")}
-      </VStack>
-
-      {/* Warning for unverified tokens */}
+      {/* Warning for unverified tokens - only show if needed */}
       {(!fromToken.verified || !toToken.verified) && (
         <Box
           bg={warningBgColor}
@@ -201,36 +610,18 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
         >
           <HStack spacing={2} align="flex-start">
             <WarningIcon color="yellow.500" mt={1} />
-            <VStack align="stretch" spacing={1}>
-              <Text fontSize="sm" fontWeight="bold" color={warningTextColor}>
-                Warning: Unverified Tokens Detected
-              </Text>
-              <Text fontSize="sm" color={warningTextColor}>
-                Please verify tokens before proceeding with DCA. Unverified
-                tokens may pose risks.
-              </Text>
-            </VStack>
+            <Text fontSize="sm" color={warningTextColor}>
+              <Text as="span" fontWeight="bold">
+                Warning:
+              </Text>{" "}
+              Unverified tokens detected. Please verify tokens before
+              proceeding.
+            </Text>
           </HStack>
         </Box>
       )}
 
-      <Box
-        bg="yellow.50"
-        p={3}
-        borderRadius="md"
-        borderWidth="1px"
-        borderColor="yellow.300"
-      >
-        <HStack spacing={2} align="flex-start">
-          <Box>⚠️</Box>
-          <Text fontSize="sm">
-            <strong>Important:</strong> Please note that the OpenOcean DCA API
-            is in beta. Always monitor your DCA orders regularly.
-          </Text>
-        </HStack>
-      </Box>
-
-      <Text mt={2}>
+      <Text fontSize="sm" mt={1}>
         Would you like to proceed with setting up this DCA? Type 'yes' to
         continue or 'no' to cancel.
       </Text>
