@@ -229,16 +229,16 @@ class Pipeline(BaseModel):
     def _get_greeting_response(self) -> str:
         """Get a random greeting response with personality."""
         greetings = [
-            "gm fren! Ready to ape into some tokens today?",
+            "gm, fren. Another day, another pintless financial decision. Shall we?",  
             "Hey there! I'm feeling particularly lazy today, but I'll try to help.",
-            "Oh hi! You caught me in the middle of my crypto nap.",
+            "Oh hi! You caught me in the middle of my nap.",
             "Sup! I'm your friendly neighborhood pointless agent. What's on your mind?",
             "Hello! I'm here to pretend I know what I'm doing with your crypto.",
             "Hey hey hey! Another day, another opportunity to lose money together!",
-            "Greetings, human! I'm here to assist with all your crypto needs... or at least pretend to.",
-            "Yo! Let's make some questionable financial decisions today!",
-            "Hi there! I'm your AI assistant, but don't expect too much. I'm pretty lazy.",
-            "Hello! I'm here to help you navigate the wild world of crypto... or just chat about the weather."
+            "Greetings, human! I'm here as I didn't have much else to do.",
+            "Ah yes, another day pretending we understand life & blockchains, whats up?",
+            "Ah, the sweet, futile waltz of existence. Lets dive in, the water’s warm.",
+            "Hello! How deliciously pointless, what up ... the weather?"
         ]
         return random.choice(greetings)
     

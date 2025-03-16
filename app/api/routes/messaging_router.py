@@ -6,6 +6,11 @@ import json
 import httpx
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env files
+load_dotenv()
+load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
 from app.api.dependencies import get_redis_service, get_token_service
 from app.agents.agent_factory import get_agent_factory
@@ -13,6 +18,8 @@ from app.services.pipeline import Pipeline
 from app.services.token_service import TokenService
 from app.services.redis_service import RedisService
 from app.agents.messaging_agent import MessagingAgent
+from app.services.swap_service import SwapService
+from app.agents.simple_swap_agent import SimpleSwapAgent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messaging"])
@@ -20,6 +27,7 @@ router = APIRouter(tags=["messaging"])
 # Environment variables for messaging platforms
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+logger.info(f"Loaded TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:5]}... from environment")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 class WhatsAppMessage(BaseModel):
@@ -30,7 +38,11 @@ class WhatsAppMessage(BaseModel):
 class TelegramMessage(BaseModel):
     """Telegram message webhook payload."""
     update_id: int
-    message: Dict[str, Any]
+    message: Optional[Dict[str, Any]] = None
+    edited_message: Optional[Dict[str, Any]] = None
+    channel_post: Optional[Dict[str, Any]] = None
+    edited_channel_post: Optional[Dict[str, Any]] = None
+    callback_query: Optional[Dict[str, Any]] = None
 
 class MessagingRequest(BaseModel):
     """Generic messaging request for testing."""
@@ -48,26 +60,25 @@ class MessagingResponse(BaseModel):
     awaiting_confirmation: bool = False
     metadata: Optional[Dict[str, Any]] = None
 
+class TokenConfig(BaseModel):
+    """Token configuration for messaging platforms."""
+    token: str
+
 async def get_messaging_agent(
     redis_service: RedisService = Depends(get_redis_service),
-    token_service: TokenService = Depends(get_token_service),
-    agent_factory = Depends(get_agent_factory)
+    token_service: TokenService = Depends(get_token_service)
 ) -> MessagingAgent:
     """Get an instance of MessagingAgent."""
-    # Create a pipeline for the messaging agent
-    pipeline = Pipeline(
-        token_service=token_service,
-        swap_agent=agent_factory.create_agent("swap"),
-        price_agent=agent_factory.create_agent("price"),
-        dca_agent=agent_factory.create_agent("dca"),
-        redis_service=redis_service
-    )
+    # Create a simple swap agent for the swap service
+    swap_agent = SimpleSwapAgent()
+    
+    # Create a swap service for the messaging agent
+    swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
     
     # Create and return the messaging agent
     return MessagingAgent(
         token_service=token_service,
-        redis_service=redis_service,
-        pipeline=pipeline
+        swap_service=swap_service
     )
 
 @router.post("/whatsapp/webhook", response_model=Dict[str, Any])
@@ -140,13 +151,33 @@ async def telegram_webhook(
     try:
         logger.info(f"Received Telegram webhook: {update.update_id}")
         
-        # Extract message details
-        chat_id = update.message.get("chat", {}).get("id")
-        text = update.message.get("text", "")
+        # Extract message details based on the update type
+        message_obj = None
+        if update.message:
+            message_obj = update.message
+        elif update.edited_message:
+            message_obj = update.edited_message
+        elif update.channel_post:
+            message_obj = update.channel_post
+        elif update.edited_channel_post:
+            message_obj = update.edited_channel_post
+        elif update.callback_query and update.callback_query.get("message"):
+            message_obj = update.callback_query.get("message")
+            
+        if not message_obj:
+            logger.warning("No message found in Telegram update")
+            return {"status": "ignored"}
+        
+        # Extract chat ID and text
+        chat_id = message_obj.get("chat", {}).get("id")
+        text = message_obj.get("text", "")
         
         if not chat_id or not text:
             logger.warning("Missing chat_id or text in Telegram message")
             return {"status": "ignored"}
+        
+        # Log the full message for debugging
+        logger.info(f"Processing Telegram message: {json.dumps(message_obj)}")
         
         # Process in background to avoid webhook timeout
         background_tasks.add_task(
@@ -298,6 +329,18 @@ async def process_whatsapp_message(
             message=result.get("content", "No response")
         )
         
+        # If there's a wallet address in the result, store it
+        if result.get("wallet_address") and result.get("wallet_address") != wallet_address:
+            await redis_service.set(
+                key=f"messaging:whatsapp:user:{from_user}:wallet",
+                value=result["wallet_address"]
+            )
+            # Also store the reverse mapping
+            await redis_service.set(
+                key=f"wallet:{result['wallet_address']}:whatsapp:user",
+                value=from_user
+            )
+        
     except Exception as e:
         logger.exception(f"Error processing WhatsApp message: {e}")
         # Try to send error message
@@ -338,6 +381,18 @@ async def process_telegram_message(
             chat_id=chat_id,
             message=result.get("content", "No response")
         )
+        
+        # If there's a wallet address in the result, store it
+        if result.get("wallet_address") and result.get("wallet_address") != wallet_address:
+            await redis_service.set(
+                key=f"messaging:telegram:user:{chat_id}:wallet",
+                value=result["wallet_address"]
+            )
+            # Also store the reverse mapping
+            await redis_service.set(
+                key=f"wallet:{result['wallet_address']}:telegram:user",
+                value=chat_id
+            )
         
     except Exception as e:
         logger.exception(f"Error processing Telegram message: {e}")
@@ -389,24 +444,161 @@ async def send_whatsapp_message(to: str, message: str):
 
 async def send_telegram_message(chat_id: str, message: str):
     """Send a message via Telegram Bot API."""
+    global TELEGRAM_BOT_TOKEN
+    
     if not TELEGRAM_BOT_TOKEN:
-        logger.warning("Telegram bot token not configured")
-        return
+        logger.warning("Telegram bot token not configured, attempting to reload from environment")
+        reload_environment_variables()
+        if not TELEGRAM_BOT_TOKEN:
+            logger.error("Failed to load Telegram bot token from environment")
+            return
     
     try:
+        # Log the token (first few characters) for debugging
+        token_preview = TELEGRAM_BOT_TOKEN[:5] + "..." if TELEGRAM_BOT_TOKEN else "None"
+        logger.info(f"Sending Telegram message to {chat_id} using token: {token_preview}")
+        
         # Send message via Telegram Bot API
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": message,
-                    "parse_mode": "Markdown"
-                }
-            )
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            logger.info(f"Sending request to: {url}")
+            
+            # Use plain text for simplicity
+            payload = {
+                "chat_id": chat_id,
+                "text": message
+            }
+            
+            response = await client.post(url, json=payload)
             
             if response.status_code != 200:
                 logger.error(f"Telegram API error: {response.text}")
+                logger.error(f"Request payload: {payload}")
+                
+                # If unauthorized, try reloading environment variables
+                if "Unauthorized" in response.text:
+                    logger.warning("Unauthorized error, attempting to reload environment variables")
+                    reload_environment_variables()
+                    
+                    # Try again with the new token
+                    if TELEGRAM_BOT_TOKEN:
+                        logger.info(f"Retrying with new token: {TELEGRAM_BOT_TOKEN[:5]}...")
+                        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+                        retry_response = await client.post(url, json=payload)
+                        
+                        if retry_response.status_code == 200:
+                            logger.info(f"Successfully sent message to Telegram chat {chat_id} after token reload")
+                            return
+                        else:
+                            logger.error(f"Telegram API error after token reload: {retry_response.text}")
+            else:
+                logger.info(f"Successfully sent message to Telegram chat {chat_id}")
             
     except Exception as e:
         logger.exception(f"Error sending Telegram message: {e}")
+
+@router.get("/telegram/verify-token")
+async def verify_telegram_token():
+    """Verify that the Telegram bot token is configured and valid."""
+    if not TELEGRAM_BOT_TOKEN:
+        return {
+            "status": "error",
+            "message": "Telegram bot token not configured"
+        }
+    
+    try:
+        # Check if the token is valid by getting bot info
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe")
+            
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"Invalid Telegram bot token: {response.text}"
+                }
+            
+            bot_info = response.json()
+            return {
+                "status": "ok",
+                "bot_info": bot_info["result"]
+            }
+            
+    except Exception as e:
+        logger.exception(f"Error verifying Telegram token: {e}")
+        return {
+            "status": "error",
+            "message": f"Error verifying token: {str(e)}"
+        }
+
+@router.post("/telegram/set-token")
+async def set_telegram_token(config: TokenConfig):
+    """Set the Telegram bot token dynamically."""
+    global TELEGRAM_BOT_TOKEN
+    
+    try:
+        # Verify the token is valid
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"https://api.telegram.org/bot{config.token}/getMe")
+            
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": f"Invalid Telegram bot token: {response.text}"
+                }
+            
+            # Set the token
+            TELEGRAM_BOT_TOKEN = config.token
+            
+            # Get bot info
+            bot_info = response.json()
+            return {
+                "status": "ok",
+                "message": "Telegram bot token set successfully",
+                "bot_info": bot_info["result"]
+            }
+            
+    except Exception as e:
+        logger.exception(f"Error setting Telegram token: {e}")
+        return {
+            "status": "error",
+            "message": f"Error setting token: {str(e)}"
+        }
+
+@router.get("/env-check")
+async def check_environment_variables():
+    """Check the environment variables for debugging."""
+    # Only show the first few characters of sensitive values
+    return {
+        "telegram_bot_token": f"{TELEGRAM_BOT_TOKEN[:5]}..." if TELEGRAM_BOT_TOKEN else "Not set",
+        "whatsapp_api_key": f"{WHATSAPP_API_KEY[:5]}..." if WHATSAPP_API_KEY else "Not set",
+        "webhook_secret": f"{WEBHOOK_SECRET[:5]}..." if WEBHOOK_SECRET else "Not set",
+        "env_file_path": os.path.abspath(".env"),
+        "env_local_file_path": os.path.abspath(".env.local"),
+        "current_directory": os.getcwd(),
+    }
+
+def reload_environment_variables():
+    """Reload environment variables from .env files."""
+    global TELEGRAM_BOT_TOKEN, WHATSAPP_API_KEY, WEBHOOK_SECRET
+    
+    # Load environment variables from .env files
+    load_dotenv()
+    load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
+    
+    # Update global variables
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+    
+    logger.info(f"Reloaded environment variables. TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:5]}...")
+    
+    return {
+        "telegram_bot_token": f"{TELEGRAM_BOT_TOKEN[:5]}..." if TELEGRAM_BOT_TOKEN else "Not set",
+        "whatsapp_api_key": f"{WHATSAPP_API_KEY[:5]}..." if WHATSAPP_API_KEY else "Not set",
+        "webhook_secret": f"{WEBHOOK_SECRET[:5]}..." if WEBHOOK_SECRET else "Not set"
+    }
+
+@router.post("/reload-env")
+async def reload_env():
+    """Reload environment variables from .env files."""
+    return reload_environment_variables()

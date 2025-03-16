@@ -4,6 +4,7 @@ Messaging agent for WhatsApp and Telegram integration.
 import logging
 import json
 from typing import Dict, Any, List, Optional, Union
+from pydantic import Field
 from app.agents.base import PointlessAgent
 from app.services.token_service import TokenService
 from app.services.prices import price_service
@@ -19,6 +20,8 @@ class MessagingAgent(PointlessAgent):
     This agent processes commands from messaging platforms and returns
     appropriate responses that can be sent back to the user.
     """
+    token_service: TokenService = Field(default=None)
+    swap_service: SwapService = Field(default=None)
     
     def __init__(self, token_service: TokenService, swap_service: SwapService):
         """
@@ -29,8 +32,23 @@ class MessagingAgent(PointlessAgent):
             swap_service: Service for swap operations
         """
         # Initialize the base class with a prompt
-        prompt = """You are a helpful assistant that processes messages from WhatsApp and Telegram.
-        You can handle commands like balance checks, swaps, and price queries."""
+        prompt = """You are a helpful crypto assistant for Dowse Pointless, a DeFi platform.
+        
+        You can help users with the following tasks:
+        1. Connect their wallet to the platform
+        2. Check their token balances
+        3. Swap tokens (e.g., ETH to USDC)
+        4. Check token prices
+        
+        When responding to users:
+        - Be friendly and professional
+        - Keep responses concise and to the point
+        - Explain crypto concepts in simple terms
+        - If you don't know something, be honest about it
+        - Always prioritize security and accuracy
+        
+        You are currently interacting with users via messaging platforms (WhatsApp/Telegram).
+        """
         
         super().__init__(
             prompt=prompt,
@@ -38,8 +56,9 @@ class MessagingAgent(PointlessAgent):
             temperature=0.7
         )
         
-        self.token_service = token_service
-        self.swap_service = swap_service
+        # Update the model fields
+        object.__setattr__(self, "token_service", token_service)
+        object.__setattr__(self, "swap_service", swap_service)
         
     async def process_message(
         self, 
@@ -47,7 +66,8 @@ class MessagingAgent(PointlessAgent):
         platform: str, 
         user_id: str,
         wallet_address: Optional[str] = None,
-        chain_id: int = 534352  # Default to Scroll chain
+        chain_id: int = 534352,  # Default to Scroll chain
+        metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process a message from a messaging platform.
@@ -58,6 +78,7 @@ class MessagingAgent(PointlessAgent):
             user_id: The user ID on the platform
             wallet_address: Optional wallet address
             chain_id: Chain ID (default: Scroll)
+            metadata: Optional metadata
             
         Returns:
             Response to send back to the user
@@ -71,7 +92,7 @@ class MessagingAgent(PointlessAgent):
             if "balance" in message.lower() or "check balance" in message.lower():
                 if not wallet_address:
                     return {
-                        "text": "Please connect your wallet first by sending 'connect wallet'",
+                        "content": "Please connect your wallet first by sending 'connect wallet'",
                         "requires_wallet": True
                     }
                 return await self._handle_balance_check(wallet_address, chain_id)
@@ -80,7 +101,7 @@ class MessagingAgent(PointlessAgent):
             if "swap" in message.lower():
                 if not wallet_address:
                     return {
-                        "text": "Please connect your wallet first by sending 'connect wallet'",
+                        "content": "Please connect your wallet first by sending 'connect wallet'",
                         "requires_wallet": True
                     }
                 return await self._handle_swap_request(message, wallet_address, chain_id)
@@ -91,7 +112,7 @@ class MessagingAgent(PointlessAgent):
                 
             # Default response for unknown commands
             return {
-                "text": "I can help you with the following commands:\n\n"
+                "content": "I can help you with the following commands:\n\n"
                         "- Connect wallet\n"
                         "- Check balance\n"
                         "- Swap [amount] [token] for [token]\n"
@@ -101,7 +122,7 @@ class MessagingAgent(PointlessAgent):
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
             return {
-                "text": f"Sorry, I encountered an error: {str(e)}"
+                "content": f"Sorry, I encountered an error: {str(e)}"
             }
     
     def _handle_connect_wallet(self, platform: str, user_id: str) -> Dict[str, Any]:
@@ -119,7 +140,7 @@ class MessagingAgent(PointlessAgent):
         connection_url = f"https://snel.ai/connect/{platform}/{user_id}"
         
         return {
-            "text": "To connect your wallet, please visit the following link:\n\n"
+            "content": "To connect your wallet, please visit the following link:\n\n"
                     f"{connection_url}\n\n"
                     "After connecting, you'll be able to check balances and perform swaps directly from this chat.",
             "connection_url": connection_url
@@ -164,7 +185,7 @@ class MessagingAgent(PointlessAgent):
             # TODO: Add ERC20 token balances in the future
                 
             return {
-                "text": response_text,
+                "content": response_text,
                 "balances": [
                     {
                         "token": native_token,
@@ -177,7 +198,7 @@ class MessagingAgent(PointlessAgent):
         except Exception as e:
             logger.error(f"Error checking balance: {str(e)}")
             return {
-                "text": f"Sorry, I couldn't check your balance: {str(e)}"
+                "content": f"Sorry, I couldn't check your balance: {str(e)}"
             }
     
     async def _handle_swap_request(self, message: str, wallet_address: str, chain_id: int) -> Dict[str, Any]:
@@ -198,7 +219,7 @@ class MessagingAgent(PointlessAgent):
             
             if not quotes or not quotes.get("quotes"):
                 return {
-                    "text": "Sorry, I couldn't find any quotes for this swap. Please try a different amount or token pair."
+                    "content": "Sorry, I couldn't find any quotes for this swap. Please try a different amount or token pair."
                 }
             
             # Get the best quote
@@ -206,7 +227,7 @@ class MessagingAgent(PointlessAgent):
             
             if not best_quote:
                 return {
-                    "text": "Sorry, I couldn't find any quotes for this swap. Please try a different amount or token pair."
+                    "content": "Sorry, I couldn't find any quotes for this swap. Please try a different amount or token pair."
                 }
             
             # Format the response
@@ -224,7 +245,7 @@ class MessagingAgent(PointlessAgent):
             response_text += "To confirm this swap, reply with 'confirm swap'"
             
             return {
-                "text": response_text,
+                "content": response_text,
                 "quote": best_quote,
                 "requires_confirmation": True,
                 "confirmation_type": "swap",
@@ -241,7 +262,7 @@ class MessagingAgent(PointlessAgent):
         except Exception as e:
             logger.error(f"Error processing swap request: {str(e)}")
             return {
-                "text": f"Sorry, I couldn't process your swap request: {str(e)}"
+                "content": f"Sorry, I couldn't process your swap request: {str(e)}"
             }
     
     async def _handle_price_check(self, message: str, chain_id: int) -> Dict[str, Any]:
@@ -267,7 +288,7 @@ class MessagingAgent(PointlessAgent):
             
             if not token:
                 return {
-                    "text": "Please specify a token to check the price of. For example: 'price of ETH'"
+                    "content": "Please specify a token to check the price of. For example: 'price of ETH'"
                 }
             
             # Get the price of the token
@@ -276,7 +297,7 @@ class MessagingAgent(PointlessAgent):
             
             if price <= 0:
                 return {
-                    "text": f"Sorry, I couldn't find the price of {token}."
+                    "content": f"Sorry, I couldn't find the price of {token}."
                 }
             
             # Format the response
@@ -284,7 +305,7 @@ class MessagingAgent(PointlessAgent):
             response_text += f"${price:.2f} USD"
             
             return {
-                "text": response_text,
+                "content": response_text,
                 "price": {
                     "token": token,
                     "usd": price
@@ -294,7 +315,7 @@ class MessagingAgent(PointlessAgent):
         except Exception as e:
             logger.error(f"Error checking price: {str(e)}")
             return {
-                "text": f"Sorry, I couldn't check the price: {str(e)}"
+                "content": f"Sorry, I couldn't check the price: {str(e)}"
             }
     
     def _get_chain_name(self, chain_id: int) -> str:
