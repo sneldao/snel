@@ -2,7 +2,7 @@ fastapi==0.115.8
 uvicorn==0.34.0
 pydantic==2.10.6
 pydantic_settings==2.2.1
-httpx==0.24.1
+httpx>=0.24.1,<0.28.0
 python-dotenv==1.0.1
 slowapi==0.1.9
 eth-rpc-py==0.1.26
