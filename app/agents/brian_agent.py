@@ -272,34 +272,62 @@ class BrianAgent(PointlessAgent):
                 metadata={"command": command}
             ).model_dump()
     
-    async def process_brian_command(self, command: str, chain_id: int = 1, wallet_address: Optional[str] = None) -> Dict[str, Any]:
+    async def process_brian_command(
+        self, 
+        command: str, 
+        chain_id: int = 1, 
+        wallet_address: Optional[str] = None,
+        user_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        Process a command using the Brian API.
+        Process a Brian API command (transfer, bridge, or balance).
         
         Args:
             command: The command to process
             chain_id: The chain ID
             wallet_address: The wallet address
+            user_name: The user's display name
             
         Returns:
             Dictionary with response data
         """
         try:
+            # Personalize the response with the user's name if available
+            name_prefix = f"{user_name}'s" if user_name and user_name != "User" else "Your"
+            
             # Check if this is a transfer command
             if re.search(r"(?:send|transfer)\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9\.]+", command, re.IGNORECASE):
-                return await self.process_transfer_command(command, chain_id, wallet_address)
+                result = await self.process_transfer_command(command, chain_id, wallet_address)
+                
+                # Personalize the message if we have a user name
+                if user_name and user_name != "User" and "content" in result and isinstance(result["content"], dict):
+                    result["content"]["message"] = result["content"]["message"].replace("Ready to transfer", f"Ready to transfer {name_prefix}")
+                
+                return result
             
             # Check if this is a bridge command
             elif re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", command, re.IGNORECASE):
-                return await self.process_bridge_command(command, chain_id, wallet_address)
+                result = await self.process_bridge_command(command, chain_id, wallet_address)
+                
+                # Personalize the message if we have a user name
+                if user_name and user_name != "User" and "content" in result and isinstance(result["content"], dict):
+                    result["content"]["message"] = result["content"]["message"].replace("Ready to bridge", f"Ready to bridge {name_prefix}")
+                
+                return result
             
             # Check if this is a balance command
             elif re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+(?:[A-Za-z0-9]+\s+)?balance", command, re.IGNORECASE):
-                return await self.process_balance_command(command, chain_id, wallet_address)
+                result = await self.process_balance_command(command, chain_id, wallet_address)
+                
+                # Personalize the message if we have a user name
+                if user_name and user_name != "User" and "content" in result and isinstance(result["content"], str):
+                    result["content"] = result["content"].replace("Your balance", f"{name_prefix} balance")
+                
+                return result
             
-            # Not a recognized Brian command
+            # If not a recognized command, return an error
             return AgentMessage(
-                error="Not a recognized Brian command",
+                error="Not a recognized Brian API command. Please try a transfer, bridge, or balance command.",
                 metadata={"command": command}
             ).model_dump()
             

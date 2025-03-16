@@ -18,7 +18,7 @@ import {
   Icon,
   List,
   ListItem,
-  ListIcon,
+  SimpleGrid,
 } from "@chakra-ui/react";
 import {
   FaExchangeAlt,
@@ -71,15 +71,12 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
     {
       category: "DCA Orders",
       icon: FaCoins,
-      examples: [
-        "dca $10 USDC into ETH over 5 days",
-        "dollar cost average 100 USDC into ETH weekly for a month",
-      ],
+      examples: ["** coming soon **", "** coming soon **"],
     },
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg" isCentered>
+    <Modal isOpen={isOpen} onClose={onClose} size="md" isCentered>
       <ModalOverlay backdropFilter="blur(4px)" />
       <ModalContent
         borderRadius="xl"
@@ -88,66 +85,69 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         border="1px solid"
         borderColor={borderColor}
         mx={4}
+        maxW="450px"
       >
         <ModalHeader
           display="flex"
           alignItems="center"
           justifyContent="center"
-          pt={6}
+          pt={4}
+          pb={2}
         >
-          <Flex align="center" justify="center" direction="column">
-            <Box position="relative" width="60px" height="60px" mb={2}>
+          <Flex align="center" justify="center" direction="row" gap={3}>
+            <Box position="relative" width="40px" height="40px">
               <Image
                 src="/icon.png"
                 alt="SNEL Logo"
-                width={60}
-                height={60}
+                width={40}
+                height={40}
                 priority
                 style={{ objectFit: "contain" }}
               />
             </Box>
-            <Heading size="lg" color={headingColor}>
+            <Heading size="md" color={headingColor}>
               What can SNEL do?
             </Heading>
-            <Text fontSize="sm" color={textColor} mt={1}>
-              Super poiNtlEss Lazy agents at your service
-            </Text>
           </Flex>
         </ModalHeader>
         <ModalCloseButton />
 
-        <ModalBody pb={6}>
-          <VStack spacing={5} align="stretch">
+        <ModalBody pb={4} px={4}>
+          <SimpleGrid columns={1} spacing={3} alignItems="stretch">
             {examples.map((category, idx) => (
-              <Box key={idx}>
-                <Flex align="center" mb={2}>
+              <Box
+                key={idx}
+                p={2}
+                borderRadius="md"
+                bg={useColorModeValue("gray.50", "gray.700")}
+              >
+                <Flex align="center" mb={1}>
                   <Icon
                     as={category.icon}
                     mr={2}
                     color="blue.500"
-                    boxSize={5}
+                    boxSize={4}
                   />
-                  <Heading size="sm" color={headingColor}>
+                  <Heading size="xs" color={headingColor}>
                     {category.category}
                   </Heading>
                 </Flex>
-                <List spacing={2} pl={8}>
+                <List spacing={1} pl={6} fontSize="xs">
                   {category.examples.map((example, exIdx) => (
-                    <ListItem key={exIdx} color={textColor} fontSize="sm">
+                    <ListItem key={exIdx} color={textColor}>
                       <Text as="span" fontFamily="mono" fontWeight="medium">
                         "{example}"
                       </Text>
                     </ListItem>
                   ))}
                 </List>
-                {idx < examples.length - 1 && <Divider mt={4} />}
               </Box>
             ))}
-          </VStack>
+          </SimpleGrid>
         </ModalBody>
 
-        <ModalFooter justifyContent="center">
-          <Button colorScheme="blue" onClick={onClose} size="md" width="150px">
+        <ModalFooter justifyContent="center" pt={2} pb={3}>
+          <Button colorScheme="blue" onClick={onClose} size="sm" width="120px">
             Got it!
           </Button>
         </ModalFooter>

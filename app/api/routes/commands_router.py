@@ -28,7 +28,9 @@ async def process_command(
     Process a command from the user.
     """
     try:
-        logger.info(f"Processing command: {command.content}")
+        # Get user name or default to "User"
+        user_name = command.user_name or "User"
+        logger.info(f"Processing command from {user_name}: {command.content}")
         
         # Check if this is a Brian API command (transfer, bridge, or balance)
         content = command.content.lower()
@@ -45,7 +47,8 @@ async def process_command(
             result = await brian_agent.process_brian_command(
                 command=command.content,
                 chain_id=command.chain_id,
-                wallet_address=command.wallet_address
+                wallet_address=command.wallet_address,
+                user_name=user_name  # Pass the user's name
             )
             
             # Check for errors

@@ -36,6 +36,11 @@ import { HelpModal } from "../components/HelpModal";
 import { formatTokenAmount, smallestUnitsToAmount } from "../utils/tokenUtils";
 import { openoceanLimitOrderSdk } from "@openocean.finance/limitorder-sdk";
 import { ethers } from "ethers";
+import {
+  fetchUserProfile,
+  ProfileInfo,
+  getDisplayName,
+} from "../services/profileService";
 
 type Response = {
   content: string | any;
@@ -333,6 +338,23 @@ export default function Home() {
   const [confirmationCallback, setConfirmationCallback] = React.useState<
     (() => Promise<void>) | null
   >(null);
+  const [userProfile, setUserProfile] = React.useState<ProfileInfo | null>(
+    null
+  );
+
+  // Fetch user profile when address changes
+  React.useEffect(() => {
+    const fetchProfile = async () => {
+      if (address) {
+        const profile = await fetchUserProfile(address);
+        setUserProfile(profile);
+      } else {
+        setUserProfile(null);
+      }
+    };
+
+    fetchProfile();
+  }, [address]);
 
   // Add chain change effect
   React.useEffect(() => {
@@ -966,6 +988,21 @@ export default function Home() {
         return;
       }
 
+      // Get the API endpoint
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const endpoint = `${apiUrl}/api/commands`;
+
+      // Get the user's display name
+      const userName = getDisplayName(address, userProfile);
+
+      // Prepare the request body
+      const requestBody = {
+        command,
+        wallet_address: address,
+        chain_id: chainId,
+        user_name: userName, // Add the user's name to the request
+      };
+
       // For other commands, use the general API
       const response = await fetch("/api/process-command", {
         method: "POST",
@@ -977,6 +1014,7 @@ export default function Home() {
           content: command,
           wallet_address: address,
           chain_id: chainId || 1,
+          user_name: getDisplayName(address, userProfile), // Add user's display name
         }),
       });
 
@@ -1658,9 +1696,14 @@ export default function Home() {
             >
               <AlertIcon />
               <Box>
-                <AlertTitle>Welcome! Why are you here?</AlertTitle>
+                <AlertTitle>
+                  Welcome! I, SNEL, am in beta, kindly go slow.
+                </AlertTitle>
                 <AlertDescription>
-                  Click the help icon if you need help.
+                  By continuing, you agree to my{" "}
+                  <Link href="/terms" color="blue.500" isExternal>
+                    Terms 🐌
+                  </Link>
                 </AlertDescription>
               </Box>
             </Alert>

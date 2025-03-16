@@ -19,10 +19,12 @@ import {
   ListIcon,
   Badge,
   Link,
+  Tooltip,
 } from "@chakra-ui/react";
 import { InfoIcon, ChatIcon } from "@chakra-ui/icons";
 import { useAccount, useChainId } from "wagmi";
 import NextLink from "next/link";
+import { useUserProfile } from "../hooks/useUserProfile";
 
 type CommandInputProps = {
   onSubmit: (command: string) => Promise<void>;
@@ -56,6 +58,7 @@ export const CommandInput = ({
   const toast = useToast();
   const chainId = useChainId();
   const { isConnected } = useAccount();
+  const { profile, getUserDisplayName } = useUserProfile();
 
   const isChainSupported = chainId && chainId in SUPPORTED_CHAINS;
   const currentChainName = chainId
@@ -129,7 +132,7 @@ export const CommandInput = ({
       <VStack spacing={4} align="stretch">
         <HStack>
           <Text fontSize="lg" fontWeight="bold">
-            Ask Pointless
+            Ask something pointless on
           </Text>
           {chainId && (
             <Badge
@@ -176,7 +179,14 @@ export const CommandInput = ({
         </HStack>
 
         <HStack align="start" spacing={3}>
-          <Avatar size="sm" name="User" bg="gray.500" />
+          <Tooltip label={getUserDisplayName()} placement="top" hasArrow>
+            <Avatar
+              size="sm"
+              name={getUserDisplayName()}
+              src={profile?.avatar || undefined}
+              bg="blue.500"
+            />
+          </Tooltip>
           <VStack align="stretch" flex={1} spacing={3}>
             <Textarea
               value={command}

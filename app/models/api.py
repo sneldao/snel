@@ -8,6 +8,7 @@ class Command(BaseModel):
     chain_id: int = 1
     creator_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    user_name: Optional[str] = None  # User's display name (ENS or profile name)
 
 class CommandResponse(BaseModel):
     """Response model for command processing."""
