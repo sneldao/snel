@@ -424,6 +424,75 @@ dowse-pointless/
 └── README.md         # This file
 ```
 
+## Infrastructure and Architecture
+
+### Agent Factory System
+
+The project uses a flexible agent factory system (`app/agents/agent_factory.py`) that provides a centralized way to create and manage different types of agents:
+
+- **Dynamic Agent Creation**: Creates agent instances based on type (swap, price, DCA, messaging, brian)
+- **Dependency Injection**: Automatically injects required services into agents
+- **Environment Awareness**: Handles different configurations for local and production environments
+- **Error Handling**: Provides consistent error handling across all agent types
+
+### Aggregator Selection System
+
+The project implements a robust aggregator selection system with fallback mechanisms:
+
+#### Frontend Component (`frontend/src/components/AggregatorSelection.tsx`)
+
+- **Smart Sorting**: Prioritizes aggregators based on chain and rate
+- **Chain-Specific Logic**: Special handling for Scroll chain using Brian API
+- **Visual Feedback**: Clear UI showing best rates and recommended options
+- **Gas Estimation**: Displays estimated gas costs for each option
+
+#### Backend Support (`app/services/aggregator_fixes.py`)
+
+- **Chain-Specific Fixes**: Customized fixes for different chains
+- **Quote Validation**: Ensures quotes are reasonable and valid
+- **Gas Estimation**: Adjusts unreasonable gas estimates
+- **Router Address Management**: Maintains correct router addresses per chain
+
+### Testing Suite
+
+The project includes a comprehensive testing suite in the `scripts/` and `tests/` directories:
+
+#### Aggregator Testing (`scripts/test_aggregators.py`)
+
+- Tests multiple DEX aggregators (0x, OpenOcean, Uniswap, Kyber)
+- Validates quote formats and responses
+- Checks gas estimates and slippage calculations
+- Verifies chain-specific configurations
+
+#### Token Lookup Testing (`scripts/test_token_lookup.py`)
+
+- Tests token symbol resolution
+- Validates contract address lookups
+- Checks chain-specific token lists
+- Verifies price feed integration
+
+#### Infrastructure Testing
+
+- **Logger Testing** (`api/test_logger.py`): Verifies logging system integration
+- **Serverless Testing** (`tests/test_serverless.py`): Tests serverless environment compatibility
+- **Redis Testing** (`tests/test_redis.py`): Validates Redis connection and operations
+
+### Test Running
+
+To run the test suite:
+
+```bash
+# Run all tests
+poetry run pytest
+
+# Run specific test categories
+poetry run python scripts/test_aggregators.py
+poetry run python scripts/test_token_lookup.py
+poetry run python api/test_logger.py
+poetry run python tests/test_serverless.py
+poetry run python tests/test_redis.py
+```
+
 ## Notes on Dowse Implementation Challenges
 
 During our attempt to integrate Dowse for natural language command processing, we encountered several challenges that led us to implement our own command parsing solution:

@@ -14,6 +14,7 @@ from app.services.redis_service import RedisService
 from app.api.dependencies import get_redis_service
 from app.prompts import SWAP_PROMPT, PRICE_PROMPT
 from emp_agents.providers import OpenAIProvider
+from app.services.swap_service import SwapService
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +44,17 @@ class AgentFactory:
                 redis_service=self.redis_service
             )
         elif agent_type == "price":
-            return PriceAgent(provider="openai")
+            # Create price agent without provider to avoid HTTPX compatibility issues
+            return PriceAgent()
         elif agent_type == "swap":
             return SimpleSwapAgent()
         elif agent_type == "messaging":
-            # For messaging agent, we'll need to create a pipeline in the router
+            # For messaging agent, we need to create a swap service
+            swap_service = SwapService(token_service=self.token_service)
+            
             return MessagingAgent(
                 token_service=self.token_service,
-                redis_service=self.redis_service
+                swap_service=swap_service
             )
         elif agent_type == "brian":
             # Create a Brian agent for token transfers, bridging, and balance checking

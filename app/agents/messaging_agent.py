@@ -28,6 +28,16 @@ class MessagingAgent(PointlessAgent):
             token_service: Service for token lookups
             swap_service: Service for swap operations
         """
+        # Initialize the base class with a prompt
+        prompt = """You are a helpful assistant that processes messages from WhatsApp and Telegram.
+        You can handle commands like balance checks, swaps, and price queries."""
+        
+        super().__init__(
+            prompt=prompt,
+            model="gpt-4-turbo-preview",
+            temperature=0.7
+        )
+        
         self.token_service = token_service
         self.swap_service = swap_service
         

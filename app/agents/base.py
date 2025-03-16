@@ -36,26 +36,37 @@ class PointlessAgent(BaseModel):
             model=model,
             temperature=temperature
         )
+        
+        # Get OpenAI API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        
+        # Create client options without proxies to avoid HTTPX compatibility issues
+        client_options = {
+            "api_key": api_key,
+        }
+        
+        # Check if we're in a production environment (Vercel)
+        is_production = os.getenv("VERCEL", "").lower() == "1"
+        
+        # Only add timeout in production to avoid issues
+        if is_production:
+            client_options["timeout"] = 60.0
+        
         if provider:
             # Check if it's an OpenAIProvider from emp_agents.providers
             if hasattr(provider, 'api_key'):
                 # Create our own client using the provider's API key
-                self.client = AsyncOpenAI(
-                    api_key=provider.api_key,
-                )
+                client_options["api_key"] = provider.api_key
+                self.client = AsyncOpenAI(**client_options)
             elif hasattr(provider, 'client'):
                 # Use the provider's client directly
                 self.client = provider.client
             else:
                 # Fallback to creating our own client
                 logger.warning(f"Unknown provider type: {type(provider)}. Creating default client.")
-                self.client = AsyncOpenAI(
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                )
+                self.client = AsyncOpenAI(**client_options)
         else:
-            self.client = AsyncOpenAI(
-                api_key=os.getenv("OPENAI_API_KEY"),
-            )
+            self.client = AsyncOpenAI(**client_options)
 
     def _format_messages(self, user_input: str) -> List[Dict[str, str]]:
         """Format the system prompt and user input as chat messages."""

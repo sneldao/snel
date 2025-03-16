@@ -38,6 +38,11 @@ class PriceAgent(PointlessAgent):
     def __init__(self, prompt: str = "", provider = None):
         if not prompt:
             prompt = "You are a helpful assistant that processes price queries for cryptocurrencies. You extract token names from natural language questions about prices."
+        
+        # Ensure we're passing a string provider correctly
+        if isinstance(provider, str) and provider == "openai":
+            provider = None
+            
         super().__init__(
             prompt=prompt,
             model="gpt-4-turbo-preview",
