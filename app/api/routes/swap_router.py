@@ -68,17 +68,36 @@ async def process_swap_command(
         try:
             result = await swap_agent.process_swap_command(command, chain_id)
             logger.info(f"Swap agent result: {result}")
+            
+            # Check for errors in the result
+            if result.get("error"):
+                logger.error(f"Error from swap agent: {result['error']}")
+                return {
+                    "error": result["error"],
+                    "content": None,
+                    "metadata": result.get("metadata", {})
+                }
+            
+            # Format for frontend display via SwapConfirmation component
+            return result
         except Exception as agent_error:
             logger.error(f"Error in swap agent: {str(agent_error)}")
-            raise
-        
-        # Format for frontend display via SwapConfirmation component
-        return result
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                "error": f"Error processing swap: {str(agent_error)}",
+                "content": None,
+                "metadata": {"command": command}
+            }
     except Exception as e:
         logger.error(f"Error processing swap command: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return {"error": str(e)}
+        return {
+            "error": f"Error processing swap: {str(e)}",
+            "content": None,
+            "metadata": {"command": command if 'command' in locals() else "unknown"}
+        }
 
 @router.post("/get-quotes", response_model=Dict[str, Any])
 async def get_swap_quotes(

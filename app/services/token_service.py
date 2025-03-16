@@ -313,59 +313,81 @@ class TokenService:
         chain_id: int, 
         original_input: str
     ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[Dict]]:
-        """Try looking up the token in various external APIs."""
-        # Try OpenOcean first for all tokens
-        result = await self._lookup_token_by_symbol_openocean(clean_symbol, chain_id)
-        if result[0]:
-            logger.info(f"Found token via OpenOcean: {result}")
-            symbol = original_input if original_input.startswith('$') else result[1]
-            links = self._get_verification_links(result[0], chain_id)
-            return result[0], symbol, result[2], {
-                "verified": True, 
-                "source": "openocean", 
-                "links": links,
-                "is_custom": False
-            }
-
-        # Try Moralis
-        result = await self._lookup_token_moralis(clean_symbol, chain_id)
-        if result[0]:
-            logger.info(f"Found token via Moralis: {result}")
-            symbol = original_input if original_input.startswith('$') else result[1]
-            links = self._get_verification_links(result[0], chain_id)
-            return result[0], symbol, result[2], {
-                "verified": True, 
-                "source": "moralis", 
-                "links": links,
-                "is_custom": False
-            }
+        """Try looking up a token using various external APIs."""
+        logger.info(f"Trying external APIs for token: {clean_symbol} on chain {chain_id}")
         
-        # Try CoinGecko
-        result = await self._lookup_token_coingecko(clean_symbol)
-        if result[0]:
-            logger.info(f"Found token via CoinGecko: {result}")
-            symbol = original_input if original_input.startswith('$') else result[1]
-            links = self._get_verification_links(result[0], chain_id, clean_symbol.lower())
-            return result[0], symbol, result[2], {
-                "verified": True, 
-                "source": "coingecko", 
-                "links": links,
-                "is_custom": False
-            }
+        # Check for token aliases
+        if clean_symbol in REVERSE_ALIASES:
+            main_token = REVERSE_ALIASES[clean_symbol]
+            logger.info(f"Found token alias: {clean_symbol} -> {main_token}")
+            clean_symbol = main_token
+        elif clean_symbol in TOKEN_ALIASES:
+            logger.info(f"Using main token: {clean_symbol}")
         
-        # Try QuickNode
-        result = await self._lookup_token_quicknode(clean_symbol, chain_id)
-        if result[0]:
-            logger.info(f"Found token via QuickNode: {result}")
-            symbol = original_input if original_input.startswith('$') else result[1]
-            links = self._get_verification_links(result[0], chain_id)
-            return result[0], symbol, result[2], {
-                "verified": True, 
-                "source": "quicknode", 
-                "links": links,
-                "is_custom": False
-            }
+        # Try Moralis API first if available
+        if self.moralis_api_key:
+            try:
+                logger.info(f"Trying Moralis API for {clean_symbol}")
+                address, symbol, name = await self._lookup_token_moralis(clean_symbol, chain_id)
+                if address:
+                    logger.info(f"Found token via Moralis: {symbol} ({name}) at {address}")
+                    links = self._get_verification_links(address, chain_id)
+                    return address, symbol, name, {
+                        "verified": True,
+                        "source": "moralis",
+                        "links": links
+                    }
+            except Exception as e:
+                logger.warning(f"Moralis API lookup failed: {str(e)}")
         
+        # Try QuickNode API if available
+        if self.quicknode_api_key:
+            try:
+                logger.info(f"Trying QuickNode API for {clean_symbol}")
+                address, symbol, name = await self._lookup_token_quicknode(clean_symbol, chain_id)
+                if address:
+                    logger.info(f"Found token via QuickNode: {symbol} ({name}) at {address}")
+                    links = self._get_verification_links(address, chain_id)
+                    return address, symbol, name, {
+                        "verified": True,
+                        "source": "quicknode",
+                        "links": links
+                    }
+            except Exception as e:
+                logger.warning(f"QuickNode API lookup failed: {str(e)}")
+        
+        # Try CoinGecko API if available
+        if self.coingecko_api_key:
+            try:
+                logger.info(f"Trying CoinGecko API for {clean_symbol}")
+                address, symbol, name = await self._lookup_token_coingecko(clean_symbol)
+                if address:
+                    logger.info(f"Found token via CoinGecko: {symbol} ({name}) at {address}")
+                    links = self._get_verification_links(address, chain_id)
+                    return address, symbol, name, {
+                        "verified": True,
+                        "source": "coingecko",
+                        "links": links
+                    }
+            except Exception as e:
+                logger.warning(f"CoinGecko API lookup failed: {str(e)}")
+        
+        # Try OpenOcean API as a fallback
+        try:
+            logger.info(f"Trying OpenOcean API for {clean_symbol}")
+            address, symbol, name = await self._lookup_token_by_symbol_openocean(clean_symbol, chain_id)
+            if address:
+                logger.info(f"Found token via OpenOcean: {symbol} ({name}) at {address}")
+                links = self._get_verification_links(address, chain_id)
+                return address, symbol, name, {
+                    "verified": True,
+                    "source": "openocean",
+                    "links": links
+                }
+        except Exception as e:
+            logger.warning(f"OpenOcean API lookup failed: {str(e)}")
+        
+        # Not found in any external API
         return None, None, None, None
     
     async def _lookup_token_moralis(
@@ -373,66 +395,56 @@ class TokenService:
         token_symbol: str, 
         chain_id: int
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        """Look up token using Moralis API."""
+        """Look up a token using the Moralis API."""
         if not self.moralis_api_key:
             logger.warning("Moralis API key not set")
             return None, None, None
-
+        
+        # Get the Moralis chain name
+        chain_name = self.chain_mapping.get(chain_id)
+        if not chain_name:
+            logger.warning(f"Unsupported chain ID for Moralis: {chain_id}")
+            return None, None, None
+        
+        # Construct the API URL
+        url = f"https://deep-index.moralis.io/api/v2/erc20/{token_symbol}/price"
+        params = {"chain": chain_name}
+        headers = {"X-API-Key": self.moralis_api_key}
+        
         try:
-            # Map chain ID to Moralis chain name
-            chain_mapping = {
-                1: "eth",
-                56: "bsc",
-                137: "polygon",
-                10: "optimism",
-                42161: "arbitrum",
-                8453: "base",
-                534352: "scroll"
-            }
-
-            chain = chain_mapping.get(chain_id, "eth")
-
-            # Prepare API URL - use the correct v2.2 endpoint for token search
-            search_term = token_symbol.lower()
-            url = "https://deep-index.moralis.io/api/v2.2/token/search"
-            params = {
-                "chain": chain,
-                "q": search_term,
-                "limit": 10
-            }
-
-            # Prepare headers
-            headers = {"X-API-Key": self.moralis_api_key}
-
-            logger.info(f"Searching for token {search_term} on chain {chain} via Moralis")
-
-            # Make API request
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url, headers=headers, params=params)
-
-                if response.status_code == 200:
-                    data = response.json()
-
-                    # Check if we got any results
-                    if "result" in data and data["result"]:
-                        # Get the first result
-                        token = data["result"][0]
-
-                        # Extract token data
-                        address = token.get("address")
-                        symbol = token.get("symbol")
-                        name = token.get("name")
-
-                        if address and symbol:
-                            logger.info(f"Found token {symbol} ({name}) at {address}")
-                            return address, symbol, name
-                else:
+            # Create a custom SSL context if needed
+            ssl_context = self._create_ssl_context()
+            
+            # Make the API request
+            async with httpx.AsyncClient(verify=ssl_context) as client:
+                response = await client.get(url, params=params, headers=headers, timeout=10.0)
+                
+                # Check for errors
+                if response.status_code != 200:
                     logger.warning(f"Moralis API error: {response.status_code} - {response.text}")
-
+                    return None, None, None
+                
+                # Parse the response
+                try:
+                    data = response.json()
+                except Exception as e:
+                    logger.error(f"Failed to parse Moralis API response: {str(e)}")
+                    logger.error(f"Response text: {response.text[:200]}")
+                    return None, None, None
+                
+                # Extract token information
+                token_address = data.get("tokenAddress")
+                token_symbol = data.get("tokenSymbol")
+                token_name = data.get("tokenName")
+                
+                if token_address and token_symbol:
+                    return token_address, token_symbol, token_name
+                
+                return None, None, None
+                
         except Exception as e:
-            logger.error(f"Error looking up token with Moralis: {str(e)}")
-
-        return None, None, None
+            logger.warning(f"Error calling Moralis API: {str(e)}")
+            return None, None, None
     
     async def _lookup_token_coingecko(
         self, 
@@ -688,75 +700,70 @@ class TokenService:
         token_symbol: str,
         chain_id: int
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        """Look up token using OpenOcean API with improved matching."""
+        """Look up a token using the OpenOcean API."""
+        # Map chain ID to OpenOcean chain name
+        chain_mapping = {
+            1: "eth",
+            56: "bsc",
+            137: "polygon",
+            10: "optimism",
+            42161: "arbitrum",
+            8453: "base",
+            534352: "scroll"
+        }
+        
+        chain = chain_mapping.get(chain_id)
+        if not chain:
+            logger.warning(f"Unsupported chain ID for OpenOcean: {chain_id}")
+            return None, None, None
+        
+        # Prepare API URL
+        url = f"https://open-api.openocean.finance/v3/{chain}/tokenList"
+        
         try:
-            # Map chain ID to OpenOcean chain name
-            chain_mapping = {
-                1: "eth",
-                10: "optimism",
-                137: "polygon",
-                42161: "arbitrum",
-                8453: "base",
-                534352: "scroll"
-            }
-            chain = chain_mapping.get(chain_id)
-            if not chain:
-                logger.warning(f"Chain {chain_id} not supported by OpenOcean")
-                return None, None, None
-
-            # Get token list from OpenOcean
-            url = f"https://open-api.openocean.finance/v4/{chain}/tokenList"
-            logger.info(f"Searching for token {token_symbol} on chain {chain} via OpenOcean")
-
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data["code"] == 200 and "data" in data:
-                        tokens = data["data"]
-                        # Clean up search symbol - remove $ and spaces, convert to uppercase
-                        search_symbol = token_symbol.strip().lstrip('$').upper()
-                        logger.info(f"Searching for cleaned symbol: {search_symbol}")
-                        
-                        # First try exact match
-                        for token in tokens:
-                            if token["symbol"].upper() == search_symbol:
-                                address = token.get("address")
-                                symbol = token.get("symbol")
-                                name = token.get("name")
-                                if address and symbol:
-                                    logger.info(f"Found exact match for token {symbol} ({name}) at {address} via OpenOcean")
-                                    return address, symbol, name
-                        
-                        # If no exact match, try fuzzy matching
-                        potential_matches = []
-                        for token in tokens:
-                            token_symbol = token["symbol"].upper()
-                            # Check if search term is contained in token symbol or vice versa
-                            if search_symbol in token_symbol or token_symbol in search_symbol:
-                                potential_matches.append(token)
-                        
-                        if potential_matches:
-                            # Sort by length difference to find closest match
-                            potential_matches.sort(key=lambda x: abs(len(x["symbol"]) - len(search_symbol)))
-                            best_match = potential_matches[0]
-                            address = best_match.get("address")
-                            symbol = best_match.get("symbol")
-                            name = best_match.get("name")
-                            if address and symbol:
-                                logger.info(f"Found fuzzy match for token {symbol} ({name}) at {address} via OpenOcean")
-                                return address, symbol, name
-                        
-                        logger.warning(f"No matches found for token {token_symbol} in OpenOcean token list")
-                    else:
-                        logger.warning(f"Invalid response format from OpenOcean: {data}")
-                else:
+            # Create a custom SSL context if needed
+            ssl_context = self._create_ssl_context()
+            
+            # Make the API request
+            async with httpx.AsyncClient(verify=ssl_context) as client:
+                response = await client.get(url, timeout=10.0)
+                
+                # Check for errors
+                if response.status_code != 200:
                     logger.warning(f"OpenOcean API error: {response.status_code} - {response.text}")
-
+                    return None, None, None
+                
+                # Parse the response
+                try:
+                    data = response.json()
+                except Exception as e:
+                    logger.error(f"Failed to parse OpenOcean API response: {str(e)}")
+                    logger.error(f"Response text: {response.text[:200]}")
+                    return None, None, None
+                
+                # Check if we got a valid response
+                if not data.get("data") or not isinstance(data["data"], list):
+                    logger.warning("Invalid response format from OpenOcean API")
+                    return None, None, None
+                
+                # Search for the token by symbol
+                clean_symbol = token_symbol.upper()
+                for token in data["data"]:
+                    if token.get("symbol", "").upper() == clean_symbol:
+                        address = token.get("address")
+                        symbol = token.get("symbol")
+                        name = token.get("name")
+                        
+                        if address and symbol:
+                            logger.info(f"Found token {symbol} ({name}) at {address} via OpenOcean")
+                            return address, symbol, name
+                
+                # Token not found
+                return None, None, None
+                
         except Exception as e:
-            logger.error(f"Error looking up token with OpenOcean: {str(e)}")
-
-        return None, None, None
+            logger.warning(f"Error calling OpenOcean API: {str(e)}")
+            return None, None, None
 
     def _get_chain_name(self, chain_id: int) -> str:
         """Get a human-readable chain name from a chain ID."""

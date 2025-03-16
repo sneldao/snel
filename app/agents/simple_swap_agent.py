@@ -156,12 +156,43 @@ class SimpleSwapAgent:
                 
                 # Look up token info
                 logger.info(f"Looking up token_in: {token_in}")
-                token_in_info = await self.token_service.lookup_token(token_in, chain_id)
-                logger.info(f"token_in_info: {token_in_info}")
+                try:
+                    token_in_info = await self.token_service.lookup_token(token_in, chain_id)
+                    logger.info(f"token_in_info: {token_in_info}")
+                except Exception as token_error:
+                    logger.error(f"Error looking up token_in: {str(token_error)}")
+                    return {
+                        "content": None,
+                        "error": f"Failed to look up token {token_in}: {str(token_error)}",
+                        "metadata": {"command": command}
+                    }
                 
                 logger.info(f"Looking up token_out: {token_out}")
-                token_out_info = await self.token_service.lookup_token(token_out, chain_id)
-                logger.info(f"token_out_info: {token_out_info}")
+                try:
+                    token_out_info = await self.token_service.lookup_token(token_out, chain_id)
+                    logger.info(f"token_out_info: {token_out_info}")
+                except Exception as token_error:
+                    logger.error(f"Error looking up token_out: {str(token_error)}")
+                    return {
+                        "content": None,
+                        "error": f"Failed to look up token {token_out}: {str(token_error)}",
+                        "metadata": {"command": command}
+                    }
+                
+                # Check if token info was found
+                if not token_in_info or not token_in_info[0]:
+                    return {
+                        "content": None,
+                        "error": f"Could not find token information for {token_in}",
+                        "metadata": {"command": command}
+                    }
+                
+                if not token_out_info or not token_out_info[0]:
+                    return {
+                        "content": None,
+                        "error": f"Could not find token information for {token_out}",
+                        "metadata": {"command": command}
+                    }
                 
                 # Extract token info
                 from_address, from_symbol, from_name, from_metadata = token_in_info
