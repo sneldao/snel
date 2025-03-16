@@ -6,6 +6,7 @@ from app.services.redis_service import RedisService
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.price_agent import PriceAgent
 from app.agents.dca_agent import DCAAgent
+from app.agents.brian_agent import BrianAgent
 import re
 import json
 import random
@@ -18,6 +19,7 @@ class Pipeline(BaseModel):
     swap_agent: SimpleSwapAgent
     price_agent: PriceAgent
     dca_agent: Optional[DCAAgent] = None
+    brian_agent: Optional[BrianAgent] = None
     redis_service: Optional[RedisService] = None
     
     model_config = {
@@ -31,6 +33,11 @@ class Pipeline(BaseModel):
             self.dca_agent = DCAAgent(
                 token_service=self.token_service,
                 redis_service=self.redis_service
+            )
+        # Initialize Brian agent if not provided
+        if self.brian_agent is None:
+            self.brian_agent = BrianAgent(
+                token_service=self.token_service
             )
         logger.info("Pipeline initialized with all agents")
 
@@ -50,6 +57,11 @@ class Pipeline(BaseModel):
         
         # Normalize input text
         normalized_text = input_text.lower().strip()
+        
+        # Check if this is a Brian API command (transfer, bridge, or balance)
+        is_transfer_command = re.search(r"(?:send|transfer)\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9\.]+", normalized_text, re.IGNORECASE) is not None
+        is_bridge_command = re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", normalized_text, re.IGNORECASE) is not None
+        is_balance_command = re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+(?:[A-Za-z0-9]+\s+)?balance", normalized_text, re.IGNORECASE) is not None
         
         # Check if this is a DCA command
         is_dca_command = (
@@ -79,6 +91,26 @@ class Pipeline(BaseModel):
             "cost" in normalized_text or
             ("what is" in normalized_text and any(token in normalized_text for token in ["eth", "btc", "usdc", "dai", "usdt", "bitcoin", "ethereum", "token", "coin", "crypto"]))
         )
+        
+        # Try to process as a Brian API command first
+        if is_transfer_command or is_bridge_command or is_balance_command:
+            try:
+                logger.info("Processing as Brian API command")
+                result = await self.brian_agent.process_brian_command(
+                    command=input_text,
+                    chain_id=chain_id,
+                    wallet_address=wallet_address
+                )
+                if not result.get("error"):
+                    # Successfully processed as Brian API command
+                    result["agent_type"] = "brian"
+                    return result
+                else:
+                    logger.warning(f"Brian API processing failed: {result.get('error')}")
+                    # Fall through to other processing
+            except Exception as e:
+                logger.error(f"Error processing Brian API command: {e}")
+                # Fall through to other processing
         
         # Try to process as a DCA command first
         if is_dca_command:
@@ -216,7 +248,10 @@ class Pipeline(BaseModel):
             "I'm your super pointless lazy agent, but I can still help with a few things:\n\n"
             "1. Check token prices: 'price ETH' or 'what's the price of Bitcoin?'\n"
             "2. Swap tokens: 'swap 1 ETH for USDC' or 'convert 100 USDC to ETH'\n"
-            "3. Set up DCA orders: 'dca $10 USDC into ETH over 5 days'\n\n"
+            "3. Set up DCA orders: 'dca $10 USDC into ETH over 5 days'\n"
+            "4. Transfer tokens: 'send 10 USDC to 0x123...' or 'transfer 0.1 ETH to papajams.eth'\n"
+            "5. Bridge tokens: 'bridge 0.1 ETH from Scroll to Base'\n"
+            "6. Check balances: 'check my USDC balance on Scroll' or 'what's my ETH balance'\n\n"
             "Just don't expect me to be too enthusiastic about it. I'm pretty lazy, you know."
         )
     

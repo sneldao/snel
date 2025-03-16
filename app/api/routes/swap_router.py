@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 import logging
-import time
 
 from app.models.transaction import TransactionRequest, TransactionResponse
 from app.services.token_service import TokenService
@@ -14,10 +13,6 @@ from app.models.commands import SwapCommand as SwapCommandModel
 
 router = APIRouter(tags=["swap"])
 logger = logging.getLogger(__name__)
-
-# Simple debounce mechanism to prevent duplicate transactions
-last_transaction_time = {}
-DEBOUNCE_SECONDS = 5  # Prevent duplicate transactions within 5 seconds
 
 # Model for swap quote selection
 class QuoteSelectionRequest(BaseModel):
@@ -218,22 +213,6 @@ async def execute_swap(
         
         if not wallet_address or not selected_quote:
             raise HTTPException(400, "Missing wallet address or selected quote")
-        
-        # Apply debounce to prevent duplicate transactions
-        transaction_key = f"{wallet_address}_{chain_id}"
-        current_time = time.time()
-        
-        if transaction_key in last_transaction_time:
-            time_since_last = current_time - last_transaction_time[transaction_key]
-            if time_since_last < DEBOUNCE_SECONDS:
-                logger.warning(f"Debouncing transaction request - only {time_since_last:.2f}s since last request (minimum {DEBOUNCE_SECONDS}s)")
-                return TransactionResponse(
-                    error=f"Transaction request rate limited. Please wait {DEBOUNCE_SECONDS - time_since_last:.1f} seconds before trying again.",
-                    chain_id=chain_id
-                )
-        
-        # Update last transaction time
-        last_transaction_time[transaction_key] = current_time
             
         # Get pending command
         pending_command = await redis_service.get_pending_command(wallet_address)

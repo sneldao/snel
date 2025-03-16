@@ -20,6 +20,8 @@ import {
   useColorModeValue,
   Button,
   UnorderedList,
+  Flex,
+  Code,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -31,7 +33,9 @@ import {
 } from "@chakra-ui/icons";
 import { SwapConfirmation } from "./SwapConfirmation";
 import { DCAConfirmation } from "./DCAConfirmation";
+import { BrianConfirmation } from "./BrianConfirmation";
 import AggregatorSelection from "./AggregatorSelection";
+import { FaExchangeAlt, FaCalendarAlt, FaRobot } from "react-icons/fa";
 
 interface CommandResponseProps {
   content: string | any; // Updated to accept structured content
@@ -39,11 +43,12 @@ interface CommandResponseProps {
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
-  agentType?: "default" | "swap" | "dca";
+  agentType?: "default" | "swap" | "dca" | "brian";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
   onQuoteSelect?: (response: any, quote: any) => void;
+  transaction?: any;
 }
 
 type TokenInfo = {
@@ -100,10 +105,17 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   requires_selection = false,
   all_quotes = [],
   onQuoteSelect,
+  transaction,
 }) => {
   const [currentStep, setCurrentStep] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
   const [showTokenInfo, setShowTokenInfo] = React.useState(false);
+
+  // Extract transaction data from content if available
+  const transactionData =
+    transaction ||
+    (typeof content === "object" && content?.transaction) ||
+    (typeof content === "object" && content?.content?.transaction);
 
   const isError = status === "error";
   const isSuccess = status === "success";
@@ -168,6 +180,11 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   const isDCASuccess =
     typeof content === "object" &&
     (content?.type === "dca_success" || content?.type === "dca_order_created");
+  const isBrianTransaction =
+    (typeof content === "object" &&
+      content?.type === "transaction" &&
+      agentType === "brian") ||
+    (agentType === "brian" && transactionData);
 
   // Handle confirmation actions
   const handleConfirm = () => {
@@ -273,28 +290,48 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
   // Get agent name and avatar based on agent type
   const getAgentInfo = () => {
-    if (agentType === "swap") {
-      return {
-        name: "Wheeler-Dealer",
-        handle: "@wheeler_dealer",
-        avatarSrc: "/avatars/🕴️.png",
-      };
+    switch (agentType) {
+      case "swap":
+        return {
+          name: "Swap Agent",
+          handle: "@swap",
+          avatarSrc: "/avatars/🕴️.png",
+        };
+      case "dca":
+        return {
+          name: "DCA Agent",
+          handle: "@dca",
+          avatarSrc: "/avatars/📊.png",
+        };
+      case "brian":
+        return {
+          name: "Brian Agent",
+          handle: "@brian",
+          avatarSrc: "/avatars/🤖.png",
+        };
+      default:
+        return {
+          name: "SNEL",
+          handle: "@snel",
+          avatarSrc: "/avatars/🐌.png",
+        };
     }
-    if (agentType === "dca") {
-      return {
-        name: "DCA Planner",
-        handle: "@dca_planner",
-        avatarSrc: "/avatars/📊.png",
-      };
-    }
-    return {
-      name: "SNEL",
-      handle: "@snel_agent",
-      avatarSrc: "/avatars/🐌.png",
-    };
   };
 
   const { name, handle, avatarSrc } = getAgentInfo();
+
+  const getAgentIcon = () => {
+    switch (agentType) {
+      case "swap":
+        return <Icon as={FaExchangeAlt} color="blue.500" />;
+      case "dca":
+        return <Icon as={FaCalendarAlt} color="green.500" />;
+      case "brian":
+        return <Icon as={FaRobot} color="purple.500" />;
+      default:
+        return <Icon as={FaRobot} color="gray.500" />;
+    }
+  };
 
   // Render token information if available
   const renderTokenInfo = () => {
@@ -435,6 +472,20 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
           ) : isDCAConfirmation ? (
             <DCAConfirmation
               message={content}
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+            />
+          ) : isBrianTransaction ? (
+            <BrianConfirmation
+              message={{
+                type: "transaction",
+                message:
+                  typeof content === "object" && content.message
+                    ? content.message
+                    : "Ready to execute transaction",
+                transaction: transactionData,
+              }}
+              metadata={metadata}
               onConfirm={handleConfirm}
               onCancel={handleCancel}
             />

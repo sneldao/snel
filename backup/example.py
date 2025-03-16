@@ -72,7 +72,7 @@ async def amain():
         # the input is a tweet, which then gets handled by the Pipeline
         Tweet(
             id=1684298214198108160,
-            content="swap $300 for $UNI and then send half of it to @vitalikbuterin",
+            content="swap $300 for $UNI and then send half of it to @papajamsbuterin",
             creator_id=12,
             creator_name="@jack",
         ),

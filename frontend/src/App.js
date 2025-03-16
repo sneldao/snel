@@ -69,8 +69,8 @@ function App() {
           <VStack spacing={8}>
             <Heading>Dowse Command Processor</Heading>
             <Text color="gray.600" textAlign="center">
-              Enter a command like "swap $300 for $UNI and then send half of it
-              to @vitalikbuterin"
+              Enter a command like "swap $10 for $UNI and then send half of it
+              to the dev papajams.eth 😊"
             </Text>
 
             <Card w="100%" variant="outline">

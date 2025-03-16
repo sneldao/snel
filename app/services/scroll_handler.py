@@ -3,6 +3,11 @@ Handler for Scroll-specific operations.
 """
 import logging
 from typing import Dict, Any, List, Optional, Union
+from dotenv import load_dotenv
+
+# Load environment variables from .env files
+load_dotenv()
+load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
 from app.services.scroll_fixes import (
     apply_scroll_fixes,
@@ -42,8 +47,12 @@ class ScrollHandler:
         try:
             # Check if Brian API key is set
             if not brian_service.api_key:
-                logger.warning("BRIAN_API_KEY environment variable not set. Falling back to regular aggregators.")
-                return None
+                logger.error("BRIAN_API_KEY environment variable not set. Brian API is required for Scroll swaps.")
+                return {
+                    "error": "Brian API is required for Scroll swaps but is currently unavailable. Please ensure BRIAN_API_KEY is set in your environment variables.",
+                    "all_quotes": [],
+                    "quotes_count": 0
+                }
                 
             # Get swap transaction from Brian API
             tx_data = await brian_service.get_swap_transaction(

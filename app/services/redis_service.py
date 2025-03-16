@@ -275,6 +275,10 @@ class RedisService(BaseModel):
         else:
             await self.client.set(key, command, ex=self.expire_time)
 
+    async def store_pending_command(self, wallet_address: str, command: str) -> None:
+        """Alias for set_pending_command for backward compatibility."""
+        await self.set_pending_command(wallet_address, command)
+
     async def get_pending_command(self, wallet_address: str) -> Optional[str]:
         """Get the pending command for a wallet address."""
         key = f"pending_command:{wallet_address}"

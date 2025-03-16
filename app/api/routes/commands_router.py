@@ -1,40 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional, Literal
-from app.api.dependencies import get_redis_service, get_token_service
-from app.agents.agent_factory import AgentFactory, get_agent_factory
-from app.services.pipeline import Pipeline
-from app.services.token_service import TokenService
+from typing import Dict, Any, Optional, List
 import logging
-from datetime import datetime
 import re
+import httpx
+from datetime import datetime
+import json
+
+from app.models.api import CommandResponse, Command
+from app.services.redis_service import RedisService
+from app.services.token_service import TokenService
+from app.services.pipeline import Pipeline
+from app.agents.agent_factory import AgentFactory, get_agent_factory
+from app.api.dependencies import get_redis_service, get_token_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["commands"])
-
-class Command(BaseModel):
-    """
-    Represents a command sent by a user.
-    """
-    content: str
-    creator_name: str = "User"
-    creator_id: str = "anonymous"
-    chain_id: int = 1
-    wallet_address: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-class CommandResponse(BaseModel):
-    """
-    Represents a response to a command.
-    """
-    content: Dict[str, Any]
-    error_message: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    agent_type: Optional[str] = None
-    requires_selection: bool = False
-    all_quotes: Optional[List[Dict[str, Any]]] = None
-    pending_command: Optional[str] = None
-    awaiting_confirmation: bool = False
 
 @router.post("/process-command", response_model=CommandResponse)
 async def process_command(
@@ -50,6 +30,68 @@ async def process_command(
     try:
         logger.info(f"Processing command: {command.content}")
         
+        # Check if this is a Brian API command (transfer, bridge, or balance)
+        content = command.content.lower()
+        
+        # Check for transfer, bridge, or balance commands
+        if (re.search(r"(?:send|transfer)\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9\.]+", content, re.IGNORECASE) or
+            re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE) or
+            re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+(?:[A-Za-z0-9]+\s+)?balance", content, re.IGNORECASE)):
+            
+            # Create a Brian agent
+            brian_agent = agent_factory.create_agent("brian")
+            
+            # Process the command with the Brian agent
+            result = await brian_agent.process_brian_command(
+                command=command.content,
+                chain_id=command.chain_id,
+                wallet_address=command.wallet_address
+            )
+            
+            # Check for errors
+            if result.get("error"):
+                return CommandResponse(
+                    content=f"Error: {result['error']}",
+                    error_message=result["error"]
+                )
+            
+            # If this is a transaction, format it for the frontend
+            if isinstance(result.get("content"), dict) and result["content"].get("type") == "transaction":
+                # Store the pending command
+                await redis_service.store_pending_command(
+                    wallet_address=command.wallet_address or command.creator_id,
+                    command=command.content
+                )
+                
+                # Store the agent type
+                await redis_service.set(
+                    f"pending_command_type:{command.wallet_address or command.creator_id}",
+                    "brian",
+                    expire=1800  # 30 minutes
+                )
+                
+                # Include the transaction data directly in the response
+                transaction_data = result["content"].get("transaction")
+                
+                # If there's a transaction field at the top level, use that too
+                if "transaction" in result:
+                    transaction_data = result["transaction"]
+                
+                return CommandResponse(
+                    content=result["content"],
+                    metadata=result.get("metadata", {}),
+                    agent_type="brian",
+                    transaction=transaction_data
+                )
+            
+            # Otherwise, return the result as is
+            return CommandResponse(
+                content=result.get("content", "Command processed"),
+                metadata=result.get("metadata", {}),
+                agent_type="brian"
+            )
+        
+        # If not a Brian API command, process with the regular agent
         # Store the user ID or wallet address for consistent identification
         user_id = command.wallet_address or command.creator_id
         
@@ -116,6 +158,35 @@ async def process_command(
                         requires_selection=result.get("requires_selection", False),
                         all_quotes=result.get("all_quotes")
                     )
+                elif agent_type == "brian":
+                    logger.info("Routing confirmation to Brian agent")
+                    # Process with Brian agent directly
+                    brian_agent = agent_factory.create_agent("brian")
+                    result = await brian_agent.process_brian_command(
+                        command=command.content,
+                        chain_id=command.chain_id,
+                        wallet_address=command.wallet_address
+                    )
+                    
+                    # Clear the pending command and agent type
+                    await redis_service.clear_pending_command(user_id)
+                    await redis_service.delete(f"pending_command_type:{user_id}")
+                    
+                    # Get transaction data
+                    transaction_data = None
+                    if "transaction" in result:
+                        transaction_data = result["transaction"]
+                    elif isinstance(result.get("content"), dict) and "transaction" in result["content"]:
+                        transaction_data = result["content"]["transaction"]
+                    
+                    # Return early with the Brian result
+                    return CommandResponse(
+                        content=result.get("content", {}),
+                        error_message=result.get("error"),
+                        metadata=result.get("metadata", {}),
+                        agent_type="brian",
+                        transaction=transaction_data
+                    )
                 else:
                     # If no specific agent type or unknown, use the pipeline
                     # Clear the pending command
@@ -140,6 +211,7 @@ async def process_command(
             swap_agent=agent_factory.create_agent("swap"),
             price_agent=agent_factory.create_agent("price"),
             dca_agent=agent_factory.create_agent("dca"),
+            brian_agent=agent_factory.create_agent("brian"),
             redis_service=redis_service
         )
         

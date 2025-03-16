@@ -8,6 +8,7 @@ from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.price_agent import PriceAgent
 from app.agents.dca_agent import DCAAgent
 from app.agents.messaging_agent import MessagingAgent
+from app.agents.brian_agent import BrianAgent
 from app.services.token_service import TokenService
 from app.services.redis_service import RedisService
 from app.api.dependencies import get_redis_service
@@ -50,6 +51,11 @@ class AgentFactory:
             return MessagingAgent(
                 token_service=self.token_service,
                 redis_service=self.redis_service
+            )
+        elif agent_type == "brian":
+            # Create a Brian agent for token transfers, bridging, and balance checking
+            return BrianAgent(
+                token_service=self.token_service
             )
         else:
             # Default agent

@@ -29,9 +29,10 @@ import {
 import { CommandInput } from "../components/CommandInput";
 import { CommandResponse } from "../components/CommandResponse";
 import { WalletButton } from "../components/WalletButton";
-import { ExternalLinkIcon, SettingsIcon } from "@chakra-ui/icons";
+import { ExternalLinkIcon, SettingsIcon, QuestionIcon } from "@chakra-ui/icons";
 import { ApiKeyModal } from "../components/ApiKeyModal";
 import { LogoModal } from "../components/LogoModal";
+import { HelpModal } from "../components/HelpModal";
 import { formatTokenAmount, smallestUnitsToAmount } from "../utils/tokenUtils";
 import { openoceanLimitOrderSdk } from "@openocean.finance/limitorder-sdk";
 import { ethers } from "ethers";
@@ -44,7 +45,7 @@ type Response = {
   awaitingConfirmation?: boolean;
   confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
-  agentType?: "default" | "swap" | "dca";
+  agentType?: "default" | "swap" | "dca" | "brian";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
@@ -325,6 +326,7 @@ export default function Home() {
   const responsesEndRef = React.useRef<HTMLDivElement>(null);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = React.useState(false);
   const [isLogoModalOpen, setIsLogoModalOpen] = React.useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = React.useState(false);
   const [commandInput, setCommandInput] = React.useState("");
   const [currentCommand, setCurrentCommand] = React.useState("");
   const [awaitingInput, setAwaitingInput] = React.useState(false);
@@ -450,17 +452,32 @@ export default function Home() {
         !txData.skip_approval
       ) {
         const tokenSymbol = txData.metadata?.token_in_symbol || "Token";
+        const isScrollChain = chainId === 534352;
 
-        setResponses((prev) => [
-          ...prev,
-          {
-            content: `Please approve ${tokenSymbol} spending for the swap...`,
-            timestamp: new Date().toLocaleTimeString(),
-            isCommand: false,
-            status: "processing",
-            agentType: "swap",
-          },
-        ]);
+        // For Scroll chain, make it clearer that this is a two-step process
+        if (isScrollChain) {
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: `This swap requires two transactions:\n\n1️⃣ First, approve ${tokenSymbol} spending (current step)\n2️⃣ Then execute the actual swap (next step)\n\nPlease confirm the approval transaction in your wallet...`,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "processing",
+              agentType: "swap",
+            },
+          ]);
+        } else {
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: `Please approve ${tokenSymbol} spending for the swap...`,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "processing",
+              agentType: "swap",
+            },
+          ]);
+        }
 
         // Generate proper ERC20 approve function data
         // Function signature: approve(address,uint256)
@@ -482,6 +499,23 @@ export default function Home() {
         };
 
         const approveHash = await walletClient.sendTransaction(approveParams);
+
+        // For Scroll chain, make it clearer that we're waiting for the approval to complete
+        if (isScrollChain) {
+          setResponses((prev) => [
+            ...prev.filter((r) => !r.status?.includes("processing")),
+            {
+              content: `✅ Approval transaction submitted!\n\nWaiting for confirmation...\nView on block explorer: ${getBlockExplorerLink(
+                approveHash
+              )}`,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "processing",
+              agentType: "swap",
+            },
+          ]);
+        }
+
         const approveReceipt = await publicClient?.waitForTransactionReceipt({
           hash: approveHash,
         });
@@ -490,16 +524,30 @@ export default function Home() {
           throw new Error("Approval transaction failed");
         }
 
-        setResponses((prev) => [
-          ...prev,
-          {
-            content: `${tokenSymbol} approved successfully! Proceeding with swap...`,
-            timestamp: new Date().toLocaleTimeString(),
-            isCommand: false,
-            status: "success",
-            agentType: "swap",
-          },
-        ]);
+        // For Scroll chain, make it clearer that we're moving to the second step
+        if (isScrollChain) {
+          setResponses((prev) => [
+            ...prev.filter((r) => !r.status?.includes("processing")),
+            {
+              content: `✅ ${tokenSymbol} approved successfully!\n\nNow proceeding with the swap transaction (step 2 of 2).\nPlease confirm the swap transaction in your wallet...`,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "success",
+              agentType: "swap",
+            },
+          ]);
+        } else {
+          setResponses((prev) => [
+            ...prev,
+            {
+              content: `${tokenSymbol} approved successfully! Proceeding with swap...`,
+              timestamp: new Date().toLocaleTimeString(),
+              isCommand: false,
+              status: "success",
+              agentType: "swap",
+            },
+          ]);
+        }
 
         // Retry the original transaction after approval
         if (txData.pending_command) {
@@ -792,6 +840,22 @@ export default function Home() {
     try {
       setIsLoading(true);
       const sessionApiKeys = getApiKeys();
+      const isScrollChain = chainId === 534352;
+
+      // For Scroll chain, provide clearer messaging about the two-step process
+      if (isScrollChain) {
+        setResponses((prev) => [
+          ...prev,
+          {
+            content:
+              "Preparing your swap on Scroll...\n\nNote: Scroll swaps typically require two transactions:\n1. First to approve token spending\n2. Then to execute the actual swap",
+            timestamp: new Date().toISOString(),
+            isCommand: false,
+            status: "processing",
+            agentType: "swap",
+          },
+        ]);
+      }
 
       // Call the backend to prepare the transaction with the selected quote
       const result = await fetch("/api/swap/execute", {
@@ -918,14 +982,52 @@ export default function Home() {
 
       const data = await response.json();
 
-      if (data.error) {
+      if (data.error_message) {
         const errorResponse: Response = {
-          content: `Error: ${data.error}`,
+          content: `Error: ${data.error_message}`,
           timestamp: new Date().toISOString(),
           isCommand: false,
           status: "error",
         };
         setResponses((prev) => [...prev, errorResponse]);
+        return;
+      }
+
+      // Check if we have a transaction to execute
+      if (data.transaction) {
+        console.log("Transaction data received:", data.transaction);
+
+        // Add a response indicating we're processing the transaction
+        const processingResponse: Response = {
+          content: {
+            type: "message",
+            message: `Processing your transaction...`,
+          },
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "processing",
+          agentType: data.agent_type || "brian",
+        };
+
+        setResponses((prev) => [...prev, processingResponse]);
+
+        // Execute the transaction
+        try {
+          const txData = {
+            to: data.transaction.to,
+            data: data.transaction.data,
+            value: data.transaction.value || "0",
+            chainId: data.transaction.chainId || chainId,
+            gasLimit: data.transaction.gasLimit || "300000",
+            method: data.transaction.method || "unknown",
+          };
+
+          await executeTransaction(txData);
+        } catch (error) {
+          console.error("Error executing transaction:", error);
+          // Error handling is done in executeTransaction
+        }
+
         return;
       }
 
@@ -936,6 +1038,7 @@ export default function Home() {
         isCommand: false,
         agentType: data.agent_type || "default",
         metadata: data.metadata,
+        awaitingConfirmation: data.awaiting_confirmation,
       };
 
       // Handle special response types
@@ -992,9 +1095,21 @@ export default function Home() {
 
       // Check if we have a swap confirmation
       if (data.content && data.content.type === "swap_confirmation") {
+        // For Scroll chain, add a note about the two-step process
+        const isScrollChain = chainId === 534352;
+        let confirmationContent = data.content;
+
+        if (isScrollChain) {
+          // Add a note about the two-step process for Scroll
+          confirmationContent = {
+            ...data.content,
+            note: "Note: On Scroll, swaps require two separate transactions: first to approve token spending, then to execute the swap.",
+          };
+        }
+
         // Add the swap confirmation to the responses
         const swapConfirmationResponse: Response = {
-          content: data.content,
+          content: confirmationContent,
           timestamp: new Date().toISOString(),
           isCommand: false,
           awaitingConfirmation: true,
@@ -1491,6 +1606,15 @@ export default function Home() {
                 <Button
                   size="sm"
                   variant="outline"
+                  colorScheme="blue"
+                  onClick={() => setIsHelpModalOpen(true)}
+                  leftIcon={<Icon as={QuestionIcon} />}
+                >
+                  Help
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   colorScheme="gray"
                   onClick={() => setIsApiKeyModalOpen(true)}
                   leftIcon={<Icon as={SettingsIcon} />}
@@ -1575,6 +1699,10 @@ export default function Home() {
           <ApiKeyModal
             isOpen={isApiKeyModalOpen}
             onClose={() => setIsApiKeyModalOpen(false)}
+          />
+          <HelpModal
+            isOpen={isHelpModalOpen}
+            onClose={() => setIsHelpModalOpen(false)}
           />
         </VStack>
       </Container>

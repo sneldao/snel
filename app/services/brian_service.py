@@ -7,6 +7,11 @@ import json
 import httpx
 from typing import Dict, Any, Optional, List, Union
 from decimal import Decimal
+from dotenv import load_dotenv
+
+# Load environment variables from .env files
+load_dotenv()
+load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
 from app.models.commands import SwapCommand
 from app.utils.token_conversion import amount_to_smallest_units, smallest_units_to_amount
@@ -300,6 +305,337 @@ class BrianAPIService:
             raise ValueError(f"Error from Brian API: {e.response.text}")
         except Exception as e:
             logger.error(f"Error getting token info from Brian API: {str(e)}")
+            raise
+    
+    async def get_transfer_transaction(
+        self,
+        token_symbol: str,
+        amount: float,
+        recipient_address: str,
+        wallet_address: str,
+        chain_id: int
+    ) -> Dict[str, Any]:
+        """
+        Get a token transfer transaction from the Brian API.
+        
+        Args:
+            token_symbol: The token symbol to transfer
+            amount: The amount to transfer
+            recipient_address: The recipient's wallet address
+            wallet_address: The sender's wallet address
+            chain_id: The chain ID
+            
+        Returns:
+            Dictionary with transaction data
+        """
+        try:
+            if not self.api_key:
+                raise ValueError("BRIAN_API_KEY environment variable not set")
+            
+            # Construct the prompt for Brian API
+            prompt = f"transfer {amount} {token_symbol} to {recipient_address}"
+            
+            logger.info(f"Sending transfer prompt to Brian API: {prompt}")
+            
+            # Call the Brian API
+            response = await self.http_client.post(
+                f"{self.api_url}/agent/transaction",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-brian-api-key": self.api_key
+                },
+                json={
+                    "prompt": prompt,
+                    "address": wallet_address,
+                    "chainId": str(chain_id)
+                }
+            )
+            
+            # Check for errors
+            try:
+                response.raise_for_status()
+                
+                # Parse the response
+                result = response.json()
+            except httpx.HTTPStatusError as e:
+                # Handle HTTP errors (4xx, 5xx)
+                error_text = await e.response.text()
+                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
+                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
+            except json.JSONDecodeError as e:
+                # Handle invalid JSON responses
+                error_text = await response.text()
+                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
+                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
+            
+            logger.info(f"Brian API transfer response: {json.dumps(result, indent=2)}")
+            
+            # Extract the transaction data
+            if not result.get("result") or not isinstance(result["result"], list) or len(result["result"]) == 0:
+                raise ValueError("No transaction data returned from Brian API")
+            
+            # Get the first transaction result
+            tx_result = result["result"][0]
+            
+            # Extract the transaction steps
+            steps = tx_result.get("data", {}).get("steps", [])
+            if not steps:
+                raise ValueError("No transaction steps returned from Brian API")
+            
+            # Format the transaction data for our system
+            formatted_tx = {
+                "to": steps[0]["to"],
+                "data": steps[0]["data"],
+                "value": steps[0]["value"],
+                "gas": steps[0].get("gasLimit", "500000"),
+                "method": "transfer",
+                "metadata": {
+                    "token_symbol": token_symbol,
+                    "amount": amount,
+                    "recipient": recipient_address,
+                    "chain_id": chain_id
+                }
+            }
+            
+            return formatted_tx
+            
+        except Exception as e:
+            logger.error(f"Error getting transfer transaction from Brian API: {str(e)}")
+            raise
+    
+    async def get_bridge_transaction(
+        self,
+        token_symbol: str,
+        amount: float,
+        from_chain_id: int,
+        to_chain_id: int,
+        wallet_address: str
+    ) -> Dict[str, Any]:
+        """
+        Get a cross-chain bridge transaction from the Brian API.
+        
+        Args:
+            token_symbol: The token symbol to bridge
+            amount: The amount to bridge
+            from_chain_id: The source chain ID
+            to_chain_id: The destination chain ID
+            wallet_address: The wallet address
+            
+        Returns:
+            Dictionary with transaction data
+        """
+        try:
+            if not self.api_key:
+                raise ValueError("BRIAN_API_KEY environment variable not set")
+            
+            # Get chain names for better prompts
+            chain_names = {
+                1: "ethereum",
+                10: "optimism",
+                56: "bsc",
+                137: "polygon",
+                42161: "arbitrum",
+                8453: "base",
+                534352: "scroll",
+                43114: "avalanche"
+            }
+            
+            from_chain = chain_names.get(from_chain_id, f"chain {from_chain_id}")
+            to_chain = chain_names.get(to_chain_id, f"chain {to_chain_id}")
+            
+            # Construct the prompt for Brian API
+            prompt = f"bridge {amount} {token_symbol} from {from_chain} to {to_chain}"
+            
+            logger.info(f"Sending bridge prompt to Brian API: {prompt}")
+            
+            # Call the Brian API
+            response = await self.http_client.post(
+                f"{self.api_url}/agent/transaction",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-brian-api-key": self.api_key
+                },
+                json={
+                    "prompt": prompt,
+                    "address": wallet_address,
+                    "chainId": str(from_chain_id)
+                }
+            )
+            
+            # Check for errors
+            try:
+                response.raise_for_status()
+                
+                # Parse the response
+                result = response.json()
+            except httpx.HTTPStatusError as e:
+                # Handle HTTP errors (4xx, 5xx)
+                error_text = await e.response.text()
+                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
+                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
+            except json.JSONDecodeError as e:
+                # Handle invalid JSON responses
+                error_text = await response.text()
+                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
+                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
+            
+            logger.info(f"Brian API bridge response: {json.dumps(result, indent=2)}")
+            
+            # Extract the transaction data
+            if not result.get("result") or not isinstance(result["result"], list) or len(result["result"]) == 0:
+                raise ValueError("No transaction data returned from Brian API")
+            
+            # Get the first transaction result
+            tx_result = result["result"][0]
+            
+            # Extract the transaction steps
+            steps = tx_result.get("data", {}).get("steps", [])
+            if not steps:
+                raise ValueError("No transaction steps returned from Brian API")
+            
+            # Format the transaction data for our system
+            formatted_quotes = []
+            
+            # Process each step (there might be approval steps and bridge steps)
+            for step in steps:
+                # Skip if missing required fields
+                if not all(k in step for k in ["to", "data", "value"]):
+                    continue
+                
+                # Determine if this is an approval or bridge step
+                is_approval = "approve" in step.get("data", "").lower()
+                
+                # Get metadata from the transaction result
+                metadata = tx_result.get("data", {})
+                
+                # Create a quote object
+                quote = {
+                    "to": step["to"],
+                    "data": step["data"],
+                    "value": step["value"],
+                    "gas": step.get("gasLimit", "500000"),
+                    "method": "bridge",
+                    "protocol": metadata.get("protocol", {}).get("name", "brian"),
+                    "is_approval": is_approval,
+                    "from_chain": from_chain,
+                    "to_chain": to_chain
+                }
+                
+                formatted_quotes.append(quote)
+            
+            # Return the formatted quotes and metadata
+            return {
+                "all_quotes": formatted_quotes,
+                "quotes_count": len(formatted_quotes),
+                "needs_approval": any(q.get("is_approval", False) for q in formatted_quotes),
+                "token_to_approve": tx_result.get("data", {}).get("fromToken", {}).get("address") if any(q.get("is_approval", False) for q in formatted_quotes) else None,
+                "spender": formatted_quotes[0].get("to") if any(q.get("is_approval", False) for q in formatted_quotes) else None,
+                "pending_command": prompt,
+                "metadata": {
+                    "token_symbol": token_symbol,
+                    "amount": amount,
+                    "from_chain_id": from_chain_id,
+                    "to_chain_id": to_chain_id,
+                    "from_chain_name": from_chain,
+                    "to_chain_name": to_chain
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting bridge transaction from Brian API: {str(e)}")
+            raise
+    
+    async def get_token_balances(
+        self,
+        wallet_address: str,
+        chain_id: int,
+        token_symbol: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get token balances from the Brian API.
+        
+        Args:
+            wallet_address: The wallet address
+            chain_id: The chain ID
+            token_symbol: Optional specific token to check
+            
+        Returns:
+            Dictionary with balance information
+        """
+        try:
+            if not self.api_key:
+                raise ValueError("BRIAN_API_KEY environment variable not set")
+            
+            # Construct the prompt for Brian API
+            prompt = f"check balance"
+            if token_symbol:
+                prompt += f" of {token_symbol}"
+            
+            # Get chain name for better prompts
+            chain_names = {
+                1: "ethereum",
+                10: "optimism",
+                56: "bsc",
+                137: "polygon",
+                42161: "arbitrum",
+                8453: "base",
+                534352: "scroll",
+                43114: "avalanche"
+            }
+            
+            chain_name = chain_names.get(chain_id, f"chain {chain_id}")
+            prompt += f" on {chain_name}"
+            
+            logger.info(f"Sending balance prompt to Brian API: {prompt}")
+            
+            # Call the Brian API
+            response = await self.http_client.post(
+                f"{self.api_url}/agent/knowledge",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-brian-api-key": self.api_key
+                },
+                json={
+                    "prompt": prompt,
+                    "address": wallet_address,
+                    "chainId": str(chain_id),
+                    "kb": "public-knowledge-box"
+                }
+            )
+            
+            # Check for errors
+            try:
+                response.raise_for_status()
+                
+                # Parse the response
+                result = response.json()
+            except httpx.HTTPStatusError as e:
+                # Handle HTTP errors (4xx, 5xx)
+                error_text = await e.response.text()
+                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
+                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
+            except json.JSONDecodeError as e:
+                # Handle invalid JSON responses
+                error_text = await response.text()
+                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
+                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
+            
+            logger.info(f"Brian API balance response: {json.dumps(result, indent=2)}")
+            
+            # Extract the balance information
+            answer = result.get("answer", "")
+            
+            # Return the balance information
+            return {
+                "answer": answer,
+                "wallet_address": wallet_address,
+                "chain_id": chain_id,
+                "token_symbol": token_symbol,
+                "chain_name": chain_name
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting token balances from Brian API: {str(e)}")
             raise
 
 # Create a singleton instance

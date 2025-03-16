@@ -50,6 +50,7 @@ interface SwapConfirmationProps {
     token_out: TokenInfo;
     is_target_amount: boolean;
     amount_is_usd: boolean;
+    note?: string;
     metadata?: {
       route_summary?: string;
       price_impact?: string;
@@ -343,132 +344,148 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
   };
 
   const renderSwapMessage = () => {
-    const amount = formatAmount(message.amount, message.amount_is_usd);
-    const direction = message.is_target_amount ? "to get" : "of";
+    const { amount, token_in, token_out, is_target_amount, amount_is_usd } =
+      message;
+    const formattedAmount = formatAmount(amount, amount_is_usd);
 
-    // Check if we need a contract address for any token
-    if (message.metadata?.requires_contract && message.metadata.token_symbol) {
-      const { token_symbol, chain_name, chain_id } = message.metadata;
-      return (
-        <VStack spacing={3} align="stretch">
-          <Text>
-            I see you want to swap {amount} {direction}{" "}
-            {message.token_in.symbol} for {message.token_out.symbol}.
-          </Text>
+    return (
+      <Box>
+        <Text fontSize="md" mb={4}>
+          I'll help you swap {formattedAmount} of{" "}
+          <TokenDisplay token={token_in} /> for{" "}
+          <TokenDisplay token={token_out} />.
+        </Text>
+
+        {/* Display note for Scroll chain transactions */}
+        {message.note && (
           <Box
-            bg="blue.50"
-            p={4}
+            mt={2}
+            mb={4}
+            p={3}
             borderRadius="md"
             borderWidth="1px"
             borderColor="blue.200"
+            bg="blue.50"
           >
-            <VStack align="stretch" spacing={3}>
-              <HStack>
-                <InfoIcon color="blue.500" />
-                <Text color="blue.800" fontWeight="medium">
-                  Contract Address Required
-                </Text>
-              </HStack>
-              <Text color="blue.800">
-                To proceed with this swap, please provide the contract address
-                for {token_symbol} on {chain_name ?? "the selected chain"}.
-              </Text>
-              <Text fontSize="sm" color="blue.600">
-                You can try again with:
-                <br />
-                swap {amount} {message.token_in.symbol} for{" "}
-                {message.token_out.symbol} at {chain_id ?? ""}{" "}
-                [contract_address]
-              </Text>
-            </VStack>
+            <Text fontSize="sm" color="blue.700">
+              {message.note}
+            </Text>
           </Box>
-        </VStack>
-      );
-    }
-
-    // Regular swap confirmation
-    return (
-      <VStack spacing={3} align="stretch" fontSize="md">
-        {/* Initial message */}
-        <Text>
-          I'll help you swap {amount} {direction} {message.token_in.symbol} for{" "}
-          {message.token_out.symbol}.
-        </Text>
-
-        {/* Token Information */}
-        <VStack align="stretch" spacing={2} pl={4}>
-          {renderTokenInfo(message.token_in)}
-          {renderTokenInfo(message.token_out)}
-        </VStack>
-
-        {/* Swap Details */}
-        {message.metadata && (
-          <VStack align="stretch" spacing={2} pl={4} fontSize="sm">
-            {message.metadata.route_summary && (
-              <Text>{message.metadata.route_summary}</Text>
-            )}
-            {message.metadata.minimum_received && (
-              <Text>Minimum received: {message.metadata.minimum_received}</Text>
-            )}
-            {message.metadata.price_impact && (
-              <Text>Price impact: {message.metadata.price_impact}</Text>
-            )}
-            {message.metadata.estimated_gas_usd && (
-              <Text>Estimated gas: ${message.metadata.estimated_gas_usd}</Text>
-            )}
-          </VStack>
         )}
 
-        {/* Aggregator Information */}
-        {message.metadata?.aggregator_info && (
-          <AggregatorInfo
-            aggregatorInfo={message.metadata.aggregator_info}
-            missingKey={message.metadata.missing_key}
-            fallbackOptions={message.metadata.fallback_options}
-          />
-        )}
-
-        {/* Warning for unverified tokens */}
-        {(message.token_in.metadata.warning ||
-          message.token_out.metadata.warning) && (
+        {/* Display token verification warnings */}
+        {(!token_in.metadata.verified || !token_out.metadata.verified) && (
           <Box
-            bg="yellow.50"
+            mt={2}
+            mb={4}
             p={3}
             borderRadius="md"
             borderWidth="1px"
             borderColor="yellow.200"
+            bg="yellow.50"
           >
-            <HStack spacing={2} align="flex-start">
-              <WarningIcon color="yellow.400" mt={1} />
+            <HStack spacing={2} alignItems="flex-start">
+              <WarningIcon color="yellow.500" mt={1} />
               <Box>
-                <Text fontSize="sm" fontWeight="bold" color="yellow.800">
-                  Please verify these tokens before proceeding:
+                <Text fontSize="sm" fontWeight="medium" color="yellow.700">
+                  Token Verification Warning
                 </Text>
-                <VStack align="stretch" spacing={1} mt={1}>
-                  {message.token_in.metadata.warning && (
-                    <Text fontSize="sm" color="yellow.800">
-                      • {message.token_in.symbol}:{" "}
-                      {message.token_in.metadata.warning}
-                    </Text>
-                  )}
-                  {message.token_out.metadata.warning && (
-                    <Text fontSize="sm" color="yellow.800">
-                      • {message.token_out.symbol}:{" "}
-                      {message.token_out.metadata.warning}
-                    </Text>
-                  )}
-                </VStack>
+                <Text fontSize="sm" color="yellow.700">
+                  {!token_in.metadata.verified &&
+                    !token_out.metadata.verified &&
+                    "Both tokens in this swap are unverified. Please verify the token addresses before proceeding."}
+                  {token_in.metadata.verified &&
+                    !token_out.metadata.verified &&
+                    `${token_out.symbol} is unverified. Please verify the token address before proceeding.`}
+                  {!token_in.metadata.verified &&
+                    token_out.metadata.verified &&
+                    `${token_in.symbol} is unverified. Please verify the token address before proceeding.`}
+                </Text>
               </Box>
             </HStack>
           </Box>
         )}
+
+        {/* Check if we need a contract address for any token */}
+        {message.metadata?.requires_contract &&
+          message.metadata.token_symbol && (
+            <Box
+              mt={4}
+              p={4}
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="blue.200"
+              bg="blue.50"
+            >
+              <VStack align="stretch" spacing={3}>
+                <HStack>
+                  <InfoIcon color="blue.500" />
+                  <Text color="blue.800" fontWeight="medium">
+                    Contract Address Required
+                  </Text>
+                </HStack>
+                <Text color="blue.800">
+                  To proceed with this swap, please provide the contract address
+                  for {message.metadata.token_symbol} on{" "}
+                  {message.metadata.chain_name ?? "the selected chain"}.
+                </Text>
+                <Text fontSize="sm" color="blue.600">
+                  You can try again with:
+                  <br />
+                  swap {formattedAmount} {message.token_in.symbol} for{" "}
+                  {message.token_out.symbol} at{" "}
+                  {message.metadata.chain_id ?? ""} [contract_address]
+                </Text>
+              </VStack>
+            </Box>
+          )}
+
+        {/* Regular swap confirmation */}
+        <VStack spacing={3} align="stretch" fontSize="md">
+          {/* Token Information */}
+          <VStack align="stretch" spacing={2} pl={4}>
+            {renderTokenInfo(message.token_in)}
+            {renderTokenInfo(message.token_out)}
+          </VStack>
+
+          {/* Swap Details */}
+          {message.metadata && (
+            <VStack align="stretch" spacing={2} pl={4} fontSize="sm">
+              {message.metadata.route_summary && (
+                <Text>{message.metadata.route_summary}</Text>
+              )}
+              {message.metadata.minimum_received && (
+                <Text>
+                  Minimum received: {message.metadata.minimum_received}
+                </Text>
+              )}
+              {message.metadata.price_impact && (
+                <Text>Price impact: {message.metadata.price_impact}</Text>
+              )}
+              {message.metadata.estimated_gas_usd && (
+                <Text>
+                  Estimated gas: ${message.metadata.estimated_gas_usd}
+                </Text>
+              )}
+            </VStack>
+          )}
+
+          {/* Aggregator Information */}
+          {message.metadata?.aggregator_info && (
+            <AggregatorInfo
+              aggregatorInfo={message.metadata.aggregator_info}
+              missingKey={message.metadata.missing_key}
+              fallbackOptions={message.metadata.fallback_options}
+            />
+          )}
+        </VStack>
 
         {/* Confirmation Request */}
         <Text mt={2}>
           Would you like me to proceed with the swap? Type 'yes' to continue or
           'no' to cancel.
         </Text>
-      </VStack>
+      </Box>
     );
   };
 

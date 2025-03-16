@@ -1,8 +1,12 @@
 from typing import Optional, Literal, Dict, Any, List, Union, TypeVar
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, root_validator, validator
 from eth_typing import HexAddress
 from datetime import datetime
 from dowse.models import Tweet, AgentMessage
+from decimal import Decimal
+
+# Re-export Command from api.py for backward compatibility
+from app.models.api import Command
 
 class UserMessage(Tweet):
     """A message from the user."""
@@ -243,3 +247,35 @@ class SwapCommand(BaseModel):
     def amount_out(self) -> Optional[float]:
         """Amount of output token."""
         return self.amount_in if self.is_target_amount else None
+
+class TransferCommand(BaseModel):
+    """A command to transfer tokens."""
+    action: Literal["transfer"]
+    amount: float
+    token: Union[str, Dict[str, Any]]  # Token symbol or token info dict
+    recipient: str  # Recipient address or ENS name
+    natural_command: Optional[str] = None  # The original command text
+    metadata: Optional[Dict[str, Any]] = None
+
+class BridgeCommand(BaseModel):
+    """A command to bridge tokens across chains."""
+    action: Literal["bridge"]
+    amount: float
+    token: Union[str, Dict[str, Any]]  # Token symbol or token info dict
+    from_chain_id: int  # Source chain ID
+    to_chain_id: int  # Destination chain ID
+    natural_command: Optional[str] = None  # The original command text
+    metadata: Optional[Dict[str, Any]] = None
+
+class BalanceCommand(BaseModel):
+    """A command to check token balances."""
+    action: Literal["balance"]
+    token: Optional[str] = None  # Token symbol (optional)
+    chain_id: Optional[int] = None  # Chain ID (optional)
+    natural_command: Optional[str] = None  # The original command text
+    metadata: Optional[Dict[str, Any]] = None
+
+class BaseCommand(BaseModel):
+    """Base class for all commands."""
+    action: str
+    natural_command: Optional[str] = None

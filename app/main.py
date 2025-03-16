@@ -4,11 +4,17 @@ import os
 import time
 import logging
 from contextvars import ContextVar
+from dotenv import load_dotenv
+
+# Load environment variables from .env files
+load_dotenv()
+load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
 from app.api.routes.commands_router import router as commands_router
 from app.api.routes.swap_router import router as swap_router
 from app.api.routes.dca_router import router as dca_router
 from app.api.routes.messaging_router import router as messaging_router
+from app.api.routes.brian_router import router as brian_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.utils.configure_logging import configure_logging
 from app.services.redis_service import get_redis_service, RedisService
@@ -20,6 +26,11 @@ logger = logging.getLogger(__name__)
 # Set environment variables
 environment = os.getenv("ENVIRONMENT", "production")
 is_dev = environment == "development"
+
+# Log important environment variables (without exposing sensitive values)
+logger.info(f"Environment: {environment}")
+logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
+logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -45,6 +56,7 @@ app.include_router(commands_router, prefix="/api")
 app.include_router(swap_router, prefix="/api/swap")
 app.include_router(dca_router, prefix="/api/dca")
 app.include_router(messaging_router, prefix="/api/messaging")
+app.include_router(brian_router, prefix="/api/brian")
 
 # Add request ID middleware
 request_id_contextvar = ContextVar("request_id", default=None)

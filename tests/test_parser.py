@@ -12,7 +12,7 @@ async def test_transfer():
     commands = await parser.execute(
         Tweet(
             id=1890118705016877145,
-            content="transfer $10 of ETH to @VitalikButerin",
+            content="transfer $10 of ETH to @papajamsButerin",
             creator_id=1414021381298089984,
             creator_name="@ethereum",
         ),
@@ -32,7 +32,7 @@ async def test_transfer():
     assert command.args.amount > eth_amount * 0.97
     assert command.args.amount < eth_amount * 1.03
 
-    assert command.args.recipient == "@VitalikButerin"
+    assert command.args.recipient == "@papajamsButerin"
 
 
 @pytest.mark.asyncio()
