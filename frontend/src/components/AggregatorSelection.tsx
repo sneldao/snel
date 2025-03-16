@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Text,
@@ -9,8 +9,11 @@ import {
   Badge,
   useColorModeValue,
   Tooltip,
+  Alert,
+  AlertIcon,
 } from "@chakra-ui/react";
 import { formatTokenAmount, smallestUnitsToAmount } from "../utils/tokenUtils";
+import { formatAmountForDisplay, validateGasUsd } from "../utils/formatUtils";
 
 interface Quote {
   aggregator: string;
@@ -22,6 +25,7 @@ interface Quote {
   to: string;
   data: string;
   value: string;
+  is_brian_api?: boolean;
 }
 
 interface AggregatorSelectionProps {
@@ -29,6 +33,8 @@ interface AggregatorSelectionProps {
   tokenSymbol: string;
   tokenDecimals: number;
   onSelect: (quote: Quote) => void;
+  chainId?: number;
+  scrollNote?: string;
 }
 
 const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
@@ -36,6 +42,8 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
   tokenSymbol,
   tokenDecimals,
   onSelect,
+  chainId,
+  scrollNote,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const bgColor = useColorModeValue("white", "gray.800");
@@ -43,19 +51,48 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
   const hoverBgColor = useColorModeValue("gray.50", "gray.700");
   const selectedBgColor = useColorModeValue("blue.50", "blue.900");
 
-  // Sort quotes by buy_amount (descending)
+  // Check if we're on Scroll chain
+  const isScrollChain = chainId === 534352;
+
+  // Sort quotes by buy_amount (descending), but prioritize Brian API for Scroll
   const sortedQuotes = [...quotes].sort((a, b) => {
-    const amountA = BigInt(a.buy_amount);
-    const amountB = BigInt(b.buy_amount);
-    return amountB > amountA ? 1 : amountB < amountA ? -1 : 0;
+    // If we're on Scroll and one is Brian API, prioritize it
+    if (isScrollChain) {
+      if (a.aggregator === "brian" && b.aggregator !== "brian") return -1;
+      if (a.aggregator !== "brian" && b.aggregator === "brian") return 1;
+    }
+
+    // Otherwise sort by buy_amount
+    try {
+      const amountA = BigInt(a.buy_amount || "0");
+      const amountB = BigInt(b.buy_amount || "0");
+      return amountB > amountA ? 1 : amountB < amountA ? -1 : 0;
+    } catch (e) {
+      // Handle case where buy_amount might not be a valid BigInt
+      return 0;
+    }
   });
 
-  // Auto-select the best quote (highest buy_amount)
-  React.useEffect(() => {
+  // Auto-select the best quote (highest buy_amount or Brian API on Scroll)
+  useEffect(() => {
     if (sortedQuotes.length > 0 && selectedIndex === null) {
+      // If on Scroll, prefer Brian API
+      if (isScrollChain) {
+        const brianIndex = sortedQuotes.findIndex(
+          (q) => q.aggregator === "brian"
+        );
+        if (brianIndex >= 0) {
+          setSelectedIndex(brianIndex);
+          onSelect(sortedQuotes[brianIndex]);
+          return;
+        }
+      }
+
+      // Otherwise select the first (best) quote
       setSelectedIndex(0);
+      onSelect(sortedQuotes[0]);
     }
-  }, [sortedQuotes, selectedIndex]);
+  }, [sortedQuotes, selectedIndex, isScrollChain, onSelect]);
 
   const handleSelect = (index: number) => {
     setSelectedIndex(index);
@@ -63,10 +100,20 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
   };
 
   const formatAmount = (amount: string) => {
-    return formatTokenAmount(
-      smallestUnitsToAmount(amount, tokenDecimals),
-      tokenDecimals
-    );
+    if (!amount || amount === "0") {
+      return "calculating...";
+    }
+
+    try {
+      // First try our new formatting function
+      return formatAmountForDisplay(amount, tokenDecimals);
+    } catch (error) {
+      // Fall back to the original method if there's an error
+      return formatTokenAmount(
+        smallestUnitsToAmount(amount, tokenDecimals),
+        tokenDecimals
+      );
+    }
   };
 
   if (quotes.length === 0) {
@@ -83,55 +130,83 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
         Select a provider for your swap:
       </Text>
 
-      {sortedQuotes.map((quote, index) => (
-        <Box
-          key={index}
-          p={3}
-          borderRadius="md"
-          borderWidth="1px"
-          borderColor={selectedIndex === index ? "blue.500" : borderColor}
-          bg={selectedIndex === index ? selectedBgColor : bgColor}
-          cursor="pointer"
-          _hover={{
-            bg: selectedIndex === index ? selectedBgColor : hoverBgColor,
-          }}
-          onClick={() => handleSelect(index)}
-          position="relative"
-        >
-          <HStack justifyContent="space-between" mb={2}>
-            <HStack>
-              <Text fontWeight="bold">{quote.protocol}</Text>
-              {index === 0 && (
-                <Badge colorScheme="green" fontSize="xs">
-                  Best Rate
-                </Badge>
-              )}
+      {isScrollChain && scrollNote && (
+        <Alert status="info" borderRadius="md">
+          <AlertIcon />
+          <Text fontSize="sm">{scrollNote}</Text>
+        </Alert>
+      )}
+
+      {sortedQuotes.map((quote, index) => {
+        const isBrianApi = quote.aggregator === "brian" || quote.is_brian_api;
+
+        return (
+          <Box
+            key={index}
+            p={3}
+            borderRadius="md"
+            borderWidth="1px"
+            borderColor={
+              selectedIndex === index
+                ? "blue.500"
+                : isBrianApi && isScrollChain
+                ? "purple.300"
+                : borderColor
+            }
+            bg={selectedIndex === index ? selectedBgColor : bgColor}
+            cursor="pointer"
+            _hover={{
+              bg: selectedIndex === index ? selectedBgColor : hoverBgColor,
+            }}
+            onClick={() => handleSelect(index)}
+            position="relative"
+          >
+            <HStack justifyContent="space-between" mb={2}>
+              <HStack>
+                <Text fontWeight="bold">{quote.protocol}</Text>
+                {index === 0 && !isBrianApi && (
+                  <Badge colorScheme="green" fontSize="xs">
+                    Best Rate
+                  </Badge>
+                )}
+                {isBrianApi && isScrollChain && (
+                  <Badge colorScheme="purple" fontSize="xs">
+                    Recommended for Scroll
+                  </Badge>
+                )}
+              </HStack>
+              <Text
+                fontWeight="semibold"
+                color={selectedIndex === index ? "blue.500" : undefined}
+              >
+                {formatAmount(quote.buy_amount)} {tokenSymbol}
+              </Text>
             </HStack>
-            <Text
-              fontWeight="semibold"
-              color={selectedIndex === index ? "blue.500" : undefined}
+
+            <HStack
+              justifyContent="space-between"
+              fontSize="xs"
+              color="gray.500"
             >
-              {formatAmount(quote.buy_amount)} {tokenSymbol}
-            </Text>
-          </HStack>
+              <Text>
+                Min. received: {formatAmount(quote.minimum_received)}{" "}
+                {tokenSymbol}
+              </Text>
+              <Tooltip label="Estimated gas cost in USD">
+                <Text>
+                  Gas: ${parseFloat(validateGasUsd(quote.gas_usd)).toFixed(2)}
+                </Text>
+              </Tooltip>
+            </HStack>
 
-          <HStack justifyContent="space-between" fontSize="xs" color="gray.500">
-            <Text>
-              Min. received: {formatAmount(quote.minimum_received)}{" "}
-              {tokenSymbol}
-            </Text>
-            <Tooltip label="Estimated gas cost in USD">
-              <Text>Gas: ${parseFloat(quote.gas_usd).toFixed(2)}</Text>
-            </Tooltip>
-          </HStack>
-
-          {selectedIndex === index && (
-            <Box position="absolute" top={2} right={2}>
-              <Badge colorScheme="blue">Selected</Badge>
-            </Box>
-          )}
-        </Box>
-      ))}
+            {selectedIndex === index && (
+              <Box position="absolute" top={2} right={2}>
+                <Badge colorScheme="blue">Selected</Badge>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
 
       <Box
         p={3}

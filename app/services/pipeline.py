@@ -91,7 +91,11 @@ class Pipeline(BaseModel):
                 )
                 if not result.get("error"):
                     # Successfully processed as DCA
-                    return {**result, "agent_type": "dca"}
+                    result["agent_type"] = "dca"
+                    # Make sure the content type is set correctly
+                    if "content" in result and isinstance(result["content"], dict) and "type" not in result["content"]:
+                        result["content"]["type"] = "dca_confirmation"
+                    return result
                 else:
                     logger.warning(f"DCA processing failed: {result.get('error')}")
                     # Fall through to other processing
@@ -106,7 +110,11 @@ class Pipeline(BaseModel):
                 result = await self.swap_agent.process_swap_command(input_text, chain_id)
                 if not result.get("error"):
                     # Successfully processed as swap
-                    return {**result, "agent_type": "swap"}
+                    result["agent_type"] = "swap"
+                    # Make sure the content type is set correctly
+                    if "content" in result and isinstance(result["content"], dict) and "type" not in result["content"]:
+                        result["content"]["type"] = "swap_confirmation"
+                    return result
                 else:
                     logger.warning(f"Swap processing failed: {result.get('error')}")
                     # Fall through to price query
@@ -226,4 +234,4 @@ class Pipeline(BaseModel):
             "I'm not smart enough for that. But I can pretend to be smart about crypto prices and swaps!",
             "I'm just a simple crypto agent with simple needs. Ask me about prices, swaps, or DCA orders instead."
         ]
-        return random.choice(responses) 
+        return random.choice(responses)

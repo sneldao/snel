@@ -218,13 +218,14 @@ class SwapCommand(BaseModel):
     """A command to swap tokens."""
     action: Literal["swap", "price", "unknown"]
     amount_in: Optional[float] = None  # Changed from amount to amount_in
-    token_in: Optional[str] = None
-    token_out: Optional[str] = None
+    token_in: Optional[Union[str, Dict[str, Any]]] = None  # Allow dictionary for token info
+    token_out: Optional[Union[str, Dict[str, Any]]] = None  # Allow dictionary for token info
     is_target_amount: bool = False  # True if amount refers to token_out
     amount_is_usd: bool = False  # True if amount is in USD
     natural_command: Optional[str] = None  # The original command text
     token_in_name: Optional[str] = None  # Full name of token_in
     token_out_name: Optional[str] = None  # Full name of token_out
+    slippage: float = 0.5  # Default slippage percentage
     
     # Add a custom init method to handle 'amount' parameter
     def __init__(self, **data):
@@ -241,4 +242,4 @@ class SwapCommand(BaseModel):
     @property
     def amount_out(self) -> Optional[float]:
         """Amount of output token."""
-        return self.amount_in if self.is_target_amount else None 
+        return self.amount_in if self.is_target_amount else None

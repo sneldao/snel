@@ -91,3 +91,4 @@ yarn.lock
 .next/
 out/
 .vercel/
+.qodo

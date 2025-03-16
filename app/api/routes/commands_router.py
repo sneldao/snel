@@ -64,11 +64,63 @@ async def process_command(
             if pending_command:
                 logger.info(f"Found pending command for user {user_id}: {pending_command}")
                 
+                # Get the agent type for the pending command
+                agent_type = await redis_service.get(f"pending_command_type:{user_id}")
+                logger.info(f"Agent type for pending command: {agent_type}")
+                
                 # Use the pending command
                 command.content = pending_command
                 
-                # Clear the pending command
-                await redis_service.clear_pending_command(user_id)
+                # If we have a specific agent type, route directly to that agent
+                if agent_type == "swap":
+                    logger.info("Routing confirmation to swap agent")
+                    # Process with swap agent directly
+                    swap_agent = agent_factory.create_agent("swap")
+                    result = await swap_agent.process_swap_command(command.content, command.chain_id)
+                    result["agent_type"] = "swap"
+                    
+                    # Clear the pending command and agent type
+                    await redis_service.clear_pending_command(user_id)
+                    await redis_service.delete(f"pending_command_type:{user_id}")
+                    
+                    # Return early with the swap result
+                    return CommandResponse(
+                        content=result.get("content", {}),
+                        error_message=result.get("error"),
+                        metadata=result.get("metadata", {}),
+                        agent_type="swap",
+                        requires_selection=result.get("requires_selection", False),
+                        all_quotes=result.get("all_quotes")
+                    )
+                elif agent_type == "dca":
+                    logger.info("Routing confirmation to DCA agent")
+                    # Process with DCA agent directly
+                    dca_agent = agent_factory.create_agent("dca")
+                    result = await dca_agent.process_dca_command(
+                        command.content, 
+                        chain_id=command.chain_id,
+                        wallet_address=command.wallet_address
+                    )
+                    result["agent_type"] = "dca"
+                    
+                    # Clear the pending command and agent type
+                    await redis_service.clear_pending_command(user_id)
+                    await redis_service.delete(f"pending_command_type:{user_id}")
+                    
+                    # Return early with the DCA result
+                    return CommandResponse(
+                        content=result.get("content", {}),
+                        error_message=result.get("error"),
+                        metadata=result.get("metadata", {}),
+                        agent_type="dca",
+                        requires_selection=result.get("requires_selection", False),
+                        all_quotes=result.get("all_quotes")
+                    )
+                else:
+                    # If no specific agent type or unknown, use the pipeline
+                    # Clear the pending command
+                    await redis_service.clear_pending_command(user_id)
+                    await redis_service.delete(f"pending_command_type:{user_id}")
         
         # Store the command for reference
         timestamp = datetime.now().isoformat()
@@ -99,9 +151,19 @@ async def process_command(
         )
         
         # Check if we need to store a pending command
-        if result.get("type") in ["swap_confirmation", "dca_confirmation"]:
+        content_type = result.get("content", {}).get("type")
+        if content_type in ["swap_confirmation", "dca_confirmation"]:
             logger.info(f"Storing pending command for user {user_id}: {command.content}")
             await redis_service.set_pending_command(user_id, command.content)
+            
+            # Store the agent type with the pending command to ensure proper routing on confirmation
+            agent_type = result.get("agent_type")
+            if agent_type:
+                await redis_service.set(
+                    f"pending_command_type:{user_id}",
+                    agent_type,
+                    expire=1800  # 30 minutes
+                )
             
         # Format the response
         return CommandResponse(
@@ -111,8 +173,8 @@ async def process_command(
             agent_type=result.get("agent_type", "default"),
             requires_selection=result.get("requires_selection", False),
             all_quotes=result.get("all_quotes"),
-            pending_command=command.content if result.get("type") in ["swap_confirmation", "dca_confirmation"] else None,
-            awaiting_confirmation=result.get("type") in ["swap_confirmation", "dca_confirmation"]
+            pending_command=command.content if content_type in ["swap_confirmation", "dca_confirmation"] else None,
+            awaiting_confirmation=content_type in ["swap_confirmation", "dca_confirmation"]
         )
             
     except Exception as e:
@@ -199,4 +261,4 @@ async def clear_commands(
         return {"success": True}
     except Exception as e:
         logger.exception(f"Error clearing commands: {e}")
-        return {"success": False} 
+        return {"success": False}

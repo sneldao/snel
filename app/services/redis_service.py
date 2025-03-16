@@ -287,6 +287,13 @@ class RedisService(BaseModel):
             self.client.delete(key)
         else:
             await self.client.delete(key)
+            
+        # Also clear the pending command type if it exists
+        type_key = f"pending_command_type:{wallet_address}"
+        if self.is_upstash:
+            self.client.delete(type_key)
+        else:
+            await self.client.delete(type_key)
     
     async def store_token_data(self, wallet_address: str, token_data: Dict[str, Any]) -> None:
         """Store token data for a wallet address."""
@@ -306,4 +313,4 @@ class RedisService(BaseModel):
 async def get_redis_service() -> RedisService:
     """Get an instance of RedisService."""
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    return RedisService(redis_url=redis_url) 
+    return RedisService(redis_url=redis_url)

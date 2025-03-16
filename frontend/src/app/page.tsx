@@ -717,33 +717,47 @@ export default function Home() {
         throw error;
       }
 
+      // Create a user-friendly error message
       let errorMessage = "Transaction failed";
       let isUserRejection = false;
 
       if (error instanceof Error) {
+        // Check for user rejection errors
         if (
           error.message.includes("user rejected") ||
           error.message.includes("User rejected") ||
           error.message.includes("User denied") ||
           error.message.includes("user denied") ||
-          error.message.includes("rejected the request")
+          error.message.includes("rejected the request") ||
+          error.message.includes("transaction signature")
         ) {
-          errorMessage = "Transaction was cancelled by user";
+          errorMessage = "Transaction cancelled";
           isUserRejection = true;
-        } else if (error.message.includes("insufficient funds")) {
-          errorMessage = "Insufficient funds for transaction";
+        }
+        // Check for common errors with helpful messages
+        else if (error.message.includes("insufficient funds")) {
+          errorMessage = "You don't have enough funds for this transaction";
         } else if (error.message.includes("TRANSFER_FROM_FAILED")) {
           errorMessage =
-            "Failed to transfer USDC. Please make sure you have enough USDC and have approved the swap.";
+            "Token transfer failed. Please check your balance and token approval.";
+        } else if (error.message.includes("gas required exceeds allowance")) {
+          errorMessage = "Gas required exceeds your ETH balance";
+        } else if (error.message.includes("nonce too low")) {
+          errorMessage = "Transaction nonce issue. Please try again.";
+        } else if (error.message.includes("execution reverted")) {
+          // Extract revert reason if available
+          const revertMatch = error.message.match(
+            /execution reverted: (.*?)(?:")/
+          );
+          errorMessage = revertMatch
+            ? `Transaction reverted: ${revertMatch[1]}`
+            : "Transaction reverted by the contract";
         } else {
           // For other errors, extract a more readable message
           const message = error.message;
 
           // If the error contains transaction data (which is very long), simplify it
-          if (
-            message.includes("Request Arguments:") &&
-            message.includes("data:")
-          ) {
+          if (message.includes("Request Arguments:")) {
             // Extract just the first part before the technical details
             errorMessage = message.split("Request Arguments:")[0].trim();
           } else {
@@ -756,6 +770,7 @@ export default function Home() {
         }
       }
 
+      // Add a user-friendly error message to the chat
       setResponses((prev) => [
         ...prev.filter((r) => !r.status?.includes("processing")),
         {
@@ -1087,16 +1102,22 @@ export default function Home() {
   const handleDCAConfirmation = async () => {
     try {
       // Find the pending command from the responses
-      const pendingResponses = responses.filter(
-        (r) => r.awaitingConfirmation && r.agentType === "dca"
-      );
+      const pendingResponses = responses.filter((r) => r.awaitingConfirmation);
       const lastDCAResponse =
         pendingResponses.length > 0
           ? pendingResponses[pendingResponses.length - 1]
           : null;
 
       if (!lastDCAResponse) {
-        throw new Error("No pending DCA command found");
+        throw new Error("No pending command found");
+      }
+
+      // Check if this is actually a swap confirmation that was misidentified
+      if (lastDCAResponse.content?.type === "swap_confirmation") {
+        console.log("Detected swap confirmation, redirecting to swap handler");
+        // Process as a swap instead
+        await processCommand("yes");
+        return;
       }
 
       // Check if there's transaction data in the response
@@ -1321,9 +1342,85 @@ export default function Home() {
         };
         setResponses((prev) => [...prev, userConfirmation]);
 
-        // Process based on confirmation type
-        if (lastResponse.confirmation_type === "token_confirmation") {
+        // Check the content type to determine how to handle the confirmation
+        if (lastResponse.content?.type === "swap_confirmation") {
+          console.log("Processing swap confirmation");
+
+          // For swap confirmations, we need to get quotes and show the aggregator selection UI
+          try {
+            setIsLoading(true);
+
+            // First, get quotes for the swap
+            const quotesResponse = await fetch("/api/swap/get-quotes", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...getApiHeaders(),
+              },
+              body: JSON.stringify({
+                wallet_address: address,
+                chain_id: chainId || 1,
+              }),
+            });
+
+            if (!quotesResponse.ok) {
+              throw new Error(
+                `Error getting quotes: ${quotesResponse.statusText}`
+              );
+            }
+
+            const quotesData = await quotesResponse.json();
+            console.log("Quotes data:", quotesData);
+
+            if (quotesData.error) {
+              throw new Error(quotesData.error);
+            }
+
+            // If we have quotes, show the aggregator selection UI
+            if (quotesData.quotes && quotesData.quotes.length > 0) {
+              // Add a response with the quotes for the user to select from
+              const quotesResponse: Response = {
+                content: "Please select a provider for your swap:",
+                timestamp: new Date().toISOString(),
+                isCommand: false,
+                status: "success",
+                agentType: "swap",
+                requires_selection: true,
+                all_quotes: quotesData.quotes,
+                metadata: {
+                  token_out_symbol: quotesData.token_out?.symbol || "tokens",
+                  token_out_decimals: quotesData.token_out?.decimals || 18,
+                },
+              };
+
+              setResponses((prev) => [...prev, quotesResponse]);
+            } else {
+              throw new Error("No quotes available for this swap");
+            }
+          } catch (error) {
+            console.error("Error processing swap confirmation:", error);
+            const errorResponse: Response = {
+              content: `Unable to get swap quotes: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error",
+              agentType: "swap",
+            };
+            setResponses((prev) => [...prev, errorResponse]);
+          } finally {
+            setIsLoading(false);
+          }
+        } else if (
+          lastResponse.content?.type === "dca_confirmation" ||
+          lastResponse.confirmation_type === "token_confirmation"
+        ) {
+          console.log("Processing DCA confirmation");
           await handleDCAConfirmation();
+        } else {
+          // Generic confirmation - just send the command
+          await processCommand("yes");
         }
         return;
       } else if (["no", "cancel", "stop"].includes(command.toLowerCase())) {
@@ -1335,7 +1432,7 @@ export default function Home() {
         };
 
         const botResponse: Response = {
-          content: "Swap cancelled. How else can I help you?",
+          content: "Operation cancelled. How else can I help you?",
           timestamp: new Date().toISOString(),
           isCommand: false,
           status: "success",

@@ -7,6 +7,7 @@ from app.agents.base import PointlessAgent
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.price_agent import PriceAgent
 from app.agents.dca_agent import DCAAgent
+from app.agents.messaging_agent import MessagingAgent
 from app.services.token_service import TokenService
 from app.services.redis_service import RedisService
 from app.api.dependencies import get_redis_service
@@ -44,6 +45,12 @@ class AgentFactory:
             return PriceAgent(provider="openai")
         elif agent_type == "swap":
             return SimpleSwapAgent()
+        elif agent_type == "messaging":
+            # For messaging agent, we'll need to create a pipeline in the router
+            return MessagingAgent(
+                token_service=self.token_service,
+                redis_service=self.redis_service
+            )
         else:
             # Default agent
             return PointlessAgent(prompt=BASE_PROMPT, model="gpt-4-turbo-preview")
@@ -108,4 +115,4 @@ def get_agent_factory(
 ) -> AgentFactory:
     """Get an instance of AgentFactory."""
     token_service = TokenService()
-    return AgentFactory(token_service=token_service, redis_service=redis_service) 
+    return AgentFactory(token_service=token_service, redis_service=redis_service)

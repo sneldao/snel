@@ -1,3 +1,6 @@
+"""
+Service for handling all swap operations.
+"""
 import contextlib
 from typing import Dict, Any, Optional, Tuple, List, Union
 import logging
@@ -18,63 +21,13 @@ import asyncio
 # Import the new token conversion utility
 from app.utils.token_conversion import amount_to_smallest_units, smallest_units_to_amount, format_token_amount
 
-# Import Kyber implementation
-from src.dowse.tools.best_route.kyber import (
-    get_quote as get_kyber_quote,
-    Quote as KyberQuote,
-    KyberSwapError,
-    NoRouteFoundError as KyberNoRouteFoundError,
-    InsufficientLiquidityError as KyberInsufficientLiquidityError,
-    InvalidTokenError as KyberInvalidTokenError,
-    BuildTransactionError as KyberBuildTransactionError
+# Import aggregator services
+from app.services.aggregators import (
+    get_zerox_quote,
+    get_openocean_quote,
+    get_kyber_quote,
+    get_router_address
 )
-from src.dowse.tools.best_route.kyber import get_chain_from_chain_id as get_kyber_chain_name
-
-# Import Uniswap implementation
-from src.dowse.tools.best_route.uniswap import (
-    get_quote as get_uniswap_quote,
-    Quote as UniswapQuote,
-    UniswapError,
-    NoRouteFoundError as UniswapNoRouteFoundError,
-    InsufficientLiquidityError as UniswapInsufficientLiquidityError,
-    InvalidTokenError as UniswapInvalidTokenError,
-    BuildTransactionError as UniswapBuildTransactionError
-)
-from src.dowse.tools.best_route.uniswap import get_router_address as get_uniswap_router_address
-
-class TransferFromFailedError(Exception):
-    """Raised when the token transfer fails, likely due to insufficient balance or allowance"""
-    pass
-
-class NoRouteFoundError(Exception):
-    """Raised when no swap route is found across all aggregators"""
-    pass
-
-class InsufficientLiquidityError(Exception):
-    """Raised when there's insufficient liquidity for the swap across all aggregators"""
-    pass
-
-class InvalidTokenError(Exception):
-    """Raised when token is not supported or invalid across all aggregators"""
-    pass
-
-# Define router addresses by chain for Kyber
-# Define router addresses by chain for Kyber
-KYBER_ROUTER_ADDRESSES = {
-    1: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Ethereum
-    137: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Polygon
-    42161: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Arbitrum
-    10: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Optimism
-    8453: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Base
-    534352: "0x6131B5fae19EA4f9D964eAc0408E4408b66337b5",  # Scroll
-}
-
-def get_router_address(chain_id: int, aggregator: str = "kyber") -> Optional[str]:
-    """Get the router address for a specific chain and aggregator."""
-    if aggregator.lower() == "uniswap":
-        return get_uniswap_router_address(chain_id)
-    else:
-        return KYBER_ROUTER_ADDRESSES.get(chain_id)
 
 # Import the transaction executor
 from app.services.transaction_executor import TransactionExecutor, transaction_executor
@@ -102,67 +55,20 @@ WETH_ADDRESS = {
     534352: "0x5300000000000000000000000000000000000004",  # Scroll
 }
 
-class SwapCommand:
-    """Class to represent a swap command."""
-    def __init__(
-        self,
-        action: str,
-        amount_in: Union[str, float],
-        token_in: Union[str, Dict],
-        token_out: Union[str, Dict],
-        is_target_amount: bool = False,
-        amount_is_usd: bool = False,
-        natural_command: Optional[str] = None,
-        slippage: float = 0.5,
-        aggregator: Optional[str] = None,
-    ):
-        self.action = action
-        self.amount_in = amount_in
-        self.token_in = token_in
-        self.token_out = token_out
-        self.is_target_amount = is_target_amount
-        self.amount_is_usd = amount_is_usd
-        self.natural_command = natural_command
-        self.slippage = slippage
-        self.aggregator = aggregator
-    
-    def __str__(self) -> str:
-        token_in_symbol = self.token_in["symbol"] if isinstance(self.token_in, dict) else self.token_in
-        token_out_symbol = self.token_out["symbol"] if isinstance(self.token_out, dict) else self.token_out
-        return f"SwapCommand(action={self.action}, amount_in={self.amount_in}, token_in={token_in_symbol}, token_out={token_out_symbol}, is_target_amount={self.is_target_amount}, amount_is_usd={self.amount_is_usd})"
-
-class Quote:
-    """Class to represent a swap quote."""
-    def __init__(
-        self,
-        to: str,
-        data: str,
-        value: str,
-        gas: str,
-        router_address: str,
-        buy_amount: str,
-        sell_amount: str,
-        price: Optional[str] = None,
-        token_in: Optional[str] = None,
-        token_out: Optional[str] = None
-    ):
-        self.to = to
-        self.data = data
-        self.value = value
-        self.gas = gas
-        self.router_address = router_address
-        self.buy_amount = buy_amount
-        self.sell_amount = sell_amount
-        self.price = price
-        self.token_in = token_in
-        self.token_out = token_out
-
-class QuoteError(Exception):
-    """Base class for quote-related errors."""
+class TransferFromFailedError(Exception):
+    """Raised when the token transfer fails, likely due to insufficient balance or allowance"""
     pass
 
-class AggregatorError(QuoteError):
-    """Raised when an aggregator fails to provide a quote."""
+class NoRouteFoundError(Exception):
+    """Raised when no swap route is found across all aggregators"""
+    pass
+
+class InsufficientLiquidityError(Exception):
+    """Raised when there's insufficient liquidity for the swap across all aggregators"""
+    pass
+
+class InvalidTokenError(Exception):
+    """Raised when token is not supported or invalid across all aggregators"""
     pass
 
 class SwapService:
@@ -192,6 +98,9 @@ class SwapService:
     ) -> Dict[str, Any]:
         """Process a swap command and build the transaction."""
         try:
+            # Import Scroll-specific fixes if needed
+            from app.services.scroll_handler import ScrollHandler
+            
             # Parse the command
             swap_command = await self.parse_swap_command(command, chain_id, wallet_address)
 
@@ -241,20 +150,57 @@ class SwapService:
                     token_amount = round(token_amount, 10)
                 elif token_price > 100:  # Mid-value tokens like ETH
                     token_amount = round(token_amount, 8)
-                else:  # Low-value tokens
+                else:  # Use more precision for low-value tokens
                     token_amount = round(token_amount, 6)
 
                 logger.info(f"Converted ${swap_command.amount_in} to {token_amount} {swap_command.token_in['symbol']} (price: ${token_price})")
                 swap_command.amount_in = str(token_amount)
 
             # Build the swap transaction
-            logger.info(f"Building swap transaction for {swap_command.amount_in} {swap_command.token_in['symbol']} to {swap_command.token_out['symbol']}")
+            logger.info(f"Building swap transaction for {swap_command.token_in['symbol']} to {swap_command.token_out['symbol']}")
             tx_data = await self.build_swap_transaction(
                 swap_command=swap_command,
                 chain_id=chain_id,
                 wallet_address=wallet_address,
                 skip_approval=skip_approval
             )
+
+            # For Scroll chain, use only Brian API
+            if chain_id == 534352:  # Scroll chain ID
+                logger.info("Handling Scroll chain swap - using Brian API exclusively")
+                
+                if isinstance(swap_command, SwapCommand):
+                    # Get transaction data from Brian API
+                    brian_tx_data = await ScrollHandler.use_brian_api(
+                        swap_command=swap_command,
+                        wallet_address=wallet_address,
+                        chain_id=chain_id
+                    )
+                    
+                    if brian_tx_data:
+                        logger.info("Successfully got transaction data from Brian API")
+                        tx_data = brian_tx_data
+                        # Set the selected aggregator to brian
+                        selected_aggregator = "brian"
+                    else:
+                        # If Brian API fails, return an error message
+                        logger.error("Brian API failed for Scroll swap and no fallback is configured")
+                        return {
+                            "error": "Swap on Scroll requires Brian API which is currently unavailable. Please ensure BRIAN_API_KEY is set in your environment variables.",
+                            "method": "swap",
+                            "metadata": {
+                                "token_in_symbol": swap_command.token_in["symbol"] if isinstance(swap_command.token_in, dict) else swap_command.token_in,
+                                "token_out_symbol": swap_command.token_out["symbol"] if isinstance(swap_command.token_out, dict) else swap_command.token_out,
+                                "chain_id": chain_id
+                            }
+                        }
+                else:
+                    # If we don't have a SwapCommand, return an error
+                    logger.error("Invalid swap command for Scroll")
+                    return {
+                        "error": "Invalid swap command for Scroll",
+                        "method": "swap"
+                    }
 
             # If the user has selected a specific aggregator, filter for that one
             if selected_aggregator and 'all_quotes' in tx_data:
@@ -349,7 +295,7 @@ class SwapService:
                         # Need approval
                         needs_approval = True
                         token_to_approve = token_in_address
-                        # TODO: Get proper spender (router) address
+                        # Get proper spender (router) address
                         spender = get_router_address(chain_id)
                         logger.info(f"Approval needed for {token_in_address}, spender: {spender}")
                 except Exception as e:
@@ -370,6 +316,12 @@ class SwapService:
                 chain_id
             )
 
+            # Import the aggregator fixes
+            from app.services.aggregator_fixes import fix_quote_for_chain, should_include_quote
+            
+            # Get token out decimals for validation
+            token_out_decimals = await self.token_service.get_token_decimals(token_out_address, chain_id)
+            
             # Store all valid quotes
             all_quotes = []
             errors = []
@@ -390,10 +342,18 @@ class SwapService:
                     if quote:
                         # Add the aggregator name to the quote for frontend display
                         quote["aggregator"] = name
-
-                        # Store the quote
-                        all_quotes.append(quote)
-                        logger.info(f"Got valid quote from {name}: {quote.get('buy_amount')} output tokens")
+                        
+                        # Apply chain-specific fixes to the quote
+                        fixed_quote = fix_quote_for_chain(quote, chain_id, name, token_out_decimals)
+                        
+                        # Check if the quote should be included
+                        if should_include_quote(fixed_quote, chain_id, name):
+                            # Store the quote
+                            all_quotes.append(fixed_quote)
+                            logger.info(f"Got valid quote from {name}: {fixed_quote.get('buy_amount')} output tokens")
+                        else:
+                            logger.warning(f"Excluding invalid quote from {name}")
+                            errors.append(f"{name}: Quote validation failed")
                 except Exception as e:
                     logger.error(f"Error getting quote from {name}: {str(e)}")
                     errors.append(f"{name}: {str(e)}")
@@ -444,147 +404,19 @@ class SwapService:
         token_out: Union[str, Dict],
         amount: int,
         chain_id: int,
-        wallet_address: str
+        wallet_address: str,
+        slippage_percentage: float = 1.0
     ) -> Dict[str, Any]:
-        """Get quote from 0x API using the Permit2 endpoint with improved handling"""
-        try:
-            # Extract addresses
-            token_in_address = token_in["address"] if isinstance(token_in, dict) else token_in
-            token_out_address = token_out["address"] if isinstance(token_out, dict) else token_out
-
-            # Check if chain is supported by 0x
-            supported_chains = [1, 10, 56, 137, 8453, 42161, 43114, 59144, 534352, 5000, 34443, 81457, 10143]
-            if chain_id not in supported_chains:
-                logger.warning(f"Chain {chain_id} not supported by 0x API")
-                raise ValueError(f"Chain {chain_id} not supported by 0x API")
-
-            # Use environment variable for API key
-            api_key = os.getenv("ZEROX_API_KEY", "")
-            if not api_key:
-                logger.warning("No 0x API key found in environment variables. This may lead to rate limiting or failures.")
-
-            # Determine base URL based on chain
-            base_url = "https://api.0x.org"
-
-            # Use the permit2 quote endpoint for v2 API
-            endpoint = "/swap/permit2/quote"
-
-            params = {
-                "sellToken": token_in_address,
-                "buyToken": token_out_address,
-                "sellAmount": str(amount),
-                "taker": wallet_address,
-                "chainId": chain_id,
-                "skipValidation": "false",
-                "enableSlippageProtection": "true"
-            }
-
-            headers = {
-                "0x-api-key": api_key,
-                "0x-version": "v2"  # Use v2 of the API
-            }
-
-            logger.info(f"Getting 0x quote for {token_in_address} to {token_out_address} with amount {amount}")
-            response = await self.http_client.get(
-                f"{base_url}{endpoint}",
-                params=params,
-                headers=headers
-            )
-
-            response.raise_for_status()
-            data = response.json()
-
-            # Log the full response for debugging
-            logger.debug(f"0x response: {data}")
-
-            # Check if we have the required fields
-            if 'buyAmount' not in data or 'transaction' not in data:
-                logger.error(f"Missing required fields in 0x response: {data}")
-                raise ValueError("Invalid 0x response format")
-
-            # Get a reasonable gas estimate
-            gas_estimate = data['transaction'].get('gas', '300000')
-            if gas_estimate:
-                # Parse to int and apply a reasonable cap if it's too high
-                try:
-                    gas_int = int(gas_estimate)
-                    # Cap at 500,000 if it's over 1,000,000
-                    if gas_int > 1000000:
-                        logger.warning(f"0x provided very high gas estimate: {gas_int}, capping at 500000")
-                        gas_estimate = "500000"
-                except (ValueError, TypeError):
-                    logger.warning(f"Could not parse 0x gas estimate: {gas_estimate}, using default")
-                    gas_estimate = "300000"  # Fallback to a reasonable value
-
-            # Ensure value field is properly formatted 
-            value = data['transaction'].get('value', '0')
-            if value == '' or value is None:
-                value = '0'
-
-            # Extract min_buy_amount (minBuyAmount or guaranteedPrice * sellAmount)
-            min_buy_amount = data.get('minBuyAmount')
-
-            # If minBuyAmount is not available, use guaranteedPrice calculation
-            if not min_buy_amount and 'guaranteedPrice' in data and data['guaranteedPrice']:
-                try:
-                    guaranteed_price = float(data['guaranteedPrice'])
-                    sell_amount = float(amount)
-                    min_buy_amount = str(int(guaranteed_price * sell_amount * 0.99))  # 99% of expected amount as minimum
-                    logger.info(f"Calculated min_buy_amount from guaranteedPrice: {min_buy_amount}")
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Error calculating min_buy_amount from guaranteedPrice: {e}")
-                    min_buy_amount = data.get('buyAmount', '0')  # Fallback to buyAmount
-
-            # If both methods fail, fall back to buyAmount
-            if not min_buy_amount:
-                min_buy_amount = data.get('buyAmount', '0')
-
-            # Get protocol/source information
-            protocol = "0x"
-            if 'route' in data:
-                if 'fills' in data['route'] and len(data['route']['fills']) > 0:
-                    protocol = data['route']['fills'][0].get('source', '0x')
-                elif 'sources' in data['route'] and len(data['route']['sources']) > 0:
-                    # Find the source with the highest proportion
-                    max_proportion = 0
-                    for source in data['route']['sources']:
-                        if source.get('proportion', 0) > max_proportion:
-                            protocol = source.get('name', '0x')
-                            max_proportion = source.get('proportion', 0)
-
-            # Format response for frontend consumption
-            return {
-                "to": data['transaction']['to'],
-                "data": data['transaction']['data'],
-                "value": value,
-                "gas": gas_estimate,
-                "buy_amount": data['buyAmount'],
-                "sell_amount": str(amount),
-                "protocol": protocol,
-                "gas_usd": data.get('estimatedGas', data.get('totalNetworkFee', '0')),
-                "price": data.get('guaranteedPrice', data.get('price')),
-                "minimum_received": min_buy_amount,
-                "guaranteedPrice": data.get('guaranteedPrice'),  # Include the guaranteed price directly
-                "aggregator": "0x"
-            }
-        except Exception as e:
-            error_msg = str(e)
-            if hasattr(e, 'response'):
-                if hasattr(e.response, 'text'):
-                    error_msg = f"{error_msg}: {e.response.text}"
-                if hasattr(e.response, 'status_code'):
-                    error_msg = f"Status {e.response.status_code} - {error_msg}"
-
-                # If there was a JSON response with more details, try to extract it
-                if hasattr(e.response, 'json'):
-                    with contextlib.suppress(Exception):
-                        error_json = e.response.json()
-                        logger.error(f"0x API error details: {error_json}")
-                        if 'validationErrors' in error_json:
-                            for err in error_json['validationErrors']:
-                                logger.error(f"Validation error: {err.get('reason', 'Unknown')}")
-            logger.error(f"0x API error: {error_msg}")
-            raise
+        """Get quote from 0x API using the modular service."""
+        return await get_zerox_quote(
+            self.http_client,
+            token_in,
+            token_out,
+            amount,
+            chain_id,
+            wallet_address,
+            slippage_percentage
+        )
 
     async def get_openocean_quote(
         self,
@@ -593,60 +425,19 @@ class SwapService:
         amount: float,
         chain_id: int,
         wallet_address: str,
-        slippage_percentage: float = 1.0,
+        slippage_percentage: float = 1.0
     ) -> Optional[Dict[str, Any]]:
-        """Get quote from OpenOcean API"""
-        try:
-            # Extract addresses
-            token_in_address = token_in["address"] if isinstance(token_in, dict) else token_in
-            token_out_address = token_out["address"] if isinstance(token_out, dict) else token_out
-
-            base_url = "https://open-api.openocean.finance"
-            endpoint = f"/v4/{self._get_chain_name(chain_id)}/quote"
-
-            params = {
-                "inTokenAddress": token_in_address,
-                "outTokenAddress": token_out_address,
-                "amount": str(amount),
-                "gasPrice": "5",
-                "slippage": str(slippage_percentage),
-                "account": wallet_address
-            }
-
-            response = await self.http_client.get(
-                f"{base_url}{endpoint}",
-                params=params
-            )
-            response.raise_for_status()
-            quote_data = response.json()
-            
-            if quote_data["code"] != 200 or "data" not in quote_data:
-                raise ValueError(f"Invalid OpenOcean quote response: {quote_data}")
-            
-            # Then get the swap data
-            swap_url = f"{base_url}/v4/{self._get_chain_name(chain_id)}/swap"
-            swap_response = await self.http_client.get(swap_url, params=params)
-            swap_response.raise_for_status()
-            swap_data = swap_response.json()
-            
-            if swap_data["code"] != 200 or "data" not in swap_data:
-                raise ValueError(f"Invalid OpenOcean swap response: {swap_data}")
-            
-            # Combine data from both endpoints
-            return {
-                "to": swap_data["data"]["to"],
-                "data": swap_data["data"]["data"],
-                "value": swap_data["data"].get("value", "0"),
-                "gas": str(swap_data["data"].get("estimatedGas", "500000")),
-                "buy_amount": str(quote_data["data"]["outAmount"]),
-                "sell_amount": str(amount),
-                "price": quote_data["data"].get("price"),
-                "protocol": "openocean",
-                "gas_usd": str(swap_data["data"].get("estimatedGasUsd", "0"))
-            }
-        except Exception as e:
-            logger.error(f"OpenOcean API error: {str(e)}")
-            raise
+        """Get quote from OpenOcean API using the modular service."""
+        return await get_openocean_quote(
+            self.http_client,
+            token_in,
+            token_out,
+            amount,
+            chain_id,
+            wallet_address,
+            slippage_percentage,
+            self._get_chain_name
+        )
 
     async def get_kyber_quote(
         self,
@@ -657,128 +448,16 @@ class SwapService:
         recipient: str,
         slippage_percentage: float = 1.0
     ) -> Optional[Dict[str, Any]]:
-        """Get quote from Kyber API v1"""
-        try:
-            # Extract addresses
-            token_in_address = token_in["address"] if isinstance(token_in, dict) else token_in
-            token_out_address = token_out["address"] if isinstance(token_out, dict) else token_out
-
-            # Step 1: Get the route data
-            base_url = "https://aggregator-api.kyberswap.com"
-            route_endpoint = f"/{self._get_chain_name(chain_id)}/api/v1/routes"
-
-            route_params = {
-                "tokenIn": token_in_address,
-                "tokenOut": token_out_address,
-                "amountIn": str(amount_in_smallest_units)
-            }
-
-            logger.info(f"Getting Kyber route for {token_in_address} to {token_out_address} with amount {amount_in_smallest_units}")
-            route_response = await self.http_client.get(
-                f"{base_url}{route_endpoint}",
-                params=route_params
-            )
-            route_response.raise_for_status()
-            route_data = route_response.json()
-            
-            # Log the route response for debugging
-            logger.debug(f"Kyber route response: {route_data}")
-            
-            # Check for required fields
-            if 'data' not in route_data:
-                raise ValueError(f"Missing 'data' in Kyber response: {route_data}")
-            
-            if 'routeSummary' not in route_data['data']:
-                raise ValueError(f"Missing 'routeSummary' in Kyber response data: {route_data['data']}")
-                
-            router_address = route_data['data'].get('routerAddress') or get_router_address(chain_id, "kyber")
-                
-            # Step 2: Get the encoded swap data using the routeSummary
-            # FIXED: Use the correct endpoint from the documentation
-            encode_endpoint = f"/{self._get_chain_name(chain_id)}/api/v1/route/build"
-            
-            # Format the request body according to KyberSwap documentation
-            encode_body = {
-                "routeSummary": route_data['data']['routeSummary'],
-                "sender": recipient,
-                "recipient": recipient,
-                "slippageTolerance": int(slippage_percentage * 100)  # Convert percentage to basis points
-            }
-            
-            logger.info(f"Getting Kyber encoded swap data with slippage {slippage_percentage}%")
-            encode_response = await self.http_client.post(
-                f"{base_url}{encode_endpoint}",
-                json=encode_body
-            )
-            encode_response.raise_for_status()
-            encode_data = encode_response.json()
-            
-            # Log the encode response for debugging
-            logger.debug(f"Kyber encode response: {encode_data}")
-            
-            # Check for required fields
-            if 'data' not in encode_data:
-                raise ValueError(f"Missing 'data' in Kyber encode response: {encode_data}")
-                
-            # Per the documentation, the encoded data is directly in the data field
-            if not encode_data['data'].get('data'):
-                raise ValueError(f"Missing 'data.data' in Kyber encode response: {encode_data['data']}")
-            
-            # Format Kyber response to match expected format
-            buy_amount = str(route_data['data']['routeSummary']["amountOut"])
-            min_amount_out = str(int(float(buy_amount) * (1 - slippage_percentage / 100)))
-            
-            return {
-                "to": router_address,
-                "data": encode_data['data']['data'],  # Use the actual encoded transaction data
-                "value": str(amount_in_smallest_units if token_in_address.lower() == ETH_ADDRESS.lower() else 0),
-                "gas": str(route_data['data']['routeSummary'].get("gas", "500000")),
-                "buy_amount": buy_amount,
-                "sell_amount": str(amount_in_smallest_units),
-                "price": route_data['data']['routeSummary'].get("amountOutUsd"),
-                "protocol": "kyberswap",
-                "gas_usd": str(route_data['data']['routeSummary'].get("gasUsd", "0")),
-                "minimum_received": min_amount_out,
-                "aggregator": "kyber"
-            }
-        except Exception as e:
-            logger.error(f"Kyber API error: {str(e)}")
-            # Re-raise the exception to be caught by the caller
-            raise
-
-    # Remove Uniswap-related methods
-    def _get_universal_router_address(self, chain_id: int) -> Optional[str]:
-        """Deprecated: Uniswap Universal Router addresses."""
-        return None
-
-    def _encode_uniswap_path(self, token_in: str, token_out: str, chain_id: int) -> Optional[bytes]:
-        """Deprecated: Uniswap path encoding."""
-        return None
-
-    def _encode_uniswap_inputs(
-        self,
-        recipient: str,
-        amount_in: int,
-        min_amount_out: int,
-        path: bytes,
-        use_permit2: bool
-    ) -> bytes:
-        """Deprecated: Uniswap inputs encoding."""
-        return b""
-
-    def _encode_uniswap_execute(self, commands: bytes, inputs: List[bytes]) -> str:
-        """Deprecated: Uniswap execute encoding."""
-        return ""
-
-    async def _estimate_uniswap_gas(
-        self,
-        router_address: str,
-        commands: bytes,
-        inputs: List[bytes],
-        chain_id: int
-    ) -> int:
-        """Deprecated: Uniswap gas estimation."""
-        return 0
+        """Get quote from Kyber API using the modular service."""
+        return await get_kyber_quote(
+            self.http_client,
+            token_in,
+            token_out,
+            amount_in_smallest_units,
+            chain_id,
+            recipient,
+            slippage_percentage
+        )
     
     async def parse_swap_command(
         self,
@@ -993,6 +672,9 @@ class SwapService:
             Dictionary with transaction result
         """
         try:
+            # Import the error handler
+            from app.services.error_handler import handle_transaction_error
+            
             # Build the swap transaction
             tx_data = await self.build_swap_transaction(
                 swap_command=swap_command,
@@ -1027,19 +709,8 @@ class SwapService:
             }
             
         except Exception as e:
-            error_message = str(e)
-            # Clean up user rejection messages
-            if "User rejected" in error_message or "Transaction was cancelled" in error_message:
-                return {
-                    "error": "Transaction was cancelled by user",
-                    "success": False
-                }
-            
-            logger.error(f"Error executing swap: {e}")
-            return {
-                "error": f"Failed to execute swap: {error_message}",
-                "success": False
-            }
+            # Use our new error handler
+            return handle_transaction_error(e)
 
     async def _convert_to_smallest_units(self, amount: float, token_address: str, chain_id: int) -> int:
         """Convert a decimal amount to the smallest units based on token decimals."""
@@ -1131,7 +802,8 @@ class SwapService:
                     to_address,
                     amount_in_smallest,
                     chain_id,
-                    wallet_address
+                    wallet_address,
+                    slippage
                 )
                 if zero_x_quote:
                     quotes.append({
@@ -1215,6 +887,65 @@ class SwapService:
                 reverse=True
             )
 
+            # For Scroll chain, use only Brian API
+            if chain_id == 534352:  # Scroll chain ID
+                from app.services.scroll_handler import ScrollHandler
+                logger.info("Handling Scroll chain quotes - using Brian API exclusively")
+                
+                # Get transaction data from Brian API
+                brian_tx_data = await ScrollHandler.use_brian_api(
+                    swap_command=swap_command,
+                    wallet_address=wallet_address,
+                    chain_id=chain_id
+                )
+                
+                if brian_tx_data and brian_tx_data.get("all_quotes"):
+                    # Replace all quotes with Brian API quotes
+                    formatted_quotes = []
+                    
+                    for quote in brian_tx_data["all_quotes"]:
+                        if quote.get("is_approval", False):
+                            continue
+                            
+                        formatted_quotes.append({
+                            "aggregator": "brian",
+                            "protocol": "Brian API",
+                            "buy_amount": quote.get("buy_amount", "0"),
+                            "minimum_received": quote.get("buy_amount", "0"),  # Will be adjusted with slippage later
+                            "gas_usd": "0",
+                            "gas": quote.get("gas", "500000"),
+                            "to": quote.get("to", ""),
+                            "data": quote.get("data", ""),
+                            "value": quote.get("value", "0"),
+                            "token_in_symbol": from_symbol,
+                            "token_in_decimals": decimals,
+                            "token_out_symbol": to_symbol,
+                            "token_out_decimals": token_out_decimals
+                        })
+                    
+                    # Add a note about Brian API
+                    return {
+                        "quotes": formatted_quotes,
+                        "token_in": {
+                            "address": from_address,
+                            "symbol": from_symbol,
+                            "name": from_name,
+                            "metadata": from_metadata
+                        },
+                        "token_out": {
+                            "address": to_address,
+                            "symbol": to_symbol,
+                            "name": to_name,
+                            "metadata": to_metadata
+                        },
+                        "amount": amount_in,
+                        "amount_is_usd": swap_command.amount_is_usd,
+                        "scroll_note": "Using Brian API for Scroll swaps"
+                    }
+                else:
+                    # If Brian API fails, return an error
+                    raise ValueError("Brian API is required for Scroll swaps but is currently unavailable. Please ensure BRIAN_API_KEY is set in your environment variables.")
+
             return {
                 "quotes": formatted_quotes,
                 "token_in": {
@@ -1235,7 +966,7 @@ class SwapService:
         except Exception as e:
             logging.exception(f"Error getting swap quotes: {e}")
             raise
-    
+            
     async def build_transaction_from_quote(
         self,
         wallet_address: str,
@@ -1294,7 +1025,13 @@ class SwapService:
                 }
             }
             
+            # Apply Scroll-specific fixes if on Scroll chain
+            if chain_id == 534352:  # Scroll chain ID
+                from app.services.scroll_handler import ScrollHandler
+                logger.info("Applying Scroll-specific fixes to transaction")
+                tx_data = ScrollHandler.apply_scroll_fixes(tx_data, chain_id)
+            
             return tx_data
         except Exception as e:
             logging.exception(f"Error building transaction from quote: {e}")
-            raise 
+            raise
