@@ -36,6 +36,7 @@ import { DCAConfirmation } from "./DCAConfirmation";
 import { BrianConfirmation } from "./BrianConfirmation";
 import AggregatorSelection from "./AggregatorSelection";
 import { FaExchangeAlt, FaCalendarAlt, FaRobot } from "react-icons/fa";
+import { useUserProfile } from "../hooks/useUserProfile";
 
 interface CommandResponseProps {
   content: string | any; // Updated to accept structured content
@@ -415,6 +416,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     );
   };
 
+  const { getUserDisplayName, profile } = useUserProfile();
+
   return (
     <Box
       p={3}
@@ -431,12 +434,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
           size="sm"
           name={
             isCommand
-              ? "User"
+              ? getUserDisplayName()
               : agentType === "swap"
               ? "Wheeler-Dealer"
               : "SNEL"
           }
-          src={isCommand ? undefined : avatarSrc}
+          src={isCommand ? profile?.avatar || undefined : avatarSrc}
           bg={isCommand ? "blue.500" : "gray.500"}
         />
         <VStack spacing={1} align="flex-start" flex={1}>
@@ -447,7 +450,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               fontWeight="bold"
             >
               {isCommand
-                ? "@user"
+                ? `@${getUserDisplayName().toLowerCase().replace(/\s+/g, "_")}`
                 : agentType === "swap"
                 ? "@wheeler_dealer"
                 : "@snel"}

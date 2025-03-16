@@ -1,13 +1,13 @@
 # SNEL - Your Lazy AI Agent Assistant and Her Crew
 
-A friendly crypto command interpreter that helps users swap tokens, bridge assets across chains, check balances, and answer questions about crypto.
+Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who helps users swap tokens, bridge assets across chains, check balances, and answer questions about crypto
 
 ## Features
 
 - **Token swaps** across multiple chains (Optimism, Base, Scroll)
 - **Cross-chain bridging** with Brian API integration
 - **Balance checking** for any token on supported chains
-- **Natural language command processing**
+- **Natural language command processing** with snail-like wit
 - **Automatic token approval** handling with skip approval option
 - **Multi-chain support** with automatic chain detection
 - **Persistent command storage** with Redis
@@ -22,7 +22,7 @@ A friendly crypto command interpreter that helps users swap tokens, bridge asset
 - Arbitrum
 - Polygon
 - Avalanche
-- (More coming soon)
+- (More coming soon... at a snail's pace, of course)
 
 ## Brian API Integration
 
