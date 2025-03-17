@@ -52,7 +52,8 @@ class AgentFactory:
             return SimpleSwapAgent()
         elif agent_type == "messaging":
             # For messaging agent, we need to create a swap service
-            swap_service = SwapService(token_service=self.token_service)
+            swap_agent = SimpleSwapAgent()
+            swap_service = SwapService(token_service=self.token_service, swap_agent=swap_agent)
             
             return MessagingAgent(
                 token_service=self.token_service,

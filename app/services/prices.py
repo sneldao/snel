@@ -466,8 +466,11 @@ class PriceService:
         
         return None
 
-# Export a singleton instance
+# Create a singleton instance of PriceService
 price_service = PriceService()
+
+# Export the singleton instance
+__all__ = ["price_service", "get_token_price", "get_token_price_coingecko", "get_token_price_moralis"]
 
 def _is_valid_contract_address(token: str) -> bool:
     """Check if the token is a valid Ethereum contract address."""

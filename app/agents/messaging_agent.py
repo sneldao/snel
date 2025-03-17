@@ -10,6 +10,7 @@ from app.services.token_service import TokenService
 from app.services.prices import price_service
 from app.services.swap_service import SwapService
 from app.services.transaction_executor import transaction_executor
+from app.agents.price_agent import PriceAgent
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class MessagingAgent(PointlessAgent):
     """
     token_service: TokenService = Field(default=None)
     swap_service: SwapService = Field(default=None)
+    price_agent: PriceAgent = Field(default=None)
     
     def __init__(self, token_service: TokenService, swap_service: SwapService):
         """
@@ -32,7 +34,7 @@ class MessagingAgent(PointlessAgent):
             swap_service: Service for swap operations
         """
         # Initialize the base class with a prompt
-        prompt = """You are a helpful crypto assistant for Dowse Pointless, a DeFi platform.
+        prompt = """You are Snel, a friendly but comically slow crypto assistant for Dowse Pointless, a DeFi platform.
         
         You can help users with the following tasks:
         1. Connect their wallet to the platform
@@ -41,8 +43,9 @@ class MessagingAgent(PointlessAgent):
         4. Check token prices
         
         When responding to users:
-        - Be friendly and professional
+        - Be friendly but with a touch of sarcasm
         - Keep responses concise and to the point
+        - Occasionally make jokes about your slow pace as a snail
         - Explain crypto concepts in simple terms
         - If you don't know something, be honest about it
         - Always prioritize security and accuracy
@@ -59,6 +62,7 @@ class MessagingAgent(PointlessAgent):
         # Update the model fields
         object.__setattr__(self, "token_service", token_service)
         object.__setattr__(self, "swap_service", swap_service)
+        object.__setattr__(self, "price_agent", PriceAgent())
         
     async def process_message(
         self, 
@@ -277,39 +281,30 @@ class MessagingAgent(PointlessAgent):
             Response with token price
         """
         try:
-            # Extract the token from the message
-            tokens = ["ETH", "USDC", "USDT", "DAI", "WBTC"]
-            token = None
+            # Use the PriceAgent to handle the price query
+            price_result = await self.price_agent.process_price_query(message, chain_id)
             
-            for t in tokens:
-                if t.lower() in message.lower():
-                    token = t
-                    break
-            
-            if not token:
+            if price_result.get("error"):
                 return {
-                    "content": "Please specify a token to check the price of. For example: 'price of ETH'"
+                    "content": f"Sorry, I couldn't check the price: {price_result['error']}"
                 }
             
-            # Get the price of the token
-            price_data = await price_service.get_token_price(token, "usd", chain_id)
-            price = price_data[0] if price_data and price_data[0] else 0
+            # Extract the content from the price result
+            content = price_result.get("content", {})
             
-            if price <= 0:
+            if isinstance(content, dict) and content.get("type") == "price":
+                # Return the formatted message from the price agent
                 return {
-                    "content": f"Sorry, I couldn't find the price of {token}."
+                    "content": content.get("message", "No price information available."),
+                    "price": {
+                        "token": content.get("token", {}).get("symbol", ""),
+                        "usd": content.get("price", 0)
+                    }
                 }
             
-            # Format the response
-            response_text = f"Current price of {token}:\n\n"
-            response_text += f"${price:.2f} USD"
-            
+            # Fallback to basic response
             return {
-                "content": response_text,
-                "price": {
-                    "token": token,
-                    "usd": price
-                }
+                "content": "I found some price information, but I'm not sure how to interpret it. Please try again with a specific token name."
             }
             
         except Exception as e:

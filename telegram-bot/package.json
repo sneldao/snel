@@ -1,0 +1,28 @@
+{
+  "name": "telegram-bot",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "build": "chmod +x deploy.sh && ./deploy.sh",
+    "vercel-build": "echo 'Vercel build step complete'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Telegram bot for DeFi interactions",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "ethers": "^6.11.1",
+    "grammy": "^1.19.2",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
