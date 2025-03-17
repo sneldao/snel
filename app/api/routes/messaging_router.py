@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
-from app.api.dependencies import get_redis_service, get_token_service
+from app.api.dependencies import get_redis_service, get_token_service, get_wallet_service
 from app.agents.agent_factory import get_agent_factory
 from app.services.pipeline import Pipeline
 from app.services.token_service import TokenService
@@ -21,6 +21,7 @@ from app.agents.messaging_agent import MessagingAgent
 from app.services.swap_service import SwapService
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.telegram_agent import TelegramAgent
+from app.services.wallet_service import WalletService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messaging"])
@@ -84,7 +85,8 @@ async def get_messaging_agent(
 
 async def get_telegram_agent(
     redis_service: RedisService = Depends(get_redis_service),
-    token_service: TokenService = Depends(get_token_service)
+    token_service: TokenService = Depends(get_token_service),
+    wallet_service: WalletService = Depends(get_wallet_service)
 ) -> TelegramAgent:
     """Get an instance of TelegramAgent."""
     # Create a simple swap agent for the swap service
@@ -96,7 +98,8 @@ async def get_telegram_agent(
     # Create and return the telegram agent
     return TelegramAgent(
         token_service=token_service,
-        swap_service=swap_service
+        swap_service=swap_service,
+        wallet_service=wallet_service
     )
 
 @router.post("/whatsapp/webhook", response_model=Dict[str, Any])

@@ -8,12 +8,48 @@ from app.services.redis_service import RedisService
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.price_agent import PriceAgent
 from app.agents.base import PointlessAgent
+from app.services.wallet_service import WalletService
 
 # Don't import AgentFactory here to avoid circular imports
 
+# Singleton instance of RedisService
+_redis_service: Optional[RedisService] = None
+
+# Singleton instance of TokenService
+_token_service: Optional[TokenService] = None
+
+# Singleton instance of WalletService
+_wallet_service: Optional[WalletService] = None
+
+async def get_redis_service() -> RedisService:
+    """Get or create Redis service instance."""
+    global _redis_service
+    
+    if _redis_service is None:
+        _redis_service = RedisService()
+        await _redis_service.connect()
+        
+    return _redis_service
+
 async def get_token_service() -> TokenService:
-    """Get an instance of TokenService."""
-    return TokenService()
+    """Get or create token service instance."""
+    global _token_service
+    
+    if _token_service is None:
+        _token_service = TokenService()
+        
+    return _token_service
+
+async def get_wallet_service(
+    redis_service: RedisService = Depends(get_redis_service)
+) -> WalletService:
+    """Get or create wallet service instance."""
+    global _wallet_service
+    
+    if _wallet_service is None:
+        _wallet_service = WalletService(redis_service=redis_service)
+        
+    return _wallet_service
 
 async def get_openai_key(x_openai_key: Optional[str] = Header(None)) -> str:
     """Get OpenAI API key from headers or environment."""
@@ -42,9 +78,4 @@ async def get_swap_service(
     swap_agent: SimpleSwapAgent = Depends(get_swap_agent)
 ) -> SwapService:
     """Get an instance of SwapService."""
-    return SwapService(token_service=token_service, swap_agent=swap_agent)
-
-async def get_redis_service() -> RedisService:
-    """Get an instance of RedisService."""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    return RedisService(redis_url=redis_url) 
+    return SwapService(token_service=token_service, swap_agent=swap_agent) 

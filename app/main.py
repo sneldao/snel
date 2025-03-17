@@ -15,6 +15,7 @@ from app.api.routes.swap_router import router as swap_router
 from app.api.routes.dca_router import router as dca_router
 from app.api.routes.messaging_router import router as messaging_router
 from app.api.routes.brian_router import router as brian_router
+from app.api.routes.wallet_router import router as wallet_router
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.utils.configure_logging import configure_logging
 from app.services.redis_service import get_redis_service, RedisService
@@ -31,6 +32,7 @@ is_dev = environment == "development"
 logger.info(f"Environment: {environment}")
 logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
 logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
+logger.info(f"PARTICLE_PROJECT_ID set: {bool(os.getenv('PARTICLE_PROJECT_ID'))}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -57,6 +59,7 @@ app.include_router(swap_router, prefix="/api/swap")
 app.include_router(dca_router, prefix="/api/dca")
 app.include_router(messaging_router, prefix="/api/messaging")
 app.include_router(brian_router, prefix="/api/brian")
+app.include_router(wallet_router, prefix="/api/wallet")
 
 # Add request ID middleware
 request_id_contextvar = ContextVar("request_id", default=None)
