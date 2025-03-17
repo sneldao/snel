@@ -1,12 +1,7 @@
-// Load polyfills and environment
-import "whatwg-url";
-import "web-streams-polyfill";
-import "abortcontroller-polyfill/dist/abortcontroller-polyfill-only.js";
-import "formdata-polyfill";
 import "dotenv/config";
-
-import { Bot, InlineKeyboard, session } from "grammy";
-import fetch from "node-fetch";
+import { Telegraf, Markup } from "telegraf";
+import axios from "axios";
+import express from "express";
 import {
   generateWalletAddress,
   storeWalletInfo,
@@ -17,27 +12,39 @@ import {
 // Set API URL with fallback for production
 const API_URL = process.env.API_URL || "https://snel-pointless.vercel.app/api";
 
+// Initialize Express app
+const app = express();
+
 // Initialize the bot
-const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+
+// Store sessions in memory (simple approach for serverless)
+const sessions = new Map();
+
+// Session middleware
+bot.use((ctx, next) => {
+  const userId = ctx.from?.id.toString();
+  if (!userId) return next();
+
+  if (!sessions.has(userId)) {
+    sessions.set(userId, {
+      walletAddress: null,
+      pendingSwap: null,
+    });
+  }
+
+  ctx.session = sessions.get(userId);
+  return next();
+});
 
 // Log startup information
 console.log(`Starting bot with API_URL: ${API_URL}`);
 console.log(
-  `Webhook URL should be set to: https://[your-vercel-domain]/webhook`
-);
-
-// Middleware for session management
-bot.use(
-  session({
-    initial: () => ({
-      walletAddress: null,
-      pendingSwap: null,
-    }),
-  })
+  `Running in ${process.env.NODE_ENV || "development"} mode with polling`
 );
 
 // Command handlers
-bot.command("start", async (ctx) => {
+bot.start(async (ctx) => {
   await ctx.reply(
     "👋 Welcome to Snel! I'm your DeFi assistant on Telegram.\n\n" +
       "I'm a Scroll-native multichain agent that can help you with:\n" +
@@ -50,7 +57,7 @@ bot.command("start", async (ctx) => {
   );
 });
 
-bot.command("help", async (ctx) => {
+bot.help(async (ctx) => {
   await ctx.reply(
     "🔍 Here's what I can do:\n\n" +
       "/connect - Connect or create a wallet\n" +
@@ -77,13 +84,16 @@ bot.command("connect", async (ctx) => {
   }
 
   // For MVP, we'll simulate wallet creation
-  const keyboard = new InlineKeyboard()
-    .text("Create New Wallet", "create_wallet")
-    .text("Connect Existing", "connect_existing");
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.callback("Create New Wallet", "create_wallet"),
+      Markup.button.callback("Connect Existing", "connect_existing"),
+    ],
+  ]);
 
   await ctx.reply(
     "Let's set up your wallet. You can create a new wallet or connect an existing one:",
-    { reply_markup: keyboard }
+    keyboard
   );
 });
 
@@ -162,20 +172,21 @@ bot.command("price", async (ctx) => {
 
   const token = parts[1].toUpperCase();
 
-  // Use the dedicated Telegram endpoint
   try {
-    const response = await fetch(`${API_URL}/api/messaging/telegram/process`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(
-        createTelegramRequestBody(ctx.from.id, `price of ${token}`)
-      ),
-    });
+    // Use the dedicated Telegram endpoint
+    console.log(`Sending price request to API for ${token}`);
+    const response = await axios.post(
+      `${API_URL}/api/messaging/telegram/process`,
+      createTelegramRequestBody(ctx.from.id, `price of ${token}`),
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    const data = await response.json();
-    await ctx.reply(data.content);
+    console.log(`Received response from API: ${JSON.stringify(response.data)}`);
+    await ctx.reply(response.data.content);
   } catch (error) {
     console.error("Error fetching price:", error);
     await ctx.reply(
@@ -232,9 +243,12 @@ bot.command("swap", async (ctx) => {
     1800
   ).toFixed(2);
 
-  const keyboard = new InlineKeyboard()
-    .text("Approve Swap", "approve_swap")
-    .text("Cancel", "cancel_swap");
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.callback("Approve Swap", "approve_swap"),
+      Markup.button.callback("Cancel", "cancel_swap"),
+    ],
+  ]);
 
   // Store the swap request in session
   ctx.session.pendingSwap = {
@@ -251,7 +265,7 @@ bot.command("swap", async (ctx) => {
       `To: ~${estimatedOutput} ${toToken.toUpperCase()}\n` +
       `Fee: 0.3%\n\n` +
       `Do you want to proceed with this swap?`,
-    { reply_markup: keyboard }
+    keyboard
   );
 });
 
@@ -306,41 +320,40 @@ bot.on("callback_query", async (ctx) => {
     await ctx.reply("Swap cancelled.");
   }
 
-  // Answer the callback query to remove the loading state
-  await ctx.answerCallbackQuery();
+  // Answer the callback query
+  await ctx.answerCbQuery();
 });
 
 // Handle regular messages
 bot.on("message", async (ctx) => {
+  // Skip non-text messages
+  if (!ctx.message.text) return;
+
   const message = ctx.message.text;
+  const userId = ctx.from.id.toString();
 
-  if (!message) return;
-
-  console.log(`Received message from user ${ctx.from.id}: ${message}`);
+  console.log(`Received message from user ${userId}: ${message}`);
 
   try {
     // Forward to our dedicated Telegram endpoint
-    const requestBody = createTelegramRequestBody(ctx.from.id, message);
+    const requestBody = createTelegramRequestBody(userId, message);
     console.log(`Sending to API: ${API_URL}/api/messaging/telegram/process`);
     console.log(`Request body: ${JSON.stringify(requestBody)}`);
 
-    const response = await fetch(`${API_URL}/api/messaging/telegram/process`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const response = await axios.post(
+      `${API_URL}/api/messaging/telegram/process`,
+      requestBody,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-    if (!response.ok) {
-      throw new Error(`API responded with status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log(`API response: ${JSON.stringify(data)}`);
+    console.log(`API response: ${JSON.stringify(response.data)}`);
 
     // Send the response back to the user
-    await ctx.reply(data.content);
+    await ctx.reply(response.data.content);
   } catch (error) {
     console.error(`Error processing message: ${error.message}`);
     console.error(error.stack);
@@ -351,10 +364,6 @@ bot.on("message", async (ctx) => {
     );
   }
 });
-
-// Export Express app for Vercel serverless deployment
-import express from "express";
-const app = express();
 
 // Health check endpoint for Vercel
 app.get("/", (req, res) => {
@@ -367,17 +376,16 @@ app.get("/", (req, res) => {
   });
 });
 
-// Test endpoint to check bot status
+// Status endpoint to check bot info
 app.get("/status", async (req, res) => {
   try {
-    const response = await fetch(
+    const response = await axios.get(
       `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`
     );
-    const data = await response.json();
 
     res.send({
       status: "ok",
-      bot_info: data.result,
+      bot_info: response.data.result,
       api_url: API_URL,
       mode: process.env.NODE_ENV === "production" ? "polling" : "development",
       environment: process.env.NODE_ENV || "development",
@@ -391,17 +399,7 @@ app.get("/status", async (req, res) => {
   }
 });
 
-// Start polling in all environments, no more webhook in production
-console.log(
-  `Starting bot in ${process.env.NODE_ENV || "development"} mode with polling`
-);
-bot.start({
-  drop_pending_updates: true,
-  allowed_updates: ["message", "callback_query"],
-});
-
-// Set up a keepalive mechanism for Vercel to prevent the serverless function from shutting down
-// This is a workaround for Vercel's serverless functions which typically shut down after a period of inactivity
+// Set up a keepalive mechanism for Vercel
 if (process.env.NODE_ENV === "production") {
   console.log("Setting up keepalive mechanism for Vercel");
 
@@ -416,8 +414,8 @@ if (process.env.NODE_ENV === "production") {
       }/status`;
       console.log(`Pinging self at ${pingUrl} to stay alive`);
 
-      const response = await fetch(pingUrl);
-      if (response.ok) {
+      const response = await axios.get(pingUrl);
+      if (response.status === 200) {
         console.log(`Keepalive ping successful at ${new Date().toISOString()}`);
       } else {
         console.error(`Keepalive failed with status: ${response.status}`);
@@ -428,15 +426,25 @@ if (process.env.NODE_ENV === "production") {
   }, PING_INTERVAL);
 }
 
+// Start the bot
+bot
+  .launch()
+  .then(() => {
+    console.log("Bot initialized and running!");
+  })
+  .catch((error) => {
+    console.error("Error starting bot:", error);
+  });
+
+// Enable graceful stop
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
+
+// Express server
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
 // Export for Vercel
 export default app;
-
-// Start the express server for local development
-if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
-  });
-}
-
-console.log("Bot initialized!");

@@ -1,6 +1,6 @@
 # Snel Telegram Bot
 
-Telegram bot integration for the Snel DeFi assistant.
+Telegram bot integration for the Snel DeFi assistant
 
 ## Features
 
@@ -31,7 +31,7 @@ Telegram bot integration for the Snel DeFi assistant.
 
 ## Deployment on Vercel
 
-This bot is configured for deployment on Vercel using long polling (not webhooks):
+This bot is configured for deployment on Vercel using long polling:
 
 1. Connect your GitHub repository to Vercel
 2. Set the following environment variables in Vercel:
@@ -47,10 +47,11 @@ This bot is configured for deployment on Vercel using long polling (not webhooks
 
 ## Important Notes
 
-- The bot uses long polling, not webhooks, which is more reliable on Vercel
+- The bot uses Telegraf framework for better compatibility with serverless environments
+- Long polling is used instead of webhooks for reliability on Vercel
+- In-memory session storage is used for user state management
 - We use a keepalive mechanism to prevent Vercel from shutting down the function
 - The bot communicates with the main API using the `/api/messaging/telegram/process` endpoint
-- All messages are logged for debugging purposes
 
 ## Architecture
 

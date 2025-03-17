@@ -11,16 +11,13 @@ This guide provides solutions for common issues when deploying the Telegram bot 
 3. **Check Bot Status**: Visit `https://your-vercel-app.vercel.app/status` to verify the bot is running
 4. **Restart the Bot**: Redeploy the project on Vercel to restart the bot
 
-### 401 Unauthorized Errors with Webhooks
+### Dependency Issues
 
-If you see "401 Unauthorized" errors with webhooks:
+If you see errors about missing dependencies:
 
-1. We've switched to long polling mode which is more reliable on Vercel
-2. Make sure you've deleted any existing webhooks:
-   ```
-   curl -X POST "https://api.telegram.org/bot<YOUR_TOKEN>/deleteWebhook"
-   ```
-3. Redeploy the bot on Vercel
+1. Make sure all necessary dependencies are in `package.json`
+2. The bot now uses Telegraf instead of GrammY for better serverless compatibility
+3. Run `npm install` locally to update your `package-lock.json` before deploying
 
 ### API Connection Issues
 
@@ -51,10 +48,11 @@ Vercel's serverless functions shut down after periods of inactivity. Our solutio
 
 ## Common Error Messages and Solutions
 
-### "Cannot GET /webhook-info"
+### "Cannot find module 'X'"
 
-- This is expected as we've switched to long polling mode
-- Use `/status` endpoint instead to check bot health
+- This usually means a dependency is missing in package.json
+- Make sure all dependencies are properly listed in package.json
+- Try running `npm install` locally and redeploying
 
 ### "Bot Not Initialized"
 
