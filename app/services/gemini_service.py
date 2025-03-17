@@ -82,8 +82,8 @@ class GeminiService:
             if wallet_info and wallet_info.get("connected"):
                 context += f" The user has a connected wallet with address {wallet_info['address']}."
             
-            # Build API request
-            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+            # Build API request with specific model version
+            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-001:generateContent"
             headers = {"Content-Type": "application/json"}
             
             payload = {
