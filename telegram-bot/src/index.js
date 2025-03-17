@@ -310,47 +310,38 @@ bot.on("message", async (ctx) => {
 
   if (!message) return;
 
-  // Simple message handling for the MVP
-  if (
-    message.toLowerCase().includes("price") ||
-    message.toLowerCase().includes("how much is")
-  ) {
-    // Forward to our dedicated Telegram endpoint
-    try {
-      const response = await fetch(
-        `${API_URL}/api/messaging/telegram/process`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(createTelegramRequestBody(ctx.from.id, message)),
-        }
-      );
+  console.log(`Received message from user ${ctx.from.id}: ${message}`);
 
-      const data = await response.json();
-      await ctx.reply(data.content);
-    } catch (error) {
-      console.error("Error processing message:", error);
-      await ctx.reply(
-        "Sorry, I couldn't process your request. Please try again later."
-      );
+  try {
+    // Forward to our dedicated Telegram endpoint
+    const requestBody = createTelegramRequestBody(ctx.from.id, message);
+    console.log(`Sending to API: ${API_URL}/api/messaging/telegram/process`);
+    console.log(`Request body: ${JSON.stringify(requestBody)}`);
+
+    const response = await fetch(`${API_URL}/api/messaging/telegram/process`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API responded with status: ${response.status}`);
     }
-  } else if (message.toLowerCase().includes("swap")) {
-    // Suggest using the /swap command
+
+    const data = await response.json();
+    console.log(`API response: ${JSON.stringify(data)}`);
+
+    // Send the response back to the user
+    await ctx.reply(data.content);
+  } catch (error) {
+    console.error(`Error processing message: ${error.message}`);
+    console.error(error.stack);
+
+    // Send a friendly error message
     await ctx.reply(
-      "It looks like you want to swap tokens. Please use the /swap command followed by the details.\n\n" +
-        "Example: /swap 0.1 ETH for USDC"
-    );
-  } else {
-    // Default response
-    await ctx.reply(
-      "I'm not sure what you're asking. Here are some things I can help with:\n\n" +
-        "• /price ETH - Check token prices\n" +
-        "• /swap 0.1 ETH for USDC - Swap tokens\n" +
-        "• /connect - Set up your wallet\n\n" +
-        "Or try /help for all commands.\n\n" +
-        "You can also visit our web app: https://snel-pointless.vercel.app/"
+      "Sorry, I encountered an error processing your request. Please try again later."
     );
   }
 });
@@ -366,25 +357,25 @@ app.get("/", (req, res) => {
     message: "Telegram bot is running",
     version: "1.0.0",
     timestamp: new Date().toISOString(),
+    mode: process.env.NODE_ENV === "production" ? "polling" : "development",
   });
 });
 
-// Test endpoint to check webhook info
-app.get("/webhook-info", async (req, res) => {
+// Test endpoint to check bot status
+app.get("/status", async (req, res) => {
   try {
     const response = await fetch(
-      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`
     );
     const data = await response.json();
 
     res.send({
       status: "ok",
-      webhook_info: data,
-      bot_token_preview: process.env.TELEGRAM_BOT_TOKEN
-        ? `${process.env.TELEGRAM_BOT_TOKEN.substring(0, 5)}...`
-        : "Not set",
+      bot_info: data.result,
       api_url: API_URL,
+      mode: process.env.NODE_ENV === "production" ? "polling" : "development",
       environment: process.env.NODE_ENV || "development",
+      started_at: new Date().toISOString(),
     });
   } catch (error) {
     res.status(500).send({
@@ -394,52 +385,41 @@ app.get("/webhook-info", async (req, res) => {
   }
 });
 
-// Mount the bot's webhook handling on Express
-app.use(express.json());
-app.post(`/webhook`, (req, res) => {
-  // Log the entire webhook request
-  console.log("Webhook received at:", new Date().toISOString());
-  console.log("Headers:", JSON.stringify(req.headers));
-  console.log("Body:", JSON.stringify(req.body));
-
-  // Validate the request
-  if (!req.body || !req.body.update_id) {
-    console.error("Invalid webhook data received - not a Telegram update");
-    return res.status(400).send("Bad Request: Not a valid Telegram update");
-  }
-
-  try {
-    // Process update with grammy
-    console.log("Processing update with bot.handleUpdate()");
-    bot.handleUpdate(req.body);
-    console.log("Update processed successfully");
-    res.sendStatus(200);
-  } catch (error) {
-    console.error("Error handling update:", error);
-    res.status(500).send("Internal Server Error");
-  }
+// Start polling in all environments, no more webhook in production
+console.log(
+  `Starting bot in ${process.env.NODE_ENV || "development"} mode with polling`
+);
+bot.start({
+  drop_pending_updates: true,
+  allowed_updates: ["message", "callback_query"],
 });
 
-// Start the bot using polling in development, webhook in production
+// Set up a keepalive mechanism for Vercel to prevent the serverless function from shutting down
+// This is a workaround for Vercel's serverless functions which typically shut down after a period of inactivity
 if (process.env.NODE_ENV === "production") {
-  console.log("Running in production mode with webhook");
-  // Set up the bot to handle updates via webhook
-  // Instead of calling bot.start(), we'll just use bot.handleUpdate() in the webhook route
+  console.log("Setting up keepalive mechanism for Vercel");
 
-  // Optional: Verify the webhook is set up correctly by fetching info from Telegram
-  fetch(
-    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`
-  )
-    .then((response) => response.json())
-    .then((data) => {
-      console.log("Current webhook info:", JSON.stringify(data));
-    })
-    .catch((error) => {
-      console.error("Error checking webhook info:", error);
-    });
-} else {
-  console.log("Running in development mode with polling");
-  bot.start();
+  // Self-ping every 5 minutes to keep the bot alive
+  const PING_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+  setInterval(async () => {
+    try {
+      // Call our own status endpoint to keep the function warm
+      const pingUrl = `https://${
+        process.env.VERCEL_URL || "snel-telegram.vercel.app"
+      }/status`;
+      console.log(`Pinging self at ${pingUrl} to stay alive`);
+
+      const response = await fetch(pingUrl);
+      if (response.ok) {
+        console.log(`Keepalive ping successful at ${new Date().toISOString()}`);
+      } else {
+        console.error(`Keepalive failed with status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Keepalive ping failed:", error);
+    }
+  }, PING_INTERVAL);
 }
 
 // Export for Vercel
@@ -453,5 +433,4 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// The original bot start call is still necessary for polling mode
 console.log("Bot initialized!");

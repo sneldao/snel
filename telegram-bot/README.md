@@ -31,34 +31,37 @@ Telegram bot integration for the Snel DeFi assistant.
 
 ## Deployment on Vercel
 
-This bot is configured for deployment on Vercel:
+This bot is configured for deployment on Vercel using long polling (not webhooks):
 
 1. Connect your GitHub repository to Vercel
 2. Set the following environment variables in Vercel:
    - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
    - `API_URL`: URL of your backend API (e.g., https://snel-pointless.vercel.app/api)
+   - `NODE_ENV`: Set to `production`
 3. Deploy the project
+
+## Endpoints
+
+- `/`: Health check endpoint
+- `/status`: Status endpoint showing bot info and configuration
 
 ## Important Notes
 
-- The Telegram bot should be deployed separately from the main application
-- Make sure your backend API endpoint is correctly configured in the environment variables
-- The bot uses the `/api/messaging/telegram/process` endpoint for processing messages
+- The bot uses long polling, not webhooks, which is more reliable on Vercel
+- We use a keepalive mechanism to prevent Vercel from shutting down the function
+- The bot communicates with the main API using the `/api/messaging/telegram/process` endpoint
+- All messages are logged for debugging purposes
 
 ## Architecture
 
 - The bot acts as a middleware between Telegram and the Snel backend
 - It formats messages appropriately and sends them to the backend for processing
 - Session management is handled within the bot for a smoother user experience
+- In production, the bot runs in a serverless function with a keepalive mechanism
 
-## Testing
+## Troubleshooting
 
-To test the bot locally:
-
-1. Start your local backend server
-2. Set the `API_URL` in `.env` to point to your local server
-3. Run the bot with `npm run dev`
-4. Send messages to your bot on Telegram
+For deployment issues, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
 
 ## Setup
 
