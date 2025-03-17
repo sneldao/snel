@@ -12,6 +12,8 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **Multi-chain support** with automatic chain detection
 - **Persistent command storage** with Redis
 - **Messaging platform integration** (WhatsApp, Telegram)
+- **Wallet security** with Particle Auth integration
+- **AI-powered responses** using Google's Gemini API
 
 ## Telegram Bot
 
@@ -22,6 +24,7 @@ Snel is available as a Telegram bot! Chat with [@pointless_snel_bot](https://t.m
 - Swap tokens
 - Check your wallet balance
 - Get real-time crypto information
+- Ask general questions about crypto and DeFi
 
 ### Bot Commands
 
@@ -32,8 +35,38 @@ Snel is available as a Telegram bot! Chat with [@pointless_snel_bot](https://t.m
 - `/swap [amount] [token] for [token]` - Create a swap (e.g., `/swap 0.1 ETH for USDC`)
 - `/balance` - Check your wallet balance
 - `/disconnect` - Disconnect your wallet
+- `/networks` - Show available networks
+- `/network [chain]` - Switch to a specific network
+- `/keys` - Learn about key management and security
 
-You can also chat with Snel naturally, asking questions like "What's the price of ETH?" or "Tell me about Scroll L2."
+You can also chat with Snel naturally, asking questions like "What's the price of ETH?" or "Tell me about Scroll L2." The bot uses Google's Gemini AI to provide informative responses while maintaining a friendly, snail-themed personality.
+
+## Wallet Security with Particle Auth
+
+Snel uses Particle Auth for secure wallet management:
+
+- **Secure Key Management**: User private keys are never fully stored in one place
+- **Multi-Party Computation (MPC)**: Keys are split across secure locations
+- **Account Abstraction**: Support for smart contract wallets (ERC-4337)
+- **Social Recovery**: Secure recovery options for wallet access
+- **Cross-Chain Support**: Single interface for multiple blockchain networks
+
+### Wallet Features
+
+- Simulated wallets for learning DeFi without risking real funds
+- Smart contract wallet support via Account Abstraction
+- Secure key management with MPC technology
+- Support for multiple networks on testnet and mainnet
+
+## AI Integration with Gemini
+
+Snel uses Google's Gemini API to power its conversational abilities:
+
+- **Natural Language Understanding**: Process and understand complex crypto questions
+- **Contextual Responses**: Provide relevant information based on conversation history
+- **Command Guidance**: Direct users to appropriate commands for transactions
+- **Educational Content**: Explain crypto concepts and terminology
+- **Real-Time Information**: Provide current information about crypto trends
 
 ## Supported Chains
 
@@ -118,6 +151,53 @@ Example commands in Telegram:
 - `/swap 0.1 ETH for USDC` - Swap tokens
 - `/price ETH` - Check token price
 
+## Telegram Bot Setup
+
+### Creating a Bot with BotFather
+
+1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
+2. Start a chat with BotFather and send the command `/newbot`
+3. Follow the instructions to create a new bot:
+   - Provide a name for your bot (e.g., "Snel DeFi Assistant")
+   - Provide a username ending in "bot" (e.g., "snel_defi_bot")
+4. BotFather will give you a token - save this as `TELEGRAM_BOT_TOKEN` in your environment variables
+
+### Setting Up Webhook
+
+For production, the bot uses webhook mode. You'll need a publicly accessible HTTPS URL:
+
+1. Deploy your application to Vercel or another hosting service
+2. Set your webhook URL using:
+   ```bash
+   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://your-domain.com/api/telegram/process"
+   ```
+3. Verify the webhook is set correctly:
+   ```bash
+   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
+   ```
+
+### Testing the Bot
+
+For local development, you can use the API directly:
+
+1. Start your backend server
+2. Send a test message to your API endpoint:
+   ```bash
+   curl -X POST http://localhost:8000/api/telegram/process \
+     -H "Content-Type: application/json" \
+     -d '{"message": {"text": "/start", "from": {"id": 123456789}}}'
+   ```
+
+### Bot Features Configuration
+
+The bot's AI capabilities and wallet features depend on proper configuration:
+
+1. Ensure `GEMINI_API_KEY` is set for AI-powered responses
+2. Configure Particle Auth with `PARTICLE_PROJECT_ID`, `PARTICLE_CLIENT_KEY`, and `PARTICLE_APP_ID`
+3. Set up Redis for persistent storage with `REDIS_URL`
+
+After setup, your bot will automatically respond to commands and natural language queries using the Gemini API and provide secure wallet functionality with Particle Auth.
+
 ## Local Development Setup
 
 ### Prerequisites
@@ -127,12 +207,47 @@ Example commands in Telegram:
 - Poetry for Python dependency management
 - pnpm for Node.js dependency management
 - Redis (via Upstash)
+- API keys for:
+  - 0x Protocol (swap aggregator)
+  - Coingecko (token prices)
+  - Brian API (Scroll transactions)
+  - Gemini (AI responses)
+  - Particle Auth (wallet management)
 
-### Environment Variables
+### Environment Setup
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/your-username/snel-pointless.git
+cd snel-pointless
+```
+
+2. Create and activate a Python virtual environment:
+
+```bash
+poetry shell
+```
+
+3. Install Python dependencies:
+
+```bash
+poetry install
+```
+
+4. Install Node.js dependencies:
+
+```bash
+cd frontend
+pnpm install
+cd ..
+```
+
+5. Set up environment variables:
 
 Create a `.env.local` file in the root directory:
 
-```
+```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ALCHEMY_KEY=your_alchemy_key
 COINGECKO_API_KEY=your_coingecko_key
@@ -142,54 +257,40 @@ ZEROX_API_KEY=your_0x_api_key
 BRIAN_API_KEY=your_brian_api_key
 BRIAN_API_URL=https://api.brianknows.org/api/v0
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+GEMINI_API_KEY=your_gemini_api_key
+PARTICLE_PROJECT_ID=your_particle_project_id
+PARTICLE_CLIENT_KEY=your_particle_client_key
+PARTICLE_APP_ID=your_particle_app_id
 ```
 
 For local development, if you encounter SSL certificate verification issues with the API services, you can set:
 
-```
+```bash
 DISABLE_SSL_VERIFY=true
 ```
 
 Note: This should only be used in development environments, never in production.
 
-### Redis Setup
+6. Set up Redis:
 
-The project uses Upstash Redis for persistent storage. To set up:
+   - Create a database at [Upstash Console](https://console.upstash.com/)
+   - Get your Redis URL from the Upstash dashboard
+   - Add the URL to your `.env.local` file
+   - Test the connection:
+     ```bash
+     poetry run python test_redis_upstash.py
+     ```
 
-1. Create a database at [Upstash Console](https://console.upstash.com/)
-2. Get your Redis URL from the Upstash dashboard
-3. Add the URL to your `.env` file
-4. Test the connection:
-   ```
-   poetry run python test_redis_upstash.py
-   ```
+7. Start the backend:
 
-### Backend Setup
-
-Install Python dependencies:
-
-```
-poetry install
-```
-
-Start the FastAPI server:
-
-```
+```bash
 poetry run python main.py
 ```
 
-### Frontend Setup
+8. Start the frontend:
 
-Install Node.js dependencies:
-
-```
+```bash
 cd frontend
-pnpm install
-```
-
-Start the Next.js development server:
-
-```
 pnpm dev
 ```
 
@@ -382,6 +483,10 @@ The application supports a variety of natural language commands:
 
 ## Recent Updates
 
+- Added Gemini API integration for intelligent conversational responses in the Telegram bot
+- Added Particle Auth integration for secure wallet management
+- Added multi-network support with ability to switch chains in Telegram
+- Added comprehensive wallet security information with `/keys` command
 - Added Brian API integration for Scroll network
 - Added cross-chain bridging functionality
 - Added token transfer capabilities
@@ -558,6 +663,8 @@ The application requires several environment variables to be set:
 - `ZEROX_API_KEY`: API key for 0x Protocol swap functionality (get one at https://dashboard.0x.org)
 - `BRIAN_API_KEY`: API key for Brian API (get one at https://brianknows.org)
 - `TELEGRAM_BOT_TOKEN`: Token for Telegram bot integration
+- `GEMINI_API_KEY`: API key for Google's Gemini API
+- `PARTICLE_PROJECT_ID`, `PARTICLE_CLIENT_KEY`, and `PARTICLE_APP_ID`: Credentials for Particle Auth
 
 ### Setting Up Swap Functionality
 
@@ -581,3 +688,42 @@ To enable Brian API functionality:
 5. Restart the application to ensure the key is loaded
 
 Without a valid Brian API key, Scroll network functionality may be limited.
+
+### Setting Up Gemini API
+
+To enable Gemini AI features for the Telegram bot:
+
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey) and create an account
+2. Generate an API key for Gemini
+3. Add the key to your environment variables as `GEMINI_API_KEY`
+4. Restart the application to ensure the key is loaded
+
+Without a valid Gemini API key, the Telegram bot will have limited conversational abilities.
+
+### Setting Up Particle Auth
+
+To enable wallet management with Particle Auth:
+
+1. Visit [Particle Auth Dashboard](https://dashboard.particle.network/) and create an account
+2. Create a new project and application
+3. Get your Project ID, Client Key, and App ID
+4. Add these to your environment variables as `PARTICLE_PROJECT_ID`, `PARTICLE_CLIENT_KEY`, and `PARTICLE_APP_ID`
+5. Restart the application to ensure the keys are loaded
+
+Without valid Particle Auth credentials, wallet management will be limited to simulated wallets.
+
+## Acknowledgments
+
+Snel leverages several powerful technologies and APIs to deliver its functionality:
+
+- [Google Gemini API](https://ai.google.dev/) - Powers the natural language processing capabilities
+- [Particle Auth](https://particle.network/) - Provides secure wallet management and Account Abstraction
+- [Brian API](https://brianknows.org) - Powers the Scroll network transactions
+- [0x Protocol](https://0x.org/) - Provides swap aggregation across multiple DEXes
+- [Upstash Redis](https://upstash.com/) - Serverless Redis for persistent storage
+- [Vercel](https://vercel.com) - Hosts the frontend and serverless backend
+- [FastAPI](https://fastapi.tiangolo.com/) - Powers the backend API
+- [Next.js](https://nextjs.org/) - Powers the frontend application
+- [Telegram Bot API](https://core.telegram.org/bots/api) - Enables the Telegram bot integration
+
+Special thanks to the development team and all the open-source contributors who made this project possible.
