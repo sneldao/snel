@@ -8,8 +8,14 @@ import {
   getWalletBalance,
 } from "./wallet.js";
 
+// Set API URL with fallback for production
+const API_URL = process.env.API_URL || "https://snel-pointless.vercel.app/api";
+
 // Initialize the bot
 const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
+
+// Log startup information
+console.log(`Starting bot with API_URL: ${API_URL}`);
 
 // Middleware for session management
 bot.use(
@@ -149,18 +155,15 @@ bot.command("price", async (ctx) => {
 
   // Use the dedicated Telegram endpoint
   try {
-    const response = await fetch(
-      `${process.env.API_URL}/api/messaging/telegram/process`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          createTelegramRequestBody(ctx.from.id, `price of ${token}`)
-        ),
-      }
-    );
+    const response = await fetch(`${API_URL}/api/messaging/telegram/process`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        createTelegramRequestBody(ctx.from.id, `price of ${token}`)
+      ),
+    });
 
     const data = await response.json();
     await ctx.reply(data.content);
@@ -312,7 +315,7 @@ bot.on("message", async (ctx) => {
     // Forward to our dedicated Telegram endpoint
     try {
       const response = await fetch(
-        `${process.env.API_URL}/api/messaging/telegram/process`,
+        `${API_URL}/api/messaging/telegram/process`,
         {
           method: "POST",
           headers: {
@@ -349,6 +352,48 @@ bot.on("message", async (ctx) => {
   }
 });
 
-// Start the bot
-bot.start();
-console.log("Bot started!");
+// Export Express app for Vercel serverless deployment
+import express from "express";
+const app = express();
+
+// Health check endpoint for Vercel
+app.get("/", (req, res) => {
+  res.send({
+    status: "ok",
+    message: "Telegram bot is running",
+    version: "1.0.0",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Mount the bot's webhook handling on Express
+app.use(express.json());
+app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
+  // Process update
+  bot.handleUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// Start the bot using polling in development, webhook in production
+if (process.env.NODE_ENV === "production") {
+  console.log("Running in production mode with webhook");
+  // The actual webhook setup is handled by the Telegram API
+  // We just need to expose the endpoint for Telegram to call
+} else {
+  console.log("Running in development mode with polling");
+  bot.start();
+}
+
+// Export for Vercel
+export default app;
+
+// Start the express server for local development
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
+
+// The original bot start call is still necessary for polling mode
+console.log("Bot initialized!");

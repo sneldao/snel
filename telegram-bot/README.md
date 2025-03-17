@@ -1,13 +1,64 @@
 # Snel Telegram Bot
 
-A Telegram bot for DeFi interactions using account abstraction.
+Telegram bot integration for the Snel DeFi assistant.
 
 ## Features
 
-- **Price Checking**: Get real-time prices of cryptocurrencies
-- **Wallet Management**: Create and manage smart contract wallets
-- **Token Swaps**: Swap tokens directly from Telegram
-- **Balance Checking**: Check your wallet balances
+- Token price queries
+- Wallet management
+- Token swaps
+- Balance checking
+
+## Local Development
+
+1. Install dependencies:
+
+   ```
+   npm install
+   ```
+
+2. Create a `.env` file with the following variables:
+
+   ```
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   API_URL=http://localhost:8000
+   ```
+
+3. Run the development server:
+   ```
+   npm run dev
+   ```
+
+## Deployment on Vercel
+
+This bot is configured for deployment on Vercel:
+
+1. Connect your GitHub repository to Vercel
+2. Set the following environment variables in Vercel:
+   - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+   - `API_URL`: URL of your backend API (e.g., https://snel-pointless.vercel.app/api)
+3. Deploy the project
+
+## Important Notes
+
+- The Telegram bot should be deployed separately from the main application
+- Make sure your backend API endpoint is correctly configured in the environment variables
+- The bot uses the `/api/messaging/telegram/process` endpoint for processing messages
+
+## Architecture
+
+- The bot acts as a middleware between Telegram and the Snel backend
+- It formats messages appropriately and sends them to the backend for processing
+- Session management is handled within the bot for a smoother user experience
+
+## Testing
+
+To test the bot locally:
+
+1. Start your local backend server
+2. Set the `API_URL` in `.env` to point to your local server
+3. Run the bot with `npm run dev`
+4. Send messages to your bot on Telegram
 
 ## Setup
 
@@ -51,22 +102,6 @@ npm run dev
 - `/swap [amount] [token] for [token]` - Create a swap (e.g., `/swap 0.1 ETH for USDC`)
 - `/balance` - Check your wallet balance
 - `/disconnect` - Disconnect your wallet
-
-## Architecture
-
-This bot uses a simple architecture for the MVP:
-
-1. **GrammyJS**: For Telegram bot functionality
-2. **In-Memory Storage**: For user session management
-3. **Simulated Wallet Creation**: For testing wallet functionality
-4. **API Integration**: Connects to existing backend for price data
-
-In future versions, this will be enhanced with:
-
-1. **Account Abstraction**: Using ERC-4337 for smart contract wallets
-2. **MPC Wallets**: For secure key management
-3. **Session Keys**: For temporary delegation
-4. **Paymaster Integration**: For gasless transactions
 
 ## Development Roadmap
 
