@@ -56,16 +56,18 @@ app.add_middleware(
 # Add error handler middleware
 app.add_middleware(ErrorHandlerMiddleware)
 
-# Import the main API router
-from app.api.routes import api_router
+# First include core routes directly
+from app.api.routes.commands_router import router as commands_router
+app.include_router(commands_router, prefix="/api")
 
-# Include all routes from the centralized API router
-app.include_router(api_router, prefix="/api")
-
-# Add webhook endpoints for compatibility with existing deployments
+# Then add webhook routes separately (since these are needed for compatibility)
 from app.api.routes.messaging import router as webhook_router
 app.include_router(webhook_router, prefix="/api/webhook")
 app.include_router(webhook_router, prefix="/api/telegram")
+
+# Finally include the rest of the API routes
+from app.api.routes import api_router
+app.include_router(api_router, prefix="/api")
 
 # Add request ID middleware
 request_id_contextvar = ContextVar("request_id", default=None)
