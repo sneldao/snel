@@ -1,4 +1,4 @@
-import { Telegraf } from "telegraf";
+import { Telegraf, session } from "telegraf";
 import dotenv from "dotenv";
 import fetch from "node-fetch";
 import * as wallet from "./wallet.js";
