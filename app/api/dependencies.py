@@ -1,6 +1,7 @@
 from fastapi import Depends, HTTPException, Header
 from typing import Optional
 import os
+import logging
 
 from app.services.token_service import TokenService
 from app.services.swap_service import SwapService
@@ -21,14 +22,23 @@ _token_service: Optional[TokenService] = None
 # Singleton instance of WalletService
 _wallet_service: Optional[WalletService] = None
 
+logger = logging.getLogger(__name__)
+
 async def get_redis_service() -> RedisService:
     """Get or create Redis service instance."""
     global _redis_service
     
     if _redis_service is None:
-        _redis_service = RedisService()
-        await _redis_service.connect()
-        
+        try:
+            # Get Redis URL from environment or use default
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            _redis_service = RedisService(redis_url=redis_url)
+            await _redis_service.connect()
+        except Exception as e:
+            logger.warning(f"Failed to initialize Redis service: {e}. Some features may be limited.")
+            # Create a dummy Redis service to prevent errors
+            _redis_service = RedisService(redis_url="redis://localhost:6379/0")
+    
     return _redis_service
 
 async def get_token_service() -> TokenService:

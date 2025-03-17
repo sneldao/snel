@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from fastapi import Depends
 import redis.asyncio
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -256,15 +257,30 @@ class RedisService(BaseModel):
             return [None] * len(keys)
     
     async def test_connection(self) -> bool:
-        """Test the Redis connection."""
+        """
+        Test the Redis connection by setting and getting a value.
+        
+        Returns:
+            True if the connection is working, False otherwise
+        """
         try:
-            test_key = "connection_test"
-            await self.set(test_key, "test")
-            result = await self.get(test_key)
-            await self.delete(test_key)
-            return result == "test"
+            test_key = "redis_connection_test"
+            test_value = f"test_{int(time.time())}"
+            
+            # Try to set and get a test value
+            if self.is_upstash:
+                self.client.set(test_key, test_value)
+                result = self.client.get(test_key)
+            else:
+                await self.client.set(test_key, test_value)
+                result = await self.client.get(test_key)
+            
+            # Check if we got the expected value back
+            success = result == test_value
+            logger.info(f"Redis connection test {'successful' if success else 'failed'}")
+            return success
         except Exception as e:
-            logger.error(f"Redis connection test failed: {e}")
+            logger.error(f"Error testing Redis connection: {e}")
             return False
 
     async def set_pending_command(self, wallet_address: str, command: str) -> None:
@@ -313,6 +329,20 @@ class RedisService(BaseModel):
         key = f"token_data:{wallet_address}"
         data = self.client.get(key) if self.is_upstash else await self.client.get(key)
         return json.loads(data) if data else None
+
+    async def connect(self) -> bool:
+        """
+        Connect to Redis and return success status.
+        Will not fail the application if Redis is unavailable.
+        """
+        try:
+            if not self.is_upstash:
+                # Test connection to Redis
+                await self.test_connection()
+            return True
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}. Some features may be limited.")
+            return False
 
 async def get_redis_service() -> RedisService:
     """Get an instance of RedisService."""

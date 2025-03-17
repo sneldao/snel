@@ -161,7 +161,42 @@ class TelegramAgent(MessagingAgent):
         Returns:
             Dict with response content and any additional information
         """
-        if callback_data == "create_wallet":
+        # Simple callbacks that map to existing command handlers
+        callback_to_command = {
+            "check_balance": self._handle_balance_command,
+            "show_help": self._handle_help_command,
+            "show_networks": self._handle_networks_command,
+        }
+        
+        if callback_data in callback_to_command:
+            return await callback_to_command[callback_data](user_id, "", wallet_address)
+        
+        elif callback_data == "disconnect_wallet":
+            # Same as disconnect command
+            if not wallet_address:
+                return {
+                    "content": "You don't have a wallet connected.",
+                }
+            
+            return {
+                "content": f"Wallet disconnected: {wallet_address[:6]}...{wallet_address[-4:]}",
+                "wallet_address": None  # Signal to remove the wallet
+            }
+        
+        elif callback_data == "start_swap":
+            if not wallet_address:
+                return {
+                    "content": "You need to connect a wallet first. Use /connect to set up your wallet."
+                }
+            
+            return {
+                "content": "To create a swap, use the format:\n\n" +
+                    "*/swap [amount] [token] for [token]*\n\n" +
+                    "Example: */swap 0.1 ETH for USDC*\n\n" +
+                    "I'll guide you through the rest of the process!"
+            }
+        
+        elif callback_data == "create_wallet":
             # Generate a wallet using the wallet service
             chain = "scroll_sepolia"  # Default to Scroll Sepolia
             new_wallet = await self._generate_wallet_address(user_id, chain)
@@ -178,19 +213,41 @@ class TelegramAgent(MessagingAgent):
             else:
                 chain_name = "Scroll Sepolia"
             
+            # Button for checking balance or viewing networks
+            buttons = [
+                [
+                    {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                    {"text": "🏦 View Networks", "callback_data": "show_networks"}
+                ]
+            ]
+            
             return {
-                "content": f"🎉 I've created a new wallet for you on {chain_name}!\n\n" +
-                    f"Address: {new_wallet}\n\n" +
+                "content": f"✨ Awesome! I've created a new wallet for you on {chain_name}!\n\n" +
+                    f"🔐 Address: {new_wallet[:6]}...{new_wallet[-4:]}\n\n" +
                     f"This wallet uses Particle Auth with Account Abstraction to keep your keys secure while letting you:\n\n" +
                     f"• Execute actual on-chain transactions\n" +
                     f"• Manage your assets securely\n" +
                     f"• Use advanced features like ERC-4337\n\n" +
-                    f"To begin using your wallet, try */balance* to check your balance or */networks* to see available networks.",
-                "wallet_address": new_wallet
+                    f"Ready to start exploring? Try checking your balance or exploring other networks!",
+                "wallet_address": new_wallet,
+                "metadata": {
+                    "telegram_buttons": buttons
+                }
             }
         elif callback_data == "connect_existing":
+            # Create buttons for future connect options
+            buttons = [
+                [
+                    {"text": "✨ Create New Instead", "callback_data": "create_wallet"}
+                ]
+            ]
+            
             return {
-                "content": "To connect an existing wallet, you would scan a QR code or enter your wallet address.\n\nThis feature will be implemented in the next version."
+                "content": "Coming soon! Support for connecting your existing wallet is under development.\n\n" +
+                    "For now, would you like to create a new wallet instead?",
+                "metadata": {
+                    "telegram_buttons": buttons
+                }
             }
         elif callback_data.startswith("approve_swap:"):
             # Extract swap information from callback data
@@ -200,8 +257,22 @@ class TelegramAgent(MessagingAgent):
                 # Generate a fake transaction hash
                 tx_hash = f"0x{hashlib.sha256(f'{user_id}:{int(time.time())}'.encode()).hexdigest()[:40]}"
                 
+                # Create buttons for new actions
+                buttons = [
+                    [
+                        {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                        {"text": "🔄 New Swap", "callback_data": "start_swap"}
+                    ]
+                ]
+                
                 return {
-                    "content": f"✅ Swap approved!\n\nSwapping {swap_info['amount']} {swap_info['from_token']} for ~{swap_info['estimated_output']} {swap_info['to_token']}\n\nTransaction hash: {tx_hash}\n\nThis is a simulation for the MVP. In the full version, this would execute the actual swap transaction."
+                    "content": f"✅ Swap approved!\n\n" +
+                        f"Swapping {swap_info['amount']} {swap_info['from_token']} for ~{swap_info['estimated_output']} {swap_info['to_token']}\n\n" +
+                        f"Transaction hash: {tx_hash}\n\n" +
+                        f"This is a simulation for the MVP. In the full version, this would execute the actual swap transaction.",
+                    "metadata": {
+                        "telegram_buttons": buttons
+                    }
                 }
             except Exception as e:
                 logger.error(f"Error processing swap approval: {e}")
@@ -210,11 +281,11 @@ class TelegramAgent(MessagingAgent):
                 }
         elif callback_data == "cancel_swap":
             return {
-                "content": "Swap cancelled."
+                "content": "Swap cancelled. You can start a new swap anytime with the */swap* command."
             }
         else:
             return {
-                "content": "I don't know how to handle this action. Please try a different option."
+                "content": "I don't know how to handle this action. Please try a different option or use a command like */help*."
             }
 
     def _add_telegram_personality(self, content: str) -> str:
@@ -268,15 +339,37 @@ class TelegramAgent(MessagingAgent):
         Returns:
             Dict with response content
         """
+        # Check if user already has a wallet
+        has_wallet_text = ""
+        if wallet_address:
+            has_wallet_text = f"\n\n🔗 You already have a wallet connected: {wallet_address[:6]}...{wallet_address[-4:]}\nUse */balance* to check your balance."
+        
+        # Create buttons for quick actions
+        buttons = []
+        if not wallet_address:
+            buttons.append([
+                {"text": "🔗 Connect Wallet", "callback_data": "create_wallet"},
+                {"text": "ℹ️ Help", "callback_data": "show_help"}
+            ])
+        else:
+            buttons.append([
+                {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                {"text": "🏦 Networks", "callback_data": "show_networks"}
+            ])
+        
         return {
             "content": "👋 Welcome to Snel! I'm your DeFi assistant on Telegram.\n\n" +
                 "I'm a Scroll-native multichain agent that can help you with:\n" +
                 "• Checking token prices\n" +
                 "• Swapping tokens across chains\n" +
                 "• Managing your wallet\n" +
-                "• Executing transactions\n\n" +
-                "Try /help to see available commands, or visit our web app at https://snel-pointless.vercel.app/\n\n" +
-                "🐌 I might be slow, but I'll get you there safely!"
+                "• Executing transactions" +
+                has_wallet_text + "\n\n" +
+                "Try */help* to see all available commands, or visit our web app at https://snel-pointless.vercel.app/" +
+                "\n\n🐌 I might be slow, but I'll get you there safely!",
+            "metadata": {
+                "telegram_buttons": buttons
+            }
         }
 
     async def _handle_help_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
@@ -291,15 +384,30 @@ class TelegramAgent(MessagingAgent):
         Returns:
             Dict with response content
         """
+        # Create buttons for quick actions
+        buttons = []
+        if not wallet_address:
+            buttons.append([
+                {"text": "🔗 Connect Wallet", "callback_data": "create_wallet"}
+            ])
+        else:
+            buttons.append([
+                {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                {"text": "🔄 Swap Tokens", "callback_data": "start_swap"}
+            ])
+        
         return {
             "content": "🔍 Here's what I can do:\n\n" +
-                "/connect - Connect or create a wallet\n" +
-                "/price [token] - Check token price (e.g., /price ETH)\n" +
-                "/swap [amount] [token] for [token] - Create a swap (e.g., /swap 0.1 ETH for USDC)\n" +
-                "/balance - Check your wallet balance\n" +
-                "/disconnect - Disconnect your wallet\n" +
-                "/networks - See available networks\n\n" +
-                "I'm still learning, so please be patient with me! 🐌"
+                "*/connect* - Connect or create a wallet\n" +
+                "*/price [token]* - Check token price (e.g., /price ETH)\n" +
+                "*/swap [amount] [token] for [token]* - Create a swap (e.g., /swap 0.1 ETH for USDC)\n" +
+                "*/balance* - Check your wallet balance\n" +
+                "*/disconnect* - Disconnect your wallet\n" +
+                "*/networks* - See available networks\n\n" +
+                "I'm still learning, so please be patient with me! 🐌",
+            "metadata": {
+                "telegram_buttons": buttons
+            }
         }
 
     async def _handle_connect_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
@@ -316,22 +424,40 @@ class TelegramAgent(MessagingAgent):
         """
         # Check if user already has a wallet
         if wallet_address:
+            # Create buttons for wallet management
+            buttons = [
+                [
+                    {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                    {"text": "🔄 Switch Network", "callback_data": "show_networks"}
+                ],
+                [
+                    {"text": "❌ Disconnect Wallet", "callback_data": "disconnect_wallet"}
+                ]
+            ]
+            
             return {
                 "content": f"You already have a wallet connected!\n\n" +
-                    f"Address: {wallet_address}\n\n" +
-                    f"Use /disconnect if you want to disconnect this wallet."
+                    f"Address: {wallet_address[:6]}...{wallet_address[-4:]}\n\n" +
+                    f"What would you like to do with your wallet?",
+                "metadata": {
+                    "telegram_buttons": buttons
+                }
             }
         
         # Create buttons for wallet options
         buttons = [
             [
-                {"text": "Create New Wallet", "callback_data": "create_wallet"},
-                {"text": "Connect Existing", "callback_data": "connect_existing"}
+                {"text": "✨ Create New Wallet", "callback_data": "create_wallet"},
+                {"text": "🔗 Connect Existing", "callback_data": "connect_existing"}
             ]
         ]
         
         return {
-            "content": "Let's set up your wallet. You can create a new wallet or connect an existing one:",
+            "content": "Let's set up your wallet. Creating a wallet lets you swap tokens, check balances, and more:\n\n" +
+                "• Your keys remain secure with Particle Auth\n" +
+                "• Default network is Scroll Sepolia testnet\n" +
+                "• You can switch networks anytime\n\n" +
+                "What would you like to do?",
             "metadata": {
                 "telegram_buttons": buttons
             }
@@ -507,7 +633,7 @@ class TelegramAgent(MessagingAgent):
                 return None
             
             # Return success and auth parameters
-            # Note: The actual wallet address will be created on the client side
+            # Note: The actual wallet address will be created client-side
             # We're using a deterministic address for demonstration purposes
             # In production, this would be replaced with MPC/AA wallet creation
             

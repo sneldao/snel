@@ -10,6 +10,12 @@ from dotenv import load_dotenv
 load_dotenv()
 load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
+# Make sure we have a default Redis URL if not provided in environment
+if not os.environ.get("REDIS_URL"):
+    redis_url = "redis://localhost:6379/0"
+    os.environ["REDIS_URL"] = redis_url
+    print(f"No REDIS_URL found, using default: {redis_url}")
+
 from app.api.routes.commands_router import router as commands_router
 from app.api.routes.swap_router import router as swap_router
 from app.api.routes.dca_router import router as dca_router
