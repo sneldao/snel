@@ -42,41 +42,51 @@ class RedisService(BaseModel):
     }
     
     def __init__(self, **data):
+        # Ensure we have a redis_url
+        if 'redis_url' not in data:
+            # Default to environment variable or local Redis
+            data['redis_url'] = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            logger.info(f"Using Redis URL from environment: {data['redis_url'][:10]}...")
+        
         super().__init__(**data)
 
         # Determine whether to use Upstash or local Redis
         self.is_upstash = "upstash" in self.redis_url.lower()
 
-        if self.is_upstash:
-            # For Upstash, parse the URL to extract credentials
-            try:
-                # Parse the Redis URL (format: rediss://default:password@hostname:port)
-                # It seems Upstash Redis connection strings use 'rediss://'
-                url_parts = urlparse(self.redis_url)
-                hostname = url_parts.hostname
-                port = url_parts.port or 6379
-                password = url_parts.password
-
-                # Import Upstash Redis
-                from upstash_redis import Redis
-
-                # Extract the token from the password
-                token = password.split('@')[0] if password and '@' in password else password
-                # Create the client with the extracted parameters
-                self.client = Redis(url=f"https://{hostname}", token=token)
-                logger.info("Using Upstash Redis client")
-            except ImportError:
-                logger.warning("upstash_redis not installed, falling back to redis.asyncio")
+        try:
+            if self.is_upstash:
+                # For Upstash, parse the URL to extract credentials
+                try:
+                    # Parse the Redis URL (format: rediss://default:password@hostname:port)
+                    # It seems Upstash Redis connection strings use 'rediss://'
+                    url_parts = urlparse(self.redis_url)
+                    hostname = url_parts.hostname
+                    port = url_parts.port or 6379
+                    password = url_parts.password
+    
+                    # Import Upstash Redis
+                    from upstash_redis import Redis
+    
+                    # Extract the token from the password
+                    token = password.split('@')[0] if password and '@' in password else password
+                    # Create the client with the extracted parameters
+                    self.client = Redis(url=f"https://{hostname}", token=token)
+                    logger.info("Using Upstash Redis client")
+                except ImportError:
+                    logger.warning("upstash_redis not installed, falling back to redis.asyncio")
+                    self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
+                    self.is_upstash = False
+                except Exception as e:
+                    logger.error(f"Error initializing Upstash Redis: {e}")
+                    logger.warning("Falling back to redis.asyncio")
+                    self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
+                    self.is_upstash = False
+            else:
+                # For local Redis, use redis.asyncio
                 self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
-                self.is_upstash = False
-            except Exception as e:
-                logger.error(f"Error initializing Upstash Redis: {e}")
-                logger.warning("Falling back to redis.asyncio")
-                self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
-                self.is_upstash = False
-        else:
-            # For local Redis, use redis.asyncio
-            self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis client: {e}")
+            self.client = None
 
         logger.info(f"Redis client initialized with URL: {self.redis_url[:10]}... (Upstash: {self.is_upstash})")
 
@@ -170,6 +180,10 @@ class RedisService(BaseModel):
     async def get(self, key: str) -> Optional[Any]:
         """Get a value from Redis."""
         try:
+            if not self.client:
+                logger.warning(f"Redis client not initialized when getting key {key}")
+                return None
+            
             value = self.client.get(key) if self.is_upstash else await self.client.get(key)
             return json.loads(value) if value else None
         except Exception as e:
@@ -179,6 +193,10 @@ class RedisService(BaseModel):
     async def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
         """Set a value in Redis with optional expiration in seconds."""
         try:
+            if not self.client:
+                logger.warning(f"Redis client not initialized when setting key {key}")
+                return False
+            
             # Convert value to JSON string using custom encoder
             json_value = json.dumps(value, cls=DateTimeEncoder)
 

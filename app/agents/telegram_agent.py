@@ -28,7 +28,12 @@ class TelegramAgent(MessagingAgent):
     like commands, wallet creation, and inline buttons.
     """
     command_handlers: Dict[str, Callable] = Field(default_factory=dict)
+    wallet_service: Optional[WalletService] = None
     
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+
     def __init__(
         self, 
         token_service: TokenService, 
@@ -48,6 +53,9 @@ class TelegramAgent(MessagingAgent):
         
         # Store the wallet service
         self.wallet_service = wallet_service
+        
+        # Logging for debugging
+        logger.info(f"TelegramAgent initialized with wallet_service: {wallet_service is not None}")
         
         # Command handlers mapping
         self.command_handlers = {
@@ -168,7 +176,11 @@ class TelegramAgent(MessagingAgent):
             "show_networks": self._handle_networks_command,
         }
         
+        # Log the callback for debugging
+        logger.info(f"Processing callback from user {user_id}: {callback_data}")
+        
         if callback_data in callback_to_command:
+            logger.info(f"Executing mapped command handler for {callback_data}")
             return await callback_to_command[callback_data](user_id, "", wallet_address)
         
         elif callback_data == "disconnect_wallet":
@@ -198,7 +210,36 @@ class TelegramAgent(MessagingAgent):
         
         elif callback_data == "create_wallet":
             # Generate a wallet using the wallet service
-            chain = "scroll_sepolia"  # Default to Scroll Sepolia
+            chain = DEFAULT_CHAIN
+            
+            # Fallback if wallet service is not available
+            if not self.wallet_service:
+                logger.warning("Wallet service not available, using simulated wallet")
+                seed = f"snel_wallet_{user_id}_{random.randint(1, 1000000)}"
+                new_wallet = f"0x{hashlib.sha256(seed.encode()).hexdigest()[:40]}"
+                
+                buttons = [
+                    [
+                        {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                        {"text": "🏦 View Networks", "callback_data": "show_networks"}
+                    ]
+                ]
+                
+                return {
+                    "content": f"✨ I've created a simulated wallet for you on Scroll Sepolia!\n\n" +
+                        f"🔐 Address: {new_wallet[:6]}...{new_wallet[-4:]}\n\n" +
+                        f"This is currently a simulated wallet. In the future, we'll implement real smart contract wallets with:\n\n" +
+                        f"• Actual on-chain transactions\n" +
+                        f"• Secure asset management\n" +
+                        f"• ERC-4337 support\n\n" +
+                        f"What would you like to do next?",
+                    "wallet_address": new_wallet,
+                    "metadata": {
+                        "telegram_buttons": buttons
+                    }
+                }
+            
+            # Normal flow with wallet service
             new_wallet = await self._generate_wallet_address(user_id, chain)
             
             if not new_wallet:
@@ -602,7 +643,7 @@ class TelegramAgent(MessagingAgent):
             "wallet_address": None  # Signal to remove the wallet
         }
 
-    async def _generate_wallet_address(self, user_id: str, chain: str = "scroll_sepolia") -> Optional[str]:
+    async def _generate_wallet_address(self, user_id: str, chain: str = DEFAULT_CHAIN) -> Optional[str]:
         """
         Generate a wallet address for the user using the wallet service.
         

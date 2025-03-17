@@ -158,10 +158,8 @@ async def whatsapp_webhook(
 
 @router.post("/telegram/webhook", response_model=Dict[str, Any])
 async def telegram_webhook(
-    update: TelegramMessage,
-    background_tasks: BackgroundTasks,
-    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
-    redis_service: RedisService = Depends(get_redis_service)
+    request: Request,
+    background_tasks: BackgroundTasks
 ):
     """
     Handle Telegram webhook messages.
@@ -170,83 +168,15 @@ async def telegram_webhook(
     and processes them using the Telegram agent.
     """
     try:
-        logger.info(f"Received Telegram webhook: {update.update_id}")
+        # Get the raw request body for debugging
+        body = await request.json()
+        logger.info(f"Received Telegram webhook: {body.get('update_id', 'unknown')}")
         
-        # Extract user_id from the update based on the update type
-        user_id = None
-        if update.message and update.message.get("from", {}).get("id"):
-            user_id = update.message.get("from", {}).get("id")
-        elif update.callback_query and update.callback_query.get("from", {}).get("id"):
-            user_id = update.callback_query.get("from", {}).get("id")
+        # Process in background to avoid timeouts
+        background_tasks.add_task(process_telegram_webhook, body)
         
-        if not user_id:
-            logger.warning("No user_id found in Telegram update")
-            return {"status": "ignored"}
-        
-        # Check if user has a linked wallet
-        wallet_address = None
-        if redis_service:
-            key = f"messaging:telegram:user:{user_id}:wallet"
-            wallet_address = await redis_service.get(key)
-        
-        # Create a dictionary from the update Pydantic model
-        update_dict = update.dict(exclude_unset=True)
-        
-        # Process the update with the TelegramAgent
-        result = await telegram_agent.process_telegram_update(
-            update=update_dict,
-            user_id=str(user_id),
-            wallet_address=wallet_address
-        )
-        
-        # If result contains a callback query answer, send it back
-        callback_query_id = update_dict.get("callback_query", {}).get("id")
-        if callback_query_id:
-            await send_telegram_callback_answer(callback_query_id)
-        
-        # If there's a wallet address in the result, store it
-        if result.get("wallet_address") is not None:
-            if result.get("wallet_address"):  # Non-empty wallet address
-                await redis_service.set(
-                    key=f"messaging:telegram:user:{user_id}:wallet",
-                    value=result["wallet_address"]
-                )
-                # Also store the reverse mapping
-                await redis_service.set(
-                    key=f"wallet:{result['wallet_address']}:telegram:user",
-                    value=str(user_id)
-                )
-            else:  # Empty wallet address = disconnect wallet
-                # Delete the mappings
-                old_wallet = await redis_service.get(f"messaging:telegram:user:{user_id}:wallet")
-                if old_wallet:
-                    await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
-                await redis_service.delete(f"messaging:telegram:user:{user_id}:wallet")
-        
-        # Send response back to the user
-        content = result.get("content", "")
-        if content:
-            # Check if there are any Telegram-specific buttons to include
-            buttons = None
-            if result.get("metadata", {}) and result["metadata"].get("telegram_buttons"):
-                buttons = result["metadata"]["telegram_buttons"]
-                
-            # Send the message with optional buttons
-            chat_id = None
-            if update.message and update.message.get("chat", {}).get("id"):
-                chat_id = update.message.get("chat", {}).get("id")
-            elif update.callback_query and update.callback_query.get("message", {}).get("chat", {}).get("id"):
-                chat_id = update.callback_query.get("message", {}).get("chat", {}).get("id")
-                
-            if chat_id:
-                await send_telegram_message_with_buttons(
-                    chat_id=str(chat_id),
-                    message=content,
-                    buttons=buttons
-                )
-        
-        # Return status for the webhook
-        return {"status": "processed", "user_id": user_id}
+        # Return 200 OK to acknowledge receipt
+        return {"status": "processing"}
         
     except Exception as e:
         logger.exception(f"Error processing Telegram webhook: {e}")
@@ -396,7 +326,7 @@ async def process_whatsapp_message(
             await redis_service.set(
                 key=f"wallet:{result['wallet_address']}:whatsapp:user",
                 value=from_user
-        )
+            )
         
     except Exception as e:
         logger.exception(f"Error processing WhatsApp message: {e}")
@@ -409,58 +339,98 @@ async def process_whatsapp_message(
         except:
             pass
 
-async def process_telegram_message(
-    chat_id: str,
-    text: str,
-    messaging_agent: MessagingAgent,
-    redis_service: RedisService
-):
-    """Process a Telegram message in the background."""
+async def process_telegram_webhook(update_dict: Dict[str, Any]):
+    """Process a Telegram webhook update in the background."""
     try:
-        logger.info(f"Processing Telegram message from {chat_id}: {text}")
+        # Create dependencies
+        redis_service = RedisService(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+        token_service = TokenService()
+        wallet_service = WalletService(redis_service=redis_service)
+        
+        # Create swap agent and service
+        swap_agent = SimpleSwapAgent()
+        swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
+        
+        # Create the telegram agent
+        telegram_agent = TelegramAgent(
+            token_service=token_service,
+            swap_service=swap_service,
+            wallet_service=wallet_service
+        )
+        
+        # Extract user_id from the update based on the update type
+        user_id = None
+        if update_dict.get("message", {}) and update_dict["message"].get("from", {}).get("id"):
+            user_id = update_dict["message"]["from"]["id"]
+        elif update_dict.get("callback_query", {}) and update_dict["callback_query"].get("from", {}).get("id"):
+            user_id = update_dict["callback_query"]["from"]["id"]
+        
+        if not user_id:
+            logger.warning("No user_id found in Telegram update")
+            return
         
         # Check if user has a linked wallet
         wallet_address = None
-        if redis_service:
-            key = f"messaging:telegram:user:{chat_id}:wallet"
-            wallet_address = await redis_service.get(key)
+        key = f"messaging:telegram:user:{user_id}:wallet"
+        wallet_address = await redis_service.get(key)
         
-        # Process the message
-        result = await messaging_agent.process_message(
-            message=text,
-            platform="telegram",
-            user_id=chat_id,
+        # Process the update with the TelegramAgent
+        result = await telegram_agent.process_telegram_update(
+            update=update_dict,
+            user_id=str(user_id),
             wallet_address=wallet_address
         )
         
-        # Send the response back to Telegram
-        await send_telegram_message(
-            chat_id=chat_id,
-            message=result.get("content", "No response")
-        )
+        # If result contains a callback query answer, send it back
+        callback_query_id = update_dict.get("callback_query", {}).get("id")
+        if callback_query_id:
+            await send_telegram_callback_answer(callback_query_id)
         
         # If there's a wallet address in the result, store it
-        if result.get("wallet_address") and result.get("wallet_address") != wallet_address:
-            await redis_service.set(
-                key=f"messaging:telegram:user:{chat_id}:wallet",
-                value=result["wallet_address"]
-            )
-            # Also store the reverse mapping
-            await redis_service.set(
-                key=f"wallet:{result['wallet_address']}:telegram:user",
-                value=chat_id
-        )
+        if result.get("wallet_address") is not None:
+            if result.get("wallet_address"):  # Non-empty wallet address
+                await redis_service.set(
+                    key=f"messaging:telegram:user:{user_id}:wallet",
+                    value=result["wallet_address"]
+                )
+                # Also store the reverse mapping
+                await redis_service.set(
+                    key=f"wallet:{result['wallet_address']}:telegram:user",
+                    value=str(user_id)
+                )
+            else:  # Empty wallet address = disconnect wallet
+                # Delete the mappings
+                old_wallet = await redis_service.get(f"messaging:telegram:user:{user_id}:wallet")
+                if old_wallet:
+                    await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
+                await redis_service.delete(f"messaging:telegram:user:{user_id}:wallet")
+        
+        # Send response back to the user
+        content = result.get("content", "")
+        if content:
+            # Check if there are any Telegram-specific buttons to include
+            buttons = None
+            if result.get("metadata", {}) and result["metadata"].get("telegram_buttons"):
+                buttons = result["metadata"]["telegram_buttons"]
+                
+            # Send the message with optional buttons
+            chat_id = None
+            if update_dict.get("message", {}) and update_dict["message"].get("chat", {}).get("id"):
+                chat_id = update_dict["message"]["chat"]["id"]
+            elif update_dict.get("callback_query", {}) and update_dict["callback_query"].get("message", {}).get("chat", {}).get("id"):
+                chat_id = update_dict["callback_query"]["message"]["chat"]["id"]
+                
+            if chat_id:
+                await send_telegram_message_with_buttons(
+                    chat_id=str(chat_id),
+                    message=content,
+                    buttons=buttons
+                )
+        
+        logger.info(f"Successfully processed Telegram update for user {user_id}")
         
     except Exception as e:
-        logger.exception(f"Error processing Telegram message: {e}")
-        # Try to send error message
-        try:
-            await send_telegram_message(
-                chat_id=chat_id,
-                message=f"Sorry, an error occurred: {str(e)}"
-            )
-        except:
-            pass
+        logger.exception(f"Error processing Telegram webhook in background: {e}")
 
 async def send_whatsapp_message(to: str, message: str):
     """Send a message via WhatsApp Business API."""
@@ -820,3 +790,33 @@ async def send_telegram_callback_answer(callback_query_id: str, text: str = ""):
             
     except Exception as e:
         logger.exception(f"Error answering Telegram callback: {e}")
+
+@router.get("/telegram/debug")
+async def debug_telegram_agent(
+    telegram_agent: TelegramAgent = Depends(get_telegram_agent)
+):
+    """Debug endpoint to check TelegramAgent initialization."""
+    try:
+        # Check if the wallet_service is properly initialized
+        wallet_service_type = type(telegram_agent.wallet_service).__name__ if telegram_agent.wallet_service else "None"
+        wallet_service_initialized = telegram_agent.wallet_service is not None
+        
+        # Check if the command handlers are set up
+        command_handlers = list(telegram_agent.command_handlers.keys()) if telegram_agent.command_handlers else []
+        
+        # Return debug info
+        return {
+            "status": "ok",
+            "agent_type": type(telegram_agent).__name__,
+            "wallet_service_type": wallet_service_type,
+            "wallet_service_initialized": wallet_service_initialized,
+            "command_handlers": command_handlers,
+            "model_config": getattr(telegram_agent, "model_config", {}),
+        }
+    except Exception as e:
+        logger.exception(f"Error in debug endpoint: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": f"{e.__class__.__name__}: {str(e)}"
+        }
