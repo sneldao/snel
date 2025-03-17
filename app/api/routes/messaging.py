@@ -154,4 +154,21 @@ async def process_telegram_message(
         
     except Exception as e:
         logger.exception(f"Error processing Telegram message: {e}")
-        return {"content": "Sorry, I encountered an error processing your message."} 
+        return {"content": "Sorry, I encountered an error processing your message."}
+
+@router.post("/webhook")
+async def telegram_webhook_handler(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
+    wallet_service: WalletService = Depends(get_wallet_service)
+) -> Dict[str, Any]:
+    """
+    Handle Telegram webhook requests.
+    
+    This endpoint is specifically for receiving webhook events from Telegram.
+    """
+    logger.info("Received webhook request from Telegram")
+    
+    # Process using the same logic as the regular process endpoint
+    return await process_telegram_message(request, background_tasks, telegram_agent, wallet_service) 

@@ -56,18 +56,47 @@ app.add_middleware(
 # Add error handler middleware
 app.add_middleware(ErrorHandlerMiddleware)
 
-# First include core routes directly
+# ---------- BEGIN ROUTER CONFIGURATION ----------
+
+# First include core command routes that are directly accessed by the frontend
 from app.api.routes.commands_router import router as commands_router
-app.include_router(commands_router, prefix="/api")
+app.include_router(commands_router, prefix="/api")  # /api/process-command endpoint
 
-# Then add webhook routes separately (since these are needed for compatibility)
-from app.api.routes.messaging import router as webhook_router
-app.include_router(webhook_router, prefix="/api/webhook")
-app.include_router(webhook_router, prefix="/api/telegram")
+# Include swap router for frontend access
+from app.api.routes.swap_router import router as swap_router
+app.include_router(swap_router, prefix="/api/swap")  # /api/swap/process-command
 
-# Finally include the rest of the API routes
-from app.api.routes import api_router
-app.include_router(api_router, prefix="/api")
+# Include Telegram webhook handlers
+from app.api.routes.messaging import router as messaging_router
+app.include_router(messaging_router, prefix="/api/webhook")  # For compatibility
+app.include_router(messaging_router, prefix="/api/telegram")  # For compatibility
+app.include_router(messaging_router, prefix="/api/messaging/telegram")  # Fix for frontend Telegram access
+
+# Include the messaging_router to handle Telegram webhook
+try:
+    # Import separately to avoid circular imports
+    from app.api.routes.messaging_router import router as messaging_router_extended
+    app.include_router(messaging_router_extended, prefix="/api/messaging")  # Main messaging routes
+except (ImportError, AttributeError) as e:
+    logger.warning(f"Could not import messaging_router_extended: {e}")
+
+# Include the rest of the API routers
+from app.api.routes.dca_router import router as dca_router
+from app.api.routes.brian_router import router as brian_router
+from app.api.routes.wallet_router import router as wallet_router
+
+app.include_router(dca_router, prefix="/api/dca")
+app.include_router(brian_router, prefix="/api/brian")
+app.include_router(wallet_router, prefix="/api/wallet")
+
+# Add health check router
+try:
+    from app.api.routes.health import router as health_router
+    app.include_router(health_router, prefix="/api/health")
+except ImportError:
+    logger.warning("Health router not found, skipping.")
+
+# ---------- END ROUTER CONFIGURATION ----------
 
 # Add request ID middleware
 request_id_contextvar = ContextVar("request_id", default=None)
