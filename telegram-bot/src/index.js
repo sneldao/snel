@@ -471,6 +471,26 @@ app.get("/debug-updates", async (req, res) => {
   }
 });
 
+// Webhook handler for Telegram updates
+app.post("/api/webhook", (req, res) => {
+  try {
+    console.log(
+      "Received webhook from Telegram:",
+      JSON.stringify(req.body).substring(0, 200)
+    );
+
+    // Process the update with the bot
+    bot.handleUpdate(req.body);
+
+    // Respond with 200 OK to acknowledge receipt
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("Error handling webhook:", error);
+    console.error(error.stack);
+    res.sendStatus(500);
+  }
+});
+
 // Set up a keepalive mechanism for Vercel
 if (process.env.NODE_ENV === "production") {
   console.log("Setting up keepalive mechanism for Vercel");
@@ -508,30 +528,51 @@ try {
     .then(() => {
       console.log("Successfully deleted webhook, proceeding with launch...");
 
-      // Then launch the bot
-      bot
-        .launch({
-          allowedUpdates: ["message", "callback_query"],
-          dropPendingUpdates: true,
-        })
-        .then(() => {
-          console.log("Bot successfully launched and connected to Telegram!");
+      // In production, set up webhook
+      if (process.env.NODE_ENV === "production") {
+        // Get the Vercel URL or use the provided domain
+        const webhookDomain =
+          process.env.VERCEL_URL ||
+          "snel-telegram-nlme0kapm-papas-projects-5b188431.vercel.app";
+        const webhookUrl = `https://${webhookDomain}/api/webhook`;
 
-          // Fetch and log bot info to verify connection
-          bot.telegram
-            .getMe()
-            .then((botInfo) => {
-              console.log(
-                `Connected as bot: ${botInfo.username} (${botInfo.id})`
-              );
-            })
-            .catch((error) => {
-              console.error("Error getting bot info:", error);
-            });
+        console.log(`Setting webhook to: ${webhookUrl}`);
+
+        // Register the webhook
+        bot.telegram
+          .setWebhook(webhookUrl)
+          .then(() => {
+            console.log("Webhook set successfully!");
+          })
+          .catch((error) => {
+            console.error("Error setting webhook:", error);
+            console.error(error.stack);
+          });
+      } else {
+        // In development, use long polling
+        console.log("Development mode: using long polling");
+        bot
+          .launch({
+            allowedUpdates: ["message", "callback_query"],
+            dropPendingUpdates: true,
+          })
+          .then(() => {
+            console.log("Bot successfully launched with polling!");
+          })
+          .catch((error) => {
+            console.error("Error launching bot with polling:", error);
+            console.error(error.stack);
+          });
+      }
+
+      // Fetch and log bot info to verify connection
+      bot.telegram
+        .getMe()
+        .then((botInfo) => {
+          console.log(`Connected as bot: ${botInfo.username} (${botInfo.id})`);
         })
         .catch((error) => {
-          console.error("Error launching bot:", error);
-          console.error(error.stack);
+          console.error("Error getting bot info:", error);
         });
     })
     .catch((error) => {
