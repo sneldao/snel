@@ -27,7 +27,7 @@ git add README.md
 
 # Commit with a descriptive message
 echo "Committing changes..."
-git commit -m "Fix TelegramAgent Pydantic model and update README with Telegram integration"
+git commit -m "Enhance Telegram bot: improved responses, better command guidance, and smart wallet roadmap"
 
 # Push to main branch (adjust if you're using a different branch)
 echo "Pushing changes to GitHub..."

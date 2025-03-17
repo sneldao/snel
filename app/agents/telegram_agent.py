@@ -154,7 +154,13 @@ class TelegramAgent(MessagingAgent):
             new_wallet = self._generate_wallet_address(user_id)
             
             return {
-                "content": f"🎉 I've created a new wallet for you!\n\nAddress: {new_wallet}\n\nThis is a simulation for the MVP. In the full version, this would create a real smart contract wallet.",
+                "content": f"🎉 I've created a simulated wallet for you!\n\n" +
+                    f"Address: {new_wallet}\n\n" +
+                    f"This is currently a simulated wallet for testing. Soon, we'll implement real smart contract wallets using Account Abstraction that will allow you to:\n\n" +
+                    f"• Execute actual on-chain transactions\n" +
+                    f"• Manage your assets securely\n" +
+                    f"• Use advanced features like ERC-4337\n\n" +
+                    f"For now, you can use this simulated wallet to test the interface and features.",
                 "wallet_address": new_wallet
             }
         elif callback_data == "connect_existing":
@@ -197,20 +203,31 @@ class TelegramAgent(MessagingAgent):
             Enhanced content with Telegram personality
         """
         # Add snail emojis occasionally
-        if random.random() < 0.3:
-            snail_emojis = ["🐌", "🐌 ", "🐌💨", "🐢"]
-            content = f"{random.choice(snail_emojis)} {content}"
+        snail_emojis = ["🐌", "🐌 ", "🐌💨", "🐢"]
+        emoji_chance = 0.4  # Increased chance
         
         # Add occasional quips about being slow
         slow_quips = [
             "\n\n(Sorry for the delay, moving as fast as my shell allows!)",
             "\n\n(Zooming at snail speed...)",
             "\n\n(I might be slow, but I'll get you there safely!)",
+            "\n\n(Taking my time to get things right! 🐌)",
+            "\n\n(Slow and steady wins the DeFi race!)",
             ""  # Empty string for cases where we don't add a quip
         ]
         
-        if random.random() < 0.2:
+        # Smart emoji placement - avoid adding to error messages or command syntax
+        if not any(error_term in content.lower() for error_term in ["error", "sorry", "couldn't", "failed"]):
+            if random.random() < emoji_chance and not content.startswith("🐌"):
+                content = f"{random.choice(snail_emojis)} {content}"
+        
+        # More nuanced quip addition - add personality to successful responses
+        if random.random() < 0.25 and len(content) > 50:
             content = f"{content} {random.choice(slow_quips)}"
+        
+        # Format command suggestions to make them more visible
+        # This makes the commands clickable in Telegram
+        content = re.sub(r'(\/[a-z]+)($|\s)', r'*\1*\2', content)
         
         return content
 
@@ -443,7 +460,14 @@ class TelegramAgent(MessagingAgent):
         Returns:
             A simulated Ethereum wallet address
         """
-        # Create a deterministic but random-looking address based on user ID
+        # TODO: Implement actual smart wallet creation using Account Abstraction
+        # For a complete implementation we would:
+        # 1. Generate an EOA key for the user (securely)
+        # 2. Deploy a smart contract wallet (like Safe or ERC-4337 compatible wallet)
+        # 3. Store wallet info securely
+        # 4. Use this wallet for actual on-chain operations
+        
+        # For now, we create a deterministic but random-looking address based on user ID
         seed = f"snel_wallet_{user_id}_{random.randint(1, 1000000)}"
         address_hash = hashlib.sha256(seed.encode()).hexdigest()
         return f"0x{address_hash[:40]}"
@@ -467,4 +491,70 @@ class TelegramAgent(MessagingAgent):
             "usdc": round(random.uniform(100, 5000), 2),
             "usdt": round(random.uniform(50, 2000), 2),
             "dai": round(random.uniform(75, 3000), 2)
-        } 
+        }
+
+    async def process_message(
+        self,
+        message: str,
+        platform: str,
+        user_id: str,
+        wallet_address: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Process a general message and provide a response."""
+        # Check for general "what can you do" type questions
+        what_can_do_patterns = [
+            r"what.+can.+you.+do",
+            r"what.+do.+you.+do",
+            r"help.+me",
+            r"how.+to.+use",
+            r"what.+is.+this",
+            r"(?:^|\s+)help(?:\s+|$)",
+            r"commands",
+            r"features",
+            r"gm",
+            r"hello",
+            r"hi"
+        ]
+        
+        for pattern in what_can_do_patterns:
+            if re.search(pattern, message.lower()):
+                return {
+                    "content": "🐌 Hello there! I'm Snel, your DeFi assistant. Here's what I can do for you:\n\n" +
+                        "🔹 */connect* - Create or connect a wallet\n" +
+                        "🔹 */price ETH* - Check token prices\n" +
+                        "🔹 */swap 0.1 ETH for USDC* - Swap tokens\n" +
+                        "🔹 */balance* - Check your wallet balance\n" +
+                        "🔹 */help* - See all commands\n\n" +
+                        "Try one of these commands to get started! Just tap on a command or type it.\n\n" +
+                        "Or ask me something like \"What's the price of Bitcoin?\" or \"Tell me about Scroll L2\"."
+                }
+            
+        # Original implementation continues for other message types
+        result = await super().process_message(
+            message=message,
+            platform=platform,
+            user_id=user_id,
+            wallet_address=wallet_address,
+            metadata=metadata
+        )
+        
+        # If we have a valid wallet address but user is asking about transactions
+        # without using commands, guide them to the right format
+        transaction_patterns = [
+            r"(?:swap|buy|sell|trade|exchange)",
+            r"(?:send|transfer)",
+            r"(?:bridge)",
+        ]
+        
+        if wallet_address and any(re.search(pattern, message.lower()) for pattern in transaction_patterns):
+            if "I'm not sure" in result.get("content", "") or "I don't know" in result.get("content", ""):
+                return {
+                    "content": "🐌 I noticed you might want to do a transaction. Try using one of these command formats:\n\n" +
+                        "For swaps: */swap 0.1 ETH for USDC*\n" +
+                        "For transfers: */send 10 USDC to 0xAddress*\n" +
+                        "For bridges: */bridge 0.1 ETH from Scroll to Base*\n\n" +
+                        "This makes it easier for me to understand exactly what you want to do."
+                }
+                
+        return result 
