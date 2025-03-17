@@ -1,9 +1,16 @@
+"""
+Main application module.
+"""
+import logging
+import os
 from fastapi import FastAPI, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import time
-import logging
+from starlette.middleware.base import BaseHTTPMiddleware
+from app.middleware.error_handler import ErrorHandlerMiddleware
+from app.utils.configure_logging import configure_logging
+from app.services.redis_service import get_redis_service, RedisService
 from contextvars import ContextVar
+import time
 from dotenv import load_dotenv
 
 # Load environment variables from .env files
@@ -15,16 +22,6 @@ if not os.environ.get("REDIS_URL"):
     redis_url = "redis://localhost:6379/0"
     os.environ["REDIS_URL"] = redis_url
     print(f"No REDIS_URL found, using default: {redis_url}")
-
-from app.api.routes.commands_router import router as commands_router
-from app.api.routes.swap_router import router as swap_router
-from app.api.routes.dca_router import router as dca_router
-from app.api.routes.messaging_router import router as messaging_router
-from app.api.routes.brian_router import router as brian_router
-from app.api.routes.wallet_router import router as wallet_router
-from app.middleware.error_handler import ErrorHandlerMiddleware
-from app.utils.configure_logging import configure_logging
-from app.services.redis_service import get_redis_service, RedisService
 
 # Configure logging
 configure_logging()
@@ -59,13 +56,27 @@ app.add_middleware(
 # Add error handler middleware
 app.add_middleware(ErrorHandlerMiddleware)
 
+# Import original routers
+from app.api.routes.commands_router import router as commands_router
+from app.api.routes.swap_router import router as swap_router
+from app.api.routes.dca_router import router as dca_router
+from app.api.routes.brian_router import router as brian_router
+from app.api.routes.wallet_router import router as wallet_router
+
 # Include routers
 app.include_router(commands_router, prefix="/api")
 app.include_router(swap_router, prefix="/api/swap")
 app.include_router(dca_router, prefix="/api/dca")
-app.include_router(messaging_router, prefix="/api/messaging")
 app.include_router(brian_router, prefix="/api/brian")
 app.include_router(wallet_router, prefix="/api/wallet")
+
+# Include the messaging API router for Telegram
+from app.api.routes.messaging import router as messaging_router
+app.include_router(messaging_router, prefix="/api/messaging")
+
+# Include the new Telegram API router (using a different route to avoid conflicts)
+from app.api.routes.messaging import router as telegram_router
+app.include_router(telegram_router, prefix="/api/telegram")
 
 # Add request ID middleware
 request_id_contextvar = ContextVar("request_id", default=None)

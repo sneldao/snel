@@ -6,10 +6,12 @@ import logging
 from app.services.token_service import TokenService
 from app.services.swap_service import SwapService
 from app.services.redis_service import RedisService
+from app.services.wallet_service import WalletService
+from app.services.gemini_service import GeminiService
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.price_agent import PriceAgent
 from app.agents.base import PointlessAgent
-from app.services.wallet_service import WalletService
+from app.agents.telegram_agent import TelegramAgent
 
 # Don't import AgentFactory here to avoid circular imports
 
@@ -21,6 +23,12 @@ _token_service: Optional[TokenService] = None
 
 # Singleton instance of WalletService
 _wallet_service: Optional[WalletService] = None
+
+# Singleton instance of GeminiService
+_gemini_service: Optional[GeminiService] = None
+
+# Singleton instance of TelegramAgent
+_telegram_agent: Optional[TelegramAgent] = None
 
 logger = logging.getLogger(__name__)
 
@@ -50,16 +58,42 @@ async def get_token_service() -> TokenService:
         
     return _token_service
 
-async def get_wallet_service(
-    redis_service: RedisService = Depends(get_redis_service)
-) -> WalletService:
-    """Get or create wallet service instance."""
-    global _wallet_service
+async def get_wallet_service() -> WalletService:
+    """
+    Get a WalletService instance.
     
+    Uses a singleton pattern to return the same instance on subsequent calls.
+    
+    Returns:
+        WalletService instance
+    """
+    global _wallet_service
     if _wallet_service is None:
-        _wallet_service = WalletService(redis_service=redis_service)
+        _wallet_service = WalletService()
+        logger.info("WalletService initialized")
         
     return _wallet_service
+
+async def get_gemini_service() -> GeminiService:
+    """
+    Get a GeminiService instance.
+    
+    Uses a singleton pattern to return the same instance on subsequent calls.
+    
+    Returns:
+        GeminiService instance
+    """
+    global _gemini_service
+    if _gemini_service is None:
+        # Get the Gemini API key from environment
+        gemini_api_key = os.environ.get("GEMINI_API_KEY")
+        if not gemini_api_key:
+            logger.warning("GEMINI_API_KEY not set, AI responses will be limited")
+            
+        _gemini_service = GeminiService(api_key=gemini_api_key)
+        logger.info("GeminiService initialized")
+        
+    return _gemini_service
 
 async def get_openai_key(x_openai_key: Optional[str] = Header(None)) -> str:
     """Get OpenAI API key from headers or environment."""
@@ -88,4 +122,34 @@ async def get_swap_service(
     swap_agent: SimpleSwapAgent = Depends(get_swap_agent)
 ) -> SwapService:
     """Get an instance of SwapService."""
-    return SwapService(token_service=token_service, swap_agent=swap_agent) 
+    return SwapService(token_service=token_service, swap_agent=swap_agent)
+
+async def get_telegram_agent(
+    token_service: TokenService = Depends(get_token_service),
+    swap_service: SwapService = Depends(get_swap_service),
+    wallet_service: WalletService = Depends(get_wallet_service),
+    gemini_service: GeminiService = Depends(get_gemini_service)
+) -> TelegramAgent:
+    """
+    Get a TelegramAgent instance with the necessary dependencies.
+    
+    Args:
+        token_service: Service for token operations
+        swap_service: Service for swap operations
+        wallet_service: Service for wallet operations
+        gemini_service: Service for AI-powered responses
+        
+    Returns:
+        TelegramAgent instance
+    """
+    # Return a singleton instance of the agent with dependencies
+    global _telegram_agent
+    if _telegram_agent is None:
+        _telegram_agent = TelegramAgent(
+            token_service=token_service,
+            swap_service=swap_service,
+            wallet_service=wallet_service,
+            gemini_service=gemini_service
+        )
+        
+    return _telegram_agent 
