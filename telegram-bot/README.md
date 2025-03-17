@@ -1,81 +1,105 @@
 # Snel Telegram Bot
 
-A Telegram bot for DeFi interactions using account abstraction.
+A Telegram bot for interacting with the Snel DeFi platform, featuring real wallet creation on Scroll Sepolia testnet.
 
 ## Features
 
-- **Price Checking**: Get real-time prices of cryptocurrencies
-- **Wallet Management**: Create and manage smart contract wallets
-- **Token Swaps**: Swap tokens directly from Telegram
-- **Balance Checking**: Check your wallet balances
+- Real Ethereum wallet creation and management
+- Token price checking
+- Token swaps (testnet only)
+- Balance checking
+- Natural language processing
 
-## Setup
+## Local Development
 
-1. **Install Dependencies**
+### Prerequisites
 
-```bash
-npm install
+- Node.js 18+
+- npm
+
+### Setup
+
+1. Clone the repository
+2. Navigate to the telegram-bot directory
+3. Install dependencies:
+   ```
+   npm install
+   ```
+4. Create a `.env` file with:
+   ```
+   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   API_URL=http://localhost:8000
+   ```
+5. Start the bot:
+   ```
+   npm run dev
+   ```
+
+## Vercel Deployment
+
+### Prerequisites
+
+- Vercel account
+- Telegram bot token (from BotFather)
+
+### Deployment Steps
+
+1. Create a new Vercel project
+2. Set the root directory to `telegram-bot`
+3. Add the following environment variables:
+   - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+   - `API_URL`: URL to your backend API (e.g., https://snel-pointless.vercel.app/api)
+   - `NODE_ENV`: Set to "production"
+4. Deploy the project
+
+### Setting Up the Webhook
+
+After deployment, you need to set up the webhook to receive updates from Telegram:
+
+1. Make sure your Vercel project is deployed
+2. Run the setup-webhook script:
+   ```
+   VERCEL_URL=your-vercel-url.vercel.app npm run setup-webhook
+   ```
+   Replace `your-vercel-url.vercel.app` with your actual Vercel URL
+
+## Project Structure
+
+- `src/index.js`: Main bot file and serverless function handler
+- `src/wallet.js`: Wallet management functionality
+- `src/api/webhook.js`: Webhook handler for Telegram updates
+- `setup-webhook.js`: Script to set up the webhook
+- `deploy.sh`: Deployment script
+- `vercel.json`: Vercel configuration
+
+## Troubleshooting
+
+### Common Issues
+
+#### Invalid Export Error
+
+If you see "Invalid export found in module" error, make sure your `index.js` exports a function, not a bot instance:
+
+```javascript
+// Correct export for Vercel
+export default async function handler(req, res) {
+  // Function body
+}
 ```
 
-2. **Configure Environment Variables**
+#### Webhook Not Working
 
-Create a `.env` file with the following variables:
+1. Check if the webhook is set correctly:
+   ```
+   npm run setup-webhook
+   ```
+2. Make sure your Vercel URL is correct
+3. Check Vercel logs for any errors
 
-```
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-API_URL=http://localhost:8000
-ENTRYPOINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
-FACTORY_ADDRESS=0x9406Cc6185a346906296840746125a0E44976454
-CHAIN_ID=534352
-RPC_URL=your_rpc_url
-```
+#### API Connection Issues
 
-3. **Start the Bot**
-
-```bash
-npm start
-```
-
-For development with auto-reload:
-
-```bash
-npm run dev
-```
-
-## Usage
-
-- `/start` - Start the bot
-- `/help` - Show available commands
-- `/connect` - Connect or create a wallet
-- `/price [token]` - Check token price (e.g., `/price ETH`)
-- `/swap [amount] [token] for [token]` - Create a swap (e.g., `/swap 0.1 ETH for USDC`)
-- `/balance` - Check your wallet balance
-- `/disconnect` - Disconnect your wallet
-
-## Architecture
-
-This bot uses a simple architecture for the MVP:
-
-1. **GrammyJS**: For Telegram bot functionality
-2. **In-Memory Storage**: For user session management
-3. **Simulated Wallet Creation**: For testing wallet functionality
-4. **API Integration**: Connects to existing backend for price data
-
-In future versions, this will be enhanced with:
-
-1. **Account Abstraction**: Using ERC-4337 for smart contract wallets
-2. **MPC Wallets**: For secure key management
-3. **Session Keys**: For temporary delegation
-4. **Paymaster Integration**: For gasless transactions
-
-## Development Roadmap
-
-- [x] MVP with basic functionality
-- [ ] Real wallet creation with account abstraction
-- [ ] Transaction execution with session keys
-- [ ] Multi-chain support
-- [ ] Advanced DeFi features (lending, staking, etc.)
+Make sure the `API_URL` environment variable is set correctly and points to your backend API.
 
 ## License
 
-MIT
+ISC

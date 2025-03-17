@@ -385,23 +385,26 @@ bot.on("message:text", async (ctx) => {
   );
 });
 
-// Start the bot
-console.log("Starting bot...");
-
-// For production (Vercel)
-if (process.env.NODE_ENV === "production") {
-  // Set webhook for Vercel deployment
-  const VERCEL_URL = process.env.VERCEL_URL || "";
-  if (VERCEL_URL) {
-    console.log(`Setting webhook to ${VERCEL_URL}/api/webhook`);
-    bot.api.setWebhook(`https://${VERCEL_URL}/api/webhook`);
-  } else {
-    console.error("VERCEL_URL not set, cannot set webhook");
-  }
-} else {
-  // For development, use long polling
+// Start the bot in development mode
+if (process.env.NODE_ENV !== "production") {
+  console.log("Starting bot in development mode...");
   bot.start();
 }
 
-// Export for serverless use
-export default bot;
+// For Vercel serverless deployment
+export default async function handler(req, res) {
+  // Only process POST requests (webhook updates from Telegram)
+  if (req.method !== "POST") {
+    res.status(200).json({ message: "Telegram bot is running!" });
+    return;
+  }
+
+  try {
+    // Process the update
+    await bot.handleUpdate(req.body);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error handling webhook:", error);
+    res.status(500).json({ error: "Failed to process update" });
+  }
+}

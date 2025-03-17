@@ -6,7 +6,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "build": "chmod +x deploy.sh && ./deploy.sh",
-    "vercel-build": "echo 'Vercel build step complete'"
+    "vercel-build": "echo 'Vercel build step complete'",
+    "setup-webhook": "node setup-webhook.js"
   },
   "keywords": [],
   "author": "",

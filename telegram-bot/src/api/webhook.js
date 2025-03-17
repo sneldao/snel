@@ -1,9 +1,10 @@
 import bot from "../index.js";
 
+// This is a Vercel serverless function that handles webhook updates from Telegram
 export default async function handler(req, res) {
   // Only accept POST requests
   if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
+    res.status(200).json({ message: "Telegram webhook endpoint is active" });
     return;
   }
 
