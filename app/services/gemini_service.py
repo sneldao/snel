@@ -6,6 +6,7 @@ import os
 import json
 from typing import Dict, Any, List, Optional
 import httpx
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class GeminiService:
     This service handles natural language processing for crypto and DeFi queries.
     """
     api_key: Optional[str] = None
-    http_client: httpx.AsyncClient
+    http_client: Optional[httpx.AsyncClient] = None
     
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -25,10 +26,14 @@ class GeminiService:
             api_key: Gemini API key (optional)
         """
         self.api_key = api_key
-        self.http_client = httpx.AsyncClient(timeout=30.0)
+        self.http_client = self._create_http_client()
         
         if not self.api_key:
             logger.warning("No Gemini API key provided, service will have limited functionality")
+    
+    def _create_http_client(self) -> httpx.AsyncClient:
+        """Create a new HTTP client with proper timeout settings."""
+        return httpx.AsyncClient(timeout=30.0)
     
     async def answer_crypto_question(
         self,
@@ -51,6 +56,11 @@ class GeminiService:
             return "I'm sorry, I can't answer general questions right now. Please try using specific commands like /price or /swap."
             
         try:
+            # Ensure HTTP client is available
+            if self.http_client is None or self.http_client.is_closed:
+                logger.info("HTTP client closed or not initialized, creating new client")
+                self.http_client = self._create_http_client()
+            
             # Build system instruction
             system_instruction = """
             You are Snel, a friendly DeFi assistant bot on Telegram that helps users with crypto and blockchain transactions.
@@ -82,8 +92,8 @@ class GeminiService:
             if wallet_info and wallet_info.get("connected"):
                 context += f" The user has a connected wallet with address {wallet_info['address']}."
             
-            # Build API request with specific model version
-            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-001:generateContent"
+            # Build API request
+            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
             headers = {"Content-Type": "application/json"}
             
             payload = {
@@ -128,29 +138,55 @@ class GeminiService:
                 ]
             }
             
-            # Make API request
-            response = await self.http_client.post(
-                f"{api_url}?key={self.api_key}",
-                headers=headers,
-                json=payload
-            )
-            
-            # Check for successful response
-            if response.status_code == 200:
-                data = response.json()
+            try:
+                # Make API request
+                response = await self.http_client.post(
+                    f"{api_url}?key={self.api_key}",
+                    headers=headers,
+                    json=payload
+                )
                 
-                # Extract the generated text
-                if "candidates" in data and data["candidates"]:
-                    candidate = data["candidates"][0]
-                    if "content" in candidate and "parts" in candidate["content"]:
-                        parts = candidate["content"]["parts"]
-                        if parts and "text" in parts[0]:
-                            return parts[0]["text"].strip()
+                # Check for successful response
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Extract the generated text
+                    if "candidates" in data and data["candidates"]:
+                        candidate = data["candidates"][0]
+                        if "content" in candidate and "parts" in candidate["content"]:
+                            parts = candidate["content"]["parts"]
+                            if parts and "text" in parts[0]:
+                                return parts[0]["text"].strip()
+                
+                # Log error
+                logger.error(f"Error from Gemini API: {response.status_code} - {response.text}")
+            except (httpx.HTTPError, asyncio.CancelledError, RuntimeError) as http_error:
+                # Handle HTTP errors and event loop issues
+                if "Event loop is closed" in str(http_error):
+                    logger.warning("Event loop closed during Gemini API call, recreating client")
+                    # The client needs to be recreated next time
+                    try:
+                        await self.http_client.aclose()
+                    except:
+                        pass
+                    self.http_client = None
+                else:
+                    logger.error(f"HTTP error calling Gemini API: {http_error}")
+                
+                # Return fallback message
+                return "I'm having connection issues right now. Try using specific commands like */help* or */price ETH* instead."
             
-            # Log error
-            logger.error(f"Error from Gemini API: {response.status_code} - {response.text}")
             return "I'm having trouble answering right now. Try using a specific command like */help* to see what I can do."
             
         except Exception as e:
             logger.exception(f"Error calling Gemini API: {e}")
+            
+            # Ensure client is closed if there was an error
+            if self.http_client:
+                try:
+                    await self.http_client.aclose()
+                except:
+                    pass
+                self.http_client = None
+                
             return "Sorry, I'm experiencing some technical difficulties. Please try a specific command like */price ETH* or */help*." 

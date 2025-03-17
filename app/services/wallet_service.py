@@ -177,37 +177,100 @@ class WalletService:
                 "message": f"Error creating wallet: {str(e)}"
             }
     
-    async def get_wallet_info(self, user_id: str, platform: str) -> Dict[str, Any]:
+    async def get_wallet_info(self, user_id: str, platform: str) -> Optional[Dict[str, Any]]:
         """
         Get wallet information for a user.
         
         Args:
             user_id: User ID
-            platform: Platform identifier
+            platform: Platform (telegram, whatsapp, etc.)
             
         Returns:
-            Dict with wallet information
+            Wallet information or None if not found
         """
-        # Check if Redis is available
-        if not self.redis_client:
-            logger.warning("Redis not available, wallet info not retrievable")
-            return {}
-            
+        # Create the user key
+        user_key = f"messaging:{platform}:user:{user_id}:wallet"
+        
         try:
-            # Get wallet info from Redis
-            user_key = f"wallet:{platform}:{user_id}"
+            # Get the wallet address
             wallet_data = await self.redis_client.get(user_key)
             
             if not wallet_data:
                 logger.info(f"No wallet found for {platform}:{user_id}")
-                return {}
+                return None
                 
-            wallet_info = json.loads(wallet_data)
-            return wallet_info
+            # Parse the wallet data
+            if wallet_data.startswith("{"):
+                # Handle JSON wallet data
+                try:
+                    wallet_info = json.loads(wallet_data)
+                    return wallet_info
+                except json.JSONDecodeError:
+                    # Fallback to treating it as a plain wallet address
+                    wallet_address = wallet_data
+            else:
+                # Plain wallet address
+                wallet_address = wallet_data
+                
+            # Get the current chain from wallet settings
+            chain_key = f"messaging:{platform}:user:{user_id}:chain"
+            chain = await self.redis_client.get(chain_key) or DEFAULT_CHAIN
             
+            # Get chain info
+            chain_info = self._get_chain_info(chain)
+            
+            # Return structured wallet info
+            return {
+                "wallet_address": wallet_address,
+                "platform": platform,
+                "user_id": user_id,
+                "chain": chain,
+                "chain_info": chain_info
+            }
         except Exception as e:
-            logger.exception(f"Error getting wallet info: {e}")
-            return {}
+            if "Event loop is closed" in str(e):
+                # Handle event loop closed error in serverless environments
+                logger.warning(f"Redis event loop closed, recreating client for {platform}:{user_id}")
+                try:
+                    # Recreate the Redis client
+                    self.redis_client = self._create_redis_client()
+                    # Try again with the new client
+                    wallet_data = await self.redis_client.get(user_key)
+                    if not wallet_data:
+                        return None
+                    
+                    # Return a basic wallet info object
+                    return {
+                        "wallet_address": wallet_data,
+                        "platform": platform,
+                        "user_id": user_id,
+                        "chain": DEFAULT_CHAIN,
+                        "chain_info": self._get_chain_info(DEFAULT_CHAIN)
+                    }
+                except Exception as retry_error:
+                    logger.error(f"Error retrying wallet info: {retry_error}")
+                    return None
+            else:
+                logger.error(f"Error getting wallet info: {e}")
+                return None
+
+    def _create_redis_client(self):
+        """Create a new Redis client instance."""
+        import redis.asyncio as aioredis
+        
+        # Check if we're using Upstash
+        if self.redis_url.startswith("rediss://"):
+            # Upstash Redis with SSL
+            from redis.asyncio.connection import Connection
+            
+            # Configure Redis for Upstash
+            ssl_enabled = True
+            logger.info("Using Upstash Redis client")
+            return aioredis.from_url(self.redis_url, ssl=ssl_enabled, decode_responses=True)
+        else:
+            # Standard Redis
+            logger.info("Using standard Redis client")
+            return aioredis.from_url(self.redis_url, decode_responses=True)
     
     async def delete_wallet(self, user_id: str, platform: str) -> Dict[str, Any]:
         """
