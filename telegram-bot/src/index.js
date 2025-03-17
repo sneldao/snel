@@ -1,4 +1,10 @@
+// Load polyfills and environment
+import "whatwg-url";
+import "web-streams-polyfill";
+import "abortcontroller-polyfill/dist/abortcontroller-polyfill-only.js";
+import "formdata-polyfill";
 import "dotenv/config";
+
 import { Bot, InlineKeyboard, session } from "grammy";
 import fetch from "node-fetch";
 import {
