@@ -20,6 +20,7 @@ from app.services.redis_service import RedisService
 from app.agents.messaging_agent import MessagingAgent
 from app.services.swap_service import SwapService
 from app.agents.simple_swap_agent import SimpleSwapAgent
+from app.agents.telegram_agent import TelegramAgent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messaging"])
@@ -77,6 +78,23 @@ async def get_messaging_agent(
     
     # Create and return the messaging agent
     return MessagingAgent(
+        token_service=token_service,
+        swap_service=swap_service
+    )
+
+async def get_telegram_agent(
+    redis_service: RedisService = Depends(get_redis_service),
+    token_service: TokenService = Depends(get_token_service)
+) -> TelegramAgent:
+    """Get an instance of TelegramAgent."""
+    # Create a simple swap agent for the swap service
+    swap_agent = SimpleSwapAgent()
+    
+    # Create a swap service for the telegram agent
+    swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
+    
+    # Create and return the telegram agent
+    return TelegramAgent(
         token_service=token_service,
         swap_service=swap_service
     )
@@ -139,57 +157,93 @@ async def whatsapp_webhook(
 async def telegram_webhook(
     update: TelegramMessage,
     background_tasks: BackgroundTasks,
-    messaging_agent: MessagingAgent = Depends(get_messaging_agent),
+    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
     redis_service: RedisService = Depends(get_redis_service)
 ):
     """
     Handle Telegram webhook messages.
     
     This endpoint receives messages from the Telegram Bot API
-    and processes them using the messaging agent.
+    and processes them using the Telegram agent.
     """
     try:
         logger.info(f"Received Telegram webhook: {update.update_id}")
         
-        # Extract message details based on the update type
-        message_obj = None
-        if update.message:
-            message_obj = update.message
-        elif update.edited_message:
-            message_obj = update.edited_message
-        elif update.channel_post:
-            message_obj = update.channel_post
-        elif update.edited_channel_post:
-            message_obj = update.edited_channel_post
-        elif update.callback_query and update.callback_query.get("message"):
-            message_obj = update.callback_query.get("message")
-            
-        if not message_obj:
-            logger.warning("No message found in Telegram update")
+        # Extract user_id from the update based on the update type
+        user_id = None
+        if update.message and update.message.get("from", {}).get("id"):
+            user_id = update.message.get("from", {}).get("id")
+        elif update.callback_query and update.callback_query.get("from", {}).get("id"):
+            user_id = update.callback_query.get("from", {}).get("id")
+        
+        if not user_id:
+            logger.warning("No user_id found in Telegram update")
             return {"status": "ignored"}
         
-        # Extract chat ID and text
-        chat_id = message_obj.get("chat", {}).get("id")
-        text = message_obj.get("text", "")
+        # Check if user has a linked wallet
+        wallet_address = None
+        if redis_service:
+            key = f"messaging:telegram:user:{user_id}:wallet"
+            wallet_address = await redis_service.get(key)
         
-        if not chat_id or not text:
-            logger.warning("Missing chat_id or text in Telegram message")
-            return {"status": "ignored"}
+        # Create a dictionary from the update Pydantic model
+        update_dict = update.dict(exclude_unset=True)
         
-        # Log the full message for debugging
-        logger.info(f"Processing Telegram message: {json.dumps(message_obj)}")
-        
-        # Process in background to avoid webhook timeout
-        background_tasks.add_task(
-            process_telegram_message,
-            chat_id=str(chat_id),
-            text=text,
-            messaging_agent=messaging_agent,
-            redis_service=redis_service
+        # Process the update with the TelegramAgent
+        result = await telegram_agent.process_telegram_update(
+            update=update_dict,
+            user_id=str(user_id),
+            wallet_address=wallet_address
         )
         
-        # Return 200 OK to acknowledge receipt
-        return {"status": "processing"}
+        # If result contains a callback query answer, send it back
+        callback_query_id = update_dict.get("callback_query", {}).get("id")
+        if callback_query_id:
+            await send_telegram_callback_answer(callback_query_id)
+        
+        # If there's a wallet address in the result, store it
+        if result.get("wallet_address") is not None:
+            if result.get("wallet_address"):  # Non-empty wallet address
+                await redis_service.set(
+                    key=f"messaging:telegram:user:{user_id}:wallet",
+                    value=result["wallet_address"]
+                )
+                # Also store the reverse mapping
+                await redis_service.set(
+                    key=f"wallet:{result['wallet_address']}:telegram:user",
+                    value=str(user_id)
+                )
+            else:  # Empty wallet address = disconnect wallet
+                # Delete the mappings
+                old_wallet = await redis_service.get(f"messaging:telegram:user:{user_id}:wallet")
+                if old_wallet:
+                    await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
+                await redis_service.delete(f"messaging:telegram:user:{user_id}:wallet")
+        
+        # Send response back to the user
+        content = result.get("content", "")
+        if content:
+            # Check if there are any Telegram-specific buttons to include
+            buttons = None
+            if result.get("metadata", {}) and result["metadata"].get("telegram_buttons"):
+                buttons = result["metadata"]["telegram_buttons"]
+                
+            # Send the message with optional buttons
+            chat_id = None
+            if update.message and update.message.get("chat", {}).get("id"):
+                chat_id = update.message.get("chat", {}).get("id")
+            elif update.callback_query and update.callback_query.get("message", {}).get("chat", {}).get("id"):
+                chat_id = update.callback_query.get("message", {}).get("chat", {}).get("id")
+                
+            if chat_id:
+                await send_telegram_message_with_buttons(
+                    chat_id=str(chat_id),
+                    message=content,
+                    buttons=buttons
+                )
+        
+        # Return status for the webhook
+        return {"status": "processed", "user_id": user_id}
         
     except Exception as e:
         logger.exception(f"Error processing Telegram webhook: {e}")
@@ -339,7 +393,7 @@ async def process_whatsapp_message(
             await redis_service.set(
                 key=f"wallet:{result['wallet_address']}:whatsapp:user",
                 value=from_user
-            )
+        )
         
     except Exception as e:
         logger.exception(f"Error processing WhatsApp message: {e}")
@@ -392,7 +446,7 @@ async def process_telegram_message(
             await redis_service.set(
                 key=f"wallet:{result['wallet_address']}:telegram:user",
                 value=chat_id
-            )
+        )
         
     except Exception as e:
         logger.exception(f"Error processing Telegram message: {e}")
@@ -451,7 +505,7 @@ async def send_telegram_message(chat_id: str, message: str):
         reload_environment_variables()
         if not TELEGRAM_BOT_TOKEN:
             logger.error("Failed to load Telegram bot token from environment")
-            return
+        return
     
     try:
         # Log the token (first few characters) for debugging
@@ -465,7 +519,7 @@ async def send_telegram_message(chat_id: str, message: str):
             
             # Use plain text for simplicity
             payload = {
-                "chat_id": chat_id,
+                    "chat_id": chat_id,
                 "text": message
             }
             
@@ -606,7 +660,7 @@ async def reload_env():
 @router.post("/telegram/process", response_model=Dict[str, Any])
 async def process_telegram_request(
     request: MessagingRequest,
-    messaging_agent: MessagingAgent = Depends(get_messaging_agent),
+    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
     redis_service: RedisService = Depends(get_redis_service)
 ):
     """
@@ -632,26 +686,32 @@ async def process_telegram_request(
             key = f"messaging:telegram:user:{request.user_id}:wallet"
             wallet_address = await redis_service.get(key)
         
-        # Process the message
-        result = await messaging_agent.process_message(
+        # Process the message using the Telegram agent
+        result = await telegram_agent._process_telegram_message(
             message=request.message,
-            platform="telegram",
             user_id=request.user_id,
             wallet_address=wallet_address,
             metadata=request.metadata
         )
         
         # If there's a wallet address in the result, store it
-        if result.get("wallet_address") and result.get("wallet_address") != wallet_address:
-            await redis_service.set(
-                key=f"messaging:telegram:user:{request.user_id}:wallet",
-                value=result["wallet_address"]
-            )
-            # Also store the reverse mapping
-            await redis_service.set(
-                key=f"wallet:{result['wallet_address']}:telegram:user",
-                value=request.user_id
-            )
+        if result.get("wallet_address") is not None:
+            if result.get("wallet_address"):  # Non-empty wallet address
+                await redis_service.set(
+                    key=f"messaging:telegram:user:{request.user_id}:wallet",
+                    value=result["wallet_address"]
+                )
+                # Also store the reverse mapping
+                await redis_service.set(
+                    key=f"wallet:{result['wallet_address']}:telegram:user",
+                    value=request.user_id
+                )
+            else:  # Empty wallet address = disconnect wallet
+                # Delete the mappings
+                old_wallet = await redis_service.get(f"messaging:telegram:user:{request.user_id}:wallet")
+                if old_wallet:
+                    await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
+                await redis_service.delete(f"messaging:telegram:user:{request.user_id}:wallet")
         
         # Add a flag for the bot to identify this response
         if is_from_bot:
@@ -667,3 +727,93 @@ async def process_telegram_request(
             "content": f"Sorry, I encountered an error: {str(e)}",
             "error": str(e)
         }
+
+async def send_telegram_message_with_buttons(chat_id: str, message: str, buttons=None):
+    """Send a message via Telegram Bot API with optional inline buttons."""
+    global TELEGRAM_BOT_TOKEN
+    
+    if not TELEGRAM_BOT_TOKEN:
+        logger.warning("Telegram bot token not configured, attempting to reload from environment")
+        reload_environment_variables()
+        if not TELEGRAM_BOT_TOKEN:
+            logger.error("Failed to load Telegram bot token from environment")
+            return
+    
+    try:
+        # Log the token (first few characters) for debugging
+        token_preview = TELEGRAM_BOT_TOKEN[:5] + "..." if TELEGRAM_BOT_TOKEN else "None"
+        logger.info(f"Sending Telegram message to {chat_id} using token: {token_preview}")
+        
+        # Prepare request payload
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML"  # Allow HTML formatting
+        }
+        
+        # Add reply markup if buttons are provided
+        if buttons:
+            payload["reply_markup"] = {
+                "inline_keyboard": buttons
+            }
+        
+        # Send message via Telegram Bot API
+        async with httpx.AsyncClient() as client:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            logger.info(f"Sending request to: {url}")
+            
+            response = await client.post(url, json=payload)
+            
+            if response.status_code != 200:
+                logger.error(f"Telegram API error: {response.text}")
+                logger.error(f"Request payload: {payload}")
+                
+                # If unauthorized, try reloading environment variables
+                if "Unauthorized" in response.text:
+                    logger.warning("Unauthorized error, attempting to reload environment variables")
+                    reload_environment_variables()
+                    
+                    # Try again with the new token
+                    if TELEGRAM_BOT_TOKEN:
+                        logger.info(f"Retrying with new token: {TELEGRAM_BOT_TOKEN[:5]}...")
+                        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+                        retry_response = await client.post(url, json=payload)
+                        
+                        if retry_response.status_code == 200:
+                            logger.info(f"Successfully sent message to Telegram chat {chat_id} after token reload")
+                            return
+                        else:
+                            logger.error(f"Telegram API error after token reload: {retry_response.text}")
+            else:
+                logger.info(f"Successfully sent message to Telegram chat {chat_id}")
+            
+    except Exception as e:
+        logger.exception(f"Error sending Telegram message: {e}")
+
+async def send_telegram_callback_answer(callback_query_id: str, text: str = ""):
+    """Answer a callback query to stop the loading state on the button."""
+    global TELEGRAM_BOT_TOKEN
+    
+    if not TELEGRAM_BOT_TOKEN:
+        logger.warning("Telegram bot token not configured")
+        return
+    
+    try:
+        # Send answerCallbackQuery via Telegram Bot API
+        async with httpx.AsyncClient() as client:
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+            
+            payload = {
+                "callback_query_id": callback_query_id,
+            }
+            
+            if text:
+                payload["text"] = text
+            
+            response = await client.post(url, json=payload)
+            
+            if response.status_code != 200:
+                logger.error(f"Telegram API error answering callback: {response.text}")
+            
+    except Exception as e:
+        logger.exception(f"Error answering Telegram callback: {e}")
