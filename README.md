@@ -13,6 +13,28 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **Persistent command storage** with Redis
 - **Messaging platform integration** (WhatsApp, Telegram)
 
+## Telegram Bot
+
+Snel is available as a Telegram bot! Chat with [@pointless_snel_bot](https://t.me/pointless_snel_bot) to:
+
+- Check token prices
+- Create a simulated wallet
+- Swap tokens
+- Check your wallet balance
+- Get real-time crypto information
+
+### Bot Commands
+
+- `/start` - Start the bot
+- `/help` - Show available commands
+- `/connect` - Connect or create a wallet
+- `/price [token]` - Check token price (e.g., `/price ETH`)
+- `/swap [amount] [token] for [token]` - Create a swap (e.g., `/swap 0.1 ETH for USDC`)
+- `/balance` - Check your wallet balance
+- `/disconnect` - Disconnect your wallet
+
+You can also chat with Snel naturally, asking questions like "What's the price of ETH?" or "Tell me about Scroll L2."
+
 ## Supported Chains
 
 - Optimism

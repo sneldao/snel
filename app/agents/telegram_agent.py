@@ -7,7 +7,7 @@ import re
 import random
 import hashlib
 import time
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional, Union, Tuple, Callable
 from pydantic import Field
 from app.agents.messaging_agent import MessagingAgent
 from app.services.token_service import TokenService
@@ -23,6 +23,7 @@ class TelegramAgent(MessagingAgent):
     This agent extends the MessagingAgent with Telegram-specific features
     like commands, wallet creation, and inline buttons.
     """
+    command_handlers: Dict[str, Callable] = Field(default_factory=dict)
     
     def __init__(self, token_service: TokenService, swap_service: SwapService):
         """
