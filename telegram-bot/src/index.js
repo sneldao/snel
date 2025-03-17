@@ -16,6 +16,9 @@ const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 
 // Log startup information
 console.log(`Starting bot with API_URL: ${API_URL}`);
+console.log(
+  `Webhook URL should be set to: https://[your-vercel-domain]/webhook`
+);
 
 // Middleware for session management
 bot.use(
@@ -366,19 +369,74 @@ app.get("/", (req, res) => {
   });
 });
 
+// Test endpoint to check webhook info
+app.get("/webhook-info", async (req, res) => {
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`
+    );
+    const data = await response.json();
+
+    res.send({
+      status: "ok",
+      webhook_info: data,
+      bot_token_preview: process.env.TELEGRAM_BOT_TOKEN
+        ? `${process.env.TELEGRAM_BOT_TOKEN.substring(0, 5)}...`
+        : "Not set",
+      api_url: API_URL,
+      environment: process.env.NODE_ENV || "development",
+    });
+  } catch (error) {
+    res.status(500).send({
+      status: "error",
+      message: error.message,
+    });
+  }
+});
+
 // Mount the bot's webhook handling on Express
 app.use(express.json());
-app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
-  // Process update
-  bot.handleUpdate(req.body);
-  res.sendStatus(200);
+app.post(`/webhook`, (req, res) => {
+  // Log the entire webhook request
+  console.log("Webhook received at:", new Date().toISOString());
+  console.log("Headers:", JSON.stringify(req.headers));
+  console.log("Body:", JSON.stringify(req.body));
+
+  // Validate the request
+  if (!req.body || !req.body.update_id) {
+    console.error("Invalid webhook data received - not a Telegram update");
+    return res.status(400).send("Bad Request: Not a valid Telegram update");
+  }
+
+  try {
+    // Process update with grammy
+    console.log("Processing update with bot.handleUpdate()");
+    bot.handleUpdate(req.body);
+    console.log("Update processed successfully");
+    res.sendStatus(200);
+  } catch (error) {
+    console.error("Error handling update:", error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 // Start the bot using polling in development, webhook in production
 if (process.env.NODE_ENV === "production") {
   console.log("Running in production mode with webhook");
-  // The actual webhook setup is handled by the Telegram API
-  // We just need to expose the endpoint for Telegram to call
+  // Set up the bot to handle updates via webhook
+  // Instead of calling bot.start(), we'll just use bot.handleUpdate() in the webhook route
+
+  // Optional: Verify the webhook is set up correctly by fetching info from Telegram
+  fetch(
+    `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      console.log("Current webhook info:", JSON.stringify(data));
+    })
+    .catch((error) => {
+      console.error("Error checking webhook info:", error);
+    });
 } else {
   console.log("Running in development mode with polling");
   bot.start();
