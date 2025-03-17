@@ -4,11 +4,15 @@ Service for interacting with the Gemini API.
 import logging
 import os
 import json
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import httpx
 import asyncio
 
 logger = logging.getLogger(__name__)
+
+# Default model to use (1.5 Flash is more likely to be available on the free tier)
+DEFAULT_MODEL = "gemini-1.5-flash"
+FALLBACK_MODELS = ["gemini-1.5-flash", "gemini-1.0-pro"]
 
 class GeminiService:
     """
@@ -17,6 +21,7 @@ class GeminiService:
     """
     api_key: Optional[str] = None
     http_client: Optional[httpx.AsyncClient] = None
+    model_name: str = DEFAULT_MODEL
     
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -35,6 +40,51 @@ class GeminiService:
         """Create a new HTTP client with proper timeout settings."""
         return httpx.AsyncClient(timeout=30.0)
     
+    async def check_model_availability(self) -> Tuple[bool, str]:
+        """
+        Check if the current model is available.
+        
+        Returns:
+            Tuple of (is_available, model_name)
+        """
+        if not self.api_key or not self.http_client:
+            return False, ""
+            
+        try:
+            # Ensure HTTP client is available
+            if self.http_client is None or self.http_client.is_closed:
+                self.http_client = self._create_http_client()
+                
+            # List available models
+            models_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={self.api_key}"
+            response = await self.http_client.get(models_url)
+            
+            if response.status_code != 200:
+                logger.error(f"Error listing Gemini models: {response.status_code} - {response.text}")
+                return False, ""
+                
+            # Parse response
+            data = response.json()
+            available_models = [model["name"].split("/")[-1] for model in data.get("models", [])]
+            
+            # Check if our model is available
+            if self.model_name in available_models:
+                return True, self.model_name
+                
+            # Try fallback models
+            for model in FALLBACK_MODELS:
+                if model in available_models:
+                    self.model_name = model
+                    logger.info(f"Using fallback Gemini model: {model}")
+                    return True, model
+                    
+            # No suitable model found
+            return False, ""
+            
+        except Exception as e:
+            logger.exception(f"Error checking model availability: {e}")
+            return False, ""
+    
     async def answer_crypto_question(
         self,
         user_query: str,
@@ -52,8 +102,13 @@ class GeminiService:
         Returns:
             Generated response string
         """
+        # Check if we have a valid API key
         if not self.api_key:
-            return "I'm sorry, I can't answer general questions right now. Please try using specific commands like /price or /swap."
+            return "I'm sorry, I can't answer general questions right now. Please try using specific commands like */price* or */swap*."
+
+        # If the query is simple enough, just respond directly without API call
+        if user_query.lower() in ["hi", "hello", "hey", "gm", "good morning", "good day", "good evening"]:
+            return "🐌 Hello there! I'm Snel, your DeFi assistant. To get started, try commands like */price ETH* or */connect* to set up your wallet."
             
         try:
             # Ensure HTTP client is available
@@ -89,11 +144,11 @@ class GeminiService:
             
             # Build conversation context
             context = "The user is interacting with a Telegram bot that provides DeFi services."
-            if wallet_info and wallet_info.get("connected"):
-                context += f" The user has a connected wallet with address {wallet_info['address']}."
+            if wallet_info and wallet_info.get("wallet_address"):
+                context += f" The user has a connected wallet with address {wallet_info['wallet_address']}."
             
-            # Build API request
-            api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            # Build API request with current model name
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
             headers = {"Content-Type": "application/json"}
             
             payload = {
@@ -157,6 +212,17 @@ class GeminiService:
                             parts = candidate["content"]["parts"]
                             if parts and "text" in parts[0]:
                                 return parts[0]["text"].strip()
+                
+                # If we get a 404, it might be a model issue
+                if response.status_code == 404 and "models" in response.text:
+                    # Try to check for available models
+                    available, model = await self.check_model_availability()
+                    if available:
+                        # Retry with the new model
+                        logger.info(f"Retrying with verified model: {model}")
+                        self.model_name = model
+                        # Call self recursively to retry
+                        return await self.answer_crypto_question(user_query, wallet_info, max_tokens)
                 
                 # Log error
                 logger.error(f"Error from Gemini API: {response.status_code} - {response.text}")

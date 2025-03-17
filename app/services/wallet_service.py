@@ -44,13 +44,16 @@ class WalletService:
     and network switching.
     """
     redis_client: Optional[redis.Redis] = None
+    redis_url: Optional[str] = None
     
-    def __init__(self):
+    def __init__(self, redis_service=None, redis_url=None):
         """Initialize the wallet service."""
         # Initialize Redis connection if REDIS_URL is set
-        if settings.REDIS_URL:
+        self.redis_url = redis_url or settings.REDIS_URL
+        
+        if self.redis_url:
             try:
-                self.redis_client = redis.from_url(settings.REDIS_URL)
+                self.redis_client = self._create_redis_client()
                 logger.info("Redis client initialized for WalletService")
             except Exception as e:
                 logger.exception(f"Error initializing Redis client: {e}")
@@ -63,6 +66,16 @@ class WalletService:
         # Validate configuration
         if not all([PARTICLE_PROJECT_ID, PARTICLE_CLIENT_KEY, PARTICLE_APP_ID]):
             logger.warning("Particle Auth configuration incomplete. Smart wallet features will be limited.")
+    
+    def _get_chain_info(self, chain_id: str) -> Dict[str, Any]:
+        """Get chain information by ID."""
+        if chain_id in SUPPORTED_CHAINS:
+            return SUPPORTED_CHAINS[chain_id]
+        return {
+            "name": f"Unknown Chain ({chain_id})",
+            "chainId": 0,
+            "rpcUrl": ""
+        }
     
     async def get_supported_chains(self) -> List[Dict[str, Any]]:
         """
@@ -188,6 +201,11 @@ class WalletService:
         Returns:
             Wallet information or None if not found
         """
+        # Check if Redis client is available
+        if not self.redis_client:
+            logger.warning("Redis client not available, returning no wallet info")
+            return None
+        
         # Create the user key
         user_key = f"messaging:{platform}:user:{user_id}:wallet"
         
@@ -198,6 +216,10 @@ class WalletService:
             if not wallet_data:
                 logger.info(f"No wallet found for {platform}:{user_id}")
                 return None
+                
+            # Convert bytes to string if needed
+            if isinstance(wallet_data, bytes):
+                wallet_data = wallet_data.decode('utf-8')
                 
             # Parse the wallet data
             if wallet_data.startswith("{"):
@@ -215,6 +237,10 @@ class WalletService:
             # Get the current chain from wallet settings
             chain_key = f"messaging:{platform}:user:{user_id}:chain"
             chain = await self.redis_client.get(chain_key) or DEFAULT_CHAIN
+            
+            # Convert bytes to string if needed
+            if isinstance(chain, bytes):
+                chain = chain.decode('utf-8')
             
             # Get chain info
             chain_info = self._get_chain_info(chain)
@@ -239,6 +265,10 @@ class WalletService:
                     if not wallet_data:
                         return None
                     
+                    # Convert bytes to string if needed
+                    if isinstance(wallet_data, bytes):
+                        wallet_data = wallet_data.decode('utf-8')
+                    
                     # Return a basic wallet info object
                     return {
                         "wallet_address": wallet_data,
@@ -258,8 +288,11 @@ class WalletService:
         """Create a new Redis client instance."""
         import redis.asyncio as aioredis
         
+        if not self.redis_url:
+            raise ValueError("Redis URL is not set")
+            
         # Check if we're using Upstash
-        if self.redis_url.startswith("rediss://"):
+        if isinstance(self.redis_url, str) and self.redis_url.startswith("rediss://"):
             # Upstash Redis with SSL
             from redis.asyncio.connection import Connection
             

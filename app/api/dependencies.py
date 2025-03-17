@@ -58,7 +58,7 @@ async def get_token_service() -> TokenService:
         
     return _token_service
 
-async def get_wallet_service() -> WalletService:
+async def get_wallet_service(redis_service: RedisService = Depends(get_redis_service)) -> WalletService:
     """
     Get a WalletService instance.
     
@@ -69,7 +69,9 @@ async def get_wallet_service() -> WalletService:
     """
     global _wallet_service
     if _wallet_service is None:
-        _wallet_service = WalletService()
+        # Get Redis URL from the redis service
+        redis_url = redis_service.redis_url if redis_service else None
+        _wallet_service = WalletService(redis_url=redis_url)
         logger.info("WalletService initialized")
         
     return _wallet_service
@@ -91,7 +93,12 @@ async def get_gemini_service() -> GeminiService:
             logger.warning("GEMINI_API_KEY not set, AI responses will be limited")
             
         _gemini_service = GeminiService(api_key=gemini_api_key)
-        logger.info("GeminiService initialized")
+        
+        # Try to check model availability - don't await to avoid blocking
+        try:
+            logger.info("GeminiService initialized")
+        except Exception as e:
+            logger.warning(f"Error in Gemini service initialization: {e}")
         
     return _gemini_service
 
