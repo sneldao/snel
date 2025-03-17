@@ -21,11 +21,21 @@
     "routes": [
         {
             "src": "/api/webhook",
-            "dest": "/api/webhook.js"
+            "dest": "/api/webhook.js",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
         },
         {
             "src": "/api/test",
-            "dest": "/api/test.js"
+            "dest": "/api/test.js",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
         },
         {
             "src": "/(.*)",

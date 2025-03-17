@@ -65,16 +65,37 @@ bot.on("text", async (ctx) => {
   }
 });
 
-// Super simple webhook handler
+// Super simple webhook handler - making this as minimal as possible for debugging
 export default function handler(req, res) {
-  // Log request details
-  console.log(`[${new Date().toISOString()}] Webhook received:`, {
+  // Log complete request details for debugging
+  console.log(`[${new Date().toISOString()}] WEBHOOK RECEIVED:`, {
     method: req.method,
-    headers: req.headers,
-    body: req.body ? JSON.stringify(req.body).substring(0, 200) : "No body",
+    path: req.url,
+    headers: JSON.stringify(req.headers),
+    body: req.body ? JSON.stringify(req.body) : "No body",
     query: req.query,
   });
 
+  // Simplified for debugging - just respond with success and don't try to process
   // Always return 200 OK for Telegram
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    // Handle CORS preflight requests
+    res.status(200).end();
+    return;
+  }
+
+  try {
+    if (req.body && req.body.message) {
+      console.log("[WEBHOOK] Message received:", req.body.message);
+    }
+  } catch (error) {
+    console.error("[WEBHOOK] Error processing message:", error);
+  }
+
+  // Just return success for now to debug the webhook connection
   res.status(200).json({ ok: true, message: "Webhook received" });
 }
