@@ -42,6 +42,11 @@ console.log(`Starting bot with API_URL: ${API_URL}`);
 console.log(
   `Running in ${process.env.NODE_ENV || "development"} mode with polling`
 );
+console.log(
+  `Telegram Bot Token (first 5 chars): ${
+    process.env.TELEGRAM_BOT_TOKEN?.substring(0, 5) || "not set"
+  }`
+);
 
 // Command handlers
 bot.start(async (ctx) => {
@@ -376,6 +381,36 @@ app.get("/", (req, res) => {
   });
 });
 
+// Test endpoint to manually send a message
+app.get("/test-send/:chatId", async (req, res) => {
+  try {
+    const chatId = req.params.chatId;
+    console.log(`Manual test: Attempting to send message to chat ID ${chatId}`);
+
+    const result = await bot.telegram.sendMessage(
+      chatId,
+      `Test message from bot at ${new Date().toISOString()}`
+    );
+
+    console.log(`Message sent successfully: ${JSON.stringify(result)}`);
+
+    res.send({
+      status: "success",
+      message: "Test message sent successfully",
+      details: result,
+    });
+  } catch (error) {
+    console.error(`Error sending test message: ${error}`);
+    console.error(error.stack);
+
+    res.status(500).send({
+      status: "error",
+      message: `Failed to send message: ${error.message}`,
+      error: error.toString(),
+    });
+  }
+});
+
 // Status endpoint to check bot info
 app.get("/status", async (req, res) => {
   try {
@@ -395,6 +430,43 @@ app.get("/status", async (req, res) => {
     res.status(500).send({
       status: "error",
       message: error.message,
+    });
+  }
+});
+
+// Debug endpoint to check updates
+app.get("/debug-updates", async (req, res) => {
+  try {
+    // Get update count from Telegram
+    const response = await axios.get(
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getUpdates?limit=10&offset=-10`
+    );
+
+    // Check if bot is receiving messages
+    const updates = response.data.result || [];
+    const updateCount = updates.length;
+
+    // Get webhook info
+    const webhookResponse = await axios.get(
+      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`
+    );
+
+    res.send({
+      status: "ok",
+      updates_count: updateCount,
+      recent_updates: updates,
+      webhook_info: webhookResponse.data.result,
+      bot_token_preview: process.env.TELEGRAM_BOT_TOKEN
+        ? `${process.env.TELEGRAM_BOT_TOKEN.substring(0, 5)}...`
+        : "Not set",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error checking updates: ${error}`);
+    res.status(500).send({
+      status: "error",
+      message: error.message,
+      error: error.toString(),
     });
   }
 });
@@ -426,22 +498,63 @@ if (process.env.NODE_ENV === "production") {
   }, PING_INTERVAL);
 }
 
-// Start the bot
-bot
-  .launch()
-  .then(() => {
-    console.log("Bot initialized and running!");
-  })
-  .catch((error) => {
-    console.error("Error starting bot:", error);
-  });
+// Start the bot with explicit error handling and debugging
+console.log("Attempting to launch bot...");
+try {
+  // First delete any existing webhooks
+  console.log("Deleting any existing webhooks...");
+  bot.telegram
+    .deleteWebhook({ drop_pending_updates: true })
+    .then(() => {
+      console.log("Successfully deleted webhook, proceeding with launch...");
+
+      // Then launch the bot
+      bot
+        .launch({
+          allowedUpdates: ["message", "callback_query"],
+          dropPendingUpdates: true,
+        })
+        .then(() => {
+          console.log("Bot successfully launched and connected to Telegram!");
+
+          // Fetch and log bot info to verify connection
+          bot.telegram
+            .getMe()
+            .then((botInfo) => {
+              console.log(
+                `Connected as bot: ${botInfo.username} (${botInfo.id})`
+              );
+            })
+            .catch((error) => {
+              console.error("Error getting bot info:", error);
+            });
+        })
+        .catch((error) => {
+          console.error("Error launching bot:", error);
+          console.error(error.stack);
+        });
+    })
+    .catch((error) => {
+      console.error("Error deleting webhook:", error);
+      console.error(error.stack);
+    });
+} catch (error) {
+  console.error("Exception during bot launch:", error);
+  console.error(error.stack);
+}
 
 // Enable graceful stop
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+process.once("SIGINT", () => {
+  console.log("SIGINT received, stopping bot...");
+  bot.stop("SIGINT");
+});
+process.once("SIGTERM", () => {
+  console.log("SIGTERM received, stopping bot...");
+  bot.stop("SIGTERM");
+});
 
 // Express server
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
