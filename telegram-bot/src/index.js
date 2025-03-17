@@ -1,4 +1,4 @@
-import { Bot, session } from "grammy";
+import { Telegraf } from "telegraf";
 import dotenv from "dotenv";
 import fetch from "node-fetch";
 import * as wallet from "./wallet.js";
@@ -6,8 +6,8 @@ import * as wallet from "./wallet.js";
 // Load environment variables
 dotenv.config();
 
-// Create a bot instance
-const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN || "");
+// Initialize the bot
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const API_URL = process.env.API_URL || "http://localhost:8000";
 
 // Use session middleware
@@ -21,22 +21,23 @@ bot.use(
 );
 
 // Command handlers
-bot.command("start", async (ctx) => {
-  await ctx.reply(
-    "👋 Welcome to Snel Bot! I'm your Scroll-native multichain DeFi assistant.\n\n" +
+bot.start((ctx) => {
+  ctx.reply(
+    "👋 Welcome to Dowse - your Scroll-native multichain DeFi assistant!\n\n" +
       "I can help you with:\n" +
-      "• 💰 Checking token prices\n" +
-      "• 🔄 Swapping tokens across chains\n" +
-      "• 👛 Managing your wallet\n" +
-      "• 📊 Tracking your balances\n\n" +
-      "🌐 Visit our web app: https://snel-pointless.vercel.app/\n\n" +
-      "To get started, try /connect to set up your wallet or /help for more commands."
+      "• Checking token prices across chains\n" +
+      "• Swapping tokens with the best rates\n" +
+      "• Managing your crypto wallet\n" +
+      "• Tracking your token balances\n\n" +
+      "Try me out or visit our web app: https://snel-pointless.vercel.app/"
   );
 
   // Send a follow-up message with a quick tip
-  await ctx.reply(
-    "💡 Quick Tip: You can check any token price by simply typing '/price ETH' or ask 'how much is USDC?'"
-  );
+  setTimeout(() => {
+    ctx.reply(
+      "💡 Quick tip: You can check token prices by typing something like 'What's the price of ETH?' or using the /price command!"
+    );
+  }, 1000);
 });
 
 bot.command("help", async (ctx) => {
@@ -335,7 +336,7 @@ bot.on("message:text", async (ctx) => {
   if (message.match(/balance|my tokens|my wallet|my funds/i)) {
     // Redirect to balance command
     await ctx.reply("Checking your balance...");
-    await bot.api.sendMessage(ctx.chat.id, "/balance", {
+    await bot.telegram.sendMessage(ctx.chat.id, "/balance", {
       entities: [{ type: "bot_command", offset: 0, length: 8 }],
     });
     return;
@@ -385,26 +386,41 @@ bot.on("message:text", async (ctx) => {
   );
 });
 
-// Start the bot in development mode
+// If running in development mode (not on Vercel), use long polling
 if (process.env.NODE_ENV !== "production") {
-  console.log("Starting bot in development mode...");
-  bot.start();
+  console.log("Starting bot in development mode (long polling)...");
+  bot
+    .launch()
+    .then(() => {
+      console.log("Bot started successfully!");
+    })
+    .catch((err) => {
+      console.error("Failed to start bot:", err);
+    });
 }
 
-// For Vercel serverless deployment
-export default async function handler(req, res) {
-  // Only process POST requests (webhook updates from Telegram)
-  if (req.method !== "POST") {
-    res.status(200).json({ message: "Telegram bot is running!" });
-    return;
-  }
+// Enable graceful stop
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
 
+// Export a serverless function handler for Vercel
+export default async function handler(req, res) {
   try {
-    // Process the update
-    await bot.handleUpdate(req.body);
-    res.status(200).json({ success: true });
+    // Health check for GET requests
+    if (req.method === "GET") {
+      return res.status(200).json({
+        status: "ok",
+        message: "Telegram bot is running",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return res.status(200).json({
+      message:
+        "This endpoint is just a health check. Webhook should be at /api/webhook",
+    });
   } catch (error) {
-    console.error("Error handling webhook:", error);
-    res.status(500).json({ error: "Failed to process update" });
+    console.error("Error in index handler:", error);
+    return res.status(500).json({ error: error.message });
   }
 }

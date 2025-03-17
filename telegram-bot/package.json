@@ -1,28 +1,31 @@
 {
   "name": "telegram-bot",
   "version": "1.0.0",
+  "description": "Telegram bot for Snel DeFi assistant",
   "main": "src/index.js",
+  "type": "module",
   "scripts": {
-    "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build": "chmod +x deploy.sh && ./deploy.sh",
-    "vercel-build": "echo 'Vercel build step complete'",
+    "start": "node src/index.js",
     "setup-webhook": "node setup-webhook.js"
   },
-  "keywords": [],
+  "keywords": [
+    "telegram",
+    "bot",
+    "defi",
+    "crypto",
+    "wallet"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "Telegram bot for DeFi interactions",
   "dependencies": {
     "dotenv": "^16.3.1",
-    "ethers": "^6.11.1",
-    "grammy": "^1.19.2",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "telegraf": "^4.15.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.0.2"
   },
-  "type": "module",
   "engines": {
     "node": ">=18.0.0"
   }

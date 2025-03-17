@@ -69,7 +69,7 @@ The `ScrollHandler` class in `app/services/scroll_handler.py` has been updated t
 
 ## Messaging Platform Integration
 
-The project includes integration with messaging platforms like WhatsApp and Telegram through the `MessagingAgent` class in `app/agents/messaging_agent.py`.
+The project includes a basic scaffold for a simple integration with messaging platforms like WhatsApp (future) through the `MessagingAgent` class in `app/agents/messaging_agent.py` which works via botfather if used independently.
 
 ### Messaging Agent Features
 
@@ -82,7 +82,7 @@ The project includes integration with messaging platforms like WhatsApp and Tele
 
 ### Telegram Integration
 
-The project now includes a dedicated Telegram bot built with Node.js that provides a more native Telegram experience with interactive buttons and improved user experience.
+The default for the project is a dedicated Telegram bot built with Node.js that provides a more native Telegram experience with interactive buttons and improved user experience.
 
 #### Telegram Bot Features
 
@@ -411,7 +411,7 @@ The application supports a variety of natural language commands:
 ### Transfer Commands
 
 - "send 10 USDC to 0x123..."
-- "transfer 5 ETH to vitalik.eth"
+- "transfer 5 ETH to papajams.eth"
 
 ### Bridge Commands
 

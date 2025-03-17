@@ -21,87 +21,65 @@ api_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, root_dir)  # Root directory first
 sys.path.insert(0, api_dir)   # API directory second
 
-# CRITICAL: Monkey patch Dowse's logging module BEFORE importing anything else
-# This prevents the 'Read-only file system' error in serverless environments
-def patch_dowse_modules():
-    """
-    Patch Dowse's logger module before it gets imported to prevent file system access.
-    Must be called before any imports that might trigger Dowse's logger initialization.
-    """
-    import importlib.util
-    import types
-    import logging
-    
-    # Create a default logger that only writes to stdout
-    logger = logging.getLogger("dowse")
-    logger.setLevel(logging.INFO)
-    
-    # Remove any existing handlers
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-    
-    # Add a stdout handler only
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    logger.addHandler(handler)
-    
-    # Create a fake logger module to replace dowse.logger
-    # This prevents dowse from creating file handlers
-    class MockLogger:
-        def __init__(self, name="dowse"):
-            self.name = name
-            self.logger = logging.getLogger(name)
-        
-        def info(self, msg, *args, **kwargs):
-            self.logger.info(msg, *args, **kwargs)
-        
-        def warning(self, msg, *args, **kwargs):
-            self.logger.warning(msg, *args, **kwargs)
-        
-        def error(self, msg, *args, **kwargs):
-            self.logger.error(msg, *args, **kwargs)
-        
-        def debug(self, msg, *args, **kwargs):
-            self.logger.debug(msg, *args, **kwargs)
-        
-        def critical(self, msg, *args, **kwargs):
-            self.logger.critical(msg, *args, **kwargs)
-        
-        def exception(self, msg, *args, **kwargs):
-            self.logger.exception(msg, *args, **kwargs)
-    
-    # Create a fake dowse.logger module
-    mock_logger = MockLogger()
-    mock_logger_module = types.ModuleType("dowse.logger")
-    mock_logger_module.get_logger = lambda name=None: MockLogger(name if name else "dowse")
-    
-    # Insert it into sys.modules
-    sys.modules["dowse.logger"] = mock_logger_module
-
-# Apply the patch
-patch_dowse_modules()
-
-# Now it's safe to import the app 
-
-# Add the parent directory to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Import routes
-from app.api.routes.messaging_router import router as messaging_router
-from app.api.routes.swap_router import router as swap_router
-from app.api.routes.wallet_router import router as wallet_router
-from app.api.routes.commands_router import router as commands_router
-from app.api.routes.brian_router import router as brian_router
-from app.api.routes.dca_router import router as dca_router
-from app.api.routes.health import router as health_router
-
-# Configure logging
+# Configure logging first
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 )
 
 logger = logging.getLogger(__name__)
+
+# CRITICAL: Create a fake dowse.logger module BEFORE importing anything else
+# This prevents the 'Read-only file system' error in serverless environments
+class MockLogger:
+    def __init__(self, name="dowse"):
+        self.name = name
+        self.logger = logging.getLogger(name)
+    
+    def info(self, msg, *args, **kwargs):
+        self.logger.info(msg, *args, **kwargs)
+    
+    def warning(self, msg, *args, **kwargs):
+        self.logger.warning(msg, *args, **kwargs)
+    
+    def error(self, msg, *args, **kwargs):
+        self.logger.error(msg, *args, **kwargs)
+    
+    def debug(self, msg, *args, **kwargs):
+        self.logger.debug(msg, *args, **kwargs)
+    
+    def critical(self, msg, *args, **kwargs):
+        self.logger.critical(msg, *args, **kwargs)
+    
+    def exception(self, msg, *args, **kwargs):
+        self.logger.exception(msg, *args, **kwargs)
+
+# Create a fake dowse.logger module
+import types
+mock_logger = MockLogger()
+mock_logger_module = types.ModuleType("dowse.logger")
+mock_logger_module.get_logger = lambda name=None: MockLogger(name if name else "dowse")
+mock_logger_module.logger = mock_logger  # Add the logger attribute
+
+# Insert it into sys.modules
+sys.modules["dowse.logger"] = mock_logger_module
+
+logger.info("Dowse logger monkey patched for serverless environment")
+
+# Now it's safe to import the app modules
+try:
+    # Import routes
+    from app.api.routes.messaging_router import router as messaging_router
+    from app.api.routes.swap_router import router as swap_router
+    from app.api.routes.wallet_router import router as wallet_router
+    from app.api.routes.commands_router import router as commands_router
+    from app.api.routes.brian_router import router as brian_router
+    from app.api.routes.dca_router import router as dca_router
+    from app.api.routes.health import router as health_router
+except ImportError as e:
+    logger.error(f"Error importing routes: {e}")
+    logger.error(traceback.format_exc())
+    raise
 
 # Create FastAPI app
 app = FastAPI(
