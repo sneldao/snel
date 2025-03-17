@@ -1,426 +1,354 @@
-import { Telegraf, session } from "telegraf";
-import dotenv from "dotenv";
+import "dotenv/config";
+import { Bot, InlineKeyboard, session } from "grammy";
 import fetch from "node-fetch";
-import * as wallet from "./wallet.js";
-
-// Load environment variables
-dotenv.config();
+import {
+  generateWalletAddress,
+  storeWalletInfo,
+  getWalletInfo,
+  getWalletBalance,
+} from "./wallet.js";
 
 // Initialize the bot
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-const API_URL = process.env.API_URL || "http://localhost:8000";
+const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 
-// Use session middleware
+// Middleware for session management
 bot.use(
   session({
     initial: () => ({
-      walletConnected: false,
-      pendingAction: null,
+      walletAddress: null,
+      pendingSwap: null,
     }),
   })
 );
 
 // Command handlers
-bot.start((ctx) => {
-  ctx.reply(
-    "👋 Welcome to Dowse - your Scroll-native multichain DeFi assistant!\n\n" +
-      "I can help you with:\n" +
-      "• Checking token prices across chains\n" +
-      "• Swapping tokens with the best rates\n" +
-      "• Managing your crypto wallet\n" +
-      "• Tracking your token balances\n\n" +
-      "Try me out or visit our web app: https://snel-pointless.vercel.app/"
+bot.command("start", async (ctx) => {
+  await ctx.reply(
+    "👋 Welcome to Snel! I'm your DeFi assistant on Telegram.\n\n" +
+      "I'm a Scroll-native multichain agent that can help you with:\n" +
+      "• Checking token prices\n" +
+      "• Swapping tokens across chains\n" +
+      "• Managing your wallet\n" +
+      "• Executing transactions\n\n" +
+      "Try /help to see available commands, or visit our web app at https://snel-pointless.vercel.app/\n\n" +
+      "🐌 I might be slow, but I'll get you there safely!"
   );
-
-  // Send a follow-up message with a quick tip
-  setTimeout(() => {
-    ctx.reply(
-      "💡 Quick tip: You can check token prices by typing something like 'What's the price of ETH?' or using the /price command!"
-    );
-  }, 1000);
 });
 
 bot.command("help", async (ctx) => {
   await ctx.reply(
-    "🔍 Available Commands:\n\n" +
-      "Wallet Management:\n" +
-      "• /connect - Create or connect a wallet\n" +
-      "• /disconnect - Disconnect your wallet\n" +
-      "• /balance - Check your wallet balance\n\n" +
-      "DeFi Operations:\n" +
-      "• /price [token] - Check token price\n" +
-      "• /swap [amount] [token] for [token] - Swap tokens\n\n" +
-      "You can also ask me questions in natural language like:\n" +
-      "• 'How much is ETH worth?'\n" +
-      "• 'What's the price of USDC?'\n" +
-      "• 'Show me my balance'\n\n" +
-      "For more information, visit: https://snel-pointless.vercel.app/"
+    "🔍 Here's what I can do:\n\n" +
+      "/connect - Connect or create a wallet\n" +
+      "/price [token] - Check token price (e.g., /price ETH)\n" +
+      "/swap [amount] [token] for [token] - Create a swap (e.g., /swap 0.1 ETH for USDC)\n" +
+      "/balance - Check your wallet balance\n" +
+      "/disconnect - Disconnect your wallet\n\n" +
+      "I'm still learning, so please be patient with me! 🐌"
   );
 });
 
+// Connect wallet command
 bot.command("connect", async (ctx) => {
-  try {
-    const userId = ctx.from.id.toString();
+  // Check if user already has a wallet
+  const userId = ctx.from.id.toString();
+  const existingWallet = getWalletInfo(userId);
 
-    // Check if user already has a wallet
-    const hasExistingWallet = await wallet.hasWallet(userId);
-
-    if (hasExistingWallet) {
-      const walletData = await wallet.getWallet(userId);
-      ctx.session.walletConnected = true;
-
-      await ctx.reply(
-        `✅ Your wallet is already connected!\n\n` +
-          `Address: ${walletData.address.slice(
-            0,
-            6
-          )}...${walletData.address.slice(-4)}\n` +
-          `Chain: Scroll Sepolia Testnet\n\n` +
-          `Use /balance to check your balance or /disconnect to disconnect this wallet.`
-      );
-      return;
-    }
-
-    // Create a new wallet
-    await ctx.reply(
-      "🔐 Creating a new wallet for you on Scroll Sepolia testnet..."
-    );
-
-    const newWallet = await wallet.createWallet(userId);
-    ctx.session.walletConnected = true;
-
-    await ctx.reply(
-      `✅ Wallet created successfully!\n\n` +
-        `Address: ${newWallet.address.slice(0, 6)}...${newWallet.address.slice(
-          -4
-        )}\n` +
-        `Chain: Scroll Sepolia Testnet\n\n` +
-        `Your wallet has been created with test tokens for you to experiment with.\n\n` +
-        `⚠️ Important: This is a testnet wallet for demonstration purposes. Do not send real assets to this address.\n\n` +
-        `Use /balance to check your balance.`
-    );
-  } catch (error) {
-    console.error("Error connecting wallet:", error);
-    await ctx.reply(
-      "❌ Sorry, there was an error creating your wallet. Please try again later."
+  if (existingWallet && ctx.session.walletAddress) {
+    return ctx.reply(
+      `You already have a wallet connected!\n\n` +
+        `Address: ${ctx.session.walletAddress}\n\n` +
+        `Use /disconnect if you want to disconnect this wallet.`
     );
   }
+
+  // For MVP, we'll simulate wallet creation
+  const keyboard = new InlineKeyboard()
+    .text("Create New Wallet", "create_wallet")
+    .text("Connect Existing", "connect_existing");
+
+  await ctx.reply(
+    "Let's set up your wallet. You can create a new wallet or connect an existing one:",
+    { reply_markup: keyboard }
+  );
 });
 
-bot.command("disconnect", async (ctx) => {
-  try {
-    const userId = ctx.from.id.toString();
-
-    // Check if user has a wallet
-    const hasExistingWallet = await wallet.hasWallet(userId);
-
-    if (!hasExistingWallet) {
-      await ctx.reply(
-        "❌ You don't have a connected wallet. Use /connect to create one."
-      );
-      return;
-    }
-
-    // Disconnect the wallet
-    await wallet.disconnectWallet(userId);
-    ctx.session.walletConnected = false;
-
-    await ctx.reply("✅ Your wallet has been disconnected successfully.");
-  } catch (error) {
-    console.error("Error disconnecting wallet:", error);
-    await ctx.reply(
-      "❌ Sorry, there was an error disconnecting your wallet. Please try again later."
-    );
-  }
-});
-
+// Balance command
 bot.command("balance", async (ctx) => {
-  try {
-    const userId = ctx.from.id.toString();
+  const userId = ctx.from.id.toString();
 
-    // Check if user has a wallet
-    const hasExistingWallet = await wallet.hasWallet(userId);
+  // Check if user has a wallet
+  if (!ctx.session.walletAddress) {
+    const walletAddress = getWalletInfo(userId);
 
-    if (!hasExistingWallet) {
-      await ctx.reply(
-        "❌ You don't have a connected wallet. Use /connect to create one."
+    if (walletAddress) {
+      ctx.session.walletAddress = walletAddress;
+    } else {
+      return ctx.reply(
+        "You don't have a wallet connected yet. Use /connect to set up your wallet."
       );
-      return;
     }
+  }
 
-    // Get wallet data
-    const walletData = await wallet.getWallet(userId);
+  // Get wallet balance
+  const balance = getWalletBalance(ctx.session.walletAddress);
 
-    // Get balance
-    await ctx.reply(
-      `🔍 Checking balance for ${walletData.address.slice(
+  await ctx.reply(
+    `Your wallet balance:\n\n` +
+      `ETH: ${balance.eth}\n` +
+      `USDC: ${balance.usdc}\n` +
+      `USDT: ${balance.usdt}\n` +
+      `DAI: ${balance.dai}\n\n` +
+      `Wallet: ${ctx.session.walletAddress.substring(
         0,
         6
-      )}...${walletData.address.slice(-4)}...`
-    );
-
-    const balances = await wallet.getBalance(walletData.address);
-
-    let balanceMessage = `💰 Wallet Balance on Scroll Sepolia:\n\n`;
-    balanceMessage += `• ${balances.ETH} ETH\n`;
-
-    if (balances.tokens && balances.tokens.length > 0) {
-      balanceMessage += `\nTokens:\n`;
-
-      balances.tokens.forEach((token) => {
-        balanceMessage += `• ${token.balance} ${token.symbol}`;
-
-        if (token.value_usd) {
-          balanceMessage += ` (≈ $${token.value_usd.toFixed(2)})`;
-        }
-
-        balanceMessage += `\n`;
-      });
-    }
-
-    balanceMessage += `\n🌐 View on block explorer: https://sepolia-blockscout.scroll.io/address/${walletData.address}`;
-
-    await ctx.reply(balanceMessage);
-  } catch (error) {
-    console.error("Error checking balance:", error);
-    await ctx.reply(
-      "❌ Sorry, there was an error checking your balance. Please try again later."
-    );
-  }
+      )}...${ctx.session.walletAddress.substring(38)}`
+  );
 });
 
+// Disconnect command
+bot.command("disconnect", async (ctx) => {
+  if (!ctx.session.walletAddress) {
+    return ctx.reply("You don't have a wallet connected.");
+  }
+
+  const walletAddress = ctx.session.walletAddress;
+  ctx.session.walletAddress = null;
+
+  await ctx.reply(
+    `Wallet disconnected: ${walletAddress.substring(
+      0,
+      6
+    )}...${walletAddress.substring(38)}`
+  );
+});
+
+// Function to create the request body for API calls
+function createTelegramRequestBody(userId, message) {
+  return {
+    platform: "telegram",
+    user_id: userId.toString(),
+    message: message,
+    metadata: {
+      source: "telegram_bot",
+      version: "1.0.0",
+      timestamp: Date.now(),
+    },
+  };
+}
+
+// Price command
 bot.command("price", async (ctx) => {
-  const message = ctx.message.text.trim();
+  const message = ctx.message.text;
   const parts = message.split(" ");
 
   if (parts.length < 2) {
-    await ctx.reply("Please specify a token, e.g., /price ETH");
-    return;
+    return ctx.reply("Please specify a token. Example: /price ETH");
   }
 
   const token = parts[1].toUpperCase();
 
+  // Use the dedicated Telegram endpoint
   try {
-    // Forward to the API
-    const response = await fetch(`${API_URL}/api/messaging/test`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        platform: "telegram",
-        user_id: ctx.from.id.toString(),
-        message: `price of ${token}`,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    await ctx.reply(data.content);
-  } catch (error) {
-    console.error("Error getting price:", error);
-    await ctx.reply(
-      `Sorry, I couldn't get the price for ${token}. Please try again later.`
-    );
-  }
-});
-
-bot.command("swap", async (ctx) => {
-  const userId = ctx.from.id.toString();
-
-  // Check if user has a wallet
-  const hasWallet = await wallet.hasWallet(userId);
-
-  if (!hasWallet) {
-    await ctx.reply(
-      "❌ You need to connect a wallet first. Use /connect to create one."
-    );
-    return;
-  }
-
-  const message = ctx.message.text.trim();
-
-  // Store the swap intent in the session
-  ctx.session.pendingAction = {
-    type: "swap",
-    command: message,
-  };
-
-  // Forward to the API to parse the swap
-  try {
-    const response = await fetch(`${API_URL}/api/messaging/test`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        platform: "telegram",
-        user_id: userId,
-        message: message,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    // For now, just show the parsed response
-    await ctx.reply(
-      `🔄 Swap Request Parsed:\n\n${data.content}\n\n` +
-        `⚠️ Note: This is a testnet implementation. No actual swap will be executed yet.`
-    );
-  } catch (error) {
-    console.error("Error processing swap:", error);
-    await ctx.reply(
-      "❌ Sorry, there was an error processing your swap request. Please try again later."
-    );
-  }
-});
-
-// Handle regular messages
-bot.on("message:text", async (ctx) => {
-  const message = ctx.message.text.toLowerCase();
-
-  // Handle greetings
-  if (
-    message.match(/^(hi|hello|hey|gm|good morning|good day|good evening)$/i)
-  ) {
-    await ctx.reply(
-      "👋 Hello! How can I help you today? Try /help to see what I can do."
-    );
-    return;
-  }
-
-  // Handle price queries
-  if (
-    message.match(
-      /price of|how much is|what is the price of|what's the price of/i
-    )
-  ) {
-    try {
-      // Forward to the API
-      const response = await fetch(`${API_URL}/api/messaging/test`, {
+    const response = await fetch(
+      `${process.env.API_URL}/api/messaging/telegram/process`,
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          platform: "telegram",
-          user_id: ctx.from.id.toString(),
-          message: message,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`);
+        body: JSON.stringify(
+          createTelegramRequestBody(ctx.from.id, `price of ${token}`)
+        ),
       }
+    );
 
-      const data = await response.json();
-      await ctx.reply(data.content);
-      return;
-    } catch (error) {
-      console.error("Error getting price:", error);
-      await ctx.reply(
-        "Sorry, I couldn't process your price query. Please try again later."
+    const data = await response.json();
+    await ctx.reply(data.content);
+  } catch (error) {
+    console.error("Error fetching price:", error);
+    await ctx.reply(
+      `Sorry, I couldn't get the price of ${token}. Please try again later.`
+    );
+  }
+});
+
+// Swap command
+bot.command("swap", async (ctx) => {
+  const userId = ctx.from.id.toString();
+
+  // Check if user has a wallet
+  if (!ctx.session.walletAddress) {
+    const walletAddress = getWalletInfo(userId);
+
+    if (walletAddress) {
+      ctx.session.walletAddress = walletAddress;
+    } else {
+      return ctx.reply(
+        "You need to connect a wallet first. Use /connect to set up your wallet."
       );
-      return;
     }
   }
 
-  // Handle balance queries
-  if (message.match(/balance|my tokens|my wallet|my funds/i)) {
-    // Redirect to balance command
-    await ctx.reply("Checking your balance...");
-    await bot.telegram.sendMessage(ctx.chat.id, "/balance", {
-      entities: [{ type: "bot_command", offset: 0, length: 8 }],
-    });
-    return;
-  }
+  const message = ctx.message.text;
 
-  // Handle questions about the bot
-  if (
-    message.match(
-      /who are you|what are you|what can you do|what is snel|what's snel/i
-    )
-  ) {
-    await ctx.reply(
-      "I'm Snel, a Scroll-native multichain DeFi assistant! 🐌\n\n" +
-        "I can help you check token prices, manage your wallet, and execute swaps on Scroll Sepolia testnet.\n\n" +
-        "Use /help to see all available commands."
+  // Skip the /swap part
+  const swapText = message.substring(6).trim();
+
+  if (!swapText) {
+    return ctx.reply(
+      "Please specify the swap details. Example: /swap 0.1 ETH for USDC"
     );
-    return;
   }
 
-  // Handle questions about Scroll
-  if (message.match(/what is scroll|what's scroll|tell me about scroll/i)) {
-    await ctx.reply(
-      "Scroll is a zkEVM-based zkRollup on Ethereum that enables native compatibility with Ethereum applications and tools.\n\n" +
-        "It offers fast transactions, low fees, and strong security through zero-knowledge proofs, while maintaining full compatibility with existing Ethereum smart contracts and developer tools.\n\n" +
-        "Learn more at https://scroll.io"
+  // Parse the swap text
+  const swapMatch = swapText.match(/(\d+\.?\d*)\s+(\w+)\s+(?:to|for)\s+(\w+)/i);
+
+  if (!swapMatch) {
+    return ctx.reply(
+      "I couldn't understand your swap request. Please use the format:\n" +
+        "/swap [amount] [token] for [token]\n\n" +
+        "Example: /swap 0.1 ETH for USDC"
     );
-    return;
   }
 
-  // Handle questions about gas fees
-  if (message.match(/gas fee|gas price|transaction fee/i)) {
-    await ctx.reply(
-      "Gas fees on Scroll are significantly lower than on Ethereum mainnet, typically 10-20x cheaper.\n\n" +
-        "This makes it perfect for smaller transactions that would be cost-prohibitive on mainnet.\n\n" +
-        "For this testnet implementation, you don't need to worry about gas fees as we're using Scroll Sepolia testnet."
-    );
-    return;
-  }
+  const [_, amount, fromToken, toToken] = swapMatch;
 
-  // Default response for unrecognized messages
+  // For MVP, we'll simulate getting a quote
+  const estimatedOutput = (
+    parseFloat(amount) *
+    (Math.random() * 0.2 + 0.9) *
+    1800
+  ).toFixed(2);
+
+  const keyboard = new InlineKeyboard()
+    .text("Approve Swap", "approve_swap")
+    .text("Cancel", "cancel_swap");
+
+  // Store the swap request in session
+  ctx.session.pendingSwap = {
+    fromToken: fromToken.toUpperCase(),
+    toToken: toToken.toUpperCase(),
+    amount: parseFloat(amount),
+    estimatedOutput: parseFloat(estimatedOutput),
+    timestamp: Date.now(),
+  };
+
   await ctx.reply(
-    "I'm not sure how to respond to that. Here are some things you can try:\n\n" +
-      "• Check token prices: '/price ETH' or 'How much is USDC?'\n" +
-      "• Manage your wallet: '/connect', '/balance', '/disconnect'\n" +
-      "• Swap tokens: '/swap 0.1 ETH for USDC'\n\n" +
-      "Type /help for a full list of commands or visit our web app: https://snel-pointless.vercel.app/"
+    `Swap Quote:\n\n` +
+      `From: ${amount} ${fromToken.toUpperCase()}\n` +
+      `To: ~${estimatedOutput} ${toToken.toUpperCase()}\n` +
+      `Fee: 0.3%\n\n` +
+      `Do you want to proceed with this swap?`,
+    { reply_markup: keyboard }
   );
 });
 
-// If running in development mode (not on Vercel), use long polling
-if (process.env.NODE_ENV !== "production") {
-  console.log("Starting bot in development mode (long polling)...");
-  bot
-    .launch()
-    .then(() => {
-      console.log("Bot started successfully!");
-    })
-    .catch((err) => {
-      console.error("Failed to start bot:", err);
-    });
-}
+// Handle callback queries
+bot.on("callback_query", async (ctx) => {
+  const callbackData = ctx.callbackQuery.data;
+  const userId = ctx.from.id.toString();
 
-// Enable graceful stop
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+  if (callbackData === "create_wallet") {
+    // Generate a deterministic wallet address
+    const walletAddress = generateWalletAddress(userId);
 
-// Export a serverless function handler for Vercel
-export default async function handler(req, res) {
-  try {
-    // Health check for GET requests
-    if (req.method === "GET") {
-      return res.status(200).json({
-        status: "ok",
-        message: "Telegram bot is running",
-        timestamp: new Date().toISOString(),
-      });
+    // Store in session
+    ctx.session.walletAddress = walletAddress;
+
+    // Store wallet info
+    storeWalletInfo(userId, walletAddress);
+
+    await ctx.reply(
+      "🎉 I've created a new wallet for you!\n\n" +
+        `Address: ${walletAddress}\n\n` +
+        "This is a simulation for the MVP. In the full version, this would create a real smart contract wallet."
+    );
+  } else if (callbackData === "connect_existing") {
+    await ctx.reply(
+      "To connect an existing wallet, you would scan a QR code or enter your wallet address.\n\n" +
+        "This feature will be implemented in the next version."
+    );
+  } else if (callbackData === "approve_swap") {
+    if (!ctx.session.pendingSwap) {
+      return ctx.reply(
+        "No pending swap found. Please create a new swap request."
+      );
     }
 
-    return res.status(200).json({
-      message:
-        "This endpoint is just a health check. Webhook should be at /api/webhook",
-    });
-  } catch (error) {
-    console.error("Error in index handler:", error);
-    return res.status(500).json({ error: error.message });
+    const swap = ctx.session.pendingSwap;
+
+    // Generate a fake transaction hash
+    const txHash = `0x${Math.random().toString(16).substring(2, 62)}`;
+
+    await ctx.reply(
+      "✅ Swap approved!\n\n" +
+        `Swapping ${swap.amount} ${swap.fromToken} for ~${swap.estimatedOutput} ${swap.toToken}\n\n` +
+        `Transaction hash: ${txHash}\n\n` +
+        "This is a simulation for the MVP. In the full version, this would execute the actual swap transaction."
+    );
+
+    // Clear the pending swap
+    ctx.session.pendingSwap = null;
+  } else if (callbackData === "cancel_swap") {
+    ctx.session.pendingSwap = null;
+    await ctx.reply("Swap cancelled.");
   }
-}
+
+  // Answer the callback query to remove the loading state
+  await ctx.answerCallbackQuery();
+});
+
+// Handle regular messages
+bot.on("message", async (ctx) => {
+  const message = ctx.message.text;
+
+  if (!message) return;
+
+  // Simple message handling for the MVP
+  if (
+    message.toLowerCase().includes("price") ||
+    message.toLowerCase().includes("how much is")
+  ) {
+    // Forward to our dedicated Telegram endpoint
+    try {
+      const response = await fetch(
+        `${process.env.API_URL}/api/messaging/telegram/process`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(createTelegramRequestBody(ctx.from.id, message)),
+        }
+      );
+
+      const data = await response.json();
+      await ctx.reply(data.content);
+    } catch (error) {
+      console.error("Error processing message:", error);
+      await ctx.reply(
+        "Sorry, I couldn't process your request. Please try again later."
+      );
+    }
+  } else if (message.toLowerCase().includes("swap")) {
+    // Suggest using the /swap command
+    await ctx.reply(
+      "It looks like you want to swap tokens. Please use the /swap command followed by the details.\n\n" +
+        "Example: /swap 0.1 ETH for USDC"
+    );
+  } else {
+    // Default response
+    await ctx.reply(
+      "I'm not sure what you're asking. Here are some things I can help with:\n\n" +
+        "• /price ETH - Check token prices\n" +
+        "• /swap 0.1 ETH for USDC - Swap tokens\n" +
+        "• /connect - Set up your wallet\n\n" +
+        "Or try /help for all commands.\n\n" +
+        "You can also visit our web app: https://snel-pointless.vercel.app/"
+    );
+  }
+});
+
+// Start the bot
+bot.start();
+console.log("Bot started!");

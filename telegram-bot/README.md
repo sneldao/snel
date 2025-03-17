@@ -1,113 +1,81 @@
 # Snel Telegram Bot
 
-A Telegram bot for interacting with the Snel DeFi assistant, providing wallet management, price checking, and token swaps on Scroll Sepolia testnet.
+A Telegram bot for DeFi interactions using account abstraction.
 
 ## Features
 
-- 💰 Real Ethereum wallet creation and management
-- 📊 Token price checking across chains
-- 🔄 Token swaps with the best rates
-- 💼 Balance checking for your wallet
-- 🤖 Natural language processing for queries
+- **Price Checking**: Get real-time prices of cryptocurrencies
+- **Wallet Management**: Create and manage smart contract wallets
+- **Token Swaps**: Swap tokens directly from Telegram
+- **Balance Checking**: Check your wallet balances
 
-## Local Development
+## Setup
 
-### Prerequisites
+1. **Install Dependencies**
 
-- Node.js 18+
-- npm
-- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
+```bash
+npm install
+```
 
-### Setup
+2. **Configure Environment Variables**
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   cd telegram-bot
-   npm install
-   ```
-3. Create a `.env` file based on `.env.example`:
-   ```bash
-   cp .env.example .env
-   ```
-4. Update the `.env` file with your Telegram bot token and API URL
-5. Start the bot in development mode:
-   ```bash
-   npm run dev
-   ```
+Create a `.env` file with the following variables:
 
-## Vercel Deployment
+```
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+API_URL=http://localhost:8000
+ENTRYPOINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+FACTORY_ADDRESS=0x9406Cc6185a346906296840746125a0E44976454
+CHAIN_ID=534352
+RPC_URL=your_rpc_url
+```
 
-### Prerequisites
+3. **Start the Bot**
 
-- A Vercel account
-- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
+```bash
+npm start
+```
 
-### Deployment Steps
+For development with auto-reload:
 
-1. Push your code to a GitHub repository
-2. Create a new project in Vercel
-3. Connect your GitHub repository
-4. Set the root directory to `telegram-bot`
-5. Add the following environment variables:
-   - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
-   - `API_URL`: URL to your backend API (e.g., `https://your-api.vercel.app`)
-   - `NODE_ENV`: Set to `production`
-6. Deploy the project
+```bash
+npm run dev
+```
 
-### Setting Up the Webhook
+## Usage
 
-After deploying to Vercel, you need to set up the webhook to receive updates from Telegram:
+- `/start` - Start the bot
+- `/help` - Show available commands
+- `/connect` - Connect or create a wallet
+- `/price [token]` - Check token price (e.g., `/price ETH`)
+- `/swap [amount] [token] for [token]` - Create a swap (e.g., `/swap 0.1 ETH for USDC`)
+- `/balance` - Check your wallet balance
+- `/disconnect` - Disconnect your wallet
 
-1. Add the `WEBHOOK_URL` environment variable to your Vercel project:
+## Architecture
 
-   - Format: `https://your-vercel-app.vercel.app/api/webhook`
+This bot uses a simple architecture for the MVP:
 
-2. Run the webhook setup script locally:
+1. **GrammyJS**: For Telegram bot functionality
+2. **In-Memory Storage**: For user session management
+3. **Simulated Wallet Creation**: For testing wallet functionality
+4. **API Integration**: Connects to existing backend for price data
 
-   ```bash
-   # Install dependencies if you haven't already
-   npm install
+In future versions, this will be enhanced with:
 
-   # Set up the webhook
-   TELEGRAM_BOT_TOKEN=your_bot_token WEBHOOK_URL=https://your-vercel-app.vercel.app/api/webhook node setup-webhook.js
-   ```
+1. **Account Abstraction**: Using ERC-4337 for smart contract wallets
+2. **MPC Wallets**: For secure key management
+3. **Session Keys**: For temporary delegation
+4. **Paymaster Integration**: For gasless transactions
 
-3. Alternatively, you can set up the webhook directly from the Vercel console:
-   - Go to your Vercel project
-   - Open the "Functions" tab
-   - Find and click on the "setup-webhook" function
-   - Click "Run Function"
+## Development Roadmap
 
-## Troubleshooting
-
-### Invalid Export Error
-
-If you see an error like `Cannot find module '/var/task/telegram-bot/node_modules/ws/wrapper.mjs'`, it's likely due to a dependency issue. Make sure your `package.json` doesn't include unnecessary dependencies like `ethers` that might cause conflicts.
-
-### Webhook Issues
-
-If your bot isn't receiving updates, check:
-
-1. The webhook URL is correct and points to `/api/webhook`
-2. The webhook is properly set up (run `node setup-webhook.js` again)
-3. Check Vercel function logs for any errors
-
-### API Connection Problems
-
-If the bot can't connect to your API:
-
-1. Verify the `API_URL` environment variable is correct
-2. Ensure your API is running and accessible
-3. Check CORS settings on your API if necessary
-
-## Project Structure
-
-- `src/index.js`: Main bot file with command handlers
-- `src/wallet.js`: Wallet management functions
-- `src/api/webhook.js`: Webhook handler for Telegram updates
-- `setup-webhook.js`: Script to set up the Telegram webhook
+- [x] MVP with basic functionality
+- [ ] Real wallet creation with account abstraction
+- [ ] Transaction execution with session keys
+- [ ] Multi-chain support
+- [ ] Advanced DeFi features (lending, staking, etc.)
 
 ## License
 
-ISC
+MIT

@@ -12,7 +12,6 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **Multi-chain support** with automatic chain detection
 - **Persistent command storage** with Redis
 - **Messaging platform integration** (WhatsApp, Telegram)
-- **Telegram bot with real wallet capabilities** for seamless DeFi interactions on Scroll Sepolia
 
 ## Supported Chains
 
@@ -69,7 +68,7 @@ The `ScrollHandler` class in `app/services/scroll_handler.py` has been updated t
 
 ## Messaging Platform Integration
 
-The project includes a basic scaffold for a simple integration with messaging platforms like WhatsApp (future) through the `MessagingAgent` class in `app/agents/messaging_agent.py` which works via botfather if used independently.
+The project includes integration with messaging platforms like WhatsApp and Telegram through the `MessagingAgent` class in `app/agents/messaging_agent.py`.
 
 ### Messaging Agent Features
 
@@ -82,83 +81,20 @@ The project includes a basic scaffold for a simple integration with messaging pl
 
 ### Telegram Integration
 
-The default for the project is a dedicated Telegram bot built with Node.js that provides a more native Telegram experience with interactive buttons and improved user experience.
+To set up Telegram integration:
 
-#### Telegram Bot Features
+1. Create a Telegram bot using BotFather
+2. Get your bot token
+3. Add the token to your environment variables as `TELEGRAM_BOT_TOKEN`
+4. Set up a webhook URL for your bot (pointing to your API endpoint)
+5. Enable the Telegram integration in your application
 
-- **Real Wallet Creation & Management**: Create and manage real Ethereum wallets directly in Telegram
-- **Token Price Checking**: Get real-time token prices with natural language queries
-- **Token Swaps**: Initiate and approve token swaps with a simple command
-- **Balance Checking**: View your wallet balances for multiple tokens
-- **Natural Language Understanding**: Interact with the bot using everyday language
-- **Interactive UI**: Buttons and keyboards for easier navigation
+Example commands in Telegram:
 
-#### Telegram Bot Architecture
-
-The Telegram bot uses a hybrid architecture:
-
-- **Node.js Bot**: Handles Telegram-specific UI and wallet interactions
-- **Python Backend**: Processes complex queries and DeFi operations
-- **Redis Storage**: Securely stores wallet data and user preferences
-
-This approach allows for:
-
-- Better user experience with Telegram-native features
-- Leveraging the existing AI capabilities in the Python backend
-- Simplified wallet management through the bot interface
-- Secure storage of wallet data in Redis
-
-#### Wallet Implementation
-
-The Telegram bot implements real wallet functionality on Scroll Sepolia testnet:
-
-- **Real Ethereum Wallet Creation**: Uses ethers.js to create actual Ethereum wallets
-- **Private Key Management**: Securely stores private keys in Redis
-- **Balance Checking**: Retrieves real balances from the Scroll Sepolia blockchain
-- **Transaction Capabilities**: Supports sending transactions and token swaps
-- **Testnet Focus**: Limited to Scroll Sepolia for safety during testing
-
-#### Telegram Bot Setup
-
-To set up the Telegram bot:
-
-1. Navigate to the `telegram-bot` directory
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Create a `.env` file with:
-   ```
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-   API_URL=http://localhost:8000
-   ```
-4. Start the bot:
-   ```
-   npm run dev
-   ```
-
-#### Telegram Bot Deployment on Vercel
-
-To deploy the Telegram bot to Vercel:
-
-1. Create a new Vercel project for the Telegram bot
-2. Add the following environment variables in Vercel:
-   - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
-   - `API_URL`: URL to your deployed backend API
-   - `NODE_ENV`: Set to "production"
-3. Configure the Vercel project to use the `telegram-bot` directory as the root
-4. Use the `telegram-bot/vercel.json` file for configuration
-5. Deploy the project to Vercel
-
-#### Terms and Conditions
-
-By using the Telegram bot, users agree to the [Terms and Conditions](https://snel-pointless.vercel.app/terms) which outline:
-
-- The non-custodial nature of the service
-- User responsibilities for transaction approval
-- Financial risks associated with cryptocurrency transactions
-- Limitations of liability
-- Third-party service interactions
+- `/connect` - Connect your wallet
+- `/balance` - Check your wallet balance
+- `/swap 0.1 ETH for USDC` - Swap tokens
+- `/price ETH` - Check token price
 
 ## Local Development Setup
 
@@ -235,21 +171,6 @@ Start the Next.js development server:
 pnpm dev
 ```
 
-### Telegram Bot Setup
-
-Install Node.js dependencies:
-
-```
-cd telegram-bot
-npm install
-```
-
-Start the Telegram bot:
-
-```
-npm run dev
-```
-
 ## Production Setup (Vercel)
 
 ### Vercel Configuration
@@ -259,7 +180,7 @@ The project uses Vercel's serverless functions for the backend. Configuration is
 - `vercel.json` - Main configuration file for Vercel deployment
 - `vercel.build.sh` - Custom build script that installs dependencies
 - `runtime.txt` - Specifies the Python version (3.12)
-- `vercel.ignore` - Specifies files to ignore during deployment (including the telegram-bot directory)
+- `vercel.ignore` - Specifies files to ignore during deployment
 
 The main configuration in `vercel.json`:
 
@@ -278,7 +199,6 @@ The main configuration in `vercel.json`:
         "handler": "app",
         "includeFiles": [
           "app/**",
-          "api/**",
           "src/**",
           "requirements.txt",
           "*.py",
@@ -340,19 +260,6 @@ Set these in your Vercel project settings:
 - `NEXT_PUBLIC_API_URL` (set to your production domain)
 - `REDIS_URL` (your Upstash Redis URL)
 
-### Telegram Bot Deployment
-
-For deploying the Telegram bot to Vercel:
-
-1. Create a separate Vercel project for the Telegram bot
-2. Set the root directory to `telegram-bot`
-3. Add the required environment variables:
-   - `TELEGRAM_BOT_TOKEN`
-   - `API_URL` (pointing to your main backend)
-   - `NODE_ENV=production`
-4. Use the `telegram-bot/vercel.json` file for configuration
-5. Deploy the project
-
 ### Dependencies
 
 The project uses specific versions of dependencies that are known to work with Vercel's serverless environment. These are defined in `requirements.txt`.
@@ -368,11 +275,6 @@ The project uses specific versions of dependencies that are known to work with V
 
 - Local: http://localhost:8000
 - Production: Your Vercel deployment URL
-
-### Telegram Bot
-
-- Local: Runs with `npm run dev` using long polling
-- Production: Deployed as a separate Vercel project using webhooks
 
 ### CORS Configuration
 
@@ -411,7 +313,7 @@ The application supports a variety of natural language commands:
 ### Transfer Commands
 
 - "send 10 USDC to 0x123..."
-- "transfer 5 ETH to papajams.eth"
+- "transfer 5 ETH to vitalik.eth"
 
 ### Bridge Commands
 
@@ -451,14 +353,6 @@ The application supports a variety of natural language commands:
 - Check if the token is supported on Scroll
 - Verify that the wallet has sufficient balance
 
-#### Telegram Bot Issues
-
-- Ensure `TELEGRAM_BOT_TOKEN` is set correctly
-- Check that the bot is running (`npm run dev` locally)
-- Verify the API URL is correctly pointing to your backend
-- For production, ensure the Vercel deployment is configured correctly
-- If using webhooks, ensure the webhook URL is accessible
-
 ### Logs
 
 - Local: Available in terminal running the FastAPI server
@@ -466,10 +360,6 @@ The application supports a variety of natural language commands:
 
 ## Recent Updates
 
-- Added real wallet creation functionality on Scroll Sepolia testnet
-- Added secure wallet storage in Redis
-- Added API endpoints for wallet management
-- Added Telegram bot with real wallet capabilities
 - Added Brian API integration for Scroll network
 - Added cross-chain bridging functionality
 - Added token transfer capabilities
@@ -523,7 +413,6 @@ dowse-pointless/
 │   ├── services/     # Service implementations
 │   └── utils/        # Utility functions
 ├── frontend/         # Next.js frontend application
-├── telegram-bot/     # Node.js Telegram bot implementation
 ├── backup/           # Backup of previous configurations (for reference only)
 ├── vercel.json       # Vercel deployment configuration
 ├── vercel.build.sh   # Build script for Vercel

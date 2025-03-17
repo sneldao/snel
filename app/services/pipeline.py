@@ -229,7 +229,7 @@ class Pipeline(BaseModel):
     def _get_greeting_response(self) -> str:
         """Get a random greeting response with personality."""
         greetings = [
-            "gm, fren. Another day, another pintless financial decision. Shall we?",  
+            "gm, fren. More pointless financial decisions eh? why not!",  
             "Hey there! I'm feeling particularly lazy today, but I'll try to help.",
             "Oh hi! You caught me in the middle of my nap.",
             "Sup! I'm your friendly neighborhood pointless agent. What's on your mind?",

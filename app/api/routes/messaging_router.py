@@ -602,3 +602,68 @@ def reload_environment_variables():
 async def reload_env():
     """Reload environment variables from .env files."""
     return reload_environment_variables()
+
+@router.post("/telegram/process", response_model=Dict[str, Any])
+async def process_telegram_request(
+    request: MessagingRequest,
+    messaging_agent: MessagingAgent = Depends(get_messaging_agent),
+    redis_service: RedisService = Depends(get_redis_service)
+):
+    """
+    Process a Telegram message from the dedicated Telegram bot.
+    
+    This endpoint is separate from the webhook to isolate the bot functionality
+    from the web interface.
+    """
+    try:
+        # Check if this is coming from our Telegram bot
+        metadata = request.metadata or {}
+        is_from_bot = metadata.get("source") == "telegram_bot"
+        
+        logger.info(f"Processing Telegram request from {'bot' if is_from_bot else 'webhook'} for user {request.user_id}")
+        
+        # Add more verbose logging for debugging
+        if is_from_bot:
+            logger.info(f"Bot version: {metadata.get('version')}, timestamp: {metadata.get('timestamp')}")
+        
+        # Check if user has a linked wallet
+        wallet_address = None
+        if redis_service:
+            key = f"messaging:telegram:user:{request.user_id}:wallet"
+            wallet_address = await redis_service.get(key)
+        
+        # Process the message
+        result = await messaging_agent.process_message(
+            message=request.message,
+            platform="telegram",
+            user_id=request.user_id,
+            wallet_address=wallet_address,
+            metadata=request.metadata
+        )
+        
+        # If there's a wallet address in the result, store it
+        if result.get("wallet_address") and result.get("wallet_address") != wallet_address:
+            await redis_service.set(
+                key=f"messaging:telegram:user:{request.user_id}:wallet",
+                value=result["wallet_address"]
+            )
+            # Also store the reverse mapping
+            await redis_service.set(
+                key=f"wallet:{result['wallet_address']}:telegram:user",
+                value=request.user_id
+            )
+        
+        # Add a flag for the bot to identify this response
+        if is_from_bot:
+            if not result.get("metadata"):
+                result["metadata"] = {}
+            result["metadata"]["telegram_bot_response"] = True
+        
+        return result
+        
+    except Exception as e:
+        logger.exception(f"Error processing Telegram request: {e}")
+        return {
+            "content": f"Sorry, I encountered an error: {str(e)}",
+            "error": str(e)
+        }
