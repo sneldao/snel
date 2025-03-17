@@ -1,4 +1,5 @@
 #!/bin/bash
+# Script to deploy changes to Vercel
 
 # Exit on error
 set -e
