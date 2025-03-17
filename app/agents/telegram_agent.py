@@ -922,8 +922,17 @@ class TelegramAgent(MessagingAgent):
                 }
             except Exception as e:
                 logger.exception(f"Error using Gemini: {e}")
-                # Fall back to default processing
-                pass
+                # Provide a helpful fallback response
+                if not wallet_address:
+                    return {
+                        "content": "🐌 I noticed you don't have a wallet connected yet. Let's fix that!\n\n" +
+                                  "Type */connect* to create or connect a wallet. This will let you check your balance, swap tokens, and more.\n\n" +
+                                  "If you just want to check info without a wallet, you can try:\n" +
+                                  "🔹 */price ETH* - Check token prices\n" +
+                                  "🔹 */networks* - See available networks\n" +
+                                  "🔹 */help* - See all commands"
+                    }
+                # Fall through to general help response below
                 
         # Check for general "what can you do" type questions
         what_can_do_patterns = [
@@ -956,16 +965,31 @@ class TelegramAgent(MessagingAgent):
                         "Or ask me something like \"What's the price of Bitcoin?\" or \"Tell me about Scroll L2\"."
                 }
             
-        # Original implementation for other message types
-        result = await super().process_message(
-            message=message,
-            platform=platform,
-            user_id=user_id,
-            wallet_address=wallet_address,
-            metadata=metadata
-        )
-        
-        return result
+        try:
+            # Original implementation for other message types
+            result = await super().process_message(
+                message=message,
+                platform=platform,
+                user_id=user_id,
+                wallet_address=wallet_address,
+                metadata=metadata
+            )
+            
+            return result
+        except Exception as e:
+            logger.exception(f"Error in parent process_message: {e}")
+            # Provide a fallback response if all else fails
+            if not wallet_address:
+                return {
+                    "content": "🐌 Hello! To get started with me, you'll need to connect a wallet using */connect* command.\n\n" +
+                              "Or you can check information like token prices using */price ETH*"
+                }
+            return {
+                "content": "🐌 I'm not sure how to respond to that. Try one of these commands:\n\n" +
+                          "*/help* - See all available commands\n" +
+                          "*/price ETH* - Check token prices\n" +
+                          "*/balance* - Check your wallet balance"
+            }
 
     async def _handle_networks_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
         """
