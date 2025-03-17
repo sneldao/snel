@@ -15,6 +15,10 @@ const API_URL = process.env.API_URL || "https://snel-pointless.vercel.app/api";
 // Initialize Express app
 const app = express();
 
+// Configure middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Initialize the bot
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
@@ -479,11 +483,8 @@ app.post("/api/webhook", (req, res) => {
       JSON.stringify(req.body).substring(0, 200)
     );
 
-    // Process the update with the bot
-    bot.handleUpdate(req.body);
-
-    // Respond with 200 OK to acknowledge receipt
-    res.sendStatus(200);
+    // Always respond with success for now (for debugging)
+    res.status(200).json({ ok: true });
   } catch (error) {
     console.error("Error handling webhook:", error);
     console.error(error.stack);

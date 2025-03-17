@@ -24,6 +24,10 @@
             "dest": "/api/webhook.js"
         },
         {
+            "src": "/api/test",
+            "dest": "/api/test.js"
+        },
+        {
             "src": "/(.*)",
             "dest": "src/index.js"
         }

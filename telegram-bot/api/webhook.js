@@ -65,29 +65,16 @@ bot.on("text", async (ctx) => {
   }
 });
 
-// Export a serverless function
-export default async function handler(req, res) {
-  try {
-    // Log information about the request
-    console.log("[Webhook] Received request method:", req.method);
-    console.log("[Webhook] Headers:", JSON.stringify(req.headers));
-    console.log(
-      "[Webhook] Body excerpt:",
-      JSON.stringify(req.body).substring(0, 200)
-    );
+// Super simple webhook handler
+export default function handler(req, res) {
+  // Log request details
+  console.log(`[${new Date().toISOString()}] Webhook received:`, {
+    method: req.method,
+    headers: req.headers,
+    body: req.body ? JSON.stringify(req.body).substring(0, 200) : "No body",
+    query: req.query,
+  });
 
-    if (req.method !== "POST") {
-      return res.status(200).json({ ok: true, message: "Webhook is working" });
-    }
-
-    // Process the update with the bot
-    await bot.handleUpdate(req.body);
-
-    // Respond with 200 OK
-    res.status(200).json({ ok: true });
-  } catch (error) {
-    console.error("[Webhook] Error in serverless function:", error);
-    console.error(error.stack);
-    res.status(500).json({ ok: false, error: error.message });
-  }
+  // Always return 200 OK for Telegram
+  res.status(200).json({ ok: true, message: "Webhook received" });
 }
