@@ -259,7 +259,7 @@ class TelegramAgent(MessagingAgent):
             # For MVP, we only support the simulated wallet
             if mode == "simulated":
                 # Generate a wallet address for this user
-                wallet_address = self._generate_wallet_address(user_id)
+                wallet_address = await self._generate_wallet_address(user_id)
                 
                 # Store the wallet if we have a wallet service 
                 if self.wallet_service:
@@ -578,17 +578,64 @@ class TelegramAgent(MessagingAgent):
         # Get user's current network if using wallet service
         current_network = "Scroll Sepolia"
         chain_id = "scroll_sepolia"
+        numeric_chain_id = 534351  # Default to Scroll Sepolia
+        is_simulated = True
+        wallet_info = None
+        
         if self.wallet_service:
             try:
                 wallet_info = await self.wallet_service.get_wallet_info(str(user_id), "telegram")
                 if wallet_info and "chain_info" in wallet_info:
                     current_network = wallet_info["chain_info"].get("name", "Scroll Sepolia")
                     chain_id = wallet_info.get("chain", "scroll_sepolia")
+                    numeric_chain_id = wallet_info["chain_info"].get("chainId", 534351)
+                    is_simulated = wallet_info.get("wallet_type", "simulated") == "simulated"
             except Exception as e:
                 logger.exception(f"Error getting wallet network: {e}")
         
-        # Get simulated balances for the wallet
+        # Try to get real balances if this is not a simulated wallet and we have Brian API
+        real_balances = None
+        if not is_simulated and self.token_service and hasattr(self.token_service, "brian_service"):
+            try:
+                brian_service = self.token_service.brian_service
+                balance_result = await brian_service.get_token_balances(
+                    wallet_address=wallet_address,
+                    chain_id=numeric_chain_id
+                )
+                
+                if balance_result and "answer" in balance_result:
+                    real_balances = balance_result
+                    logger.info(f"Got real balances for {wallet_address} on {chain_id}")
+            except Exception as e:
+                logger.exception(f"Error getting real balances: {e}")
+                
+        # Get simulated or real balances for the wallet
         balances = self._get_simulated_balance(wallet_address)
+        is_using_real_balances = False
+        
+        # Parse real balance response if available
+        if real_balances:
+            try:
+                # Try to extract structured balance data from the Brian API response
+                answer = real_balances.get("answer", "")
+                
+                # Look for patterns like "0.1 ETH ($200.00)" in the response
+                token_pattern = r"(\d+\.?\d*)\s+([A-Za-z]+)\s+\(\$(\d+\.?\d*)\)"
+                matches = re.findall(token_pattern, answer)
+                
+                if matches:
+                    # We found structured balance data, parse it
+                    parsed_balances = {}
+                    for amount_str, token, usd_str in matches:
+                        parsed_balances[token.lower()] = float(amount_str)
+                    
+                    # If we found balances, use them instead of simulated ones
+                    if parsed_balances:
+                        balances = parsed_balances
+                        is_using_real_balances = True
+                        logger.info(f"Parsed real balances: {parsed_balances}")
+            except Exception as e:
+                logger.exception(f"Error parsing real balances: {e}")
         
         # Get price data for relevant tokens to calculate USD value
         total_usd_value = 0
@@ -643,8 +690,10 @@ class TelegramAgent(MessagingAgent):
             message += f"\n**Total Value:** ${total_usd_value:.2f}\n\n"
         else:
             message += "No tokens found in this wallet.\n\n"
-            
-        message += "*Note: This is a simulated wallet for demonstration purposes. In production, we would show actual on-chain balances.*"
+        
+        # Add note about simulated wallet if applicable
+        if not is_using_real_balances:
+            message += "*Note: This is a simulated wallet for demonstration purposes. In production, we would show actual on-chain balances.*"
         
         return {
             "content": message,
@@ -824,7 +873,7 @@ class TelegramAgent(MessagingAgent):
             "wallet_address": None  # Signal to remove the wallet
         }
 
-    def _generate_wallet_address(self, user_id: str) -> str:
+    async def _generate_wallet_address(self, user_id: str) -> str:
         """
         Generate a wallet address for a user.
         
@@ -834,20 +883,30 @@ class TelegramAgent(MessagingAgent):
         Returns:
             A wallet address string
         """
-        # TODO: In the future, implement actual smart wallet creation using Account Abstraction:
-        # 1. Generate an EOA key securely (with Particle Auth or similar)
-        # 2. Deploy a smart contract wallet (ERC-4337 compatible)
-        # 3. Store wallet info securely associated with the user
+        # Use the wallet service to create a real wallet if possible
+        if self.wallet_service:
+            try:
+                # Create a wallet with Particle Auth if available, or fall back to simulated wallet
+                result = await self.wallet_service.create_wallet(
+                    user_id=user_id,
+                    platform="telegram",
+                    wallet_address=None,  # Let the service create a new address
+                    chain=DEFAULT_CHAIN
+                )
+                
+                if result.get("success"):
+                    logger.info(f"Created wallet for user {user_id}: {result.get('wallet_address')} ({result.get('wallet_type')})")
+                    return result.get("wallet_address")
+                else:
+                    logger.error(f"Failed to create wallet: {result.get('message')}")
+            except Exception as e:
+                logger.exception(f"Error creating wallet: {e}")
         
-        # For now, create a deterministic but random-looking address
-        # This ensures the same user always gets the same address for consistency
+        # Fallback to deterministic address generation
         seed = f"snel_wallet_{user_id}_{int(user_id) % 100000}"
         hash_object = hashlib.sha256(seed.encode())
-        hex_dig = hash_object.hexdigest()
-        
-        # Create an Ethereum-style address (0x + 40 hex chars)
-        wallet_address = f"0x{hex_dig[:40]}"
-        
+        wallet_address = "0x" + hash_object.hexdigest()[:40]
+        logger.info(f"Created fallback deterministic wallet {wallet_address} for user {user_id}")
         return wallet_address
 
     def _get_simulated_balance(self, wallet_address: str) -> Dict[str, float]:

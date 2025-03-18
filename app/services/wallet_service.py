@@ -2,6 +2,9 @@ import os
 import logging
 import httpx
 import json
+import time
+import base64
+import secrets
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 import redis.asyncio as redis
@@ -17,6 +20,7 @@ logger = logging.getLogger(__name__)
 PARTICLE_PROJECT_ID = os.getenv("PARTICLE_PROJECT_ID", "")
 PARTICLE_CLIENT_KEY = os.getenv("PARTICLE_CLIENT_KEY", "")
 PARTICLE_APP_ID = os.getenv("PARTICLE_APP_ID", "")
+PARTICLE_API_BASE = "https://api.particle.network"
 
 # Testnet Configuration
 DEFAULT_CHAIN = "scroll_sepolia"
@@ -48,76 +52,165 @@ class WalletService:
     
     def __init__(self, redis_service=None, redis_url=None):
         """Initialize the wallet service."""
-        # Initialize Redis connection if REDIS_URL is set
-        self.redis_url = redis_url or settings.REDIS_URL
-        
-        if self.redis_url:
-            try:
-                self.redis_client = self._create_redis_client()
-                logger.info("Redis client initialized for WalletService")
-            except Exception as e:
-                logger.exception(f"Error initializing Redis client: {e}")
-                self.redis_client = None
+        if redis_service:
+            self.redis_client = redis_service.client
+        elif redis_url:
+            self.redis_url = redis_url
+            self._create_redis_client()
         else:
-            logger.warning("REDIS_URL not set, wallet persistence disabled")
-        
-        self.http_client = httpx.AsyncClient(timeout=30.0)
-        
-        # Validate configuration
+            self.redis_url = os.getenv("REDIS_URL", "")
+            if self.redis_url:
+                self._create_redis_client()
+            
+        # Check if Particle Auth is properly configured
         if not all([PARTICLE_PROJECT_ID, PARTICLE_CLIENT_KEY, PARTICLE_APP_ID]):
             logger.warning("Particle Auth configuration incomplete. Smart wallet features will be limited.")
     
     def _get_chain_info(self, chain_id: str) -> Dict[str, Any]:
-        """Get chain information by ID."""
-        if chain_id in SUPPORTED_CHAINS:
-            return SUPPORTED_CHAINS[chain_id]
+        """Get chain information for the given chain ID."""
+        chain_info = SUPPORTED_CHAINS.get(chain_id, SUPPORTED_CHAINS[DEFAULT_CHAIN])
         return {
-            "name": f"Unknown Chain ({chain_id})",
-            "chainId": 0,
-            "rpcUrl": ""
+            "id": chain_id,
+            "name": chain_info["name"],
+            "chainId": chain_info["chainId"],
+            "rpcUrl": chain_info["rpcUrl"]
         }
     
     async def get_supported_chains(self) -> List[Dict[str, Any]]:
+        """Get list of supported chains with their details."""
+        chains = []
+        for chain_id, chain_info in SUPPORTED_CHAINS.items():
+            chains.append({
+                "id": chain_id,
+                "name": chain_info["name"],
+                "chainId": chain_info["chainId"],
+                "rpcUrl": chain_info["rpcUrl"]
+            })
+        return chains
+
+    async def _create_particle_auth_token(self, user_id: str, platform: str) -> Optional[str]:
         """
-        Get list of supported blockchain networks.
+        Create a Particle Auth token for a user.
         
+        Args:
+            user_id: User ID
+            platform: Platform identifier
+            
         Returns:
-            List of chain information dictionaries
+            Auth token or None if creation failed
         """
-        # Return hardcoded list of supported chains
-        return [
-            {
-                "id": "scroll_sepolia",
-                "name": "Scroll Sepolia",
-                "chainId": 534351,
-                "rpc": "https://sepolia-rpc.scroll.io",
-                "explorer": "https://sepolia.scrollscan.com",
-                "description": "Scroll L2 testnet"
-            },
-            {
-                "id": "base_sepolia",
-                "name": "Base Sepolia",
-                "chainId": 84532,
-                "rpc": "https://sepolia.base.org",
-                "explorer": "https://sepolia.basescan.org",
-                "description": "Base L2 testnet"
-            },
-            {
-                "id": "ethereum_sepolia",
-                "name": "Ethereum Sepolia",
-                "chainId": 11155111,
-                "rpc": "https://ethereum-sepolia-rpc.publicnode.com",
-                "explorer": "https://sepolia.etherscan.io",
-                "description": "Ethereum testnet"
+        if not all([PARTICLE_PROJECT_ID, PARTICLE_CLIENT_KEY, PARTICLE_APP_ID]):
+            logger.warning("Particle Auth configuration incomplete. Unable to create auth token.")
+            return None
+            
+        try:
+            # Create a unique ID for this user based on platform and user_id
+            unique_id = f"{platform}_{user_id}"
+            
+            # Generate a timestamp for the token
+            timestamp = int(time.time())
+            
+            # Create payload for Particle Auth
+            payload = {
+                "project_id": PARTICLE_PROJECT_ID,
+                "app_id": PARTICLE_APP_ID,
+                "user_info": {
+                    "uuid": unique_id
+                },
+                "timestamp": timestamp
             }
-        ]
-    
+            
+            # Make API request to Particle Auth to get token
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{PARTICLE_API_BASE}/auth/token",
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": PARTICLE_CLIENT_KEY
+                    }
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Error creating Particle Auth token: {response.text}")
+                    return None
+                    
+                result = response.json()
+                return result.get("token")
+                
+        except Exception as e:
+            logger.exception(f"Error creating Particle Auth token: {e}")
+            return None
+
+    async def _create_particle_wallet(self, user_id: str, platform: str, chain: str) -> Optional[Dict[str, Any]]:
+        """
+        Create a wallet using Particle Auth.
+        
+        Args:
+            user_id: User ID
+            platform: Platform identifier
+            chain: Chain ID to create the wallet on
+            
+        Returns:
+            Dict with wallet info or None if creation failed
+        """
+        auth_token = await self._create_particle_auth_token(user_id, platform)
+        if not auth_token:
+            logger.error("Failed to get auth token for wallet creation")
+            return None
+            
+        try:
+            # Get chain ID for the request
+            chain_info = self._get_chain_info(chain)
+            chain_id = chain_info["chainId"]
+            
+            # Generate a secure entropy for wallet creation
+            entropy = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
+            
+            # Create payload for Particle wallet creation
+            payload = {
+                "chain_id": chain_id,
+                "entropy": entropy
+            }
+            
+            # Make API request to create wallet
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{PARTICLE_API_BASE}/wallet/create",
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": PARTICLE_CLIENT_KEY,
+                        "Authorization": f"Bearer {auth_token}"
+                    }
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Error creating Particle wallet: {response.text}")
+                    return None
+                    
+                result = response.json()
+                wallet_address = result.get("address")
+                
+                if not wallet_address:
+                    logger.error("No wallet address returned from Particle API")
+                    return None
+                    
+                return {
+                    "wallet_address": wallet_address,
+                    "auth_token": auth_token
+                }
+                
+        except Exception as e:
+            logger.exception(f"Error creating Particle wallet: {e}")
+            return None
+            
     async def create_wallet(
         self,
         user_id: str,
         platform: str,
-        wallet_address: str,
-        chain: str = "scroll_sepolia"
+        wallet_address: Optional[str] = None,
+        chain: str = DEFAULT_CHAIN
     ) -> Dict[str, Any]:
         """
         Create a wallet for a user.
@@ -125,7 +218,8 @@ class WalletService:
         Args:
             user_id: User ID
             platform: Platform identifier (e.g., "telegram", "web")
-            wallet_address: Wallet address to associate with user
+            wallet_address: Optional wallet address to associate with user
+                           (if not provided, a new wallet will be created)
             chain: Chain ID to create the wallet on
             
         Returns:
@@ -134,12 +228,18 @@ class WalletService:
         # Check if Redis is available
         if not self.redis_client:
             logger.warning("Redis not available, wallet creation not persisted")
-            return {
-                "success": True,
-                "message": "Wallet created (not persisted)",
-                "wallet_address": wallet_address,
-                "chain": chain
-            }
+            if wallet_address:
+                return {
+                    "success": True,
+                    "message": "Wallet created (not persisted)",
+                    "wallet_address": wallet_address,
+                    "chain": chain
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Redis not available and no wallet address provided"
+                }
             
         try:
             # Create unique key for this user's wallet
@@ -158,19 +258,48 @@ class WalletService:
                     "success": False,
                     "message": f"Unsupported chain: {chain}"
                 }
+            
+            # If no wallet address provided, attempt to create one with Particle
+            auth_token = None
+            if not wallet_address and all([PARTICLE_PROJECT_ID, PARTICLE_CLIENT_KEY, PARTICLE_APP_ID]):
+                particle_result = await self._create_particle_wallet(user_id, platform, chain)
+                if particle_result:
+                    wallet_address = particle_result["wallet_address"]
+                    auth_token = particle_result["auth_token"]
+                    logger.info(f"Created Particle wallet {wallet_address} for {platform}:{user_id}")
+            
+            # If we still don't have a wallet address, create a deterministic one
+            if not wallet_address:
+                # For backward compatibility, use the deterministic generation
+                import hashlib
+                seed = f"snel_wallet_{user_id}_{int(user_id) % 100000}"
+                hash_object = hashlib.sha256(seed.encode())
+                wallet_address = "0x" + hash_object.hexdigest()[:40]
+                logger.info(f"Created deterministic wallet {wallet_address} for {platform}:{user_id}")
                 
             # Store wallet info in Redis
             wallet_info = {
                 "user_id": user_id,
                 "platform": platform,
                 "wallet_address": wallet_address,
+                "wallet_type": "particle" if auth_token else "simulated",
                 "chain": chain,
                 "chain_info": chain_info
             }
             
+            # Add auth token if we have one
+            if auth_token:
+                wallet_info["auth_token"] = auth_token
+            
             await self.redis_client.set(
                 user_key,
                 json.dumps(wallet_info)
+            )
+            
+            # Store reverse mapping for lookups
+            await self.redis_client.set(
+                f"address:{wallet_address}:user",
+                json.dumps({"user_id": user_id, "platform": platform})
             )
             
             logger.info(f"Created wallet for {platform}:{user_id} on {chain}")
@@ -179,6 +308,7 @@ class WalletService:
                 "success": True,
                 "message": "Wallet created successfully",
                 "wallet_address": wallet_address,
+                "wallet_type": "particle" if auth_token else "simulated",
                 "chain": chain,
                 "chain_info": chain_info
             }
@@ -285,26 +415,32 @@ class WalletService:
                 return None
 
     def _create_redis_client(self):
-        """Create a new Redis client instance."""
-        import redis.asyncio as aioredis
-        
-        if not self.redis_url:
-            raise ValueError("Redis URL is not set")
+        """
+        Create a Redis client for wallet storage.
+        """
+        try:
+            if not self.redis_url:
+                logger.warning("Redis URL not provided to WalletService")
+                return None
+                
+            logger.info(f"Creating Redis client with URL: {self.redis_url[:15]}...")
             
-        # Check if we're using Upstash
-        if isinstance(self.redis_url, str) and self.redis_url.startswith("rediss://"):
-            # Upstash Redis with SSL
-            logger.info("Using Upstash Redis client")
-            # Use connection_kwargs instead of direct ssl parameter
-            return aioredis.from_url(
-                self.redis_url, 
-                decode_responses=True,
-                ssl_cert_reqs=None  # Don't verify SSL cert
-            )
-        else:
-            # Standard Redis
-            logger.info("Using standard Redis client")
-            return aioredis.from_url(self.redis_url, decode_responses=True)
+            # Create Redis client with SSL disabled if needed (for development)
+            if os.getenv("DISABLE_SSL_VERIFY", "").lower() in ("true", "1", "yes"):
+                self.redis_client = redis.from_url(
+                    self.redis_url,
+                    ssl_cert_reqs=None
+                )
+            else:
+                self.redis_client = redis.from_url(self.redis_url)
+                
+            logger.info("Redis client created successfully")
+            return self.redis_client
+            
+        except Exception as e:
+            logger.exception(f"Error creating Redis client: {e}")
+            self.redis_client = None
+            return None
     
     async def delete_wallet(self, user_id: str, platform: str) -> Dict[str, Any]:
         """
