@@ -69,14 +69,37 @@ async def get_wallet_service(redis_service: Optional[RedisService] = Depends(get
 
 async def get_smart_wallet_service() -> Optional[SmartWalletService]:
     """Get a smart wallet service instance if available."""
-    if not SMART_WALLET_AVAILABLE or not USE_CDP_SDK:
+    if not SMART_WALLET_AVAILABLE:
+        logger.warning("SmartWalletService not available - CDP features will be limited")
+        return None
+        
+    if not USE_CDP_SDK:
+        logger.info("USE_CDP_SDK is disabled - CDP features will be limited")
         return None
     
     try:
         redis_url = os.getenv("REDIS_URL")
-        return SmartWalletService(redis_url=redis_url)
+        if not redis_url:
+            logger.warning("Redis URL not set - SmartWalletService requires Redis")
+            return None
+            
+        # Check for CDP API keys
+        cdp_api_key_name = os.getenv("CDP_API_KEY_NAME")
+        cdp_api_key_private_key = os.getenv("CDP_API_KEY_PRIVATE_KEY")
+        
+        if not cdp_api_key_name or not cdp_api_key_private_key:
+            logger.warning("CDP API keys not configured properly - Check CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE_KEY")
+            return None
+            
+        # Initialize SmartWalletService
+        service = SmartWalletService(redis_url=redis_url)
+        logger.info("SmartWalletService initialized successfully")
+        return service
     except Exception as e:
         logger.error(f"Error initializing SmartWalletService: {e}")
+        # Log more details about the error
+        import traceback
+        logger.error(f"Error details: {traceback.format_exc()}")
         return None
 
 # Factory function to get the appropriate wallet service
@@ -91,8 +114,14 @@ async def get_wallet_service_factory(
     Otherwise, fall back to the standard WalletService.
     """
     if USE_CDP_SDK and smart_wallet_service is not None:
+        logger.info("Using SmartWalletService with Coinbase CDP")
         return smart_wallet_service
     
+    if USE_CDP_SDK:
+        logger.warning("USE_CDP_SDK is enabled but SmartWalletService is not available - using basic WalletService")
+    else:
+        logger.info("Using basic WalletService (USE_CDP_SDK is disabled)")
+        
     return wallet_service
 
 async def get_gemini_service() -> GeminiService:
@@ -153,7 +182,7 @@ async def get_swap_service(
 async def get_telegram_agent(
     token_service: TokenService = Depends(get_token_service),
     swap_service: SwapService = Depends(get_swap_service),
-    wallet_service: WalletService = Depends(get_wallet_service),
+    wallet_service: WalletService = Depends(get_wallet_service_factory),
     gemini_service: GeminiService = Depends(get_gemini_service)
 ) -> TelegramAgent:
     """
@@ -162,7 +191,7 @@ async def get_telegram_agent(
     Args:
         token_service: Service for token operations
         swap_service: Service for swap operations
-        wallet_service: Service for wallet operations
+        wallet_service: Service for wallet operations (SmartWalletService if available)
         gemini_service: Service for AI-powered responses
         
     Returns:

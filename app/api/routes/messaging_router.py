@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
-from app.api.dependencies import get_redis_service, get_token_service, get_wallet_service
+from app.api.dependencies import get_redis_service, get_token_service, get_wallet_service, get_wallet_service_factory, get_gemini_service
 from app.agents.agent_factory import get_agent_factory
 from app.services.pipeline import Pipeline
 from app.services.token_service import TokenService
@@ -22,6 +22,7 @@ from app.services.swap_service import SwapService
 from app.agents.simple_swap_agent import SimpleSwapAgent
 from app.agents.telegram_agent import TelegramAgent
 from app.services.wallet_service import WalletService
+from app.services.gemini_service import GeminiService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messaging"])
@@ -86,7 +87,8 @@ async def get_messaging_agent(
 async def get_telegram_agent(
     redis_service: RedisService = Depends(get_redis_service),
     token_service: TokenService = Depends(get_token_service),
-    wallet_service: WalletService = Depends(get_wallet_service)
+    wallet_service: WalletService = Depends(get_wallet_service_factory),
+    gemini_service: GeminiService = Depends(get_gemini_service)
 ) -> TelegramAgent:
     """Get an instance of TelegramAgent."""
     # Create a simple swap agent for the swap service
@@ -99,7 +101,8 @@ async def get_telegram_agent(
     return TelegramAgent(
         token_service=token_service,
         swap_service=swap_service,
-        wallet_service=wallet_service
+        wallet_service=wallet_service,
+        gemini_service=gemini_service
     )
 
 @router.post("/whatsapp/webhook", response_model=Dict[str, Any])
@@ -348,17 +351,35 @@ async def process_telegram_webhook(update_dict: Dict[str, Any]):
         # Create dependencies
         redis_service = RedisService(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
         token_service = TokenService()
-        wallet_service = WalletService(redis_service=redis_service)
+        
+        # Get wallet service - Always prefer SmartWalletService when CDP_SDK is enabled
+        if os.getenv("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]:
+            try:
+                from app.services.smart_wallet_service import SmartWalletService
+                wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
+                logger.info("Using SmartWalletService for Telegram webhook")
+            except Exception as e:
+                logger.error(f"Error initializing SmartWalletService: {e}")
+                logger.warning("Falling back to basic WalletService - CDP features will be unavailable")
+                wallet_service = WalletService(redis_service=redis_service)
+        else:
+            logger.info("USE_CDP_SDK is disabled, using basic WalletService")
+            wallet_service = WalletService(redis_service=redis_service)
         
         # Create swap agent and service
         swap_agent = SimpleSwapAgent()
         swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
         
+        # Create Gemini service for AI responses
+        gemini_api_key = os.environ.get("GEMINI_API_KEY")
+        gemini_service = GeminiService(api_key=gemini_api_key) if gemini_api_key else None
+        
         # Create the telegram agent
         telegram_agent = TelegramAgent(
             token_service=token_service,
             swap_service=swap_service,
-            wallet_service=wallet_service
+            wallet_service=wallet_service,
+            gemini_service=gemini_service
         )
         
         # Extract user_id from the update based on the update type
@@ -829,3 +850,81 @@ async def debug_telegram_agent(
             "error": str(e),
             "traceback": f"{e.__class__.__name__}: {str(e)}"
         }
+
+@router.get("/check-cdp-config")
+async def check_cdp_config():
+    """Check the Coinbase Developer Platform configuration."""
+    # Check environment variables
+    cdp_api_key_name = os.environ.get("CDP_API_KEY_NAME")
+    cdp_api_key_private_key = os.environ.get("CDP_API_KEY_PRIVATE_KEY")
+    use_cdp_sdk = os.environ.get("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]
+    cdp_use_managed_wallet = os.environ.get("CDP_USE_MANAGED_WALLET", "false").lower() in ["true", "1", "yes"]
+    
+    # Check for CDP SDK module
+    try:
+        import cdp
+        cdp_sdk_installed = True
+        cdp_sdk_version = getattr(cdp, "__version__", "unknown")
+    except ImportError:
+        cdp_sdk_installed = False
+        cdp_sdk_version = None
+        
+    # Check for the SmartWalletService
+    try:
+        from app.services.smart_wallet_service import SmartWalletService
+        smart_wallet_available = True
+    except ImportError:
+        smart_wallet_available = False
+        
+    # Try initializing the SmartWalletService if all prerequisites are met
+    smart_wallet_service = None
+    initialization_error = None
+    if (use_cdp_sdk and cdp_sdk_installed and smart_wallet_available and
+        cdp_api_key_name and cdp_api_key_private_key):
+        try:
+            from app.services.smart_wallet_service import SmartWalletService
+            smart_wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
+            smart_wallet_initialized = True
+        except Exception as e:
+            smart_wallet_initialized = False
+            initialization_error = str(e)
+    else:
+        smart_wallet_initialized = False
+        
+    # Prepare recommendations
+    recommendations = []
+    
+    if not cdp_sdk_installed:
+        recommendations.append("Install CDP SDK: pip install cdp-sdk")
+        
+    if not cdp_api_key_name:
+        recommendations.append("Set CDP_API_KEY_NAME environment variable")
+        
+    if not cdp_api_key_private_key:
+        recommendations.append("Set CDP_API_KEY_PRIVATE_KEY environment variable")
+        
+    if not use_cdp_sdk:
+        recommendations.append("Set USE_CDP_SDK=true in environment variables")
+        
+    if not smart_wallet_available:
+        recommendations.append("Ensure app/services/smart_wallet_service.py exists and is importable")
+        
+    if initialization_error:
+        recommendations.append(f"Fix SmartWalletService initialization error: {initialization_error}")
+        
+    # Return the results
+    return {
+        "cdp_sdk_installed": cdp_sdk_installed,
+        "cdp_sdk_version": cdp_sdk_version,
+        "smart_wallet_available": smart_wallet_available,
+        "environment_variables": {
+            "CDP_API_KEY_NAME": bool(cdp_api_key_name),
+            "CDP_API_KEY_PRIVATE_KEY": bool(cdp_api_key_private_key),
+            "USE_CDP_SDK": use_cdp_sdk,
+            "CDP_USE_MANAGED_WALLET": cdp_use_managed_wallet
+        },
+        "smart_wallet_initialized": smart_wallet_initialized,
+        "initialization_error": initialization_error,
+        "recommendations": recommendations,
+        "status": "ready" if smart_wallet_initialized else "not_ready"
+    }

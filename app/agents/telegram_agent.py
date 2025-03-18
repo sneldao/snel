@@ -476,10 +476,22 @@ class TelegramAgent(MessagingAgent):
                 }
             
             # Create a new smart wallet
+            logger.info(f"Creating new smart wallet for Telegram user {user_id}")
+            
+            # Verify we have the right wallet service type
+            if not hasattr(self.wallet_service, 'create_smart_wallet'):
+                logger.error("Wallet service doesn't have create_smart_wallet method. Type: " + 
+                             str(type(self.wallet_service).__name__))
+                return {
+                    "content": "⚠️ Smart wallet creation is not available right now. Please try again later."
+                }
+                
             wallet_result = await self.wallet_service.create_smart_wallet(
                 user_id=str(user_id),
                 platform="telegram"
             )
+            
+            logger.info(f"Wallet creation result: {wallet_result}")
             
             if "error" in wallet_result:
                 return {
@@ -1123,4 +1135,94 @@ class TelegramAgent(MessagingAgent):
         logger.info(f"Test command executed by user {user_id} with args: {args}")
         return {
             "content": f"👋 Hello! The test command is working. You sent: '{args}'"
-        } 
+        }
+
+    async def process_message(
+        self,
+        message: str,
+        platform: str,
+        user_id: str,
+        wallet_address: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Process a message from a messaging platform.
+        
+        This method handles parsing the message and generating a response.
+        
+        Args:
+            message: The message text to process
+            platform: The messaging platform (e.g., "telegram", "whatsapp")
+            user_id: The user ID on the messaging platform
+            wallet_address: The user's wallet address if connected
+            metadata: Additional metadata for processing (optional)
+            
+        Returns:
+            A dictionary with the response content and any additional information
+        """
+        # Process AI queries if this isn't a command or transaction
+        if self.gemini_service and self._is_general_question(message):
+            try:
+                logger.info(f"Processing message as general question: '{message}'")
+                wallet_info = None
+                if wallet_address:
+                    wallet_info = {"wallet_address": wallet_address}
+                    
+                # Call Gemini for AI-powered response
+                ai_response = await self.gemini_service.answer_crypto_question(
+                    user_query=message,
+                    wallet_info=wallet_info
+                )
+                logger.info(f"Gemini response: {ai_response[:100]}...")
+                
+                return {
+                    "content": ai_response,
+                    "wallet_address": wallet_address
+                }
+            except Exception as e:
+                logger.exception(f"Error generating AI response: {e}")
+                # Continue with normal processing if AI fails
+        
+        # For MVP, just return a default response
+        return await super().process_message(
+            message=message,
+            platform=platform, 
+            user_id=user_id,
+            wallet_address=wallet_address,
+            metadata=metadata
+        ) 
+
+    def _is_general_question(self, message: str) -> bool:
+        """
+        Determine if a message is a general question that should be handled by AI.
+        
+        Args:
+            message: The message text to analyze
+            
+        Returns:
+            True if this appears to be a general question, False if it's a command or transaction
+        """
+        # If it starts with /, it's a command
+        if message.startswith('/'):
+            return False
+            
+        # Check for specific transaction formats/keywords that should be handled by specific commands
+        transaction_keywords = [
+            'swap', 'transfer', 'send', 'bridge', 
+            'buy', 'sell', 'trade', 'exchange'
+        ]
+        
+        # Skip short messages like "hi" or "hello"
+        if len(message.split()) <= 2:
+            return False
+            
+        # Look for transaction-like messages that should be handled by specific commands
+        message_lower = message.lower()
+        
+        for keyword in transaction_keywords:
+            if keyword in message_lower and any(char.isdigit() for char in message):
+                # Likely a transaction request with an amount
+                return False
+                
+        # If we got here, it's probably a general question
+        return True 
