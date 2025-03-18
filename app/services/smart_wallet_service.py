@@ -206,79 +206,93 @@ class SmartWalletService(WalletService):
                 
             # Create a new wallet using CDP SDK
             try:
-                # Import module here to get better error messages
+                # Import CDP SDK components
                 try:
                     from cdp import SmartWallet
+                    from eth_account import Account
+                    import inspect
+                    
+                    # Log the create method signature for debugging
+                    if hasattr(SmartWallet, 'create'):
+                        create_sig = str(inspect.signature(SmartWallet.create))
+                        logger.info(f"SmartWallet.create signature: {create_sig}")
+                    else:
+                        logger.error("SmartWallet.create method not found")
+                        return {
+                            "success": False,
+                            "error": "SmartWallet.create method not available in the CDP SDK"
+                        }
                 except ImportError as imp_err:
-                    logger.error(f"Error importing SmartWallet: {imp_err}")
+                    logger.error(f"Error importing required modules: {imp_err}")
                     return {
                         "success": False,
-                        "error": f"CDP SDK not properly installed: {str(imp_err)}"
+                        "error": f"Required modules not properly installed: {str(imp_err)}"
                     }
                 
-                # Simplest possible call to SmartWallet.create
-                # Avoid using optional parameters that might cause issues
-                logger.info("Calling SmartWallet.create with minimal parameters")
-                
-                # Try with different parameters if the first attempt fails
+                # Create an owner account (EOA) that will control the smart wallet
+                logger.info("Creating new owner account (EOA)")
+                # Generate a new private key and account
                 try:
-                    logger.info("Attempting SmartWallet.create() without parameters")
-                    wallet = SmartWallet.create()
-                    logger.info(f"SmartWallet creation successful: {wallet}")
-                except Exception as simple_err:
-                    logger.error(f"Simple SmartWallet.create failed: {simple_err}, trying with project_id")
-                    try:
-                        logger.info(f"Attempting SmartWallet.create(project_id='{unique_id}')")
-                        wallet = SmartWallet.create(project_id=unique_id)
-                        logger.info(f"SmartWallet creation with project_id successful: {wallet}")
-                    except Exception as project_err:
-                        logger.error(f"SmartWallet.create with project_id failed: {project_err}")
-                        
-                        # Try one more approach - with additional debugging
-                        try:
-                            logger.info("Checking CDP module availability")
-                            import inspect
-                            logger.info(f"SmartWallet.create signature: {inspect.signature(SmartWallet.create)}")
-                            logger.info(f"SmartWallet class methods: {dir(SmartWallet)}")
-                            
-                            # Try one more time with explicit keyword arguments
-                            logger.info("Attempting SmartWallet.create with different parameters")
-                            wallet = SmartWallet.create(name=f"Wallet for {unique_id}")
-                            logger.info(f"SmartWallet creation with name successful: {wallet}")
-                        except Exception as last_err:
-                            logger.error(f"All SmartWallet.create attempts failed: {last_err}")
-                            raise last_err
-                
-                # Check if we got a valid wallet object
-                if not hasattr(wallet, 'address'):
-                    raise ValueError(f"Created wallet missing 'address' attribute: {wallet}")
+                    owner = Account.create()
+                    logger.info(f"Created new owner account with address: {owner.address}")
                     
-                wallet_address = wallet.address
-                logger.info(f"Created new wallet for {unique_id}: {wallet_address}")
-                
-                # Store wallet info in Redis
-                wallet_data = {
-                    "address": wallet_address,
-                    "chain": "base_sepolia",  # Default to Base Sepolia testnet
-                    "platform": platform,
-                    "user_id": user_id,
-                    "created_at": datetime.utcnow().isoformat()
-                }
-                
-                # Save to Redis
-                try:
-                    await self.redis_client.set(wallet_key, json.dumps(wallet_data))
-                    logger.info(f"Saved wallet data to Redis for {unique_id}")
-                except Exception as redis_err:
-                    logger.error(f"Failed to save wallet data to Redis: {redis_err}")
-                    # Continue even if Redis fails - we still have the wallet address
-                
-                return {
-                    "success": True,
-                    "address": wallet_address,
-                    "chain": "base_sepolia",
-                    "is_new": True
-                }
+                    # Create the smart wallet with the owner account
+                    logger.info(f"Creating smart wallet with owner account: {owner.address}")
+                    wallet = SmartWallet.create(account=owner)
+                    logger.info(f"Successfully created wallet: {wallet}")
+                    
+                    if not hasattr(wallet, 'address'):
+                        logger.error(f"Created wallet missing 'address' attribute: {wallet}")
+                        return {
+                            "success": False,
+                            "error": "Created wallet is missing address attribute"
+                        }
+                    
+                    wallet_address = wallet.address
+                    logger.info(f"Created new wallet for {unique_id}: {wallet_address}")
+                    
+                    # Store wallet info in Redis
+                    wallet_data = {
+                        "address": wallet_address,
+                        "chain": "base_sepolia",  # Default to Base Sepolia testnet
+                        "platform": platform,
+                        "user_id": user_id,
+                        "created_at": datetime.utcnow().isoformat(),
+                        "owner_address": owner.address,
+                        "private_key": owner.key.hex()  # WARNING: Should be encrypted in production!
+                    }
+                    
+                    # Save to Redis
+                    try:
+                        await self.redis_client.set(wallet_key, json.dumps(wallet_data))
+                        logger.info(f"Saved wallet data to Redis for {unique_id}")
+                        
+                        # Also save to messaging format for compatibility
+                        messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+                        await self.redis_client.set(messaging_key, wallet_address)
+                        logger.info(f"Saved wallet address to messaging format for {unique_id}")
+                        
+                        # Save to smart wallet format
+                        smart_wallet_key = f"smart_wallet:{platform}:{user_id}"
+                        await self.redis_client.set(smart_wallet_key, json.dumps(wallet_data))
+                        logger.info(f"Saved to smart wallet format for {unique_id}")
+                    except Exception as redis_err:
+                        logger.error(f"Failed to save wallet data to Redis: {redis_err}")
+                        # Continue even if Redis fails - we still have the wallet address
+                    
+                    # Return success without private key for security
+                    return {
+                        "success": True,
+                        "address": wallet_address,
+                        "chain": "base_sepolia",
+                        "is_new": True
+                    }
+                except Exception as create_err:
+                    logger.error(f"Error creating SmartWallet: {create_err}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to create wallet: {str(create_err)}"
+                    }
             except Exception as wallet_err:
                 # Specific error handling for wallet creation
                 logger.error(f"Failed to create wallet via CDP SDK: {wallet_err}")

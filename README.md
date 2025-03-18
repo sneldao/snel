@@ -308,7 +308,7 @@ Note: This should only be used in development environments, never in production.
 7. Start the backend:
 
 ```bash
-poetry run python main.py
+poetry run python server.py
 ```
 
 8. Start the frontend:
@@ -415,7 +415,7 @@ The project uses specific versions of dependencies that are known to work with V
 
 ### Backend
 
-- Local: Runs as a standalone FastAPI server via `main.py`
+- Local: Runs as a standalone FastAPI server via `server.py`
 - Production: Runs as Vercel serverless functions via `api/index.py`
 
 ### API URLs
@@ -570,7 +570,7 @@ dowse-pointless/
 ├── runtime.txt       # Python runtime specification
 ├── vercel.ignore     # Files to ignore during deployment
 ├── requirements.txt  # Python dependencies
-├── main.py           # Local development entry point
+├── server.py         # Local development entry point
 ├── .env              # Environment variables
 └── README.md         # This file
 ```
@@ -751,3 +751,34 @@ Snel leverages several powerful technologies and APIs to deliver its functionali
 - [Telegram Bot API](https://core.telegram.org/bots/api) - Enables the Telegram bot integration
 
 Special thanks to the development team and all the open-source contributors who made this project possible.
+
+## Running Locally
+
+1. Set up environment variables in `.env.local`
+2. Create a virtual environment and install dependencies:
+   ```bash
+   make venv  # Creates a new virtual environment with dependencies
+   source .venv/bin/activate  # Activate the virtual environment
+   ```
+   If you have architecture issues with packages, reset the environment:
+   ```bash
+   make reset-venv  # Recreates the virtual environment
+   ```
+3. Run the server:
+   ```bash
+   make run  # Run in production mode
+   ```
+   For development mode with auto-reload:
+   ```bash
+   make dev  # Run with hot reload
+   ```
+
+This will start the FastAPI server on port 8000 (or the port specified in your environment variables).
+
+## Documentation
+
+Detailed documentation is available in the `docs` directory:
+
+- [Vercel Deployment](docs/deployment/VERCEL.md)
+- [Telegram Bot Integration](docs/development/integrating-with-telegram.md)
+- [Coinbase Wallet Integration](docs/development/README-coinbase-wallet.md)

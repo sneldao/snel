@@ -46,7 +46,7 @@ class BrianAPIService:
         """Make an API request with proper error handling and client lifecycle management."""
         if not self.api_key:
             raise ValueError("BRIAN_API_KEY environment variable not set")
-            
+
         client = await self._get_http_client()
         try:
             response = await client.request(
@@ -63,7 +63,9 @@ class BrianAPIService:
         except httpx.HTTPStatusError as e:
             error_text = await e.response.text()
             logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-            raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
+            raise ValueError(
+                f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}"
+            ) from e
         except Exception as e:
             logger.error(f"Error making API request: {str(e)}")
             raise
@@ -88,17 +90,17 @@ class BrianAPIService:
         try:
             if not self.api_key:
                 raise ValueError("BRIAN_API_KEY environment variable not set")
-            
+
             # Extract token symbols
             token_in_symbol = swap_command.token_in["symbol"] if isinstance(swap_command.token_in, dict) else swap_command.token_in
             token_out_symbol = swap_command.token_out["symbol"] if isinstance(swap_command.token_out, dict) else swap_command.token_out
-            
+
             # Construct the prompt for Brian API
             amount = swap_command.amount_in
             prompt = f"swap {amount} {token_in_symbol} for {token_out_symbol} on scroll"
-            
+
             logger.info(f"Sending prompt to Brian API: {prompt}")
-            
+
             # Call the Brian API
             response = await self._make_api_request(
                 "POST",
@@ -109,36 +111,36 @@ class BrianAPIService:
                     "chainId": str(chain_id)
                 }
             )
-            
+
             logger.info(f"Brian API response: {json.dumps(response, indent=2)}")
-            
+
             # Extract the transaction data
             if not response.get("result") or not isinstance(response["result"], list) or len(response["result"]) == 0:
                 raise ValueError("No transaction data returned from Brian API")
-            
+
             # Get the first transaction result
             tx_result = response["result"][0]
-            
+
             # Extract the transaction steps
             steps = tx_result.get("data", {}).get("steps", [])
             if not steps:
                 raise ValueError("No transaction steps returned from Brian API")
-            
+
             # Format the transaction data for our system
             formatted_quotes = []
-            
+
             # Process each step (there might be approval steps and swap steps)
             for step in steps:
                 # Skip if missing required fields
-                if not all(k in step for k in ["to", "data", "value"]):
+                if any(k not in step for k in ["to", "data", "value"]):
                     continue
-                
+
                 # Determine if this is an approval or swap step
                 is_approval = "approve" in step.get("data", "").lower()
-                
+
                 # Get metadata from the transaction result
                 metadata = tx_result.get("data", {})
-                
+
                 # Create a quote object
                 quote = {
                     "to": step["to"],
@@ -153,13 +155,13 @@ class BrianAPIService:
                     "gas_usd": "0",  # Brian API doesn't provide gas cost in USD
                     "is_approval": is_approval
                 }
-                
+
                 formatted_quotes.append(quote)
-            
+
             # Extract token information
             token_in_info = tx_result.get("data", {}).get("fromToken", {})
             token_out_info = tx_result.get("data", {}).get("toToken", {})
-            
+
             # Return the formatted quotes and metadata
             return {
                 "all_quotes": formatted_quotes,
@@ -187,7 +189,7 @@ class BrianAPIService:
                     "action": tx_result.get("action", "swap"),
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting swap transaction from Brian API: {str(e)}")
             raise
@@ -388,15 +390,15 @@ class BrianAPIService:
                 534352: "scroll",
                 43114: "avalanche"
             }
-            
+
             from_chain = chain_names.get(from_chain_id, f"chain {from_chain_id}")
             to_chain = chain_names.get(to_chain_id, f"chain {to_chain_id}")
-            
+
             # Construct the prompt for Brian API
             prompt = f"bridge {amount} {token_symbol} from {from_chain} to {to_chain}"
-            
+
             logger.info(f"Sending bridge prompt to Brian API: {prompt}")
-            
+
             # Call the Brian API
             response = await self._make_api_request(
                 "POST",
@@ -407,36 +409,36 @@ class BrianAPIService:
                     "chainId": str(from_chain_id)
                 }
             )
-            
+
             logger.info(f"Brian API bridge response: {json.dumps(response, indent=2)}")
-            
+
             # Extract the transaction data
             if not response.get("result") or not isinstance(response["result"], list) or len(response["result"]) == 0:
                 raise ValueError("No transaction data returned from Brian API")
-            
+
             # Get the first transaction result
             tx_result = response["result"][0]
-            
+
             # Extract the transaction steps
             steps = tx_result.get("data", {}).get("steps", [])
             if not steps:
                 raise ValueError("No transaction steps returned from Brian API")
-            
+
             # Format the transaction data for our system
             formatted_quotes = []
-            
+
             # Process each step (there might be approval steps and bridge steps)
             for step in steps:
                 # Skip if missing required fields
-                if not all(k in step for k in ["to", "data", "value"]):
+                if any(k not in step for k in ["to", "data", "value"]):
                     continue
-                
+
                 # Determine if this is an approval or bridge step
                 is_approval = "approve" in step.get("data", "").lower()
-                
+
                 # Get metadata from the transaction result
                 metadata = tx_result.get("data", {})
-                
+
                 # Create a quote object
                 quote = {
                     "to": step["to"],
@@ -449,9 +451,9 @@ class BrianAPIService:
                     "from_chain": from_chain,
                     "to_chain": to_chain
                 }
-                
+
                 formatted_quotes.append(quote)
-            
+
             # Return the formatted quotes and metadata
             return {
                 "all_quotes": formatted_quotes,
@@ -469,7 +471,7 @@ class BrianAPIService:
                     "to_chain_name": to_chain
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting bridge transaction from Brian API: {str(e)}")
             raise
@@ -494,12 +496,12 @@ class BrianAPIService:
         try:
             if not self.api_key:
                 raise ValueError("BRIAN_API_KEY environment variable not set")
-            
+
             # Construct the prompt for Brian API
-            prompt = f"check balance"
+            prompt = "check balance"
             if token_symbol:
                 prompt += f" of {token_symbol}"
-            
+
             # Get chain name for better prompts
             chain_names = {
                 1: "ethereum",
@@ -511,12 +513,12 @@ class BrianAPIService:
                 534352: "scroll",
                 43114: "avalanche"
             }
-            
+
             chain_name = chain_names.get(chain_id, f"chain {chain_id}")
             prompt += f" on {chain_name}"
-            
+
             logger.info(f"Sending balance prompt to Brian API: {prompt}")
-            
+
             # Call the Brian API
             response = await self._make_api_request(
                 "POST",
@@ -528,12 +530,12 @@ class BrianAPIService:
                     "kb": "public-knowledge-box"
                 }
             )
-            
+
             logger.info(f"Brian API balance response: {json.dumps(response, indent=2)}")
-            
+
             # Extract the balance information
             answer = response.get("answer", "")
-            
+
             # Return the balance information
             return {
                 "answer": answer,
@@ -542,7 +544,7 @@ class BrianAPIService:
                 "token_symbol": token_symbol,
                 "chain_name": chain_name
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting token balances from Brian API: {str(e)}")
             raise

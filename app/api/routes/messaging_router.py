@@ -27,7 +27,7 @@ from app.services.wallet_service import WalletService
 from app.services.gemini_service import GeminiService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["messaging"])
+router = APIRouter(tags=["messaging"], prefix="")
 
 # Environment variables for messaging platforms
 WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
@@ -857,7 +857,7 @@ async def debug_telegram_agent(
             "traceback": f"{e.__class__.__name__}: {str(e)}"
         }
 
-@router.get("/check-cdp-config")
+@router.get("/api/check-cdp-config")
 async def check_cdp_config():
     """Check the Coinbase Developer Platform configuration."""
     # Check environment variables
@@ -935,7 +935,7 @@ async def check_cdp_config():
         "status": "ready" if smart_wallet_initialized else "not_ready"
     }
 
-@router.get("/cdp-diagnostics")
+@router.get("/api/cdp-diagnostics")
 async def get_cdp_diagnostics():
     """Get detailed diagnostic information about the CDP SDK."""
     try:
@@ -968,7 +968,7 @@ async def get_cdp_diagnostics():
             }
         }
 
-@router.post("/test-wallet-creation")
+@router.post("/api/test-wallet-creation")
 async def test_wallet_creation():
     """Test wallet creation directly with SmartWalletService."""
     try:
@@ -1002,4 +1002,108 @@ async def test_wallet_creation():
                 "USE_CDP_SDK": os.environ.get("USE_CDP_SDK", "false"),
                 "CDP_USE_MANAGED_WALLET": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
             }
+        }
+
+@router.get("/api/cdp-debug")
+async def cdp_debug():
+    """Debug the CDP SDK configuration and SmartWallet.create function."""
+    try:
+        # Import CDP components
+        import inspect
+        import traceback
+        from cdp import Cdp, SmartWallet
+        from eth_account import Account
+        
+        # Gather detailed information
+        debug_info = {
+            "cdp_info": {
+                "module_path": getattr(Cdp, "__module__", "unknown"),
+                "module_file": getattr(Cdp, "__file__", "unknown"),
+                "has_configure": hasattr(Cdp, "configure"),
+                "has_use_server_signer": hasattr(Cdp, "use_server_signer"),
+            },
+            "smart_wallet_info": {
+                "module_path": getattr(SmartWallet, "__module__", "unknown"),
+                "has_create": hasattr(SmartWallet, "create"),
+                "create_signature": str(inspect.signature(SmartWallet.create)) if hasattr(SmartWallet, "create") else "not found",
+                "methods": [m for m in dir(SmartWallet) if not m.startswith("_")],
+            },
+            "environment": {
+                "cdp_api_key_name": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
+                "cdp_api_key_private_key": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
+                "use_cdp_sdk": os.environ.get("USE_CDP_SDK", "false"),
+                "cdp_use_managed_wallet": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
+            }
+        }
+        
+        # Try to create a test EOA
+        try:
+            test_eoa = Account.create()
+            debug_info["eoa_test"] = {
+                "address": test_eoa.address,
+                "private_key_length": len(test_eoa.key.hex()) if hasattr(test_eoa, "key") else "unknown",
+                "success": True
+            }
+        except Exception as eoa_err:
+            debug_info["eoa_test"] = {
+                "error": str(eoa_err),
+                "traceback": traceback.format_exc(),
+                "success": False
+            }
+        
+        # Try to initialize the CDP SDK
+        try:
+            # Get API keys from environment
+            api_key_name = os.getenv("CDP_API_KEY_NAME")
+            api_key_private_key = os.getenv("CDP_API_KEY_PRIVATE_KEY")
+            
+            if api_key_name and api_key_private_key:
+                # Configure the CDP SDK
+                Cdp.configure(api_key_name, api_key_private_key)
+                debug_info["cdp_initialize"] = {
+                    "success": True,
+                    "message": "CDP SDK initialized successfully"
+                }
+                
+                # See if use_server_signer works
+                try:
+                    Cdp.use_server_signer = True
+                    debug_info["cdp_initialize"]["server_signer"] = "enabled successfully"
+                except Exception as ss_err:
+                    debug_info["cdp_initialize"]["server_signer_error"] = str(ss_err)
+            else:
+                debug_info["cdp_initialize"] = {
+                    "success": False,
+                    "message": "API keys not available"
+                }
+        except Exception as cdp_err:
+            debug_info["cdp_initialize"] = {
+                "success": False,
+                "error": str(cdp_err),
+                "traceback": traceback.format_exc()
+            }
+            
+        # Try to create a SmartWallet
+        try:
+            owner = Account.from_key(test_eoa.key)
+            wallet = SmartWallet.create(account=owner)
+            debug_info["wallet_create"] = {
+                "success": True,
+                "address": wallet.address if hasattr(wallet, "address") else "unknown",
+                "wallet_repr": str(wallet),
+                "wallet_dir": dir(wallet)
+            }
+        except Exception as wallet_err:
+            debug_info["wallet_create"] = {
+                "success": False,
+                "error": str(wallet_err),
+                "traceback": traceback.format_exc()
+            }
+            
+        return debug_info
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }

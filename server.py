@@ -1,6 +1,6 @@
 """
-Main entry point for the application.
-This file is used to run the application locally.
+Server bootstrap script for local development.
+This file configures the environment and starts the FastAPI application.
 """
 
 import os
@@ -23,7 +23,7 @@ logging.basicConfig(
 
 # Create a logger for this module
 logger = logging.getLogger(__name__)
-logger.info("Starting Dowse Pointless application")
+logger.info("Starting Dowse Pointless server")
 
 # Configure SSL verification for development
 if os.getenv("DISABLE_SSL_VERIFY", "").lower() == "true":

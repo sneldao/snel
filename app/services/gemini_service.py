@@ -107,15 +107,23 @@ class GeminiService:
             return "I'm sorry, I can't answer general questions right now. Please try using specific commands like */price* or */swap*."
 
         # If the query is simple enough, just respond directly without API call
-        if user_query.lower() in ["hi", "hello", "hey", "gm", "good morning", "good day", "good evening"]:
+        if user_query.lower() in {
+            "hi",
+            "hello",
+            "hey",
+            "gm",
+            "good morning",
+            "good day",
+            "good evening",
+        }:
             return "🐌 Hello there! I'm Snel, your DeFi assistant. To get started, try commands like */price ETH* or */connect* to set up your wallet."
-            
+
         try:
             # Ensure HTTP client is available
             if self.http_client is None or self.http_client.is_closed:
                 logger.info("HTTP client closed or not initialized, creating new client")
                 self.http_client = self._create_http_client()
-            
+
             # Build system instruction
             system_instruction = """
             You are Snel, a friendly DeFi assistant bot on Telegram that helps users with crypto and blockchain transactions.
@@ -141,16 +149,16 @@ class GeminiService:
             
             IMPORTANT: When suggesting commands, format them like */command* so they are clickable in Telegram.
             """
-            
+
             # Build conversation context
             context = "The user is interacting with a Telegram bot that provides DeFi services."
             if wallet_info and wallet_info.get("wallet_address"):
                 context += f" The user has a connected wallet with address {wallet_info['wallet_address']}."
-            
+
             # Build API request with current model name
             api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
             headers = {"Content-Type": "application/json"}
-            
+
             payload = {
                 "contents": [
                     {
@@ -192,7 +200,7 @@ class GeminiService:
                     }
                 ]
             }
-            
+
             try:
                 # Make API request
                 response = await self.http_client.post(
@@ -200,11 +208,11 @@ class GeminiService:
                     headers=headers,
                     json=payload
                 )
-                
+
                 # Check for successful response
                 if response.status_code == 200:
                     data = response.json()
-                    
+
                     # Extract the generated text
                     if "candidates" in data and data["candidates"]:
                         candidate = data["candidates"][0]
@@ -212,7 +220,7 @@ class GeminiService:
                             parts = candidate["content"]["parts"]
                             if parts and "text" in parts[0]:
                                 return parts[0]["text"].strip()
-                
+
                 # If we get a 404, it might be a model issue
                 if response.status_code == 404 and "models" in response.text:
                     # Try to check for available models
@@ -223,7 +231,7 @@ class GeminiService:
                         self.model_name = model
                         # Call self recursively to retry
                         return await self.answer_crypto_question(user_query, wallet_info, max_tokens)
-                
+
                 # Log error
                 logger.error(f"Error from Gemini API: {response.status_code} - {response.text}")
             except (httpx.HTTPError, asyncio.CancelledError, RuntimeError) as http_error:
@@ -238,15 +246,15 @@ class GeminiService:
                     self.http_client = None
                 else:
                     logger.error(f"HTTP error calling Gemini API: {http_error}")
-                
+
                 # Return fallback message
                 return "I'm having connection issues right now. Try using specific commands like */help* or */price ETH* instead."
-            
+
             return "I'm having trouble answering right now. Try using a specific command like */help* to see what I can do."
-            
+
         except Exception as e:
             logger.exception(f"Error calling Gemini API: {e}")
-            
+
             # Ensure client is closed if there was an error
             if self.http_client:
                 try:
@@ -254,5 +262,5 @@ class GeminiService:
                 except:
                     pass
                 self.http_client = None
-                
+
             return "Sorry, I'm experiencing some technical difficulties. Please try a specific command like */price ETH* or */help*." 

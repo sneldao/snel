@@ -191,15 +191,9 @@ class RedisService(BaseModel):
             if not self.client:
                 logger.warning(f"Redis client not initialized when getting key {key}")
                 return None
-            
+
             try:
-                if self.is_upstash:
-                    # Upstash Redis (synchronous)
-                    value = self.client.get(key)
-                else:
-                    # Standard Redis (asynchronous)
-                    value = await self.client.get(key)
-                
+                value = self.client.get(key) if self.is_upstash else await self.client.get(key)
                 return json.loads(value) if value else None
             except Exception as e:
                 logger.error(f"Error in Redis get operation for key {key}: {e}")
@@ -215,24 +209,23 @@ class RedisService(BaseModel):
             if not self.client:
                 logger.warning(f"Redis client not initialized when setting key {key}")
                 return False
-            
+
             # Convert value to JSON string using custom encoder
             json_value = json.dumps(value, cls=DateTimeEncoder)
 
             try:
                 if self.is_upstash:
                     # Upstash Redis (synchronous)
-                    if expire:
-                        result = self.client.setex(key, expire, json_value)
-                    else:
-                        result = self.client.set(key, json_value)
+                    result = (
+                        self.client.setex(key, expire, json_value)
+                        if expire
+                        else self.client.set(key, json_value)
+                    )
+                elif expire:
+                    result = await self.client.setex(key, expire, json_value)
                 else:
-                    # Standard Redis (asynchronous)
-                    if expire:
-                        result = await self.client.setex(key, expire, json_value)
-                    else:
-                        result = await self.client.set(key, json_value)
-                
+                    result = await self.client.set(key, json_value)
+
                 return bool(result)
             except Exception as e:
                 logger.error(f"Error in Redis set operation for key {key}: {e}")
