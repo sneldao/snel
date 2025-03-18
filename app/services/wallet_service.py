@@ -112,9 +112,9 @@ class WalletService:
             
             # Create payload for Particle Auth
             payload = {
-                "project_id": PARTICLE_PROJECT_ID,
-                "app_id": PARTICLE_APP_ID,
-                "user_info": {
+                "projectUuid": PARTICLE_PROJECT_ID,
+                "appUuid": PARTICLE_APP_ID,
+                "userInfo": {
                     "uuid": unique_id
                 },
                 "timestamp": timestamp
@@ -123,11 +123,11 @@ class WalletService:
             # Make API request to Particle Auth to get token
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{PARTICLE_API_BASE}/auth/token",
+                    f"{PARTICLE_API_BASE}/server/auth-service/token",
                     json=payload,
                     headers={
                         "Content-Type": "application/json",
-                        "x-api-key": PARTICLE_CLIENT_KEY
+                        "Authorization": PARTICLE_CLIENT_KEY
                     }
                 )
                 
@@ -154,11 +154,6 @@ class WalletService:
         Returns:
             Dict with wallet info or None if creation failed
         """
-        auth_token = await self._create_particle_auth_token(user_id, platform)
-        if not auth_token:
-            logger.error("Failed to get auth token for wallet creation")
-            return None
-            
         try:
             # Get chain ID for the request
             chain_info = self._get_chain_info(chain)
@@ -167,30 +162,51 @@ class WalletService:
             # Generate a secure entropy for wallet creation
             entropy = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
             
-            # Create payload for Particle wallet creation
+            # Create a unique user ID
+            unique_id = f"{platform}_{user_id}"
+            
+            # Create payload for Particle wallet creation using server RPC API
             payload = {
-                "chain_id": chain_id,
-                "entropy": entropy
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "particle_aa_createWallet",
+                "params": [
+                    {
+                        "projectId": PARTICLE_PROJECT_ID,
+                        "chainId": chain_id,
+                        "userUuid": unique_id,
+                        "entropy": entropy
+                    }
+                ]
             }
             
             # Make API request to create wallet
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{PARTICLE_API_BASE}/wallet/create",
+                    f"{PARTICLE_API_BASE}/server/rpc",
                     json=payload,
                     headers={
                         "Content-Type": "application/json",
-                        "x-api-key": PARTICLE_CLIENT_KEY,
-                        "Authorization": f"Bearer {auth_token}"
+                        "PN-Project-Id": PARTICLE_PROJECT_ID,
+                        "PN-Secret": PARTICLE_CLIENT_KEY
                     }
                 )
                 
                 if response.status_code != 200:
                     logger.error(f"Error creating Particle wallet: {response.text}")
                     return None
-                    
+                
                 result = response.json()
-                wallet_address = result.get("address")
+                
+                # Check for error in the RPC response
+                if "error" in result:
+                    error_msg = result.get("error", {}).get("message", "Unknown error")
+                    logger.error(f"RPC error creating wallet: {error_msg}")
+                    return None
+                
+                # Extract address from result
+                wallet_data = result.get("result", {})
+                wallet_address = wallet_data.get("smartAccount")
                 
                 if not wallet_address:
                     logger.error("No wallet address returned from Particle API")
@@ -198,7 +214,8 @@ class WalletService:
                     
                 return {
                     "wallet_address": wallet_address,
-                    "auth_token": auth_token
+                    "master_key": wallet_data.get("masterKey", ""),
+                    "user_uuid": unique_id
                 }
                 
         except Exception as e:
@@ -281,6 +298,13 @@ class WalletService:
                     json.dumps({"user_id": user_id, "platform": platform})
                 )
                 
+                # Store messaging format too (for compatibility)
+                messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+                await self.redis_client.set(
+                    messaging_key,
+                    json.dumps(wallet_info)
+                )
+                
                 logger.info(f"Imported wallet {wallet_address} for {platform}:{user_id} on {chain}")
                 
                 return {
@@ -310,7 +334,6 @@ class WalletService:
                 }
                 
             wallet_address = particle_result["wallet_address"]
-            auth_token = particle_result["auth_token"]
             logger.info(f"Created Particle wallet {wallet_address} for {platform}:{user_id}")
             
             # Store wallet info in Redis
@@ -321,11 +344,18 @@ class WalletService:
                 "wallet_type": "particle",
                 "chain": chain,
                 "chain_info": chain_info,
-                "auth_token": auth_token
+                "master_key": particle_result.get("master_key", "")
             }
             
             await self.redis_client.set(
                 user_key,
+                json.dumps(wallet_info)
+            )
+            
+            # Store messaging format too (for compatibility)
+            messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+            await self.redis_client.set(
+                messaging_key,
                 json.dumps(wallet_info)
             )
             
@@ -491,26 +521,73 @@ class WalletService:
             logger.warning("Redis not available, wallet deletion not persisted")
             return {
                 "success": True,
-                "message": "Wallet deleted (not persisted)"
+                "message": "Wallet deletion request processed (not persisted)"
             }
             
         try:
-            # Delete wallet info from Redis
-            user_key = f"wallet:{platform}:{user_id}"
-            deleted = await self.redis_client.delete(user_key)
+            # We need to handle both storage formats:
+            # 1. wallet:{platform}:{user_id} (main format)
+            # 2. messaging:{platform}:user:{user_id}:wallet (messaging format)
             
-            if deleted:
-                logger.info(f"Deleted wallet for {platform}:{user_id}")
-                return {
-                    "success": True,
-                    "message": "Wallet deleted successfully"
-                }
-            else:
-                logger.info(f"No wallet found to delete for {platform}:{user_id}")
-                return {
-                    "success": False,
-                    "message": "No wallet found to delete"
-                }
+            # First, get the wallet address to delete reverse mapping
+            wallet_info = await self.get_wallet_info(user_id, platform)
+            wallet_address = None
+            if wallet_info and "wallet_address" in wallet_info:
+                wallet_address = wallet_info["wallet_address"]
+            
+            # Delete main wallet format
+            user_key = f"wallet:{platform}:{user_id}"
+            try:
+                await self.redis_client.delete(user_key)
+                logger.info(f"Deleted main wallet key: {user_key}")
+            except Exception as e:
+                # Handle non-async Redis clients that return int instead of awaitable
+                if isinstance(e, TypeError) and "await" in str(e):
+                    try:
+                        self.redis_client.delete(user_key)
+                        logger.info(f"Deleted main wallet key with non-async call: {user_key}")
+                    except Exception as e2:
+                        logger.error(f"Failed to delete main wallet key: {e2}")
+                else:
+                    logger.error(f"Failed to delete main wallet key: {e}")
+            
+            # Delete messaging format
+            messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+            try:
+                await self.redis_client.delete(messaging_key)
+                logger.info(f"Deleted messaging wallet key: {messaging_key}")
+            except Exception as e:
+                # Handle non-async Redis clients
+                if isinstance(e, TypeError) and "await" in str(e):
+                    try:
+                        self.redis_client.delete(messaging_key)
+                        logger.info(f"Deleted messaging wallet key with non-async call: {messaging_key}")
+                    except Exception as e2:
+                        logger.error(f"Failed to delete messaging wallet key: {e2}")
+                else:
+                    logger.error(f"Failed to delete messaging wallet key: {e}")
+            
+            # Delete reverse mapping if we have a wallet address
+            if wallet_address:
+                try:
+                    await self.redis_client.delete(f"address:{wallet_address}:user")
+                    logger.info(f"Deleted reverse address mapping for {wallet_address}")
+                except Exception as e:
+                    # Handle non-async Redis clients
+                    if isinstance(e, TypeError) and "await" in str(e):
+                        try:
+                            self.redis_client.delete(f"address:{wallet_address}:user")
+                            logger.info(f"Deleted reverse mapping with non-async call: {wallet_address}")
+                        except Exception as e2:
+                            logger.error(f"Failed to delete reverse mapping: {e2}")
+                    else:
+                        logger.error(f"Failed to delete reverse mapping: {e}")
+            
+            logger.info(f"Deleted wallet for {platform}:{user_id}")
+            return {
+                "success": True,
+                "message": "Wallet deleted successfully"
+            }
                 
         except Exception as e:
             logger.exception(f"Error deleting wallet: {e}")
@@ -575,6 +652,13 @@ class WalletService:
             user_key = f"wallet:{platform}:{user_id}"
             await self.redis_client.set(
                 user_key,
+                json.dumps(wallet_info)
+            )
+            
+            # Update in messaging format too
+            messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+            await self.redis_client.set(
+                messaging_key,
                 json.dumps(wallet_info)
             )
             
