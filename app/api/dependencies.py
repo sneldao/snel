@@ -2,6 +2,7 @@ from fastapi import Depends, HTTPException, Header
 from typing import Optional
 import os
 import logging
+from dotenv import load_dotenv
 
 from app.services.token_service import TokenService
 from app.services.swap_service import SwapService
@@ -13,7 +14,19 @@ from app.agents.price_agent import PriceAgent
 from app.agents.base import PointlessAgent
 from app.agents.telegram_agent import TelegramAgent
 
-# Don't import AgentFactory here to avoid circular imports
+# Load environment variables from .env files
+load_dotenv()
+load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
+
+# Conditionally import SmartWalletService if available
+try:
+    from app.services.smart_wallet_service import SmartWalletService
+    SMART_WALLET_AVAILABLE = True
+except ImportError:
+    SMART_WALLET_AVAILABLE = False
+
+# Check if CDP SDK is enabled
+USE_CDP_SDK = os.getenv("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]
 
 # Singleton instance of RedisService
 _redis_service: Optional[RedisService] = None
@@ -32,22 +45,12 @@ _telegram_agent: Optional[TelegramAgent] = None
 
 logger = logging.getLogger(__name__)
 
-async def get_redis_service() -> RedisService:
-    """Get or create Redis service instance."""
-    global _redis_service
-    
-    if _redis_service is None:
-        try:
-            # Get Redis URL from environment or use default
-            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-            _redis_service = RedisService(redis_url=redis_url)
-            await _redis_service.connect()
-        except Exception as e:
-            logger.warning(f"Failed to initialize Redis service: {e}. Some features may be limited.")
-            # Create a dummy Redis service to prevent errors
-            _redis_service = RedisService(redis_url="redis://localhost:6379/0")
-    
-    return _redis_service
+async def get_redis_service() -> Optional[RedisService]:
+    """Get a Redis service instance if configured."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return None
+    return RedisService(redis_url=redis_url)
 
 async def get_token_service() -> TokenService:
     """Get or create token service instance."""
@@ -58,23 +61,34 @@ async def get_token_service() -> TokenService:
         
     return _token_service
 
-async def get_wallet_service(redis_service: RedisService = Depends(get_redis_service)) -> WalletService:
-    """
-    Get a WalletService instance.
+async def get_wallet_service(redis_service: Optional[RedisService] = Depends(get_redis_service)) -> WalletService:
+    """Get a wallet service instance."""
+    redis_url = os.getenv("REDIS_URL")
+    return WalletService(redis_service=redis_service)
+
+async def get_smart_wallet_service() -> Optional[SmartWalletService]:
+    """Get a smart wallet service instance if available."""
+    if not SMART_WALLET_AVAILABLE or not USE_CDP_SDK:
+        return None
     
-    Uses a singleton pattern to return the same instance on subsequent calls.
-    
-    Returns:
-        WalletService instance
+    redis_url = os.getenv("REDIS_URL")
+    return SmartWalletService(redis_url=redis_url)
+
+# Factory function to get the appropriate wallet service
+async def get_wallet_service_factory(
+    wallet_service: WalletService = Depends(get_wallet_service),
+    smart_wallet_service: Optional[SmartWalletService] = Depends(get_smart_wallet_service)
+) -> WalletService:
     """
-    global _wallet_service
-    if _wallet_service is None:
-        # Get Redis URL from the redis service
-        redis_url = redis_service.redis_url if redis_service else None
-        _wallet_service = WalletService(redis_url=redis_url)
-        logger.info("WalletService initialized")
-        
-    return _wallet_service
+    Get the appropriate wallet service based on configuration.
+    
+    If USE_CDP_SDK is enabled and SmartWalletService is available, return that.
+    Otherwise, fall back to the standard WalletService.
+    """
+    if USE_CDP_SDK and smart_wallet_service is not None:
+        return smart_wallet_service
+    
+    return wallet_service
 
 async def get_gemini_service() -> GeminiService:
     """

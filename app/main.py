@@ -35,12 +35,13 @@ is_dev = environment == "development"
 logger.info(f"Environment: {environment}")
 logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
 logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
-logger.info(f"PARTICLE_PROJECT_ID set: {bool(os.getenv('PARTICLE_PROJECT_ID'))}")
+logger.info(f"CDP_API_KEY_NAME set: {bool(os.getenv('CDP_API_KEY_NAME'))}")
+logger.info(f"USE_CDP_SDK set: {os.getenv('USE_CDP_SDK')}")
 
 # Create FastAPI app
 app = FastAPI(
-    title="Dowse Pointless API",
-    description="API for the Dowse Pointless app",
+    title="Pointless Snel API",
+    description="API for the Pointless Snel app",
     version="0.1.0",
 )
 

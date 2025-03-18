@@ -326,7 +326,7 @@ async def process_whatsapp_message(
             await redis_service.set(
                 key=f"wallet:{result['wallet_address']}:whatsapp:user",
                 value=from_user
-            )
+        )
         
     except Exception as e:
         logger.exception(f"Error processing WhatsApp message: {e}")
@@ -372,7 +372,7 @@ async def process_telegram_webhook(update_dict: Dict[str, Any]):
         # Check if user has a linked wallet
         wallet_address = None
         key = f"messaging:telegram:user:{user_id}:wallet"
-        wallet_address = await redis_service.get(key)
+            wallet_address = await redis_service.get(key)
         
         # Process the update with the TelegramAgent
         result = await telegram_agent.process_telegram_update(

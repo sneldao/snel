@@ -12,8 +12,17 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **Multi-chain support** with automatic chain detection
 - **Persistent command storage** with Redis
 - **Messaging platform integration** (WhatsApp, Telegram)
-- **Wallet security** with Particle Auth integration
+- **Wallet security** with Coinbase CDP integration
 - **AI-powered responses** using Google's Gemini API
+
+## Wallet Technology
+
+SNEL uses Coinbase Developer Platform (CDP) to create ERC-4337 compatible smart wallets for users. These wallets provide:
+
+- **Security**: User's private keys never leave their device
+- **Account Abstraction**: More user-friendly transactions
+- **Gas Sponsoring**: Simple transactions without worrying about gas
+- **Batch Transactions**: Execute multiple operations in a single transaction
 
 ## Telegram Bot
 
@@ -41,43 +50,105 @@ Snel is available as a Telegram bot! Chat with [@pointless_snel_bot](https://t.m
 
 You can also chat with Snel naturally, asking questions like "What's the price of ETH?" or "Tell me about Scroll L2." The bot uses Google's Gemini AI to provide informative responses while maintaining a friendly, snail-themed personality.
 
-## Wallet Security with Particle Auth
+## Setup
 
-Snel uses Particle Auth for secure wallet management:
+### Prerequisites
 
-- **Secure Key Management**: User private keys are never fully stored in one place
-- **Multi-Party Computation (MPC)**: Keys are split across secure locations
-- **Account Abstraction**: Support for smart contract wallets (ERC-4337)
-- **Social Recovery**: Secure recovery options for wallet access
-- **Cross-Chain Support**: Single interface for multiple blockchain networks
+- Node.js (v18+)
+- Python (v3.10+)
+- Redis instance (optional, for persistent storage)
 
-### Wallet Features
+### Environment Variables
 
-- Simulated wallets for learning DeFi without risking real funds
-- Smart contract wallet support via Account Abstraction
-- Secure key management with MPC technology
-- Support for multiple networks on testnet and mainnet
+Create a `.env.local` file with the following:
 
-## AI Integration with Gemini
+```
+# API URL - Update for production
+NEXT_PUBLIC_API_URL=http://localhost:8000
 
-Snel uses Google's Gemini API to power its conversational abilities:
+# Gemini API for AI responses
+GEMINI_API_KEY=your_gemini_api_key
 
-- **Natural Language Understanding**: Process and understand complex crypto questions
-- **Contextual Responses**: Provide relevant information based on conversation history
-- **Command Guidance**: Direct users to appropriate commands for transactions
-- **Educational Content**: Explain crypto concepts and terminology
-- **Real-Time Information**: Provide current information about crypto trends
+# Coinbase CDP for wallet functionality
+CDP_API_KEY_NAME=your_cdp_api_key_name
+CDP_API_KEY_PRIVATE_KEY=your_cdp_api_key_private_key
+USE_CDP_SDK=true
 
-## Supported Chains
+# Redis for persistent storage
+REDIS_URL=redis://localhost:6379/0
 
-- Optimism
-- Base
-- Scroll
-- Ethereum
-- Arbitrum
-- Polygon
-- Avalanche
-- (More coming soon... at a snail's pace, of course)
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+```
+
+### Installation
+
+```bash
+# Install frontend dependencies
+npm install
+
+# Install backend dependencies
+pip install -r requirements.txt
+
+# For CDP wallet functionality in a separate environment (recommended)
+./isolate-cdp-env.sh
+
+# Start the development server
+npm run dev
+```
+
+## Telegram Bot Setup
+
+### Creating Your Bot with BotFather
+
+1. Open Telegram and search for @BotFather
+2. Send the command `/newbot` to create a new bot
+3. Follow the instructions to choose a name and username for your bot
+4. Once created, you'll receive a token. Save this as your `TELEGRAM_BOT_TOKEN`
+
+### Setting Up the Webhook
+
+You need a publicly accessible HTTPS URL for your webhook:
+
+1. Set the webhook using:
+
+   ```
+   curl -X POST https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<YOUR_DOMAIN>/api/telegram/webhook
+   ```
+
+2. Verify the webhook is set:
+   ```
+   curl -X GET https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo
+   ```
+
+### Testing Locally
+
+For local development, you can send test messages:
+
+```
+curl -X POST http://localhost:8000/api/telegram/process \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"telegram","user_id":"123456","message":"/start"}'
+```
+
+### Configuring Bot AI and Wallet Features
+
+For full functionality:
+
+1. Add your Gemini API key to enable AI responses
+2. Set up Coinbase CDP credentials for wallet functionality
+3. Ensure Redis is configured for user data persistence
+
+## Commands
+
+- `/start` - Start the bot and receive an introduction
+- `/help` - Show available commands
+- `/connect` - Create a new wallet
+- `/balance` - Check your wallet balance
+- `/price [symbol]` - Get the price of a cryptocurrency
+- `/swap [amount] [from] for [to]` - Swap tokens
+- `/faucet` - Get instructions for receiving testnet ETH
+- `/disconnect` - Disconnect your wallet
 
 ## Brian API Integration
 
@@ -151,53 +222,6 @@ Example commands in Telegram:
 - `/swap 0.1 ETH for USDC` - Swap tokens
 - `/price ETH` - Check token price
 
-## Telegram Bot Setup
-
-### Creating a Bot with BotFather
-
-1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
-2. Start a chat with BotFather and send the command `/newbot`
-3. Follow the instructions to create a new bot:
-   - Provide a name for your bot (e.g., "Snel DeFi Assistant")
-   - Provide a username ending in "bot" (e.g., "snel_defi_bot")
-4. BotFather will give you a token - save this as `TELEGRAM_BOT_TOKEN` in your environment variables
-
-### Setting Up Webhook
-
-For production, the bot uses webhook mode. You'll need a publicly accessible HTTPS URL:
-
-1. Deploy your application to Vercel or another hosting service
-2. Set your webhook URL using:
-   ```bash
-   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://your-domain.com/api/telegram/process"
-   ```
-3. Verify the webhook is set correctly:
-   ```bash
-   curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
-   ```
-
-### Testing the Bot
-
-For local development, you can use the API directly:
-
-1. Start your backend server
-2. Send a test message to your API endpoint:
-   ```bash
-   curl -X POST http://localhost:8000/api/telegram/process \
-     -H "Content-Type: application/json" \
-     -d '{"message": {"text": "/start", "from": {"id": 123456789}}}'
-   ```
-
-### Bot Features Configuration
-
-The bot's AI capabilities and wallet features depend on proper configuration:
-
-1. Ensure `GEMINI_API_KEY` is set for AI-powered responses
-2. Configure Particle Auth with `PARTICLE_PROJECT_ID`, `PARTICLE_CLIENT_KEY`, and `PARTICLE_APP_ID`
-3. Set up Redis for persistent storage with `REDIS_URL`
-
-After setup, your bot will automatically respond to commands and natural language queries using the Gemini API and provide secure wallet functionality with Particle Auth.
-
 ## Local Development Setup
 
 ### Prerequisites
@@ -212,7 +236,7 @@ After setup, your bot will automatically respond to commands and natural languag
   - Coingecko (token prices)
   - Brian API (Scroll transactions)
   - Gemini (AI responses)
-  - Particle Auth (wallet management)
+  - Coinbase CDP (wallet management)
 
 ### Environment Setup
 
@@ -258,9 +282,9 @@ BRIAN_API_KEY=your_brian_api_key
 BRIAN_API_URL=https://api.brianknows.org/api/v0
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 GEMINI_API_KEY=your_gemini_api_key
-PARTICLE_PROJECT_ID=your_particle_project_id
-PARTICLE_CLIENT_KEY=your_particle_client_key
-PARTICLE_APP_ID=your_particle_app_id
+CDP_API_KEY_NAME=your_cdp_api_key_name
+CDP_API_KEY_PRIVATE_KEY=your_cdp_api_key_private_key
+USE_CDP_SDK=true
 ```
 
 For local development, if you encounter SSL certificate verification issues with the API services, you can set:
@@ -484,7 +508,7 @@ The application supports a variety of natural language commands:
 ## Recent Updates
 
 - Added Gemini API integration for intelligent conversational responses in the Telegram bot
-- Added Particle Auth integration for secure wallet management
+- Added Coinbase CDP integration for secure wallet management
 - Added multi-network support with ability to switch chains in Telegram
 - Added comprehensive wallet security information with `/keys` command
 - Added Brian API integration for Scroll network
@@ -664,7 +688,7 @@ The application requires several environment variables to be set:
 - `BRIAN_API_KEY`: API key for Brian API (get one at https://brianknows.org)
 - `TELEGRAM_BOT_TOKEN`: Token for Telegram bot integration
 - `GEMINI_API_KEY`: API key for Google's Gemini API
-- `PARTICLE_PROJECT_ID`, `PARTICLE_CLIENT_KEY`, and `PARTICLE_APP_ID`: Credentials for Particle Auth
+- `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, and `USE_CDP_SDK`: Credentials for Coinbase CDP
 
 ### Setting Up Swap Functionality
 
@@ -700,24 +724,24 @@ To enable Gemini AI features for the Telegram bot:
 
 Without a valid Gemini API key, the Telegram bot will have limited conversational abilities.
 
-### Setting Up Particle Auth
+### Setting Up Coinbase CDP
 
-To enable wallet management with Particle Auth:
+To enable wallet management with Coinbase CDP:
 
-1. Visit [Particle Auth Dashboard](https://dashboard.particle.network/) and create an account
+1. Visit [Coinbase Developer Platform](https://developer.coinbase.com/) and create an account
 2. Create a new project and application
 3. Get your Project ID, Client Key, and App ID
-4. Add these to your environment variables as `PARTICLE_PROJECT_ID`, `PARTICLE_CLIENT_KEY`, and `PARTICLE_APP_ID`
+4. Add these to your environment variables as `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, and `USE_CDP_SDK`
 5. Restart the application to ensure the keys are loaded
 
-Without valid Particle Auth credentials, wallet management will be limited to simulated wallets.
+Without valid Coinbase CDP credentials, wallet management will be limited to simulated wallets.
 
 ## Acknowledgments
 
 Snel leverages several powerful technologies and APIs to deliver its functionality:
 
 - [Google Gemini API](https://ai.google.dev/) - Powers the natural language processing capabilities
-- [Particle Auth](https://particle.network/) - Provides secure wallet management and Account Abstraction
+- [Coinbase Developer Platform](https://developer.coinbase.com/) - Provides secure wallet management and Account Abstraction
 - [Brian API](https://brianknows.org) - Powers the Scroll network transactions
 - [0x Protocol](https://0x.org/) - Provides swap aggregation across multiple DEXes
 - [Upstash Redis](https://upstash.com/) - Serverless Redis for persistent storage
