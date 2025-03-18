@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "dowse-pointless"
+name = "snel-pointless"
 version = "0.1.0"
 description = "A natural language crypto command interpreter"
 authors = ["Your Name <your.email@example.com>"]

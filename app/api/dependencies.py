@@ -24,6 +24,7 @@ try:
     SMART_WALLET_AVAILABLE = True
 except ImportError:
     SMART_WALLET_AVAILABLE = False
+    SmartWalletService = None
 
 # Check if CDP SDK is enabled
 USE_CDP_SDK = os.getenv("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]
@@ -71,8 +72,12 @@ async def get_smart_wallet_service() -> Optional[SmartWalletService]:
     if not SMART_WALLET_AVAILABLE or not USE_CDP_SDK:
         return None
     
-    redis_url = os.getenv("REDIS_URL")
-    return SmartWalletService(redis_url=redis_url)
+    try:
+        redis_url = os.getenv("REDIS_URL")
+        return SmartWalletService(redis_url=redis_url)
+    except Exception as e:
+        logger.error(f"Error initializing SmartWalletService: {e}")
+        return None
 
 # Factory function to get the appropriate wallet service
 async def get_wallet_service_factory(

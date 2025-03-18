@@ -92,3 +92,4 @@ yarn.lock
 out/
 .vercel/
 .qodo
+.vercel

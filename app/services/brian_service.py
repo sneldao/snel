@@ -25,7 +25,10 @@ class BrianAPIService:
         """Initialize the Brian API service."""
         self.api_key = os.getenv("BRIAN_API_KEY")
         self.api_url = os.getenv("BRIAN_API_URL", "https://api.brianknows.org/api/v0")
-        self.http_client = httpx.AsyncClient(verify=True, timeout=30.0)
+        
+        # Check if SSL verification should be disabled for development
+        verify_ssl = os.getenv("DISABLE_SSL_VERIFY", "").lower() not in ("true", "1", "yes")
+        self.http_client = httpx.AsyncClient(verify=verify_ssl, timeout=30.0)
         
         if not self.api_key:
             logger.warning("BRIAN_API_KEY environment variable not set. Brian API will not work.")
