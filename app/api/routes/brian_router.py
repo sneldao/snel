@@ -240,19 +240,30 @@ async def process_bridge(
             token_symbol = token_symbol.get("symbol", "")
         
         # Get the transaction data from Brian API
-        tx_data = await brian_service.get_bridge_transaction(
-            token_symbol=token_symbol,
-            amount=bridge_command.amount,
-            from_chain_id=bridge_command.from_chain_id,
-            to_chain_id=bridge_command.to_chain_id,
-            wallet_address=request.wallet_address
-        )
+        try:
+            tx_data = await brian_service.get_bridge_transaction(
+                token_symbol=token_symbol,
+                amount=bridge_command.amount,
+                from_chain_id=bridge_command.from_chain_id,
+                to_chain_id=bridge_command.to_chain_id,
+                wallet_address=request.wallet_address
+            )
+        except Exception as e:
+            logger.error(f"Error getting bridge transaction: {e}")
+            return TransactionResponse(
+                error=f"Failed to get bridge transaction: {str(e)}",
+                status="error"
+            )
         
         # Store the pending command
-        await redis_service.store_pending_command(
-            wallet_address=request.wallet_address,
-            command=request.command
-        )
+        try:
+            await redis_service.store_pending_command(
+                wallet_address=request.wallet_address,
+                command=request.command
+            )
+        except Exception as e:
+            logger.error(f"Error storing pending command: {e}")
+            # Continue even if storing fails
         
         # Check if we have quotes
         if "all_quotes" in tx_data and tx_data["all_quotes"]:
@@ -271,11 +282,16 @@ async def process_bridge(
                 token_to_approve=tx_data.get("token_to_approve"),
                 spender=tx_data.get("spender"),
                 pending_command=request.command,
-                metadata=tx_data["metadata"],
-                agent_type="bridge"
+                metadata=tx_data.get("metadata", {}),
+                agent_type="bridge",
+                status="success"
             )
         else:
-            raise ValueError("No valid bridge quotes found")
+            return TransactionResponse(
+                error="No valid bridge quotes found",
+                status="error"
+            )
+            
     except ValueError as e:
         logger.error(f"Error processing bridge command: {str(e)}")
         return TransactionResponse(

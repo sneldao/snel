@@ -27,11 +27,46 @@ class BrianAPIService:
         self.api_url = os.getenv("BRIAN_API_URL", "https://api.brianknows.org/api/v0")
         
         # Check if SSL verification should be disabled for development
-        verify_ssl = os.getenv("DISABLE_SSL_VERIFY", "").lower() not in ("true", "1", "yes")
-        self.http_client = httpx.AsyncClient(verify=verify_ssl, timeout=30.0)
+        self.verify_ssl = os.getenv("DISABLE_SSL_VERIFY", "").lower() not in ("true", "1", "yes")
+        self.http_client = None  # Initialize as None, create when needed
         
         if not self.api_key:
             logger.warning("BRIAN_API_KEY environment variable not set. Brian API will not work.")
+    
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        """Get or create an HTTP client."""
+        if self.http_client is None or self.http_client.is_closed:
+            self.http_client = httpx.AsyncClient(
+                verify=self.verify_ssl,
+                timeout=30.0
+            )
+        return self.http_client
+    
+    async def _make_api_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """Make an API request with proper error handling and client lifecycle management."""
+        if not self.api_key:
+            raise ValueError("BRIAN_API_KEY environment variable not set")
+            
+        client = await self._get_http_client()
+        try:
+            response = await client.request(
+                method,
+                f"{self.api_url}/{endpoint}",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-brian-api-key": self.api_key
+                },
+                **kwargs
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            error_text = await e.response.text()
+            logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
+            raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
+        except Exception as e:
+            logger.error(f"Error making API request: {str(e)}")
+            raise
     
     async def get_swap_transaction(
         self,
@@ -65,12 +100,9 @@ class BrianAPIService:
             logger.info(f"Sending prompt to Brian API: {prompt}")
             
             # Call the Brian API
-            response = await self.http_client.post(
-                f"{self.api_url}/agent/transaction",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
+            response = await self._make_api_request(
+                "POST",
+                "agent/transaction",
                 json={
                     "prompt": prompt,
                     "address": wallet_address,
@@ -78,30 +110,14 @@ class BrianAPIService:
                 }
             )
             
-            # Check for errors
-            try:
-                response.raise_for_status()
-                
-                # Parse the response
-                result = response.json()
-            except httpx.HTTPStatusError as e:
-                # Handle HTTP errors (4xx, 5xx)
-                error_text = await e.response.text()
-                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
-            except json.JSONDecodeError as e:
-                # Handle invalid JSON responses
-                error_text = await response.text()
-                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
-                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
-            logger.info(f"Brian API response: {json.dumps(result, indent=2)}")
+            logger.info(f"Brian API response: {json.dumps(response, indent=2)}")
             
             # Extract the transaction data
-            if not result.get("result") or not isinstance(result["result"], list) or len(result["result"]) == 0:
+            if not response.get("result") or not isinstance(response["result"], list) or len(response["result"]) == 0:
                 raise ValueError("No transaction data returned from Brian API")
             
             # Get the first transaction result
-            tx_result = result["result"][0]
+            tx_result = response["result"][0]
             
             # Extract the transaction steps
             steps = tx_result.get("data", {}).get("steps", [])
@@ -172,9 +188,6 @@ class BrianAPIService:
                 }
             }
             
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error from Brian API: {e.response.status_code} - {e.response.text}")
-            raise ValueError(f"Error from Brian API: {e.response.text}")
         except Exception as e:
             logger.error(f"Error getting swap transaction from Brian API: {str(e)}")
             raise
@@ -196,41 +209,19 @@ class BrianAPIService:
             logger.info(f"Extracting parameters from prompt: {prompt}")
             
             # Call the Brian API
-            response = await self.http_client.post(
-                f"{self.api_url}/agent/parameters-extraction",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
+            response = await self._make_api_request(
+                "POST",
+                "agent/parameters-extraction",
                 json={
                     "prompt": prompt
                 }
             )
             
-            # Check for errors
-            try:
-                response.raise_for_status()
-                
-                # Parse the response
-                result = response.json()
-                logger.info(f"Brian API parameter extraction response: {json.dumps(result, indent=2)}")
-            except httpx.HTTPStatusError as e:
-                # Handle HTTP errors (4xx, 5xx)
-                error_text = await e.response.text()
-                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
-            except json.JSONDecodeError as e:
-                # Handle invalid JSON responses
-                error_text = await response.text()
-                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
-                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
+            logger.info(f"Brian API parameter extraction response: {json.dumps(response, indent=2)}")
             
             # Return the extracted parameters
-            return result
+            return response
             
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error from Brian API: {e.response.status_code} - {e.response.text}")
-            raise ValueError(f"Error from Brian API: {e.response.text}")
         except Exception as e:
             logger.error(f"Error extracting parameters from Brian API: {str(e)}")
             raise
@@ -256,39 +247,20 @@ class BrianAPIService:
             logger.info(f"Getting token info from Brian API: {prompt}")
             
             # Call the Brian API
-            response = await self.http_client.post(
-                f"{self.api_url}/agent/knowledge",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
+            response = await self._make_api_request(
+                "POST",
+                "agent/knowledge",
                 json={
                     "prompt": prompt,
                     "kb": "public-knowledge-box"
                 }
             )
             
-            # Check for errors
-            try:
-                response.raise_for_status()
-                
-                # Parse the response
-                result = response.json()
-                logger.info(f"Brian API token info response: {json.dumps(result, indent=2)}")
-            except httpx.HTTPStatusError as e:
-                # Handle HTTP errors (4xx, 5xx)
-                error_text = await e.response.text()
-                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
-            except json.JSONDecodeError as e:
-                # Handle invalid JSON responses
-                error_text = await response.text()
-                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
-                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
+            logger.info(f"Brian API token info response: {json.dumps(response, indent=2)}")
             
             # Extract token information from the response
             # This is a bit tricky as we need to parse the text response
-            answer = result.get("answer", "")
+            answer = response.get("answer", "")
             
             # Look for token address in the answer
             import re
@@ -303,9 +275,6 @@ class BrianAPIService:
                 "chainId": chain_id
             }
             
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error from Brian API: {e.response.status_code} - {e.response.text}")
-            raise ValueError(f"Error from Brian API: {e.response.text}")
         except Exception as e:
             logger.error(f"Error getting token info from Brian API: {str(e)}")
             raise
@@ -341,12 +310,9 @@ class BrianAPIService:
             logger.info(f"Sending transfer prompt to Brian API: {prompt}")
             
             # Call the Brian API
-            response = await self.http_client.post(
-                f"{self.api_url}/agent/transaction",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
+            response = await self._make_api_request(
+                "POST",
+                "agent/transaction",
                 json={
                     "prompt": prompt,
                     "address": wallet_address,
@@ -354,31 +320,14 @@ class BrianAPIService:
                 }
             )
             
-            # Check for errors
-            try:
-                response.raise_for_status()
-                
-                # Parse the response
-                result = response.json()
-            except httpx.HTTPStatusError as e:
-                # Handle HTTP errors (4xx, 5xx)
-                error_text = await e.response.text()
-                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
-            except json.JSONDecodeError as e:
-                # Handle invalid JSON responses
-                error_text = await response.text()
-                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
-                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
-            
-            logger.info(f"Brian API transfer response: {json.dumps(result, indent=2)}")
+            logger.info(f"Brian API transfer response: {json.dumps(response, indent=2)}")
             
             # Extract the transaction data
-            if not result.get("result") or not isinstance(result["result"], list) or len(result["result"]) == 0:
+            if not response.get("result") or not isinstance(response["result"], list) or len(response["result"]) == 0:
                 raise ValueError("No transaction data returned from Brian API")
             
             # Get the first transaction result
-            tx_result = result["result"][0]
+            tx_result = response["result"][0]
             
             # Extract the transaction steps
             steps = tx_result.get("data", {}).get("steps", [])
@@ -428,9 +377,6 @@ class BrianAPIService:
             Dictionary with transaction data
         """
         try:
-            if not self.api_key:
-                raise ValueError("BRIAN_API_KEY environment variable not set")
-            
             # Get chain names for better prompts
             chain_names = {
                 1: "ethereum",
@@ -452,12 +398,9 @@ class BrianAPIService:
             logger.info(f"Sending bridge prompt to Brian API: {prompt}")
             
             # Call the Brian API
-            response = await self.http_client.post(
-                f"{self.api_url}/agent/transaction",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
+            response = await self._make_api_request(
+                "POST",
+                "agent/transaction",
                 json={
                     "prompt": prompt,
                     "address": wallet_address,
@@ -465,31 +408,14 @@ class BrianAPIService:
                 }
             )
             
-            # Check for errors
-            try:
-                response.raise_for_status()
-                
-                # Parse the response
-                result = response.json()
-            except httpx.HTTPStatusError as e:
-                # Handle HTTP errors (4xx, 5xx)
-                error_text = await e.response.text()
-                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
-            except json.JSONDecodeError as e:
-                # Handle invalid JSON responses
-                error_text = await response.text()
-                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
-                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
-            
-            logger.info(f"Brian API bridge response: {json.dumps(result, indent=2)}")
+            logger.info(f"Brian API bridge response: {json.dumps(response, indent=2)}")
             
             # Extract the transaction data
-            if not result.get("result") or not isinstance(result["result"], list) or len(result["result"]) == 0:
+            if not response.get("result") or not isinstance(response["result"], list) or len(response["result"]) == 0:
                 raise ValueError("No transaction data returned from Brian API")
             
             # Get the first transaction result
-            tx_result = result["result"][0]
+            tx_result = response["result"][0]
             
             # Extract the transaction steps
             steps = tx_result.get("data", {}).get("steps", [])
@@ -592,12 +518,9 @@ class BrianAPIService:
             logger.info(f"Sending balance prompt to Brian API: {prompt}")
             
             # Call the Brian API
-            response = await self.http_client.post(
-                f"{self.api_url}/agent/knowledge",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
+            response = await self._make_api_request(
+                "POST",
+                "agent/knowledge",
                 json={
                     "prompt": prompt,
                     "address": wallet_address,
@@ -606,27 +529,10 @@ class BrianAPIService:
                 }
             )
             
-            # Check for errors
-            try:
-                response.raise_for_status()
-                
-                # Parse the response
-                result = response.json()
-            except httpx.HTTPStatusError as e:
-                # Handle HTTP errors (4xx, 5xx)
-                error_text = await e.response.text()
-                logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-                raise ValueError(f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}")
-            except json.JSONDecodeError as e:
-                # Handle invalid JSON responses
-                error_text = await response.text()
-                logger.error(f"Invalid JSON response from Brian API: {error_text[:200]}")
-                raise ValueError(f"Invalid JSON response from Brian API: {error_text[:100]}")
-            
-            logger.info(f"Brian API balance response: {json.dumps(result, indent=2)}")
+            logger.info(f"Brian API balance response: {json.dumps(response, indent=2)}")
             
             # Extract the balance information
-            answer = result.get("answer", "")
+            answer = response.get("answer", "")
             
             # Return the balance information
             return {
@@ -640,6 +546,28 @@ class BrianAPIService:
         except Exception as e:
             logger.error(f"Error getting token balances from Brian API: {str(e)}")
             raise
+    
+    async def cleanup(self):
+        """Cleanup resources when service is no longer needed."""
+        if self.http_client and not self.http_client.is_closed:
+            await self.http_client.aclose()
+            self.http_client = None
 
 # Create a singleton instance
 brian_service = BrianAPIService()
+
+# Register cleanup on module unload
+import atexit
+import asyncio
+
+def cleanup_brian_service():
+    """Cleanup the Brian service when the module is unloaded."""
+    if brian_service.http_client and not brian_service.http_client.is_closed:
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                loop.run_until_complete(brian_service.cleanup())
+        except Exception as e:
+            logger.error(f"Error cleaning up Brian service: {e}")
+
+atexit.register(cleanup_brian_service)

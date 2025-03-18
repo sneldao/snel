@@ -146,9 +146,8 @@ class TelegramAgent(MessagingAgent):
         if message.startswith("/"):
             command_parts = message.split(" ", 1)
             
-            # Extract the command by removing the bot username if present
-            # Format can be /command or /command@botusername
-            command = command_parts[0].lower().split("@")[0]
+            # Remove the leading slash and split at @
+            command = command_parts[0].lstrip("/").split("@")[0].lower()
             
             args = command_parts[1] if len(command_parts) > 1 else ""
             
