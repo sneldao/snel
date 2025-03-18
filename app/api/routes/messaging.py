@@ -9,6 +9,7 @@ from app.agents.telegram_agent import TelegramAgent
 from app.api.dependencies import get_telegram_agent
 from app.services.wallet_service import WalletService
 from app.api.dependencies import get_wallet_service
+from app.api.routes.messaging_router import process_telegram_webhook
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -159,16 +160,23 @@ async def process_telegram_message(
 @router.post("/webhook")
 async def telegram_webhook_handler(
     request: Request,
-    background_tasks: BackgroundTasks,
-    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
-    wallet_service: WalletService = Depends(get_wallet_service)
+    background_tasks: BackgroundTasks
 ) -> Dict[str, Any]:
     """
     Handle Telegram webhook requests.
     
     This endpoint is specifically for receiving webhook events from Telegram.
     """
-    logger.info("Received webhook request from Telegram")
-    
-    # Process using the same logic as the regular process endpoint
-    return await process_telegram_message(request, background_tasks, telegram_agent, wallet_service) 
+    try:
+        # Get the raw request body
+        body = await request.json()
+        logger.info(f"Received webhook request from Telegram with update_id: {body.get('update_id', 'unknown')}")
+        
+        # Process in background to avoid timeouts
+        background_tasks.add_task(process_telegram_webhook, body)
+        
+        # Return success immediately to avoid timeouts
+        return {"status": "processing"}
+    except Exception as e:
+        logger.exception(f"Error in webhook handler: {e}")
+        return {"status": "error", "message": str(e)} 
