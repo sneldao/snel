@@ -259,37 +259,70 @@ class WalletService:
                     "message": f"Unsupported chain: {chain}"
                 }
             
-            # If no wallet address provided, attempt to create one with Particle
-            auth_token = None
-            if not wallet_address and all([PARTICLE_PROJECT_ID, PARTICLE_CLIENT_KEY, PARTICLE_APP_ID]):
-                particle_result = await self._create_particle_wallet(user_id, platform, chain)
-                if particle_result:
-                    wallet_address = particle_result["wallet_address"]
-                    auth_token = particle_result["auth_token"]
-                    logger.info(f"Created Particle wallet {wallet_address} for {platform}:{user_id}")
-            
-            # If we still don't have a wallet address, create a deterministic one
-            if not wallet_address:
-                # For backward compatibility, use the deterministic generation
-                import hashlib
-                seed = f"snel_wallet_{user_id}_{int(user_id) % 100000}"
-                hash_object = hashlib.sha256(seed.encode())
-                wallet_address = "0x" + hash_object.hexdigest()[:40]
-                logger.info(f"Created deterministic wallet {wallet_address} for {platform}:{user_id}")
+            # If wallet address is provided, just use it (this is typically for migrating existing wallets)
+            if wallet_address:
+                wallet_info = {
+                    "user_id": user_id,
+                    "platform": platform,
+                    "wallet_address": wallet_address,
+                    "wallet_type": "imported",
+                    "chain": chain,
+                    "chain_info": chain_info
+                }
                 
+                await self.redis_client.set(
+                    user_key,
+                    json.dumps(wallet_info)
+                )
+                
+                # Store reverse mapping for lookups
+                await self.redis_client.set(
+                    f"address:{wallet_address}:user",
+                    json.dumps({"user_id": user_id, "platform": platform})
+                )
+                
+                logger.info(f"Imported wallet {wallet_address} for {platform}:{user_id} on {chain}")
+                
+                return {
+                    "success": True,
+                    "message": "Wallet imported successfully",
+                    "wallet_address": wallet_address,
+                    "wallet_type": "imported",
+                    "chain": chain,
+                    "chain_info": chain_info
+                }
+            
+            # For new wallet creation, require Particle Auth
+            if not all([PARTICLE_PROJECT_ID, PARTICLE_CLIENT_KEY, PARTICLE_APP_ID]):
+                logger.error("Particle Auth not configured, cannot create new wallet")
+                return {
+                    "success": False,
+                    "message": "Wallet creation requires Particle Auth, which is not properly configured."
+                }
+            
+            # Create wallet with Particle Auth
+            particle_result = await self._create_particle_wallet(user_id, platform, chain)
+            if not particle_result:
+                logger.error("Failed to create Particle wallet")
+                return {
+                    "success": False,
+                    "message": "Failed to create wallet with Particle Auth."
+                }
+                
+            wallet_address = particle_result["wallet_address"]
+            auth_token = particle_result["auth_token"]
+            logger.info(f"Created Particle wallet {wallet_address} for {platform}:{user_id}")
+            
             # Store wallet info in Redis
             wallet_info = {
                 "user_id": user_id,
                 "platform": platform,
                 "wallet_address": wallet_address,
-                "wallet_type": "particle" if auth_token else "simulated",
+                "wallet_type": "particle",
                 "chain": chain,
-                "chain_info": chain_info
+                "chain_info": chain_info,
+                "auth_token": auth_token
             }
-            
-            # Add auth token if we have one
-            if auth_token:
-                wallet_info["auth_token"] = auth_token
             
             await self.redis_client.set(
                 user_key,
@@ -308,7 +341,7 @@ class WalletService:
                 "success": True,
                 "message": "Wallet created successfully",
                 "wallet_address": wallet_address,
-                "wallet_type": "particle" if auth_token else "simulated",
+                "wallet_type": "particle",
                 "chain": chain,
                 "chain_info": chain_info
             }
