@@ -2,7 +2,7 @@ from typing import Optional, Literal, Dict, Any, List, Union, TypeVar
 from pydantic import BaseModel, Field, root_validator, validator
 from eth_typing import HexAddress
 from datetime import datetime
-from dowse.models import Tweet, AgentMessage
+from app.models.tweet import Tweet, AgentMessage
 from decimal import Decimal
 
 # Re-export Command from api.py for backward compatibility
