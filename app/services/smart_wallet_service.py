@@ -126,6 +126,31 @@ class SmartWalletService(WalletService):
             logger.error(f"Error verifying CDP configuration: {e}")
             return False
     
+    async def _cleanup_invalid_wallet(self, platform: str, user_id: str) -> None:
+        """Delete invalid wallet entries from Redis.
+        
+        Args:
+            platform: Platform identifier (e.g., "telegram")
+            user_id: User identifier
+        """
+        try:
+            # Keys to delete
+            keys_to_delete = [
+                f"wallet:{platform}:{user_id}",
+                f"messaging:{platform}:user:{user_id}:wallet",
+                f"smart_wallet:{platform}:{user_id}"
+            ]
+            
+            for key in keys_to_delete:
+                try:
+                    await self.redis_client.delete(key)
+                    logger.info(f"Deleted invalid wallet entry: {key}")
+                except Exception as e:
+                    logger.error(f"Error deleting key {key}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error in _cleanup_invalid_wallet: {e}")
+            
     async def create_smart_wallet(self, user_id: str, platform: str = "telegram") -> Dict[str, Any]:
         """Create a smart wallet for a user.
         
@@ -158,16 +183,23 @@ class SmartWalletService(WalletService):
                 if existing_wallet:
                     try:
                         wallet_data = json.loads(existing_wallet)
-                        logger.info(f"Found existing wallet for {unique_id}: {wallet_data.get('address')}")
-                        return {
-                            "success": True,
-                            "address": wallet_data.get("address"),
-                            "chain": wallet_data.get("chain", "base_sepolia"),
-                            "is_new": False
-                        }
+                        # Check if this is a valid wallet with an address
+                        if wallet_data.get('address') and wallet_data.get('address') != 'None' and wallet_data.get('address') != None:
+                            logger.info(f"Found existing wallet for {unique_id}: {wallet_data.get('address')}")
+                            return {
+                                "success": True,
+                                "address": wallet_data.get("address"),
+                                "chain": wallet_data.get("chain", "base_sepolia"),
+                                "is_new": False
+                            }
+                        else:
+                            logger.warning(f"Found existing wallet for {unique_id} but address is None or invalid. Creating a new one.")
+                            # Clean up invalid wallet entries before creating a new one
+                            await self._cleanup_invalid_wallet(platform, user_id)
                     except json.JSONDecodeError:
                         logger.error(f"Invalid JSON in Redis for wallet {wallet_key}: {existing_wallet}")
-                        # Continue to create a new wallet
+                        # Clean up invalid wallet entries before creating a new one
+                        await self._cleanup_invalid_wallet(platform, user_id)
             except Exception as redis_err:
                 logger.error(f"Error checking for existing wallet in Redis: {redis_err}")
                 # Continue to create a new wallet
@@ -190,15 +222,37 @@ class SmartWalletService(WalletService):
                 
                 # Try with different parameters if the first attempt fails
                 try:
+                    logger.info("Attempting SmartWallet.create() without parameters")
                     wallet = SmartWallet.create()
+                    logger.info(f"SmartWallet creation successful: {wallet}")
                 except Exception as simple_err:
                     logger.error(f"Simple SmartWallet.create failed: {simple_err}, trying with project_id")
                     try:
+                        logger.info(f"Attempting SmartWallet.create(project_id='{unique_id}')")
                         wallet = SmartWallet.create(project_id=unique_id)
+                        logger.info(f"SmartWallet creation with project_id successful: {wallet}")
                     except Exception as project_err:
                         logger.error(f"SmartWallet.create with project_id failed: {project_err}")
-                        raise project_err  # Re-raise the error
+                        
+                        # Try one more approach - with additional debugging
+                        try:
+                            logger.info("Checking CDP module availability")
+                            import inspect
+                            logger.info(f"SmartWallet.create signature: {inspect.signature(SmartWallet.create)}")
+                            logger.info(f"SmartWallet class methods: {dir(SmartWallet)}")
+                            
+                            # Try one more time with explicit keyword arguments
+                            logger.info("Attempting SmartWallet.create with different parameters")
+                            wallet = SmartWallet.create(name=f"Wallet for {unique_id}")
+                            logger.info(f"SmartWallet creation with name successful: {wallet}")
+                        except Exception as last_err:
+                            logger.error(f"All SmartWallet.create attempts failed: {last_err}")
+                            raise last_err
                 
+                # Check if we got a valid wallet object
+                if not hasattr(wallet, 'address'):
+                    raise ValueError(f"Created wallet missing 'address' attribute: {wallet}")
+                    
                 wallet_address = wallet.address
                 logger.info(f"Created new wallet for {unique_id}: {wallet_address}")
                 

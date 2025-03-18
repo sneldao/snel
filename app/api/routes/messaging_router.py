@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 import sys
+import uuid
 
 # Load environment variables from .env files
 load_dotenv()
@@ -959,6 +960,42 @@ async def get_cdp_diagnostics():
         return {
             "error": str(e),
             "traceback": error_details,
+            "environment": {
+                "CDP_API_KEY_NAME": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
+                "CDP_API_KEY_PRIVATE_KEY": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
+                "USE_CDP_SDK": os.environ.get("USE_CDP_SDK", "false"),
+                "CDP_USE_MANAGED_WALLET": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
+            }
+        }
+
+@router.post("/test-wallet-creation")
+async def test_wallet_creation():
+    """Test wallet creation directly with SmartWalletService."""
+    try:
+        from app.services.smart_wallet_service import SmartWalletService
+        
+        # Create a new instance of SmartWalletService
+        wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
+        
+        # Generate a unique test ID
+        test_id = str(uuid.uuid4())[:8]
+        
+        # Try to create a wallet
+        result = await wallet_service.create_smart_wallet(
+            user_id=f"test-{test_id}",
+            platform="test"
+        )
+        
+        return {
+            "result": result,
+            "time": datetime.now().isoformat(),
+            "test_id": test_id,
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
             "environment": {
                 "CDP_API_KEY_NAME": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
                 "CDP_API_KEY_PRIVATE_KEY": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
