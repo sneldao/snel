@@ -294,12 +294,13 @@ class WalletService:
         # Check if we're using Upstash
         if isinstance(self.redis_url, str) and self.redis_url.startswith("rediss://"):
             # Upstash Redis with SSL
-            from redis.asyncio.connection import Connection
-            
-            # Configure Redis for Upstash
-            ssl_enabled = True
             logger.info("Using Upstash Redis client")
-            return aioredis.from_url(self.redis_url, ssl=ssl_enabled, decode_responses=True)
+            # Use connection_kwargs instead of direct ssl parameter
+            return aioredis.from_url(
+                self.redis_url, 
+                decode_responses=True,
+                ssl_cert_reqs=None  # Don't verify SSL cert
+            )
         else:
             # Standard Redis
             logger.info("Using standard Redis client")
