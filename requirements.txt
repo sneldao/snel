@@ -20,3 +20,4 @@ loguru==0.7.2
 openai==1.14.0
 cdp-sdk==0.21.0
 certifi>=2025.1.31
+cryptography==44.0.0
