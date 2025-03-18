@@ -32,12 +32,19 @@ class SmartWalletService(WalletService):
         # Configure SSL first
         self._configure_ssl()
         
-        # Initialize Coinbase CDP SDK
-        self._initialize_coinbase_sdk()
-        
-        # Verify CDP SDK initialization
-        if not hasattr(Cdp, '_api_key_name') or not Cdp._api_key_name:
-            raise ValueError("Coinbase CDP SDK not properly initialized")
+        # Initialize Coinbase CDP SDK - but don't validate here
+        # This allows the class to be instantiated even if CDP is not properly configured yet
+        try:
+            # _initialize_coinbase_sdk returns True if successful, False otherwise
+            self.cdp_initialized = self._initialize_coinbase_sdk()
+            if self.cdp_initialized:
+                logger.info("SmartWalletService initialized successfully with CDP SDK")
+            else:
+                logger.warning("SmartWalletService initialized but CDP SDK is not available")
+        except Exception as e:
+            logger.error(f"Failed to initialize Coinbase CDP SDK: {e}")
+            self.cdp_initialized = False
+            # Don't raise an exception, just mark as not initialized
     
     def _configure_ssl(self):
         """Configure SSL certificates to ensure secure connections."""
@@ -62,27 +69,62 @@ class SmartWalletService(WalletService):
             api_key_private_key = os.getenv("CDP_API_KEY_PRIVATE_KEY")
             
             if not api_key_name or not api_key_private_key:
-                raise ValueError("CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE_KEY must be set in environment variables")
+                logger.error("CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE_KEY must be set in environment variables")
+                return False
             
             # Log the API key name (but not the private key) for debugging
             logger.info(f"Initializing Coinbase CDP SDK with API key name: {api_key_name}")
             
             # Configure the CDP SDK
-            Cdp.configure(api_key_name, api_key_private_key)
-            logger.info("Coinbase CDP SDK initialized successfully")
+            try:
+                Cdp.configure(api_key_name, api_key_private_key)
+                logger.info("Coinbase CDP SDK initialized successfully")
+            except Exception as config_error:
+                logger.error(f"Error configuring CDP SDK: {config_error}")
+                return False
             
             # Check if we're using Coinbase-Managed (2-of-2) wallets for production
             use_managed_wallet = os.getenv("CDP_USE_MANAGED_WALLET", "").lower() in ("true", "1", "yes")
             if use_managed_wallet:
                 # Enable Server-Signer for Coinbase-Managed (2-of-2) wallets
-                Cdp.use_server_signer = True
-                logger.info("Using Coinbase-Managed (2-of-2) wallets for production")
+                try:
+                    Cdp.use_server_signer = True
+                    logger.info("Using Coinbase-Managed (2-of-2) wallets for production")
+                except Exception as server_signer_error:
+                    logger.error(f"Error enabling server signer: {server_signer_error}")
+                    # Non-fatal, continue
             else:
                 logger.info("Using Developer-Managed (1-of-1) wallets for development")
+            
+            return True
                 
         except Exception as e:
             logger.error(f"Failed to initialize Coinbase CDP SDK: {e}")
-            raise ValueError(f"Failed to initialize Coinbase CDP SDK: {e}")
+            return False
+    
+    def _verify_cdp_configured(self) -> bool:
+        """Verify that the CDP SDK is properly configured.
+        
+        Returns:
+            Boolean indicating if the CDP SDK is properly configured
+        """
+        # Check that the API key is configured - this uses the public interface rather than internal attributes
+        # This is a non-destructive check that doesn't make any network calls
+        try:
+            # Check if Cdp has been initialized by looking at its configuration state
+            # Using a different approach that's independent of internal implementation details
+            api_key_name = os.getenv("CDP_API_KEY_NAME")
+            
+            # We only have access to verify that we've attempted to configure the SDK
+            # We can't verify if the key is valid without making a network call
+            if not api_key_name:
+                logger.error("CDP_API_KEY_NAME environment variable not set")
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error verifying CDP configuration: {e}")
+            return False
     
     async def create_smart_wallet(self, user_id: str, platform: str = "telegram") -> Dict[str, Any]:
         """Create a smart wallet for a user.
@@ -95,74 +137,108 @@ class SmartWalletService(WalletService):
             Dict containing wallet information
         """
         try:
+            # Check if CDP SDK is properly initialized
+            if not hasattr(self, 'cdp_initialized') or not self.cdp_initialized:
+                logger.error("Cannot create smart wallet: CDP SDK not properly initialized")
+                return {
+                    "success": False,
+                    "error": "CDP SDK not properly initialized. Smart wallet creation is unavailable."
+                }
+                
             # Generate a unique wallet identifier
             unique_id = f"{platform}:{user_id}"
             logger.info(f"Creating smart wallet for user {unique_id}")
             
-            # Check if we have a Redis client and if the wallet already exists
-            if self.redis_client:
-                existing_wallet = await self.get_smart_wallet(user_id, platform)
+            # Check if wallet already exists in Redis
+            wallet_key = f"wallet:{platform}:{user_id}"
+            
+            try:
+                existing_wallet = await self.redis_client.get(wallet_key)
+                
                 if existing_wallet:
-                    logger.info(f"Smart wallet already exists for user {unique_id}")
-                    return existing_wallet
-            
-            # Create owner account (EOA) that will control the smart wallet
-            private_key = Account.create().key
-            owner = Account.from_key(private_key)
-            
-            # Create a new smart wallet using Coinbase CDP SDK
-            logger.info(f"Initializing new SmartWallet for {platform}:{user_id}")
-            smart_wallet = SmartWallet.create(account=owner)
-            
-            # Create wallet data structure
-            wallet_data = {
-                "user_id": user_id,
-                "platform": platform,
-                "address": smart_wallet.address,
-                "owner_address": owner.address,
-                "private_key": private_key.hex(),  # This should be encrypted in production!
-                "network": "base-sepolia",
-                "wallet_type": "coinbase_cdp",
-                "created_at": datetime.now().isoformat()
-            }
-            
-            # Persist wallet data if Redis is available
-            if self.redis_client:
+                    try:
+                        wallet_data = json.loads(existing_wallet)
+                        logger.info(f"Found existing wallet for {unique_id}: {wallet_data.get('address')}")
+                        return {
+                            "success": True,
+                            "address": wallet_data.get("address"),
+                            "chain": wallet_data.get("chain", "base_sepolia"),
+                            "is_new": False
+                        }
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid JSON in Redis for wallet {wallet_key}: {existing_wallet}")
+                        # Continue to create a new wallet
+            except Exception as redis_err:
+                logger.error(f"Error checking for existing wallet in Redis: {redis_err}")
+                # Continue to create a new wallet
+                
+            # Create a new wallet using CDP SDK
+            try:
+                # Import module here to get better error messages
                 try:
-                    # Store wallet data
-                    wallet_key = f"smart_wallet:{platform}:{user_id}"
-                    await self.redis_client.set(
-                        wallet_key,
-                        json.dumps(wallet_data)
-                    )
-                    
-                    # Also store in messaging format for compatibility
-                    messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
-                    await self.redis_client.set(
-                        messaging_key,
-                        smart_wallet.address
-                    )
-                    
-                    # Store reverse mapping
-                    address_key = f"address:{smart_wallet.address}:user"
-                    await self.redis_client.set(
-                        address_key,
-                        json.dumps({"user_id": user_id, "platform": platform})
-                    )
-                    
-                    logger.info(f"Smart wallet data stored in Redis for user {unique_id}")
-                except Exception as e:
-                    logger.error(f"Failed to store smart wallet data in Redis: {e}")
-                    # Continue even if Redis storage fails
-            
-            # Return wallet data without private key for security
-            public_wallet_data = wallet_data.copy()
-            public_wallet_data.pop("private_key", None)
-            return public_wallet_data
-            
+                    from cdp import SmartWallet
+                except ImportError as imp_err:
+                    logger.error(f"Error importing SmartWallet: {imp_err}")
+                    return {
+                        "success": False,
+                        "error": f"CDP SDK not properly installed: {str(imp_err)}"
+                    }
+                
+                # Simplest possible call to SmartWallet.create
+                # Avoid using optional parameters that might cause issues
+                logger.info("Calling SmartWallet.create with minimal parameters")
+                
+                # Try with different parameters if the first attempt fails
+                try:
+                    wallet = SmartWallet.create()
+                except Exception as simple_err:
+                    logger.error(f"Simple SmartWallet.create failed: {simple_err}, trying with project_id")
+                    try:
+                        wallet = SmartWallet.create(project_id=unique_id)
+                    except Exception as project_err:
+                        logger.error(f"SmartWallet.create with project_id failed: {project_err}")
+                        raise project_err  # Re-raise the error
+                
+                wallet_address = wallet.address
+                logger.info(f"Created new wallet for {unique_id}: {wallet_address}")
+                
+                # Store wallet info in Redis
+                wallet_data = {
+                    "address": wallet_address,
+                    "chain": "base_sepolia",  # Default to Base Sepolia testnet
+                    "platform": platform,
+                    "user_id": user_id,
+                    "created_at": datetime.utcnow().isoformat()
+                }
+                
+                # Save to Redis
+                try:
+                    await self.redis_client.set(wallet_key, json.dumps(wallet_data))
+                    logger.info(f"Saved wallet data to Redis for {unique_id}")
+                except Exception as redis_err:
+                    logger.error(f"Failed to save wallet data to Redis: {redis_err}")
+                    # Continue even if Redis fails - we still have the wallet address
+                
+                return {
+                    "success": True,
+                    "address": wallet_address,
+                    "chain": "base_sepolia",
+                    "is_new": True
+                }
+            except Exception as wallet_err:
+                # Specific error handling for wallet creation
+                logger.error(f"Failed to create wallet via CDP SDK: {wallet_err}")
+                return {
+                    "success": False,
+                    "error": f"Failed to create wallet: {str(wallet_err)}"
+                }
+                
         except Exception as e:
-            logger.exception(f"Error creating smart wallet: {e}")
-            return {"error": str(e)}
+            logger.exception(f"Unexpected error creating smart wallet: {e}")
+            return {
+                "success": False,
+                "error": f"Unexpected error: {str(e)}"
+            }
     
     async def get_smart_wallet(self, user_id: str, platform: str = "telegram") -> Optional[Dict[str, Any]]:
         """Get a user's smart wallet data.
@@ -492,4 +568,66 @@ class SmartWalletService(WalletService):
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             self.redis_client = None
-            return False 
+            return False
+    
+    async def get_cdp_sdk_diagnostics(self) -> Dict[str, Any]:
+        """Get diagnostic information about the CDP SDK.
+        
+        Returns:
+            Dict containing diagnostic information
+        """
+        try:
+            # Check for environment variables
+            api_key_name = os.getenv("CDP_API_KEY_NAME", "")
+            api_key_private_key_exists = bool(os.getenv("CDP_API_KEY_PRIVATE_KEY", ""))
+            use_cdp_sdk = os.getenv("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]
+            use_managed_wallet = os.getenv("CDP_USE_MANAGED_WALLET", "false").lower() in ["true", "1", "yes"]
+            
+            # Check CDP module information
+            cdp_module_info = {}
+            try:
+                import cdp
+                cdp_module_info = {
+                    "module_exists": True,
+                    "version": getattr(cdp, "__version__", "unknown"),
+                    "path": getattr(cdp, "__file__", "unknown"),
+                }
+            except ImportError:
+                cdp_module_info = {
+                    "module_exists": False,
+                    "error": "CDP module not found or not importable"
+                }
+                
+            # Check if the CDP is configured
+            cdp_configured = hasattr(self, 'cdp_initialized') and self.cdp_initialized
+            
+            # Get SmartWallet class info
+            smart_wallet_info = {}
+            try:
+                smart_wallet_info = {
+                    "class_exists": hasattr(cdp, "SmartWallet"),
+                    "create_method_exists": hasattr(cdp.SmartWallet, "create") if hasattr(cdp, "SmartWallet") else False,
+                }
+            except Exception as sw_err:
+                smart_wallet_info = {
+                    "error": f"Error checking SmartWallet class: {sw_err}"
+                }
+                
+            # Return all diagnostic information
+            return {
+                "environment": {
+                    "CDP_API_KEY_NAME": api_key_name[:10] + "..." if len(api_key_name) > 10 else api_key_name,
+                    "CDP_API_KEY_PRIVATE_KEY": "exists" if api_key_private_key_exists else "missing",
+                    "USE_CDP_SDK": use_cdp_sdk,
+                    "CDP_USE_MANAGED_WALLET": use_managed_wallet,
+                },
+                "cdp_module": cdp_module_info,
+                "cdp_configured": cdp_configured,
+                "smart_wallet_info": smart_wallet_info,
+                "redis_connected": self.redis_client is not None,
+            }
+        except Exception as e:
+            logger.exception(f"Error getting CDP SDK diagnostics: {e}")
+            return {
+                "error": str(e)
+            } 

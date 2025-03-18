@@ -11,6 +11,7 @@ import os
 from typing import Dict, Any, List, Optional, Union, Tuple, Callable
 from pydantic import Field
 from app.agents.messaging_agent import MessagingAgent
+from app.services.prices import PriceService
 from app.services.token_service import TokenService
 from app.services.swap_service import SwapService
 from app.services.smart_wallet_service import SmartWalletService
@@ -269,10 +270,10 @@ class TelegramAgent(MessagingAgent):
         """
         if not content:
             return content
-            
+
         # Define snail emojis to add personality
         snail_emojis = ["🐌", "🐌 ", "🐌💨", "🐢"]
-        
+
         # Define quips about being slow but reliable
         slow_quips = [
             "(Sorry for the delay, moving as fast as my shell allows!)",
@@ -283,19 +284,19 @@ class TelegramAgent(MessagingAgent):
             "(Every transaction is a marathon, not a sprint!)",
             "(Quality over speed, that's the snail way!)"
         ]
-        
+
         # Get a random emoji and quip
         emoji = random.choice(snail_emojis) if random.random() < 0.4 else ""
         quip = random.choice(slow_quips) if random.random() < 0.25 and len(content) > 50 else ""
-        
+
         # Avoid adding emoji to error messages
         if "error" in content.lower() or "sorry" in content.lower():
             emoji = ""
             quip = ""
-            
+
         # Format the content with emoji and quip
         result = content
-        
+
         # Add emoji if not already at the beginning
         if emoji and not content.startswith("🐌") and not content.startswith("🐢"):
             # Add emoji at a logical position, not breaking markdown or between words
@@ -305,16 +306,16 @@ class TelegramAgent(MessagingAgent):
                 result = content[:first_newline+1] + emoji + " " + content[first_newline+1:]
             else:
                 # Add at the beginning
-                result = emoji + " " + content
-                
+                result = f"{emoji} {content}"
+
         # Add quip to the end
         if quip and not content.endswith(")"):
             result += f"\n\n{quip}"
-            
+
         # Enhance command visibility by adding asterisks around commands
         command_pattern = r'(/[a-z_]+)'
         result = re.sub(command_pattern, r'*\1*', result)
-        
+
         return result
 
     async def _handle_start_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
@@ -331,18 +332,33 @@ class TelegramAgent(MessagingAgent):
         """
         # Create buttons for getting started
         buttons = []
-        
+
         # If user already has a wallet, show wallet options
         if wallet_address:
-            buttons.append([
-                {"text": "💰 Check Balance", "callback_data": "check_balance"},
-                {"text": "🌐 Switch Network", "callback_data": "show_networks"}
-            ])
-            buttons.append([
-                {"text": "📊 Price Check", "callback_data": "suggest_price"},
-                {"text": "🔄 Swap Tokens", "callback_data": "suggest_swap"}
-            ])
-            
+            buttons.extend(
+                (
+                    [
+                        {
+                            "text": "💰 Check Balance",
+                            "callback_data": "check_balance",
+                        },
+                        {
+                            "text": "🌐 Switch Network",
+                            "callback_data": "show_networks",
+                        },
+                    ],
+                    [
+                        {
+                            "text": "📊 Price Check",
+                            "callback_data": "suggest_price",
+                        },
+                        {
+                            "text": "🔄 Swap Tokens",
+                            "callback_data": "suggest_swap",
+                        },
+                    ],
+                )
+            )
             return {
                 "content": f"Welcome back to Snel DeFi Assistant! 🐌\n\n" +
                     f"Your wallet `{wallet_address[:6]}...{wallet_address[-4:]}` is connected.\n\n" +
@@ -351,7 +367,7 @@ class TelegramAgent(MessagingAgent):
                     "telegram_buttons": buttons
                 }
             }
-        
+
         # New user flow
         buttons.append([
             {"text": "💼 Create Wallet", "callback_data": "create_wallet"}
@@ -359,7 +375,7 @@ class TelegramAgent(MessagingAgent):
         buttons.append([
             {"text": "ℹ️ Learn More", "callback_data": "show_help"}
         ])
-        
+
         return {
             "content": "Hello! I'm Snel, your friendly DeFi assistant! 🐌\n\n" +
                 "I can help you navigate the world of decentralized finance with:\n\n" +
@@ -387,7 +403,7 @@ class TelegramAgent(MessagingAgent):
         """
         # Create buttons for common actions
         buttons = []
-        
+
         # Add wallet-specific buttons if user has a wallet
         if wallet_address:
             buttons.append([
@@ -398,47 +414,44 @@ class TelegramAgent(MessagingAgent):
             buttons.append([
                 {"text": "💼 Create Wallet", "callback_data": "create_wallet"}
             ])
-            
+
         # Add general help buttons
         buttons.append([
             {"text": "🔍 View Networks", "callback_data": "show_networks"},
             {"text": "🔐 Key Custody", "callback_data": "keys_help"}
         ])
-        
-        # Create help text
-        help_text = "🐌 **Snel DeFi Assistant Commands:**\n\n"
-        
-        # Wallet commands
-        help_text += "**Wallet Commands:**\n"
+
+        help_text = (
+            "🐌 **Snel DeFi Assistant Commands:**\n\n" + "**Wallet Commands:**\n"
+        )
         help_text += "• */connect* - Create or connect a wallet\n"
         help_text += "• */balance* - Check your wallet balance\n"
         help_text += "• */disconnect* - Disconnect your wallet\n"
         help_text += "• */keys* - Learn about key management\n\n"
-        
+
         # Trading commands
         help_text += "**Trading Commands:**\n"
         help_text += "• */price ETH* - Check token prices\n"
         help_text += "• */swap 0.1 ETH for USDC* - Swap tokens\n\n"
-        
+
         # Network commands
         help_text += "**Network Commands:**\n"
         help_text += "• */networks* - See available networks\n"
         help_text += "• */network base_sepolia* - Switch to a network\n\n"
-        
+
         # Informational commands
         help_text += "**Other Commands:**\n"
         help_text += "• */help* - Show this help message\n\n"
-        
+
         # Add info about general questions
         help_text += "You can also ask me general questions about DeFi, crypto, and blockchain technology!"
-        
+
         return {
             "content": help_text,
             "metadata": {
                 "telegram_buttons": buttons
             }
         }
-
     async def _handle_connect_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
         """
         Handle the /connect command to connect or create a wallet.
@@ -454,7 +467,7 @@ class TelegramAgent(MessagingAgent):
         try:
             # User wants to create a new wallet (even if they have an existing one)
             create_new = "new" in args.lower()
-            
+
             # If the user already has a wallet and isn't creating a new one
             if wallet_address and not create_new:
                 buttons = [
@@ -466,7 +479,7 @@ class TelegramAgent(MessagingAgent):
                         {"text": "🔄 Create New Wallet", "callback_data": "create_new_wallet"}
                     ]
                 ]
-                
+
                 return {
                     "content": f"You already have a wallet connected: `{wallet_address}`\n\n" +
                                "You can check your balance, switch networks, or create a new wallet if needed.",
@@ -474,10 +487,10 @@ class TelegramAgent(MessagingAgent):
                         "telegram_buttons": buttons
                     }
                 }
-            
+
             # Create a new smart wallet
             logger.info(f"Creating new smart wallet for Telegram user {user_id}")
-            
+
             # Verify we have the right wallet service type
             if not hasattr(self.wallet_service, 'create_smart_wallet'):
                 logger.error("Wallet service doesn't have create_smart_wallet method. Type: " + 
@@ -485,23 +498,26 @@ class TelegramAgent(MessagingAgent):
                 return {
                     "content": "⚠️ Smart wallet creation is not available right now. Please try again later."
                 }
-                
+
             wallet_result = await self.wallet_service.create_smart_wallet(
-                user_id=str(user_id),
-                platform="telegram"
+                user_id=user_id, platform="telegram"
             )
-            
+
             logger.info(f"Wallet creation result: {wallet_result}")
-            
-            if "error" in wallet_result:
+
+            # Check for success flag
+            if not wallet_result.get("success", False):
+                error_msg = wallet_result.get("error", "Unknown error")
+                # Provide a friendly error message
                 return {
-                    "content": f"⚠️ I couldn't create a wallet right now. Error: {wallet_result['error']}\n\n" +
-                              "Please try again later."
+                    "content": f"⚠️ I couldn't create a wallet right now. There was an issue with our wallet provider.\n\n" +
+                               f"Error details: {error_msg}\n\n" +
+                               "Please try again later or contact support."
                 }
-            
+
             # Get the wallet address
             new_wallet_address = wallet_result.get("address")
-            
+
             # Return success response
             buttons = [
                 [
@@ -512,7 +528,7 @@ class TelegramAgent(MessagingAgent):
                     {"text": "🚰 Get Test ETH", "callback_data": "get_faucet"}
                 ]
             ]
-            
+
             return {
                 "content": f"✅ Your wallet has been created successfully!\n\n" +
                            f"Wallet Type: Coinbase CDP Smart Wallet\n" +
@@ -526,13 +542,12 @@ class TelegramAgent(MessagingAgent):
                     "telegram_buttons": buttons
                 }
             }
-            
+
         except Exception as e:
             logger.exception(f"Error creating wallet: {e}")
             return {
                 "content": "⚠️ Sorry, I encountered an error while creating your wallet. Please try again later."
             }
-
     async def _handle_balance_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
         """
         Handle the /balance command to check wallet balance.
@@ -652,7 +667,7 @@ class TelegramAgent(MessagingAgent):
         
         try:
             # Try to get the price from the price service
-            price_data = await price_service.get_token_price(token_symbol)
+            price_data = await PriceService.get_token_price(token_symbol)
             
             if not price_data or "error" in price_data:
                 return {

@@ -7,6 +7,7 @@ import httpx
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+import sys
 
 # Load environment variables from .env files
 load_dotenv()
@@ -502,47 +503,49 @@ async def send_whatsapp_message(to: str, message: str):
 async def send_telegram_message(chat_id: str, message: str):
     """Send a message via Telegram Bot API."""
     global TELEGRAM_BOT_TOKEN
-    
+
     if not TELEGRAM_BOT_TOKEN:
         logger.warning("Telegram bot token not configured, attempting to reload from environment")
         reload_environment_variables()
         if not TELEGRAM_BOT_TOKEN:
             logger.error("Failed to load Telegram bot token from environment")
         return
-    
+
     try:
         # Log the token (first few characters) for debugging
-        token_preview = TELEGRAM_BOT_TOKEN[:5] + "..." if TELEGRAM_BOT_TOKEN else "None"
+        token_preview = (
+            f"{TELEGRAM_BOT_TOKEN[:5]}..." if TELEGRAM_BOT_TOKEN else "None"
+        )
         logger.info(f"Sending Telegram message to {chat_id} using token: {token_preview}")
-        
+
         # Send message via Telegram Bot API
         async with httpx.AsyncClient() as client:
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
             logger.info(f"Sending request to: {url}")
-            
+
             # Use plain text for simplicity
             payload = {
                     "chat_id": chat_id,
                 "text": message
             }
-            
+
             response = await client.post(url, json=payload)
-            
+
             if response.status_code != 200:
                 logger.error(f"Telegram API error: {response.text}")
                 logger.error(f"Request payload: {payload}")
-                
+
                 # If unauthorized, try reloading environment variables
                 if "Unauthorized" in response.text:
                     logger.warning("Unauthorized error, attempting to reload environment variables")
                     reload_environment_variables()
-                    
+
                     # Try again with the new token
                     if TELEGRAM_BOT_TOKEN:
                         logger.info(f"Retrying with new token: {TELEGRAM_BOT_TOKEN[:5]}...")
                         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
                         retry_response = await client.post(url, json=payload)
-                        
+
                         if retry_response.status_code == 200:
                             logger.info(f"Successfully sent message to Telegram chat {chat_id} after token reload")
                             return
@@ -550,7 +553,7 @@ async def send_telegram_message(chat_id: str, message: str):
                             logger.error(f"Telegram API error after token reload: {retry_response.text}")
             else:
                 logger.info(f"Successfully sent message to Telegram chat {chat_id}")
-            
+
     except Exception as e:
         logger.exception(f"Error sending Telegram message: {e}")
 
@@ -734,54 +737,56 @@ async def process_telegram_request(
 async def send_telegram_message_with_buttons(chat_id: str, message: str, buttons=None):
     """Send a message via Telegram Bot API with optional inline buttons."""
     global TELEGRAM_BOT_TOKEN
-    
+
     if not TELEGRAM_BOT_TOKEN:
         logger.warning("Telegram bot token not configured, attempting to reload from environment")
         reload_environment_variables()
-        if not TELEGRAM_BOT_TOKEN:
-            logger.error("Failed to load Telegram bot token from environment")
-            return
-    
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("Failed to load Telegram bot token from environment")
+        return
+
     try:
         # Log the token (first few characters) for debugging
-        token_preview = TELEGRAM_BOT_TOKEN[:5] + "..." if TELEGRAM_BOT_TOKEN else "None"
+        token_preview = (
+            f"{TELEGRAM_BOT_TOKEN[:5]}..." if TELEGRAM_BOT_TOKEN else "None"
+        )
         logger.info(f"Sending Telegram message to {chat_id} using token: {token_preview}")
-        
+
         # Prepare request payload
         payload = {
             "chat_id": chat_id,
             "text": message,
             "parse_mode": "HTML"  # Allow HTML formatting
         }
-        
+
         # Add reply markup if buttons are provided
         if buttons:
             payload["reply_markup"] = {
                 "inline_keyboard": buttons
             }
-        
+
         # Send message via Telegram Bot API
         async with httpx.AsyncClient() as client:
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
             logger.info(f"Sending request to: {url}")
-            
+
             response = await client.post(url, json=payload)
-            
+
             if response.status_code != 200:
                 logger.error(f"Telegram API error: {response.text}")
                 logger.error(f"Request payload: {payload}")
-                
+
                 # If unauthorized, try reloading environment variables
                 if "Unauthorized" in response.text:
                     logger.warning("Unauthorized error, attempting to reload environment variables")
                     reload_environment_variables()
-                    
+
                     # Try again with the new token
                     if TELEGRAM_BOT_TOKEN:
                         logger.info(f"Retrying with new token: {TELEGRAM_BOT_TOKEN[:5]}...")
                         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
                         retry_response = await client.post(url, json=payload)
-                        
+
                         if retry_response.status_code == 200:
                             logger.info(f"Successfully sent message to Telegram chat {chat_id} after token reload")
                             return
@@ -789,7 +794,7 @@ async def send_telegram_message_with_buttons(chat_id: str, message: str, buttons
                             logger.error(f"Telegram API error after token reload: {retry_response.text}")
             else:
                 logger.info(f"Successfully sent message to Telegram chat {chat_id}")
-            
+
     except Exception as e:
         logger.exception(f"Error sending Telegram message: {e}")
 
@@ -928,3 +933,36 @@ async def check_cdp_config():
         "recommendations": recommendations,
         "status": "ready" if smart_wallet_initialized else "not_ready"
     }
+
+@router.get("/cdp-diagnostics")
+async def get_cdp_diagnostics():
+    """Get detailed diagnostic information about the CDP SDK."""
+    try:
+        from app.services.smart_wallet_service import SmartWalletService
+        smart_wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
+        diagnostics = await smart_wallet_service.get_cdp_sdk_diagnostics()
+        
+        # Add some additional system information
+        diagnostics["system"] = {
+            "python_version": sys.version,
+            "platform": sys.platform,
+            "environment": os.environ.get("VERCEL_ENV", "local"),
+        }
+        
+        return diagnostics
+    except Exception as e:
+        import traceback
+        
+        # Get more detailed error information
+        error_details = traceback.format_exc()
+        
+        return {
+            "error": str(e),
+            "traceback": error_details,
+            "environment": {
+                "CDP_API_KEY_NAME": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
+                "CDP_API_KEY_PRIVATE_KEY": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
+                "USE_CDP_SDK": os.environ.get("USE_CDP_SDK", "false"),
+                "CDP_USE_MANAGED_WALLET": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
+            }
+        }
