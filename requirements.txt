@@ -9,7 +9,7 @@ eth-rpc-py==0.1.26
 eth-account==0.13.5
 eth-typing==5.2.0
 dowse==0.1.6.post1
-emp-agents>=0.3.0,<0.4.0
+emp-agents==0.4.0
 upstash-redis==1.2.0
 aiohttp==3.10.5
 requests==2.32.3
@@ -20,4 +20,3 @@ loguru==0.7.2
 openai==1.14.0
 cdp-sdk==0.21.0
 certifi>=2025.1.31
-cryptography==44.0.0
