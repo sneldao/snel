@@ -13,17 +13,8 @@ from pydantic import Field
 from app.agents.messaging_agent import MessagingAgent
 from app.services.token_service import TokenService
 from app.services.swap_service import SwapService
-from app.services.wallet_service import WalletService
-
-# Try to import the SmartWalletService if available
-try:
-    from app.services.smart_wallet_service import SmartWalletService
-    SMART_WALLET_AVAILABLE = True
-except ImportError:
-    SMART_WALLET_AVAILABLE = False
-
+from app.services.smart_wallet_service import SmartWalletService
 from app.services.gemini_service import GeminiService
-from app.services.prices import price_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +29,7 @@ class TelegramAgent(MessagingAgent):
     like commands, wallet creation, and inline buttons.
     """
     command_handlers: Dict[str, Callable] = Field(default_factory=dict)
-    wallet_service: Optional[WalletService] = None
+    wallet_service: Optional[SmartWalletService] = None
     gemini_service: Optional[GeminiService] = None
     
     model_config = {
@@ -49,7 +40,7 @@ class TelegramAgent(MessagingAgent):
         self, 
         token_service: TokenService, 
         swap_service: SwapService,
-        wallet_service: Optional[WalletService] = None,
+        wallet_service: Optional[SmartWalletService] = None,
         gemini_service: Optional[GeminiService] = None
     ):
         """
@@ -62,7 +53,14 @@ class TelegramAgent(MessagingAgent):
             gemini_service: Optional Gemini service for AI-powered responses
         """
         super().__init__(token_service, swap_service)
-        self.wallet_service = wallet_service
+        
+        # Initialize SmartWalletService if not provided
+        if wallet_service is None:
+            redis_url = os.getenv("REDIS_URL")
+            self.wallet_service = SmartWalletService(redis_url=redis_url)
+        else:
+            self.wallet_service = wallet_service
+            
         self.gemini_service = gemini_service
         
         # Register command handlers
@@ -453,97 +451,44 @@ class TelegramAgent(MessagingAgent):
         Returns:
             Dict with response content and optional button markup
         """
-        # User wants to create a new wallet (even if they have an existing one)
-        create_new = "new" in args.lower()
-        
-        # If the user already has a wallet and isn't creating a new one
-        if wallet_address and not create_new:
-            buttons = [
-                [
-                    {"text": "💰 Check Balance", "callback_data": "check_balance"},
-                    {"text": "🌐 Switch Networks", "callback_data": "show_networks"}
-                ],
-                [
-                    {"text": "🔄 Create New Wallet", "callback_data": "create_new_wallet"}
-                ]
-            ]
-            
-            return {
-                "content": f"You already have a wallet connected: `{wallet_address}`\n\n" +
-                           "You can check your balance, switch networks, or create a new wallet if needed.",
-                "metadata": {
-                    "telegram_buttons": buttons
-                }
-            }
-            
-        # If creating a new wallet, disconnect any existing wallet
-        if wallet_address and self.wallet_service:
-            try:
-                # Attempt to delete existing wallet data
-                await self.wallet_service.delete_wallet(
-                    user_id=str(user_id),
-                    platform="telegram"
-                )
-                wallet_address = None
-                logger.info(f"Disconnected existing wallet for user {user_id}")
-            except Exception as e:
-                logger.exception(f"Error disconnecting wallet during connect: {e}")
-                
-                # Try deleting from the messaging namespace too (check both formats)
-                try:
-                    # Delete from messaging:telegram:user:userid:wallet
-                    message_key = f"messaging:telegram:user:{user_id}:wallet"
-                    if hasattr(self.wallet_service, 'redis_client') and self.wallet_service.redis_client:
-                        await self.wallet_service.redis_client.delete(message_key)
-                        logger.info(f"Deleted messaging wallet key for user {user_id}")
-                except Exception as e2:
-                    logger.exception(f"Error clearing messaging wallet key: {e2}")
-            
-        # Check if wallet service is available
-        if not self.wallet_service:
-            return {
-                "content": "Sorry, wallet services are not available at the moment. Please try again later."
-            }
-        
-        # Check if we're using SmartWalletService or WalletService
-        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService) if SMART_WALLET_AVAILABLE else False
-        
-        # Create a new wallet
         try:
-            if is_smart_wallet:
-                # Using Coinbase CDP Smart Wallet
-                wallet_result = await self.wallet_service.create_smart_wallet(
-                    user_id=str(user_id),
-                    platform="telegram"
-                )
+            # User wants to create a new wallet (even if they have an existing one)
+            create_new = "new" in args.lower()
+            
+            # If the user already has a wallet and isn't creating a new one
+            if wallet_address and not create_new:
+                buttons = [
+                    [
+                        {"text": "💰 Check Balance", "callback_data": "check_balance"},
+                        {"text": "🌐 Switch Networks", "callback_data": "show_networks"}
+                    ],
+                    [
+                        {"text": "🔄 Create New Wallet", "callback_data": "create_new_wallet"}
+                    ]
+                ]
                 
-                if "error" in wallet_result:
-                    return {
-                        "content": f"⚠️ I couldn't create a wallet right now. Error: {wallet_result['error']}\n\n" +
-                                  "Please try again later."
+                return {
+                    "content": f"You already have a wallet connected: `{wallet_address}`\n\n" +
+                               "You can check your balance, switch networks, or create a new wallet if needed.",
+                    "metadata": {
+                        "telegram_buttons": buttons
                     }
-                    
-                new_wallet_address = wallet_result.get("address")
-                wallet_type = "coinbase_cdp"
-            else:
-                # Legacy wallet creation using simulated wallets
-                wallet_result = await self.wallet_service.create_wallet(
-                    user_id=str(user_id),
-                    platform="telegram",
-                    wallet_address=None,  # Force creation of a new wallet
-                    chain=DEFAULT_CHAIN
-                )
-                
-                if not wallet_result.get("success"):
-                    return {
-                        "content": f"⚠️ I couldn't create a wallet right now. This might be due to:\n\n" +
-                                  "• Temporary service disruption\n" +
-                                  "• Network connectivity issues\n\n" +
-                                  "Please try again later."
-                    }
-                    
-                new_wallet_address = wallet_result.get("wallet_address")
-                wallet_type = wallet_result.get("wallet_type", "standard")
+                }
+            
+            # Create a new smart wallet
+            wallet_result = await self.wallet_service.create_smart_wallet(
+                user_id=str(user_id),
+                platform="telegram"
+            )
+            
+            if "error" in wallet_result:
+                return {
+                    "content": f"⚠️ I couldn't create a wallet right now. Error: {wallet_result['error']}\n\n" +
+                              "Please try again later."
+                }
+            
+            # Get the wallet address
+            new_wallet_address = wallet_result.get("address")
             
             # Return success response
             buttons = [
@@ -556,12 +501,10 @@ class TelegramAgent(MessagingAgent):
                 ]
             ]
             
-            network_name = "Base Sepolia (testnet)" if is_smart_wallet else "Scroll Sepolia (testnet)"
-            
             return {
                 "content": f"✅ Your wallet has been created successfully!\n\n" +
-                           f"Wallet Type: {wallet_type.capitalize()}\n" +
-                           f"Network: {network_name}\n\n" +
+                           f"Wallet Type: Coinbase CDP Smart Wallet\n" +
+                           f"Network: Base Sepolia (testnet)\n\n" +
                            "Your wallet address is:\n" +
                            f"`{new_wallet_address}`\n\n" +
                            "You can now use this wallet to check prices, make swaps, and more.\n\n" +
@@ -609,101 +552,66 @@ class TelegramAgent(MessagingAgent):
                 "content": "Sorry, wallet services are not available at the moment."
             }
         
-        # Check if we're using SmartWalletService or WalletService
-        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService) if SMART_WALLET_AVAILABLE else False
-        
         try:
-            if is_smart_wallet:
-                # Using Coinbase CDP Smart Wallet
-                balance_result = await self.wallet_service.get_wallet_balance(
-                    user_id=str(user_id),
-                    platform="telegram"
-                )
-                
-                if "error" in balance_result:
-                    return {
-                        "content": f"⚠️ I couldn't retrieve your balance. Error: {balance_result['error']}"
-                    }
-                
-                eth_balance = balance_result.get("balance", {}).get("eth", "0.0")
-                
-                buttons = [
-                    [
-                        {"text": "🚰 Get Test ETH", "callback_data": "get_faucet"},
-                        {"text": "📝 View Address", "callback_data": "show_address"}
-                    ]
-                ]
-                
+            # Get wallet data from the wallet service
+            wallet_data = await self.wallet_service.get_wallet(
+                user_id=str(user_id),
+                platform="telegram"
+            )
+            
+            if not wallet_data.get("success"):
                 return {
-                    "content": f"💰 Your wallet balance:\n\n" +
-                               f"ETH: {eth_balance}\n" +
-                               f"Address: `{wallet_address}`\n" +
-                               f"Network: Base Sepolia (testnet)",
-                    "metadata": {
-                        "telegram_buttons": buttons
-                    }
+                    "content": "⚠️ I couldn't retrieve your wallet information. Please try reconnecting your wallet."
                 }
-            else:
-                # Legacy balance check
-                # Get wallet data from the wallet service
-                wallet_data = await self.wallet_service.get_wallet(
-                    user_id=str(user_id),
-                    platform="telegram"
-                )
-                
-                if not wallet_data.get("success"):
-                    return {
-                        "content": "⚠️ I couldn't retrieve your wallet information. Please try reconnecting your wallet."
-                    }
-                
-                chain = wallet_data.get("chain", DEFAULT_CHAIN)
-                
-                # Get balance for the wallet
-                balance_result = await self.wallet_service.get_wallet_balance(
-                    user_id=str(user_id),
-                    platform="telegram",
-                    chain=chain
-                )
-                
-                if not balance_result.get("success"):
-                    return {
-                        "content": "⚠️ I couldn't retrieve your balance. This might be due to network issues."
-                    }
-                
-                chain_info = balance_result.get("chain_info", {})
-                chain_name = chain_info.get("name", "Unknown Network")
-                eth_balance = balance_result.get("balance", {}).get("eth", "0.0")
-                
-                # Add token balances if available
-                token_balances = balance_result.get("balance", {}).get("tokens", [])
-                token_balance_strings = []
-                
-                for token in token_balances:
-                    if token.get("balance") and float(token.get("balance", 0)) > 0:
-                        token_balance = token.get("balance", "0")
-                        token_symbol = token.get("symbol", "???")
-                        token_balance_strings.append(f"{token_symbol}: {token_balance}")
-                
-                token_balance_text = "\n".join(token_balance_strings) if token_balance_strings else "No token balances"
-                
-                buttons = [
-                    [
-                        {"text": "🚰 Get Test ETH", "callback_data": "get_faucet"},
-                        {"text": "🌐 Switch Networks", "callback_data": "show_networks"}
-                    ]
-                ]
-                
+            
+            chain = wallet_data.get("chain", DEFAULT_CHAIN)
+            
+            # Get balance for the wallet
+            balance_result = await self.wallet_service.get_wallet_balance(
+                user_id=str(user_id),
+                platform="telegram",
+                chain=chain
+            )
+            
+            if not balance_result.get("success"):
                 return {
-                    "content": f"💰 Your wallet balance:\n\n" +
-                               f"ETH: {eth_balance}\n\n" +
-                               f"Token Balances:\n{token_balance_text}\n\n" +
-                               f"Address: `{wallet_address}`\n" +
-                               f"Network: {chain_name}",
-                    "metadata": {
-                        "telegram_buttons": buttons
-                    }
+                    "content": "⚠️ I couldn't retrieve your balance. This might be due to network issues."
                 }
-                
+            
+            chain_info = balance_result.get("chain_info", {})
+            chain_name = chain_info.get("name", "Unknown Network")
+            eth_balance = balance_result.get("balance", {}).get("eth", "0.0")
+            
+            # Add token balances if available
+            token_balances = balance_result.get("balance", {}).get("tokens", [])
+            token_balance_strings = []
+            
+            for token in token_balances:
+                if token.get("balance") and float(token.get("balance", 0)) > 0:
+                    token_balance = token.get("balance", "0")
+                    token_symbol = token.get("symbol", "???")
+                    token_balance_strings.append(f"{token_symbol}: {token_balance}")
+            
+            token_balance_text = "\n".join(token_balance_strings) if token_balance_strings else "No token balances"
+            
+            buttons = [
+                [
+                    {"text": "🚰 Get Test ETH", "callback_data": "get_faucet"},
+                    {"text": "🌐 Switch Networks", "callback_data": "show_networks"}
+                ]
+            ]
+            
+            return {
+                "content": f"💰 Your wallet balance:\n\n" +
+                           f"ETH: {eth_balance}\n\n" +
+                           f"Token Balances:\n{token_balance_text}\n\n" +
+                           f"Address: `{wallet_address}`\n" +
+                           f"Network: {chain_name}",
+                "metadata": {
+                    "telegram_buttons": buttons
+                }
+            }
+            
         except Exception as e:
             logger.exception(f"Error retrieving balance: {e}")
             return {
@@ -1037,7 +945,7 @@ class TelegramAgent(MessagingAgent):
             ])
         
         # Check if we're using SmartWalletService or WalletService
-        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService) if SMART_WALLET_AVAILABLE else False
+        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService)
         
         if is_smart_wallet:
             # Coinbase CDP wallet information
@@ -1100,7 +1008,7 @@ class TelegramAgent(MessagingAgent):
             }
         
         # Check if we're using SmartWalletService
-        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService) if SMART_WALLET_AVAILABLE else False
+        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService)
         
         if is_smart_wallet:
             try:

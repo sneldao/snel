@@ -28,8 +28,16 @@ class SmartWalletService(WalletService):
             redis_url: Redis URL for storing wallet data (optional)
         """
         super().__init__(redis_url=redis_url)
+        
+        # Configure SSL first
         self._configure_ssl()
+        
+        # Initialize Coinbase CDP SDK
         self._initialize_coinbase_sdk()
+        
+        # Verify CDP SDK initialization
+        if not hasattr(Cdp, '_api_key_name') or not Cdp._api_key_name:
+            raise ValueError("Coinbase CDP SDK not properly initialized")
     
     def _configure_ssl(self):
         """Configure SSL certificates to ensure secure connections."""
@@ -54,7 +62,10 @@ class SmartWalletService(WalletService):
             api_key_private_key = os.getenv("CDP_API_KEY_PRIVATE_KEY")
             
             if not api_key_name or not api_key_private_key:
-                raise ValueError("Coinbase CDP API keys not found in environment variables")
+                raise ValueError("CDP_API_KEY_NAME and CDP_API_KEY_PRIVATE_KEY must be set in environment variables")
+            
+            # Log the API key name (but not the private key) for debugging
+            logger.info(f"Initializing Coinbase CDP SDK with API key name: {api_key_name}")
             
             # Configure the CDP SDK
             Cdp.configure(api_key_name, api_key_private_key)
@@ -71,7 +82,7 @@ class SmartWalletService(WalletService):
                 
         except Exception as e:
             logger.error(f"Failed to initialize Coinbase CDP SDK: {e}")
-            raise
+            raise ValueError(f"Failed to initialize Coinbase CDP SDK: {e}")
     
     async def create_smart_wallet(self, user_id: str, platform: str = "telegram") -> Dict[str, Any]:
         """Create a smart wallet for a user.
