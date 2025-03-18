@@ -58,32 +58,40 @@ class RedisService(BaseModel):
                 # For Upstash, parse the URL to extract credentials
                 try:
                     # Parse the Redis URL (format: rediss://default:password@hostname:port)
-                    # It seems Upstash Redis connection strings use 'rediss://'
                     url_parts = urlparse(self.redis_url)
                     hostname = url_parts.hostname
-                    port = url_parts.port or 6379
                     password = url_parts.password
     
                     # Import Upstash Redis
                     from upstash_redis import Redis
     
-                    # Extract the token from the password
-                    token = password.split('@')[0] if password and '@' in password else password
                     # Create the client with the extracted parameters
-                    self.client = Redis(url=f"https://{hostname}", token=token)
+                    self.client = Redis(url=f"https://{hostname}", token=password)
                     logger.info("Using Upstash Redis client")
                 except ImportError:
                     logger.warning("upstash_redis not installed, falling back to redis.asyncio")
-                    self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
+                    self.client = redis.asyncio.from_url(
+                        self.redis_url,
+                        decode_responses=True,
+                        ssl_cert_reqs=None
+                    )
                     self.is_upstash = False
                 except Exception as e:
                     logger.error(f"Error initializing Upstash Redis: {e}")
                     logger.warning("Falling back to redis.asyncio")
-                    self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
+                    self.client = redis.asyncio.from_url(
+                        self.redis_url,
+                        decode_responses=True,
+                        ssl_cert_reqs=None
+                    )
                     self.is_upstash = False
             else:
                 # For local Redis, use redis.asyncio
-                self.client = redis.asyncio.from_url(self.redis_url, decode_responses=True)
+                self.client = redis.asyncio.from_url(
+                    self.redis_url,
+                    decode_responses=True,
+                    ssl_cert_reqs=None if "upstash" in self.redis_url.lower() else True
+                )
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")
             self.client = None
@@ -184,8 +192,19 @@ class RedisService(BaseModel):
                 logger.warning(f"Redis client not initialized when getting key {key}")
                 return None
             
-            value = self.client.get(key) if self.is_upstash else await self.client.get(key)
-            return json.loads(value) if value else None
+            try:
+                if self.is_upstash:
+                    # Upstash Redis (synchronous)
+                    value = self.client.get(key)
+                else:
+                    # Standard Redis (asynchronous)
+                    value = await self.client.get(key)
+                
+                return json.loads(value) if value else None
+            except Exception as e:
+                logger.error(f"Error in Redis get operation for key {key}: {e}")
+                return None
+
         except Exception as e:
             logger.error(f"Error getting key {key} from Redis: {e}")
             return None
@@ -200,18 +219,25 @@ class RedisService(BaseModel):
             # Convert value to JSON string using custom encoder
             json_value = json.dumps(value, cls=DateTimeEncoder)
 
-            if self.is_upstash:
-                # Upstash Redis
-                if expire:
-                    self.client.setex(key, expire, json_value)
+            try:
+                if self.is_upstash:
+                    # Upstash Redis (synchronous)
+                    if expire:
+                        result = self.client.setex(key, expire, json_value)
+                    else:
+                        result = self.client.set(key, json_value)
                 else:
-                    self.client.set(key, json_value)
-            elif expire:
-                await self.client.setex(key, expire, json_value)
-            else:
-                await self.client.set(key, json_value)
+                    # Standard Redis (asynchronous)
+                    if expire:
+                        result = await self.client.setex(key, expire, json_value)
+                    else:
+                        result = await self.client.set(key, json_value)
+                
+                return bool(result)
+            except Exception as e:
+                logger.error(f"Error in Redis set operation for key {key}: {e}")
+                return False
 
-            return True
         except Exception as e:
             logger.error(f"Error setting key {key} in Redis: {e}")
             return False
@@ -219,11 +245,23 @@ class RedisService(BaseModel):
     async def delete(self, key: str) -> bool:
         """Delete a key from Redis."""
         try:
-            if self.is_upstash:
-                self.client.delete(key)
-            else:
-                await self.client.delete(key)
-            return True
+            if not self.client:
+                logger.warning(f"Redis client not initialized when deleting key {key}")
+                return False
+            
+            try:
+                if self.is_upstash:
+                    # Upstash Redis (synchronous)
+                    result = self.client.delete(key)
+                else:
+                    # Standard Redis (asynchronous)
+                    result = await self.client.delete(key)
+                
+                return bool(result)
+            except Exception as e:
+                logger.error(f"Error in Redis delete operation for key {key}: {e}")
+                return False
+
         except Exception as e:
             logger.error(f"Error deleting key {key} from Redis: {e}")
             return False
