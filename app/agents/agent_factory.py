@@ -13,8 +13,9 @@ from app.services.token_service import TokenService
 from app.services.redis_service import RedisService
 from app.api.dependencies import get_redis_service
 from app.prompts import SWAP_PROMPT, PRICE_PROMPT
-from emp_agents.providers import OpenAIProvider
 from app.services.swap_service import SwapService
+# Import our custom OpenAIProvider
+from app.utils.providers import OpenAIProvider
 
 logger = logging.getLogger(__name__)
 

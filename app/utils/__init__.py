@@ -1,1 +1,3 @@
-"""Utility functions and classes for the application."""
+"""
+Utils package for the app.
+"""
