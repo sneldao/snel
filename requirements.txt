@@ -17,4 +17,6 @@ redis==5.0.1
 web3==7.8.0
 python-multipart==0.0.9
 loguru==0.7.2
-openai==1.14.0 
+openai==1.14.0
+cdp-sdk==0.21.0
+certifi>=2025.1.31

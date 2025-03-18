@@ -58,6 +58,14 @@ required_vars = [
     "BRIAN_API_KEY"  # Add Brian API key as required
 ]
 
+# Check for CDP SDK if enabled
+if os.getenv("USE_CDP_SDK", "").lower() in ["true", "1", "yes"]:
+    logger.info("Coinbase CDP SDK is enabled, checking required variables")
+    required_vars.extend([
+        "CDP_API_KEY_NAME",
+        "CDP_API_KEY_PRIVATE_KEY"
+    ])
+
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
     logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
@@ -66,6 +74,7 @@ if missing_vars:
 # Log important environment variables (without exposing sensitive values)
 logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
 logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
+logger.info(f"CDP_USE_MANAGED_WALLET: {os.getenv('CDP_USE_MANAGED_WALLET')}")
 
 # Import the app
 from app.main import app

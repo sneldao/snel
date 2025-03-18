@@ -77,7 +77,8 @@ class TelegramAgent(MessagingAgent):
             "networks": self._handle_networks_command,
             "network": self._handle_network_command,
             "keys": self._handle_keys_command,
-            "faucet": self._handle_faucet_command
+            "faucet": self._handle_faucet_command,
+            "test": self._handle_test_command
         }
         
         logger.info("TelegramAgent initialized with commands: %s", list(self.command_handlers.keys()))
@@ -102,17 +103,21 @@ class TelegramAgent(MessagingAgent):
             Dict with response content and any additional information
         """
         logger.info(f"Processing Telegram update for user {user_id}")
+        logger.info(f"Update content: {json.dumps(update, indent=2)}")
         
         # Handle different types of updates
         if "message" in update and "text" in update["message"]:
             message_text = update["message"]["text"]
+            logger.info(f"Processing text message: '{message_text}'")
             return await self._process_telegram_message(message_text, user_id, wallet_address, metadata)
         elif "callback_query" in update:
             # Handle button callbacks
             callback_data = update["callback_query"]["data"]
+            logger.info(f"Processing callback query: '{callback_data}'")
             return await self._process_callback_query(user_id, callback_data, wallet_address)
         else:
             # Default response for unsupported update types
+            logger.warning(f"Unsupported update type: {list(update.keys())}")
             return {
                 "content": "Sorry, I can only handle text messages and button clicks for now.",
                 "metadata": {"telegram_buttons": None}
@@ -140,13 +145,20 @@ class TelegramAgent(MessagingAgent):
         # Check if this is a command
         if message.startswith("/"):
             command_parts = message.split(" ", 1)
-            command = command_parts[0].lower()
+            
+            # Extract the command by removing the bot username if present
+            # Format can be /command or /command@botusername
+            command = command_parts[0].lower().split("@")[0]
+            
             args = command_parts[1] if len(command_parts) > 1 else ""
+            
+            logger.info(f"Processing command: {command} with args: {args}")
             
             # Dispatch to the appropriate command handler
             if command in self.command_handlers:
                 return await self.command_handlers[command](user_id, args, wallet_address)
             else:
+                logger.warning(f"Unknown command received: {command}")
                 return {
                     "content": "I don't recognize that command. Try /help to see what I can do."
                 }
@@ -1190,4 +1202,11 @@ class TelegramAgent(MessagingAgent):
         # Not a command
         return {
             "content": "This doesn't look like a command. Try /help to see what I can do!"
+        }
+
+    async def _handle_test_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
+        """Handle the test command to verify command processing works."""
+        logger.info(f"Test command executed by user {user_id} with args: {args}")
+        return {
+            "content": f"👋 Hello! The test command is working. You sent: '{args}'"
         } 

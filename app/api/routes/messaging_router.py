@@ -342,6 +342,9 @@ async def process_whatsapp_message(
 async def process_telegram_webhook(update_dict: Dict[str, Any]):
     """Process a Telegram webhook update in the background."""
     try:
+        # Log the entire update for debugging
+        logger.info(f"Processing Telegram webhook: {json.dumps(update_dict, indent=2)}")
+        
         # Create dependencies
         redis_service = RedisService(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
         token_service = TokenService()
@@ -360,10 +363,16 @@ async def process_telegram_webhook(update_dict: Dict[str, Any]):
         
         # Extract user_id from the update based on the update type
         user_id = None
+        message_text = None
+        
         if update_dict.get("message", {}) and update_dict["message"].get("from", {}).get("id"):
             user_id = update_dict["message"]["from"]["id"]
+            message_text = update_dict["message"].get("text", "")
+            logger.info(f"Telegram message from user {user_id}: '{message_text}'")
         elif update_dict.get("callback_query", {}) and update_dict["callback_query"].get("from", {}).get("id"):
             user_id = update_dict["callback_query"]["from"]["id"]
+            callback_data = update_dict["callback_query"].get("data", "")
+            logger.info(f"Telegram callback from user {user_id}: '{callback_data}'")
         
         if not user_id:
             logger.warning("No user_id found in Telegram update")
