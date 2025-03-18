@@ -156,7 +156,14 @@ class TelegramAgent(MessagingAgent):
             
             # Dispatch to the appropriate command handler
             if command in self.command_handlers:
-                return await self.command_handlers[command](user_id, args, wallet_address)
+                handler = self.command_handlers[command]
+                response = await handler(user_id, args, wallet_address)
+                
+                # Add personality to the response
+                if "content" in response:
+                    response["content"] = self._add_telegram_personality(response["content"])
+                    
+                return response
             else:
                 logger.warning(f"Unknown command received: {command}")
                 return {
