@@ -134,27 +134,26 @@ class WalletService:
         Returns:
             Dict with creation status
         """
-        # Check if Redis is available
-        if not self.redis_client:
-            logger.warning("Redis not available, attempting to reconnect")
-            self._create_redis_client()
-            
-            if not self.redis_client:
-                logger.warning("Redis reconnection failed, wallet creation not persisted")
-                if wallet_address:
-                    return {
-                        "success": True,
-                        "message": "Wallet created (not persisted)",
-                        "wallet_address": wallet_address,
-                        "chain": chain
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "message": "Redis not available and no wallet address provided"
-                    }
-            
         try:
+            # Check if Redis is available
+            if not self.redis_client:
+                logger.warning("Redis not available, attempting reconnection")
+                self._create_redis_client()
+                if not self.redis_client:
+                    logger.warning("Redis reconnection failed, wallet creation not persisted")
+                    if wallet_address:
+                        return {
+                            "success": True,
+                            "message": "Wallet created (not persisted)",
+                            "wallet_address": wallet_address,
+                            "chain": chain
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "message": "Redis not available and no wallet address provided"
+                        }
+            
             # Create unique key for this user's wallet
             user_key = f"wallet:{platform}:{user_id}"
             
@@ -172,7 +171,7 @@ class WalletService:
                     "message": f"Unsupported chain: {chain}"
                 }
             
-            # If wallet address is provided, just use it (this is typically for migrating existing wallets)
+            # If wallet address is provided, just use it
             if wallet_address:
                 wallet_info = {
                     "user_id": user_id,
@@ -183,23 +182,31 @@ class WalletService:
                     "chain_info": chain_info
                 }
                 
-                await self.redis_client.set(
-                    user_key,
-                    json.dumps(wallet_info)
-                )
-                
-                # Store reverse mapping for lookups
-                await self.redis_client.set(
-                    f"address:{wallet_address}:user",
-                    json.dumps({"user_id": user_id, "platform": platform})
-                )
-                
-                # Store messaging format too (for compatibility)
-                messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
-                await self.redis_client.set(
-                    messaging_key,
-                    wallet_address  # Just store address string for compatibility
-                )
+                try:
+                    # Store wallet info
+                    await self.redis_client.set(
+                        user_key,
+                        json.dumps(wallet_info)
+                    )
+                    
+                    # Store reverse mapping
+                    await self.redis_client.set(
+                        f"address:{wallet_address}:user",
+                        json.dumps({"user_id": user_id, "platform": platform})
+                    )
+                    
+                    # Store messaging format
+                    messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+                    await self.redis_client.set(
+                        messaging_key,
+                        wallet_address
+                    )
+                except Exception as e:
+                    logger.error(f"Error storing wallet data: {e}")
+                    return {
+                        "success": False,
+                        "message": f"Error storing wallet data: {str(e)}"
+                    }
                 
                 logger.info(f"Imported wallet {wallet_address} for {platform}:{user_id} on {chain}")
                 
@@ -212,7 +219,7 @@ class WalletService:
                     "chain_info": chain_info
                 }
             
-            # For new wallet creation, use simulated wallet (real wallet creation is now in SmartWalletService)
+            # For new wallet creation, use simulated wallet
             wallet_result = await self._create_simulated_wallet(user_id, platform, chain)
             if not wallet_result:
                 logger.error("Failed to create simulated wallet")
@@ -234,23 +241,31 @@ class WalletService:
                 "chain_info": chain_info
             }
             
-            await self.redis_client.set(
-                user_key,
-                json.dumps(wallet_info)
-            )
-            
-            # Store messaging format too (for compatibility)
-            messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
-            await self.redis_client.set(
-                messaging_key,
-                wallet_address  # Just store address string for compatibility
-            )
-            
-            # Store reverse mapping for lookups
-            await self.redis_client.set(
-                f"address:{wallet_address}:user",
-                json.dumps({"user_id": user_id, "platform": platform})
-            )
+            try:
+                # Store wallet info
+                await self.redis_client.set(
+                    user_key,
+                    json.dumps(wallet_info)
+                )
+                
+                # Store messaging format
+                messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+                await self.redis_client.set(
+                    messaging_key,
+                    wallet_address
+                )
+                
+                # Store reverse mapping
+                await self.redis_client.set(
+                    f"address:{wallet_address}:user",
+                    json.dumps({"user_id": user_id, "platform": platform})
+                )
+            except Exception as e:
+                logger.error(f"Error storing wallet data: {e}")
+                return {
+                    "success": False,
+                    "message": f"Error storing wallet data: {str(e)}"
+                }
             
             logger.info(f"Created wallet for {platform}:{user_id} on {chain}")
             
@@ -489,17 +504,22 @@ class WalletService:
             if os.getenv("DISABLE_SSL_VERIFY", "").lower() in ("true", "1", "yes"):
                 self.redis_client = redis.from_url(
                     self.redis_url,
-                    ssl_cert_reqs=None
+                    ssl_cert_reqs=None,
+                    decode_responses=True
                 )
             else:
                 # For Upstash Redis, we need to explicitly set ssl_cert_reqs
                 if "upstash" in self.redis_url.lower():
                     self.redis_client = redis.from_url(
                         self.redis_url,
-                        ssl_cert_reqs=None
+                        ssl_cert_reqs=None,
+                        decode_responses=True
                     )
                 else:
-                    self.redis_client = redis.from_url(self.redis_url)
+                    self.redis_client = redis.from_url(
+                        self.redis_url,
+                        decode_responses=True
+                    )
                 
             logger.info("Redis client created successfully")
             return self.redis_client

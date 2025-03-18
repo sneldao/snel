@@ -120,19 +120,29 @@ class SmartWalletService(WalletService):
                 try:
                     # Store wallet data
                     wallet_key = f"smart_wallet:{platform}:{user_id}"
-                    await self.redis_client.set(wallet_key, json.dumps(wallet_data))
+                    await self.redis_client.set(
+                        wallet_key,
+                        json.dumps(wallet_data)
+                    )
                     
-                    # Also store in messaging format for compatibility with other services
+                    # Also store in messaging format for compatibility
                     messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
-                    await self.redis_client.set(messaging_key, smart_wallet.address)
+                    await self.redis_client.set(
+                        messaging_key,
+                        smart_wallet.address
+                    )
                     
                     # Store reverse mapping
                     address_key = f"address:{smart_wallet.address}:user"
-                    await self.redis_client.set(address_key, json.dumps({"user_id": user_id, "platform": platform}))
+                    await self.redis_client.set(
+                        address_key,
+                        json.dumps({"user_id": user_id, "platform": platform})
+                    )
                     
                     logger.info(f"Smart wallet data stored in Redis for user {unique_id}")
-                except RedisError as e:
+                except Exception as e:
                     logger.error(f"Failed to store smart wallet data in Redis: {e}")
+                    # Continue even if Redis storage fails
             
             # Return wallet data without private key for security
             public_wallet_data = wallet_data.copy()
@@ -460,7 +470,11 @@ class SmartWalletService(WalletService):
             return False
         
         try:
-            self.redis_client = await aioredis.from_url(self.redis_url, decode_responses=True)
+            self.redis_client = await aioredis.from_url(
+                self.redis_url,
+                decode_responses=True,
+                ssl_cert_reqs=None if "upstash" in self.redis_url.lower() else True
+            )
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
             return True
