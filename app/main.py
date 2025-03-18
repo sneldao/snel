@@ -12,6 +12,7 @@ from app.services.redis_service import get_redis_service, RedisService
 from contextvars import ContextVar
 import time
 from dotenv import load_dotenv
+import json
 
 # Load environment variables from .env files
 load_dotenv()
@@ -250,21 +251,130 @@ async def test_wallet_creation_proxy():
         )
         
         return {
+            "success": True,
             "result": result,
-            "time": datetime.now().isoformat(),
-            "test_id": test_id,
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         import traceback
         return {
+            "success": False,
             "error": str(e),
             "traceback": traceback.format_exc(),
-            "environment": {
-                "CDP_API_KEY_NAME": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
-                "CDP_API_KEY_PRIVATE_KEY": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
-                "USE_CDP_SDK": os.environ.get("USE_CDP_SDK", "false"),
-                "CDP_USE_MANAGED_WALLET": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
-            }
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/api/check-wallet/{platform}/{user_id}")
+async def check_wallet_for_user(platform: str, user_id: str):
+    """Check wallet status for a specific user."""
+    import os
+    
+    try:
+        from app.services.smart_wallet_service import SmartWalletService
+        
+        # Create a new instance of SmartWalletService
+        wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
+        
+        # Get all possible wallet data
+        wallet_keys = [
+            f"wallet:{platform}:{user_id}",
+            f"smart_wallet:{platform}:{user_id}",
+            f"cdp_wallet:{platform}:{user_id}",
+            f"messaging:{platform}:user:{user_id}:wallet"
+        ]
+        
+        redis_client = wallet_service.redis_client
+        if not redis_client:
+            return {"error": "Redis client not available"}
+        
+        # Check all possible keys
+        wallet_data = {}
+        for key in wallet_keys:
+            try:
+                data = await redis_client.get(key)
+                if data:
+                    if isinstance(data, bytes):
+                        data = data.decode('utf-8')
+                    try:
+                        wallet_data[key] = json.loads(data)
+                    except:
+                        wallet_data[key] = data
+            except Exception as e:
+                wallet_data[key] = f"Error: {str(e)}"
+        
+        # Try the actual get_smart_wallet method
+        smart_wallet = await wallet_service.get_smart_wallet(user_id, platform)
+        
+        # Try wallet balance (don't fail if this fails)
+        balance_data = None
+        try:
+            balance_data = await wallet_service.get_wallet_balance(user_id, platform, "base_sepolia")
+        except Exception as balance_e:
+            balance_data = {"error": str(balance_e)}
+        
+        return {
+            "success": True,
+            "wallet_data_in_redis": wallet_data,
+            "get_smart_wallet_result": smart_wallet,
+            "balance_check": balance_data,
+            "cdp_initialized": wallet_service.cdp_initialized
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+@app.post("/api/test-connect-command/{platform}/{user_id}")
+async def test_connect_command(platform: str, user_id: str):
+    """Test the connect command functionality for a user."""
+    import os
+    from datetime import datetime
+    
+    try:
+        # Import components
+        from app.services.smart_wallet_service import SmartWalletService
+        from app.agents.telegram_agent import TelegramAgent
+        from app.services.token_service import TokenService
+        from app.services.swap_service import SwapService
+        
+        # Initialize required services
+        redis_url = os.environ.get("REDIS_URL")
+        wallet_service = SmartWalletService(redis_url=redis_url)
+        token_service = TokenService()
+        swap_service = SwapService(token_service=token_service, swap_agent=None)
+        
+        # Initialize the agent
+        agent = TelegramAgent(
+            token_service=token_service,
+            swap_service=swap_service,
+            wallet_service=wallet_service
+        )
+        
+        # Call the connect command handler
+        start_time = datetime.now()
+        connect_result = await agent._handle_connect_command(user_id=user_id)
+        end_time = datetime.now()
+        
+        # Get wallet status after connect command
+        wallet_status = await check_wallet_for_user(platform, user_id)
+        
+        return {
+            "success": True,
+            "connect_command_result": connect_result,
+            "wallet_status": wallet_status,
+            "execution_time": (end_time - start_time).total_seconds(),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "timestamp": datetime.now().isoformat()
         }
 
 if __name__ == "__main__":

@@ -151,218 +151,208 @@ class SmartWalletService(WalletService):
         except Exception as e:
             logger.error(f"Error in _cleanup_invalid_wallet: {e}")
             
-    async def create_smart_wallet(self, user_id: str, platform: str = "telegram") -> Dict[str, Any]:
-        """Create a smart wallet for a user.
+    async def create_smart_wallet(self, user_id: str, platform: str = "telegram", chain: str = "base_sepolia") -> Dict[str, Any]:
+        """Create a new smart wallet for a user.
         
         Args:
-            user_id: Unique identifier for the user
+            user_id: User ID (e.g., Telegram user ID)
             platform: Platform identifier (e.g., "telegram")
+            chain: Chain to use (e.g., "base_sepolia")
             
         Returns:
-            Dict containing wallet information
+            Dict with wallet info or error
         """
+        logger.info(f"Creating smart wallet for {platform}:{user_id} on chain {chain}")
+        
+        # Check if CDP SDK is initialized
+        if not self.cdp_initialized:
+            error_msg = "Coinbase CDP SDK is not properly initialized. Check API keys."
+            logger.error(error_msg)
+            return {"error": error_msg}
+            
+        # Verify that the CDP SDK is available
+        if not self._verify_cdp_configured():
+            error_msg = "Coinbase CDP SDK is not properly configured"
+            logger.error(error_msg)
+            return {"error": error_msg}
+            
+        # Connect to Redis if not already connected
+        if not self.redis_client:
+            try:
+                await self.connect_redis()
+                if not self.redis_client:
+                    error_msg = "Failed to connect to Redis"
+                    logger.error(error_msg)
+                    return {"error": error_msg}
+            except Exception as e:
+                error_msg = f"Redis connection error: {str(e)}"
+                logger.exception(error_msg)
+                return {"error": error_msg}
+                
+        # Determine wallet key
+        wallet_key = f"wallet:{platform}:{user_id}"
+            
         try:
-            # Check if CDP SDK is properly initialized
-            if not hasattr(self, 'cdp_initialized') or not self.cdp_initialized:
-                logger.error("Cannot create smart wallet: CDP SDK not properly initialized")
-                return {
-                    "success": False,
-                    "error": "CDP SDK not properly initialized. Smart wallet creation is unavailable."
-                }
-                
-            # Generate a unique wallet identifier
-            unique_id = f"{platform}:{user_id}"
-            logger.info(f"Creating smart wallet for user {unique_id}")
+            # First check if user already has a wallet
+            existing_wallet = await self.get_smart_wallet(user_id, platform)
             
-            # Check if wallet already exists in Redis
-            wallet_key = f"wallet:{platform}:{user_id}"
+            # If wallet found, return it
+            if existing_wallet and existing_wallet.get("address"):
+                logger.info(f"Found existing wallet for {platform}:{user_id}: {existing_wallet.get('address')}")
+                return {
+                    "address": existing_wallet.get("address"),
+                    "chain": existing_wallet.get("chain", chain),
+                    "user_id": user_id,
+                    "platform": platform
+                }
+        except Exception as e:
+            logger.warning(f"Error checking for existing wallet for {platform}:{user_id}: {e}")
+            # Continue to create a new wallet
+                
+        try:
+            # Create a new owner account (EOA) that will control the smart wallet
+            logger.info(f"Creating new owner account (EOA) for {platform}:{user_id}")
+            owner = Account.create()
+            owner_address = owner.address
+            owner_key = owner.key.hex()
+            logger.info(f"Created owner account with address {owner_address}")
+            
+            # Create a new smart wallet with this owner
+            logger.info(f"Creating smart wallet with owner {owner_address}")
+            try:
+                smart_wallet = SmartWallet.create(account=owner)
+                logger.info(f"Smart wallet created with address {smart_wallet.address}")
+            except Exception as wallet_e:
+                logger.exception(f"Error creating smart wallet with CDP SDK: {wallet_e}")
+                return {"error": f"Failed to create smart wallet: {str(wallet_e)}"}
+                
+            # Store wallet data in Redis
+            # WARNING: In production, you should encrypt the private key before storing it
+            wallet_data = {
+                "address": smart_wallet.address,
+                "owner_address": owner_address,
+                "private_key": owner_key,  # WARNING: Encrypt this in production!
+                "user_id": user_id,
+                "platform": platform,
+                "chain": chain,
+                "wallet_type": "coinbase_cdp",
+                "created_at": datetime.now().isoformat()
+            }
             
             try:
-                existing_wallet = await self.redis_client.get(wallet_key)
+                # Store in Redis - save with the platform user ID as the key
+                await self.redis_client.set(wallet_key, json.dumps(wallet_data))
+                logger.info(f"Stored wallet data in Redis under key {wallet_key}")
                 
-                if existing_wallet:
-                    try:
-                        wallet_data = json.loads(existing_wallet)
-                        # Check if this is a valid wallet with an address
-                        if wallet_data.get('address') and wallet_data.get('address') != 'None' and wallet_data.get('address') != None:
-                            logger.info(f"Found existing wallet for {unique_id}: {wallet_data.get('address')}")
-                            return {
-                                "success": True,
-                                "address": wallet_data.get("address"),
-                                "chain": wallet_data.get("chain", "base_sepolia"),
-                                "is_new": False
-                            }
-                        else:
-                            logger.warning(f"Found existing wallet for {unique_id} but address is None or invalid. Creating a new one.")
-                            # Clean up invalid wallet entries before creating a new one
-                            await self._cleanup_invalid_wallet(platform, user_id)
-                    except json.JSONDecodeError:
-                        logger.error(f"Invalid JSON in Redis for wallet {wallet_key}: {existing_wallet}")
-                        # Clean up invalid wallet entries before creating a new one
-                        await self._cleanup_invalid_wallet(platform, user_id)
-            except Exception as redis_err:
-                logger.error(f"Error checking for existing wallet in Redis: {redis_err}")
-                # Continue to create a new wallet
+                # Also store in messaging format for compatibility with messaging agent
+                messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+                await self.redis_client.set(messaging_key, smart_wallet.address)
+                logger.info(f"Stored wallet address in Redis under key {messaging_key}")
                 
-            # Create a new wallet using CDP SDK
-            try:
-                # Import CDP SDK components
-                try:
-                    from cdp import SmartWallet
-                    from eth_account import Account
-                    import inspect
-                    
-                    # Log the create method signature for debugging
-                    if hasattr(SmartWallet, 'create'):
-                        create_sig = str(inspect.signature(SmartWallet.create))
-                        logger.info(f"SmartWallet.create signature: {create_sig}")
-                    else:
-                        logger.error("SmartWallet.create method not found")
-                        return {
-                            "success": False,
-                            "error": "SmartWallet.create method not available in the CDP SDK"
-                        }
-                except ImportError as imp_err:
-                    logger.error(f"Error importing required modules: {imp_err}")
-                    return {
-                        "success": False,
-                        "error": f"Required modules not properly installed: {str(imp_err)}"
-                    }
-                
-                # Create an owner account (EOA) that will control the smart wallet
-                logger.info("Creating new owner account (EOA)")
-                # Generate a new private key and account
-                try:
-                    owner = Account.create()
-                    logger.info(f"Created new owner account with address: {owner.address}")
-                    
-                    # Create the smart wallet with the owner account
-                    logger.info(f"Creating smart wallet with owner account: {owner.address}")
-                    wallet = SmartWallet.create(account=owner)
-                    logger.info(f"Successfully created wallet: {wallet}")
-                    
-                    if not hasattr(wallet, 'address'):
-                        logger.error(f"Created wallet missing 'address' attribute: {wallet}")
-                        return {
-                            "success": False,
-                            "error": "Created wallet is missing address attribute"
-                        }
-                    
-                    wallet_address = wallet.address
-                    logger.info(f"Created new wallet for {unique_id}: {wallet_address}")
-                    
-                    # Store wallet info in Redis
-                    wallet_data = {
-                        "address": wallet_address,
-                        "chain": "base_sepolia",  # Default to Base Sepolia testnet
-                        "platform": platform,
-                        "user_id": user_id,
-                        "created_at": datetime.utcnow().isoformat(),
-                        "owner_address": owner.address,
-                        "private_key": owner.key.hex()  # WARNING: Should be encrypted in production!
-                    }
-                    
-                    # Save to Redis
-                    try:
-                        await self.redis_client.set(wallet_key, json.dumps(wallet_data))
-                        logger.info(f"Saved wallet data to Redis for {unique_id}")
-                        
-                        # Also save to messaging format for compatibility
-                        messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
-                        await self.redis_client.set(messaging_key, wallet_address)
-                        logger.info(f"Saved wallet address to messaging format for {unique_id}")
-                        
-                        # Save to smart wallet format
-                        smart_wallet_key = f"smart_wallet:{platform}:{user_id}"
-                        await self.redis_client.set(smart_wallet_key, json.dumps(wallet_data))
-                        logger.info(f"Saved to smart wallet format for {unique_id}")
-                    except Exception as redis_err:
-                        logger.error(f"Failed to save wallet data to Redis: {redis_err}")
-                        # Continue even if Redis fails - we still have the wallet address
-                    
-                    # Return success without private key for security
-                    return {
-                        "success": True,
-                        "address": wallet_address,
-                        "chain": "base_sepolia",
-                        "is_new": True
-                    }
-                except Exception as create_err:
-                    logger.error(f"Error creating SmartWallet: {create_err}")
-                    return {
-                        "success": False,
-                        "error": f"Failed to create wallet: {str(create_err)}"
-                    }
-            except Exception as wallet_err:
-                # Specific error handling for wallet creation
-                logger.error(f"Failed to create wallet via CDP SDK: {wallet_err}")
-                return {
-                    "success": False,
-                    "error": f"Failed to create wallet: {str(wallet_err)}"
-                }
+                # Return wallet data without private key for security
+                public_wallet_data = {k: v for k, v in wallet_data.items() if k != "private_key"}
+                return public_wallet_data
+            except Exception as redis_e:
+                logger.exception(f"Error storing wallet data in Redis: {redis_e}")
+                return {"error": f"Failed to store wallet data: {str(redis_e)}"}
                 
         except Exception as e:
-            logger.exception(f"Unexpected error creating smart wallet: {e}")
-            return {
-                "success": False,
-                "error": f"Unexpected error: {str(e)}"
-            }
+            logger.exception(f"Error creating smart wallet for {platform}:{user_id}: {e}")
+            return {"error": str(e)}
     
-    async def get_smart_wallet(self, user_id: str, platform: str = "telegram") -> Optional[Dict[str, Any]]:
+    async def get_smart_wallet(self, user_id: str, platform: str) -> Optional[Dict[str, Any]]:
         """Get a user's smart wallet data.
         
         Args:
-            user_id: Unique identifier for the user
-            platform: Platform identifier (e.g., "telegram")
+            user_id: User ID string
+            platform: Platform identifier (telegram, discord, etc.)
             
         Returns:
             Dict containing wallet information or None if not found
         """
         try:
-            # Check if Redis is available
-            if not self.redis_client:
-                await self.connect_redis()
-                if not self.redis_client:
-                    logger.warning("Redis not available. Cannot retrieve wallet data.")
-                    return None
+            # Log the request details
+            logger.info(f"Retrieving smart wallet for user {platform}:{user_id}")
             
-            # Get wallet data from Redis
-            wallet_key = f"smart_wallet:{platform}:{user_id}"
-            wallet_data = await self.redis_client.get(wallet_key)
+            if not self.redis_client:
+                logger.error("Redis client not initialized in get_smart_wallet")
+                return None
+            
+            # Define all possible key formats to check
+            possible_keys = [
+                f"wallet:{platform}:{user_id}",
+                f"smart_wallet:{platform}:{user_id}",
+                f"cdp_wallet:{platform}:{user_id}"
+            ]
+            
+            wallet_data = None
+            used_key = None
+            
+            # Try each key format
+            for key in possible_keys:
+                data = await self.redis_client.get(key)
+                if data:
+                    wallet_data = data
+                    used_key = key
+                    logger.info(f"Found wallet data using key format: {key}")
+                    break
             
             if not wallet_data:
-                # Try to get the address from messaging format
+                # Try to get just the address from messaging format
                 messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
-                address = await self.redis_client.get(messaging_key)
+                address_data = await self.redis_client.get(messaging_key)
                 
-                if not address:
-                    logger.info(f"No smart wallet found for user {platform}:{user_id}")
+                if not address_data:
+                    logger.info(f"No smart wallet found for {platform}:{user_id} under any key format")
                     return None
                 
-                # If we just have the address but not the full wallet data, return minimal info
-                if isinstance(address, bytes):
-                    address = address.decode('utf-8')
-                    
+                # If we just have the address but not the full wallet data,
+                # return minimal wallet info with the address
+                address = address_data.decode('utf-8') if isinstance(address_data, bytes) else address_data
+                logger.info(f"Found wallet address only for {platform}:{user_id}: {address}")
+                
                 return {
                     "address": address,
                     "user_id": user_id,
                     "platform": platform,
                     "wallet_type": "coinbase_cdp",
-                    "network": "base-sepolia"
+                    "chain": "base_sepolia"  # Default to base_sepolia
                 }
             
-            if isinstance(wallet_data, bytes):
-                wallet_data = wallet_data.decode('utf-8')
+            # Parse wallet data
+            try:
+                wallet_str = wallet_data.decode('utf-8') if isinstance(wallet_data, bytes) else wallet_data
+                wallet_dict = json.loads(wallet_str)
                 
-            wallet_data = json.loads(wallet_data)
-            
-            # Return wallet data without private key for security
-            public_wallet_data = wallet_data.copy()
-            public_wallet_data.pop("private_key", None)
-            return public_wallet_data
-            
+                # Ensure required fields exist
+                if not wallet_dict.get("address"):
+                    logger.warning(f"Wallet data found but missing address for {platform}:{user_id}")
+                    return None
+                
+                # Remove private key if present for security
+                if "private_key" in wallet_dict:
+                    wallet_dict = {k: v for k, v in wallet_dict.items() if k != "private_key"}
+                
+                logger.info(f"Successfully retrieved wallet data for {platform}:{user_id} - Address: {wallet_dict.get('address')}, Chain: {wallet_dict.get('chain', 'unknown')}")
+                return wallet_dict
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding wallet data for {platform}:{user_id} from key {used_key}: {e}")
+                # Try to interpret as plain text address if JSON parsing fails
+                try:
+                    address = wallet_data.decode('utf-8') if isinstance(wallet_data, bytes) else wallet_data
+                    if address and len(address) >= 40:  # Rough check for address-like string
+                        return {
+                            "address": address,
+                            "user_id": user_id,
+                            "platform": platform,
+                            "wallet_type": "coinbase_cdp",
+                            "chain": "base_sepolia"  # Default to base_sepolia
+                        }
+                except:
+                    pass
+                return None
         except Exception as e:
-            logger.exception(f"Error getting smart wallet: {e}")
+            logger.exception(f"Error retrieving smart wallet for {platform}:{user_id}: {e}")
             return None
     
     async def get_smart_wallet_with_private_key(self, user_id: str, platform: str = "telegram") -> Optional[Dict[str, Any]]:
@@ -400,49 +390,120 @@ class SmartWalletService(WalletService):
             logger.exception(f"Error getting smart wallet with private key: {e}")
             return None
     
-    async def get_wallet_balance(self, user_id: str, platform: str = "telegram") -> Dict[str, Any]:
-        """Get a user's smart wallet balance.
+    async def get_wallet_balance(self, user_id: str, platform: str, chain: str) -> Dict[str, Any]:
+        """Get the balance of a user's smart wallet.
         
         Args:
-            user_id: Unique identifier for the user
+            user_id: User ID
             platform: Platform identifier (e.g., "telegram")
+            chain: Chain to use (e.g., "base_sepolia")
             
         Returns:
             Dict containing balance information
         """
         try:
-            # Get wallet data with private key
-            wallet_data = await self.get_smart_wallet_with_private_key(user_id, platform)
-            if not wallet_data:
-                logger.info(f"No smart wallet found for user {platform}:{user_id}")
-                return {"error": "No wallet found"}
+            logger.info(f"Getting wallet balance for {platform}:{user_id} on chain {chain}")
             
-            address = wallet_data.get("address")
-            private_key = wallet_data.get("private_key")
-            
-            if not address or not private_key:
-                logger.error(f"Wallet data for {platform}:{user_id} missing required fields")
-                return {"error": "Invalid wallet data"}
-            
-            # Recreate the smart wallet object
-            owner = Account.from_key(bytes.fromhex(private_key) if isinstance(private_key, str) else private_key)
-            
-            # Instantiate the smart wallet with the stored address
-            # This is more efficient than creating a new one
-            smart_wallet = SmartWallet.from_address(address, owner)
-            
-            # For now we'll just get ETH balance
-            # In a real implementation, you can use smart_wallet to get balances for all assets
-            return {
-                "address": address,
-                "balance": {
-                    "eth": "0.1"  # Placeholder - actual balance checking to be implemented
+            # Get wallet data
+            wallet_data = await self.get_smart_wallet(user_id, platform)
+            if not wallet_data or not wallet_data.get("address"):
+                logger.warning(f"No wallet found for {platform}:{user_id}")
+                return {
+                    "success": False,
+                    "error": "No wallet found",
+                    "balance": "0",
+                    "chain": chain
                 }
+                
+            # Get wallet address
+            wallet_address = wallet_data.get("address")
+            wallet_chain = chain  # Use the provided chain parameter
+            
+            # Map chain to chain ID
+            chain_id_map = {
+                "base_sepolia": 84532,
+                "base_mainnet": 8453,
+                "ethereum_sepolia": 11155111,
+                "ethereum_mainnet": 1
             }
             
+            chain_id = chain_id_map.get(wallet_chain, 84532)  # Default to Base Sepolia
+            
+            # Create chain info for display
+            chain_info = {
+                "id": chain_id,
+                "name": wallet_chain.replace("_", " ").title(),
+                "is_testnet": "sepolia" in wallet_chain or "goerli" in wallet_chain
+            }
+            
+            # Attempt to get balance using Web3
+            try:
+                from web3 import Web3
+                
+                # Choose provider based on chain
+                if "base" in wallet_chain:
+                    provider_url = "https://sepolia.base.org" if "sepolia" in wallet_chain else "https://mainnet.base.org"
+                else:
+                    provider_url = "https://rpc.ankr.com/eth_sepolia" if "sepolia" in wallet_chain else "https://rpc.ankr.com/eth"
+                
+                # Connect to Web3
+                w3 = Web3(Web3.HTTPProvider(provider_url))
+                
+                # Check connection
+                if not w3.is_connected():
+                    logger.warning(f"Unable to connect to provider at {provider_url}")
+                    return {
+                        "success": False,
+                        "error": f"Unable to connect to blockchain provider for {chain_info['name']}",
+                        "address": wallet_address,
+                        "chain": wallet_chain,
+                        "chain_info": chain_info,
+                        "balance": "0" 
+                    }
+                
+                # Get ETH balance
+                balance_wei = w3.eth.get_balance(wallet_address)
+                balance_eth = w3.from_wei(balance_wei, 'ether')
+                
+                logger.info(f"Retrieved balance for {wallet_address} on {wallet_chain}: {balance_eth} ETH")
+                
+                return {
+                    "success": True,
+                    "address": wallet_address,
+                    "chain": wallet_chain,
+                    "chain_info": chain_info,
+                    "balance": str(balance_eth),
+                    "balance_wei": str(balance_wei)
+                }
+            except ImportError:
+                logger.error("Web3 not available, cannot get accurate balance")
+                return {
+                    "success": False,
+                    "error": "Web3 library not available",
+                    "address": wallet_address,
+                    "chain": wallet_chain,
+                    "chain_info": chain_info,
+                    "balance": "0"
+                }
+            except Exception as web3_error:
+                logger.exception(f"Error getting balance with Web3: {web3_error}")
+                return {
+                    "success": False,
+                    "error": f"Error retrieving balance: {str(web3_error)}",
+                    "address": wallet_address,
+                    "chain": wallet_chain,
+                    "chain_info": chain_info,
+                    "balance": "0"
+                }
+                
         except Exception as e:
-            logger.exception(f"Error getting wallet balance: {e}")
-            return {"error": str(e)}
+            logger.exception(f"Error in get_wallet_balance: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "chain": chain,
+                "balance": "0"
+            }
     
     async def send_transaction(self, user_id: str, platform: str, to_address: str, amount: float) -> Dict[str, Any]:
         """Send a transaction from a user's smart wallet.
@@ -698,4 +759,156 @@ class SmartWalletService(WalletService):
             logger.exception(f"Error getting CDP SDK diagnostics: {e}")
             return {
                 "error": str(e)
-            } 
+            }
+    
+    async def switch_chain(self, user_id: str, platform: str, chain: str) -> Dict[str, Any]:
+        """Switch the blockchain network for a user's wallet.
+        
+        Args:
+            user_id: User ID
+            platform: Platform identifier (e.g., "telegram")
+            chain: New chain to use (e.g., "base_sepolia")
+            
+        Returns:
+            Dict with success status and chain info
+        """
+        try:
+            logger.info(f"Switching chain to {chain} for {platform}:{user_id}")
+            
+            # Get wallet data
+            wallet_data = await self.get_smart_wallet(user_id, platform)
+            if not wallet_data or not wallet_data.get("address"):
+                logger.warning(f"No wallet found for {platform}:{user_id}")
+                return {
+                    "success": False,
+                    "message": "No wallet found. Please create a wallet first using /connect"
+                }
+                
+            # Get supported networks
+            supported_chains = {
+                "base_sepolia": {
+                    "id": 84532,
+                    "name": "Base Sepolia",
+                    "is_testnet": True
+                },
+                "base_mainnet": {
+                    "id": 8453,
+                    "name": "Base Mainnet",
+                    "is_testnet": False
+                },
+                "ethereum_sepolia": {
+                    "id": 11155111,
+                    "name": "Ethereum Sepolia",
+                    "is_testnet": True
+                },
+                "ethereum_mainnet": {
+                    "id": 1,
+                    "name": "Ethereum Mainnet",
+                    "is_testnet": False
+                },
+                "scroll_sepolia": {
+                    "id": 534351,
+                    "name": "Scroll Sepolia",
+                    "is_testnet": True
+                }
+            }
+            
+            # Check if requested chain is supported
+            if chain not in supported_chains:
+                logger.warning(f"Unsupported chain requested: {chain}")
+                return {
+                    "success": False,
+                    "message": f"Unsupported network: {chain}",
+                    "supported_chains": list(supported_chains.keys())
+                }
+            
+            # Get wallet address and retrieve full wallet data from Redis
+            address = wallet_data.get("address")
+            
+            # Define all possible key formats to check
+            possible_keys = [
+                f"wallet:{platform}:{user_id}",
+                f"smart_wallet:{platform}:{user_id}",
+                f"cdp_wallet:{platform}:{user_id}"
+            ]
+            
+            wallet_data_str = None
+            used_key = None
+            
+            # Find the wallet data in Redis
+            for key in possible_keys:
+                data = await self.redis_client.get(key)
+                if data:
+                    wallet_data_str = data
+                    used_key = key
+                    logger.info(f"Found wallet data using key format: {key}")
+                    break
+            
+            if not wallet_data_str or not used_key:
+                logger.warning(f"Could not find wallet data in Redis for {platform}:{user_id}")
+                return {
+                    "success": False,
+                    "message": "Could not find wallet data. Please reconnect your wallet using /connect"
+                }
+            
+            # Parse wallet data and update chain
+            try:
+                wallet_dict = json.loads(wallet_data_str) if isinstance(wallet_data_str, bytes) else json.loads(wallet_data_str)
+                
+                # Update the chain
+                wallet_dict["chain"] = chain
+                
+                # Save updated wallet data back to Redis
+                await self.redis_client.set(used_key, json.dumps(wallet_dict))
+                logger.info(f"Updated wallet chain to {chain} for {platform}:{user_id}")
+                
+                return {
+                    "success": True,
+                    "chain": chain,
+                    "chain_info": supported_chains[chain],
+                    "message": f"Successfully switched to {supported_chains[chain]['name']}"
+                }
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding wallet data: {e}")
+                return {
+                    "success": False,
+                    "message": "Error processing wallet data"
+                }
+                
+        except Exception as e:
+            logger.exception(f"Error switching chain: {e}")
+            return {
+                "success": False,
+                "message": f"Error switching network: {str(e)}"
+            }
+    
+    async def get_supported_chains(self) -> List[Dict[str, Any]]:
+        """Get a list of supported blockchain networks.
+        
+        Returns:
+            List of supported chain information
+        """
+        # Return a list of supported chains
+        return [
+            {
+                "id": "base_sepolia",
+                "name": "Base Sepolia",
+                "description": "Base L2 testnet",
+                "chain_id": 84532,
+                "is_testnet": True
+            },
+            {
+                "id": "ethereum_sepolia",
+                "name": "Ethereum Sepolia",
+                "description": "Ethereum testnet",
+                "chain_id": 11155111,
+                "is_testnet": True
+            },
+            {
+                "id": "scroll_sepolia",
+                "name": "Scroll Sepolia",
+                "description": "Scroll L2 testnet",
+                "chain_id": 534351,
+                "is_testnet": True
+            }
+        ] 

@@ -8,14 +8,16 @@ import random
 import hashlib
 import time
 import os
-from typing import Dict, Any, List, Optional, Union, Tuple, Callable
+from typing import Dict, Any, List, Optional, Union, Tuple, Callable, Type
 from pydantic import Field
 from app.agents.messaging_agent import MessagingAgent
 from app.services.prices import PriceService
 from app.services.token_service import TokenService
 from app.services.swap_service import SwapService
+from app.services.wallet_service import WalletService
 from app.services.smart_wallet_service import SmartWalletService
 from app.services.gemini_service import GeminiService
+from app.models.telegram import TelegramWebhookRequest
 
 logger = logging.getLogger(__name__)
 
@@ -221,17 +223,33 @@ class TelegramAgent(MessagingAgent):
             return await self._handle_faucet_command(user_id, "", wallet_address)
         
         elif callback_data == "show_address":
-            if wallet_address:
-                return {
-                    "content": f"Your wallet address is:\n\n`{wallet_address}`\n\nYou can copy this address to receive funds."
-                }
-            else:
-                return {
-                    "content": "You don't have a wallet connected yet. Use /connect to create one."
-                }
+            try:
+                # Get wallet data from smart wallet service
+                wallet_data = await self.wallet_service.get_smart_wallet(user_id, platform="telegram")
                 
+                if wallet_data and wallet_data.get("address"):
+                    address = wallet_data.get("address")
+                    return {
+                        "content": f"Your wallet address is:\n\n`{address}`\n\nYou can copy this address to receive funds.",
+                        "parse_mode": "Markdown"
+                    }
+                else:
+                    return {
+                        "content": "You don't have a wallet connected yet. Use /connect to create one."
+                    }
+            except Exception as e:
+                logger.error(f"Error showing address: {e}")
+                return {
+                    "content": "There was an error retrieving your wallet address. Please try again later."
+                }
+        
         elif callback_data.startswith("network:"):
             network = callback_data.split(":", 1)[1]
+            return await self._handle_network_command(user_id, network, wallet_address)
+            
+        elif callback_data.startswith("select_network:"):
+            network = callback_data.split(":", 1)[1]
+            logger.info(f"Switching to network {network} for user {user_id}")
             return await self._handle_network_command(user_id, network, wallet_address)
         
         elif callback_data.startswith("swap_approve:"):
@@ -251,6 +269,18 @@ class TelegramAgent(MessagingAgent):
                           "• Differences between blockchains\n" +
                           "• What is Base/Scroll\n\n" +
                           "You can also use /help to see available commands."
+            }
+            
+        elif callback_data == "suggest_swap" or callback_data == "create_wallet":
+            return await self._handle_connect_command(user_id, "", wallet_address)
+            
+        elif callback_data.startswith("suggest_swap_"):
+            # Format: suggest_swap_TOKEN
+            token = callback_data.split("_")[-1]
+            return {
+                "content": f"To swap {token}, use the command format:\n\n" +
+                          f"/swap [amount] {token} for [token]\n\n" +
+                          f"Example: /swap 0.1 {token} for USDC"
             }
         
         # Default response
@@ -550,99 +580,103 @@ class TelegramAgent(MessagingAgent):
             }
     async def _handle_balance_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
         """
-        Handle the /balance command to check wallet balance.
+        Handle the /balance command to show wallet balance.
         
         Args:
             user_id: Telegram user ID
             args: Command arguments
-            wallet_address: User's wallet address
+            wallet_address: User's wallet address if already known
             
         Returns:
-            Dict with response content
+            Dict with response content and buttons
         """
-        if not wallet_address:
-            buttons = [
-                [
-                    {"text": "🔗 Connect Wallet", "callback_data": "connect_wallet"}
-                ]
-            ]
-            
-            return {
-                "content": "You don't have a wallet connected yet. Please connect a wallet first.",
-                "metadata": {
-                    "telegram_buttons": buttons
-                }
-            }
-        
-        if not self.wallet_service:
-            return {
-                "content": "Sorry, wallet services are not available at the moment."
-            }
-        
         try:
-            # Get wallet data from the wallet service
-            wallet_data = await self.wallet_service.get_wallet(
-                user_id=str(user_id),
-                platform="telegram"
-            )
+            # Log the command execution with more details
+            logger.info(f"Processing balance command for user {user_id}")
             
-            if not wallet_data.get("success"):
+            # Get wallet data
+            wallet_data = await self.wallet_service.get_smart_wallet(user_id, platform="telegram")
+            logger.info(f"Retrieved wallet data: {wallet_data}")
+            
+            if not wallet_data or not wallet_data.get("address"):
                 return {
-                    "content": "⚠️ I couldn't retrieve your wallet information. Please try reconnecting your wallet."
+                    "content": "⚠️ You don't have a wallet yet. Please use /connect to create one."
                 }
             
-            chain = wallet_data.get("chain", DEFAULT_CHAIN)
+            wallet_address = wallet_data.get("address")
+            wallet_chain = wallet_data.get("chain", "base_sepolia")
             
-            # Get balance for the wallet
-            balance_result = await self.wallet_service.get_wallet_balance(
-                user_id=str(user_id),
-                platform="telegram",
-                chain=chain
-            )
+            logger.info(f"Getting balance for {wallet_address} on chain {wallet_chain}")
             
-            if not balance_result.get("success"):
+            # Get wallet balance
+            try:
+                balance_data = await self.wallet_service.get_wallet_balance(
+                    user_id=user_id, 
+                    platform="telegram", 
+                    chain=wallet_chain
+                )
+                logger.info(f"Balance data: {balance_data}")
+            except Exception as balance_error:
+                logger.exception(f"Error getting wallet balance: {balance_error}")
                 return {
-                    "content": "⚠️ I couldn't retrieve your balance. This might be due to network issues."
+                    "content": f"⚠️ There was an error retrieving your wallet balance: {str(balance_error)}\n\n" +
+                              f"Wallet Address: `{wallet_address}`\n" +
+                              f"Network: {wallet_chain.replace('_', ' ').title()}",
+                    "parse_mode": "Markdown"
                 }
             
-            chain_info = balance_result.get("chain_info", {})
-            chain_name = chain_info.get("name", "Unknown Network")
-            eth_balance = balance_result.get("balance", {}).get("eth", "0.0")
+            if not balance_data.get("success", False):
+                error_msg = balance_data.get("error", "Unknown error")
+                logger.error(f"Error getting balance for {user_id}: {error_msg}")
+                
+                return {
+                    "content": f"⚠️ There was an error retrieving your wallet balance: {error_msg}\n\n" +
+                              f"Wallet Address: `{wallet_address}`\n" +
+                              f"Network: {wallet_chain.replace('_', ' ').title()}",
+                    "parse_mode": "Markdown"
+                }
             
-            # Add token balances if available
-            token_balances = balance_result.get("balance", {}).get("tokens", [])
-            token_balance_strings = []
+            # Format the balance nicely
+            eth_balance = balance_data.get("balance", "0")
+            chain_info = balance_data.get("chain_info", {})
+            network_name = chain_info.get("name", wallet_chain.replace("_", " ").title())
+            is_testnet = chain_info.get("is_testnet", "sepolia" in wallet_chain)
             
-            for token in token_balances:
-                if token.get("balance") and float(token.get("balance", 0)) > 0:
-                    token_balance = token.get("balance", "0")
-                    token_symbol = token.get("symbol", "???")
-                    token_balance_strings.append(f"{token_symbol}: {token_balance}")
-            
-            token_balance_text = "\n".join(token_balance_strings) if token_balance_strings else "No token balances"
-            
+            # Create buttons
             buttons = [
                 [
-                    {"text": "🚰 Get Test ETH", "callback_data": "get_faucet"},
-                    {"text": "🌐 Switch Networks", "callback_data": "show_networks"}
+                    {"text": "🔄 Refresh Balance", "callback_data": "check_balance"},
+                    {"text": "📋 Show Address", "callback_data": "show_address"}
                 ]
             ]
             
+            # Add faucet button for testnet networks
+            if is_testnet:
+                buttons.append([
+                    {"text": "🚰 Get Test ETH", "callback_data": "get_faucet"}
+                ])
+            
+            # Create response message
+            message = f"💰 **Wallet Balance**\n\n"
+            message += f"**{eth_balance} ETH**\n\n"
+            message += f"🔗 Network: {network_name}\n"
+            message += f"📬 Address: `{wallet_address}`\n\n"
+            
+            if is_testnet:
+                message += "_This is a testnet wallet. The tokens have no real value._\n\n"
+                message += "Need testnet ETH? Click 'Get Test ETH' below."
+            
             return {
-                "content": f"💰 Your wallet balance:\n\n" +
-                           f"ETH: {eth_balance}\n\n" +
-                           f"Token Balances:\n{token_balance_text}\n\n" +
-                           f"Address: `{wallet_address}`\n" +
-                           f"Network: {chain_name}",
-                "metadata": {
-                    "telegram_buttons": buttons
-                }
+                "content": message,
+                "parse_mode": "Markdown",
+                "buttons": buttons
             }
             
         except Exception as e:
-            logger.exception(f"Error retrieving balance: {e}")
+            # Provide more detailed error information
+            logger.exception(f"Error handling balance command: {e}")
             return {
-                "content": "⚠️ Sorry, I encountered an error while checking your balance. Please try again later."
+                "content": f"❌ There was an error checking your balance: {str(e)}\n\nPlease try again later or contact support if the problem persists."
             }
 
     async def _handle_price_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
@@ -753,36 +787,93 @@ class TelegramAgent(MessagingAgent):
             }
         
         amount, from_token, to_token = swap_match.groups()
+        from_token = from_token.upper()
+        to_token = to_token.upper()
         
-        # For MVP, simulate getting a quote
-        estimated_output = round(float(amount) * (random.random() * 0.2 + 0.9) * 1800, 2)
-        
-        # Prepare swap info for button callback
-        swap_info = {
-            "from_token": from_token.upper(),
-            "to_token": to_token.upper(),
-            "amount": float(amount),
-            "estimated_output": estimated_output
-        }
-        
-        # Create buttons for swap options
-        buttons = [
-            [
-                {"text": "✅ Approve Swap", "callback_data": f"approve_swap:{json.dumps(swap_info)}"},
-                {"text": "❌ Cancel", "callback_data": "cancel_swap"}
-            ]
-        ]
-        
-        return {
-            "content": f"Swap Quote:\n\n" +
-                f"From: {amount} {from_token.upper()}\n" +
-                f"To: ~{estimated_output} {to_token.upper()}\n" +
-                f"Fee: 0.3%\n\n" +
-                f"Do you want to proceed with this swap?",
-            "metadata": {
-                "telegram_buttons": buttons
+        # Get the wallet's current chain
+        try:
+            wallet_data = await self.wallet_service.get_smart_wallet(user_id, platform="telegram")
+            wallet_chain = wallet_data.get("chain", "base_sepolia")
+            
+            # For testnet networks, add a note about simulated swaps
+            is_testnet = "sepolia" in wallet_chain or "goerli" in wallet_chain
+            
+            if is_testnet:
+                # For testnet, simulate getting a quote
+                # Use more realistic prices for common tokens
+                price_map = {
+                    "ETH": {"USDC": 1800, "USDT": 1795, "WETH": 0.995, "BTC": 0.06},
+                    "USDC": {"ETH": 0.00055, "USDT": 0.998, "BTC": 0.000033},
+                    "USDT": {"ETH": 0.00056, "USDC": 1.002, "BTC": 0.000033},
+                    "BTC": {"ETH": 16.5, "USDC": 30000, "USDT": 29900}
+                }
+                
+                # Apply a small random price variation
+                base_rate = 0
+                if from_token in price_map and to_token in price_map[from_token]:
+                    base_rate = price_map[from_token][to_token]
+                else:
+                    # Default fallback for tokens not in our map
+                    base_rate = 1.0  # 1:1 as fallback
+                
+                # Apply a small random variation (±5%)
+                variation = random.uniform(0.95, 1.05)
+                rate = base_rate * variation
+                
+                estimated_output = round(float(amount) * rate, 4)
+                
+                # Prepare swap info for button callback
+                swap_info = {
+                    "from_token": from_token,
+                    "to_token": to_token,
+                    "amount": float(amount),
+                    "estimated_output": estimated_output,
+                    "chain": wallet_chain
+                }
+                
+                # Create a unique ID for this swap
+                swap_id = hashlib.md5(f"{user_id}:{from_token}:{to_token}:{amount}:{time.time()}".encode()).hexdigest()[:10]
+                
+                # Create buttons for swap options
+                buttons = [
+                    [
+                        {"text": "✅ Approve Swap", "callback_data": f"swap_approve:{swap_id}"},
+                        {"text": "❌ Cancel", "callback_data": f"swap_cancel:{swap_id}"}
+                    ]
+                ]
+                
+                # For testnets, provide additional explanation
+                return {
+                    "content": f"💱 **Swap Quote (Testnet)**\n\n" +
+                        f"From: {amount} {from_token}\n" +
+                        f"To: ~{estimated_output} {to_token}\n" +
+                        f"Rate: 1 {from_token} = {rate} {to_token}\n" +
+                        f"Network: {wallet_chain.replace('_', ' ').title()}\n" +
+                        f"Fee: 0.3%\n\n" +
+                        "_Note: This is a testnet swap and will use testnet tokens only. No real value will be exchanged._\n\n" +
+                        "Do you want to proceed with this swap?",
+                    "metadata": {
+                        "telegram_buttons": buttons
+                    },
+                    "parse_mode": "Markdown",
+                    "swap_data": {
+                        "id": swap_id,
+                        "details": swap_info
+                    }
+                }
+            else:
+                # For mainnet (not implemented)
+                return {
+                    "content": "⚠️ Mainnet swaps are not available in this version. Please use a testnet network for testing.\n\n" +
+                              "Switch to a testnet using /network base_sepolia"
+                }
+                
+        except Exception as e:
+            logger.exception(f"Error processing swap request: {e}")
+            return {
+                "content": f"⚠️ There was an error processing your swap request: {str(e)}\n\n" +
+                          "Please try again later or contact support if the problem persists."
             }
-        }
 
     async def _handle_disconnect_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1009,66 +1100,104 @@ class TelegramAgent(MessagingAgent):
             }
 
     async def _handle_faucet_command(self, user_id: str, args: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Handle the /faucet command to get testnet ETH.
+        """Handle /faucet command to get testnet ETH.
         
         Args:
             user_id: Telegram user ID
-            args: Command arguments
-            wallet_address: User's wallet address
+            args: Command arguments (unused)
+            wallet_address: User's wallet address if available
             
         Returns:
             Dict with response content
         """
-        if not wallet_address:
-            buttons = [
-                [
-                    {"text": "🔗 Connect Wallet", "callback_data": "connect_wallet"}
-                ]
-            ]
+        try:
+            # Get wallet data
+            wallet_data = await self.wallet_service.get_smart_wallet(user_id, platform="telegram")
             
-            return {
-                "content": "You don't have a wallet connected yet. Please connect a wallet first.",
-                "metadata": {
-                    "telegram_buttons": buttons
+            if not wallet_data or not wallet_data.get("address"):
+                return {
+                    "content": "⚠️ You don't have a wallet yet. Please use /connect to create one."
                 }
+            
+            # Get wallet address
+            address = wallet_data.get("address")
+            chain = wallet_data.get("chain", "base_sepolia")
+            
+            # Get chain info for display
+            chain_info = {
+                "name": chain.replace("_", " ").title(),
+                "is_testnet": "sepolia" in chain or "goerli" in chain
             }
-        
-        # Check if we're using SmartWalletService
-        is_smart_wallet = isinstance(self.wallet_service, SmartWalletService)
-        
-        if is_smart_wallet:
-            try:
-                faucet_info = await self.wallet_service.fund_wallet_from_faucet(
-                    user_id=str(user_id),
-                    platform="telegram"
-                )
+            
+            # Check if this is a testnet wallet
+            if not chain_info.get("is_testnet", False):
+                return {
+                    "content": "⚠️ Your wallet is on a mainnet network. Faucets are only available for testnet networks."
+                }
+            
+            # Try to get ETH from CDP faucet
+            faucet_result = await self.wallet_service.fund_wallet_from_faucet(user_id, platform="telegram")
+            
+            if faucet_result.get("success"):
+                # Success!
+                tx_hash = faucet_result.get("transaction_hash", "")
+                explorer_link = f"https://sepolia.basescan.org/tx/{tx_hash}" if "base" in chain else f"https://sepolia.etherscan.io/tx/{tx_hash}"
                 
-                faucet_url = faucet_info.get("faucet_url", "https://faucet.base.org")
+                message = f"🎉 Testnet ETH has been requested for your wallet!\n\n"
+                message += f"📬 Wallet: `{address}`\n"
+                message += f"🔗 Network: {chain_info.get('name')}\n\n"
+                
+                if tx_hash:
+                    message += f"See transaction on block explorer:\n[View Transaction]({explorer_link})\n\n"
+                
+                message += "The ETH should arrive in your wallet within a few minutes. Use /balance to check your balance."
                 
                 return {
-                    "content": f"🚰 To get testnet ETH for your wallet:\n\n" +
-                               f"1. Visit {faucet_url}\n" +
-                               f"2. Enter your wallet address: `{wallet_address}`\n" +
-                               f"3. Complete any verification steps\n\n" +
-                               f"The testnet ETH should arrive in your wallet shortly after.\n\n" +
-                               f"Once you have ETH, you can use /balance to check your balance."
+                    "content": message,
+                    "parse_mode": "Markdown",
+                    "disable_web_page_preview": True
                 }
-            except Exception as e:
-                logger.exception(f"Error getting faucet info: {e}")
-        
-        # Default response for both wallet types
-        network = "Base Sepolia" if is_smart_wallet else "Scroll Sepolia"
-        faucet_url = "https://faucet.base.org" if is_smart_wallet else "https://faucet.scroll.io/sepolia"
-        
-        return {
-            "content": f"🚰 To get testnet ETH for your wallet:\n\n" +
-                       f"1. Visit {faucet_url}\n" +
-                       f"2. Enter your wallet address: `{wallet_address}`\n" +
-                       f"3. Complete any verification steps\n\n" +
-                       f"The testnet ETH should arrive in your wallet shortly after.\n\n" +
-                       f"This testnet ETH is for testing only and has no real value."
-        }
+            else:
+                # If built-in faucet fails, provide alternative faucet links
+                faucet_url = ""
+                if "base_sepolia" in chain:
+                    faucet_url = "https://www.coinbase.com/faucets/base-sepolia-faucet"
+                elif "ethereum_sepolia" in chain:
+                    faucet_url = "https://www.alchemy.com/faucets/ethereum-sepolia"
+                    
+                error_msg = faucet_result.get("error", "Unknown error")
+                
+                message = f"❌ Unable to automatically fetch testnet ETH: {error_msg}\n\n"
+                message += f"📬 Your wallet address: `{address}`\n"
+                message += f"🔗 Network: {chain_info.get('name')}\n\n"
+                message += "Please try an external faucet instead:\n\n"
+                
+                if faucet_url:
+                    message += f"1. Visit {faucet_url}\n"
+                    message += f"2. Enter your wallet address: `{address}`\n"
+                    message += "3. Complete any verification steps\n\n"
+                else:
+                    message += "Please search for a faucet for your current network.\n\n"
+                    
+                message += "After getting ETH, use /balance to check your wallet balance."
+                
+                buttons = [
+                    [
+                        {"text": "🔄 Check Balance", "callback_data": "check_balance"}
+                    ]
+                ]
+                
+                return {
+                    "content": message,
+                    "buttons": buttons,
+                    "parse_mode": "Markdown",
+                    "disable_web_page_preview": False
+                }
+        except Exception as e:
+            logger.exception(f"Error getting testnet ETH: {e}")
+            return {
+                "content": f"❌ There was an error getting testnet ETH: {str(e)}\n\nPlease try again later."
+            }
 
     async def process_callback_query(
         self,
@@ -1241,3 +1370,109 @@ class TelegramAgent(MessagingAgent):
                 
         # If we got here, it's probably a general question
         return True 
+
+    async def _approve_swap(self, user_id: str, swap_id: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Handle a swap approval from an inline button.
+        
+        Args:
+            user_id: Telegram user ID
+            swap_id: ID of the swap to approve
+            wallet_address: User's wallet address if already connected
+            
+        Returns:
+            Dict with response content
+        """
+        logger.info(f"Processing swap approval for swap ID: {swap_id}")
+        
+        if not wallet_address:
+            return {
+                "content": "⚠️ You need to connect a wallet first. Use /connect to set up your wallet."
+            }
+        
+        # For now, we'll simulate the swap process on testnet
+        try:
+            # Get the user's wallet details
+            wallet_data = await self.wallet_service.get_smart_wallet(user_id, platform="telegram")
+            wallet_chain = wallet_data.get("chain", "base_sepolia")
+            
+            # Check if this is a testnet
+            is_testnet = "sepolia" in wallet_chain or "goerli" in wallet_chain
+            
+            if not is_testnet:
+                return {
+                    "content": "⚠️ Mainnet swaps are not available in this version. Please use a testnet network for testing."
+                }
+            
+            # Generate a fake transaction hash
+            tx_hash = f"0x{''.join(random.choices('0123456789abcdef', k=64))}"
+            
+            # Create a block explorer link based on the chain
+            explorer_url = ""
+            if "base_sepolia" in wallet_chain:
+                explorer_url = f"https://sepolia.basescan.org/tx/{tx_hash}"
+            elif "ethereum_sepolia" in wallet_chain:
+                explorer_url = f"https://sepolia.etherscan.io/tx/{tx_hash}"
+            elif "scroll_sepolia" in wallet_chain:
+                explorer_url = f"https://sepolia-blockscout.scroll.io/tx/{tx_hash}"
+            
+            # Create buttons for checking balance or doing another swap
+            buttons = [
+                [
+                    {"text": "🔄 Check Balance", "callback_data": "check_balance"},
+                    {"text": "💱 New Swap", "callback_data": "suggest_swap"}
+                ]
+            ]
+            
+            # Add explorer button if available
+            if explorer_url:
+                buttons.append([
+                    {"text": "🔍 View Transaction", "url": explorer_url}
+                ])
+            
+            return {
+                "content": f"✅ **Swap Successfully Simulated!**\n\n" +
+                           f"This was a testnet swap demonstration.\n\n" +
+                           f"Transaction Hash: `{tx_hash}`\n" +
+                           f"Network: {wallet_chain.replace('_', ' ').title()}\n\n" +
+                           f"_Note: No actual tokens were swapped as this is a testnet demo._\n\n" +
+                           f"You can check your balance or initiate a new swap using the buttons below.",
+                "metadata": {
+                    "telegram_buttons": buttons
+                },
+                "parse_mode": "Markdown"
+            }
+        except Exception as e:
+            logger.exception(f"Error approving swap: {e}")
+            return {
+                "content": f"⚠️ There was an error processing your swap: {str(e)}\n\nPlease try again later."
+            }
+    
+    async def _cancel_swap(self, user_id: str, swap_id: str, wallet_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Handle a swap cancellation from an inline button.
+        
+        Args:
+            user_id: Telegram user ID
+            swap_id: ID of the swap to cancel
+            wallet_address: User's wallet address if already connected
+            
+        Returns:
+            Dict with response content
+        """
+        logger.info(f"Cancelling swap with ID: {swap_id}")
+        
+        # Create buttons for checking balance or initiating a new swap
+        buttons = [
+            [
+                {"text": "🔄 Check Balance", "callback_data": "check_balance"},
+                {"text": "💱 New Swap", "callback_data": "suggest_swap"}
+            ]
+        ]
+        
+        return {
+            "content": "❌ Swap cancelled. No tokens were exchanged.\n\nYou can check your balance or initiate a new swap using the buttons below.",
+            "metadata": {
+                "telegram_buttons": buttons
+            }
+        } 
