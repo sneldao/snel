@@ -162,23 +162,29 @@ class WalletService:
             # Generate a secure entropy for wallet creation
             entropy = base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
             
-            # Create a unique user ID
+            # Create a unique user ID - removing special characters for UUID format
             unique_id = f"{platform}_{user_id}"
+            unique_id = unique_id.replace('-', '').replace('_', '')[:32]
             
             # Create payload for Particle wallet creation using server RPC API
+            # Note: the projectId should NOT have hyphens in the RPC format
+            clean_project_id = PARTICLE_PROJECT_ID.replace('-', '')
+            
             payload = {
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "particle_aa_createWallet",
                 "params": [
                     {
-                        "projectId": PARTICLE_PROJECT_ID,
+                        "projectId": clean_project_id,
                         "chainId": chain_id,
                         "userUuid": unique_id,
                         "entropy": entropy
                     }
                 ]
             }
+            
+            logger.info(f"Creating wallet with payload: {json.dumps(payload)}")
             
             # Make API request to create wallet
             async with httpx.AsyncClient() as client:
@@ -244,19 +250,23 @@ class WalletService:
         """
         # Check if Redis is available
         if not self.redis_client:
-            logger.warning("Redis not available, wallet creation not persisted")
-            if wallet_address:
-                return {
-                    "success": True,
-                    "message": "Wallet created (not persisted)",
-                    "wallet_address": wallet_address,
-                    "chain": chain
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": "Redis not available and no wallet address provided"
-                }
+            logger.warning("Redis not available, attempting to reconnect")
+            self._create_redis_client()
+            
+            if not self.redis_client:
+                logger.warning("Redis reconnection failed, wallet creation not persisted")
+                if wallet_address:
+                    return {
+                        "success": True,
+                        "message": "Wallet created (not persisted)",
+                        "wallet_address": wallet_address,
+                        "chain": chain
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": "Redis not available and no wallet address provided"
+                    }
             
         try:
             # Create unique key for this user's wallet
@@ -302,7 +312,7 @@ class WalletService:
                 messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
                 await self.redis_client.set(
                     messaging_key,
-                    json.dumps(wallet_info)
+                    wallet_address  # Just store address string for compatibility
                 )
                 
                 logger.info(f"Imported wallet {wallet_address} for {platform}:{user_id} on {chain}")
@@ -356,7 +366,7 @@ class WalletService:
             messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
             await self.redis_client.set(
                 messaging_key,
-                json.dumps(wallet_info)
+                wallet_address  # Just store address string for compatibility
             )
             
             # Store reverse mapping for lookups
@@ -396,8 +406,11 @@ class WalletService:
         """
         # Check if Redis client is available
         if not self.redis_client:
-            logger.warning("Redis client not available, returning no wallet info")
-            return None
+            logger.warning("Redis client not available, attempting reconnection")
+            self._create_redis_client()
+            if not self.redis_client:
+                logger.warning("Redis reconnection failed, returning no wallet info")
+                return None
         
         # Create the user key
         user_key = f"messaging:{platform}:user:{user_id}:wallet"
@@ -452,7 +465,7 @@ class WalletService:
                 logger.warning(f"Redis event loop closed, recreating client for {platform}:{user_id}")
                 try:
                     # Recreate the Redis client
-                    self.redis_client = self._create_redis_client()
+                    self._create_redis_client()
                     # Try again with the new client
                     wallet_data = await self.redis_client.get(user_key)
                     if not wallet_data:
@@ -495,7 +508,14 @@ class WalletService:
                     ssl_cert_reqs=None
                 )
             else:
-                self.redis_client = redis.from_url(self.redis_url)
+                # For Upstash Redis, we need to explicitly set ssl_cert_reqs
+                if "upstash" in self.redis_url.lower():
+                    self.redis_client = redis.from_url(
+                        self.redis_url,
+                        ssl_cert_reqs=None
+                    )
+                else:
+                    self.redis_client = redis.from_url(self.redis_url)
                 
             logger.info("Redis client created successfully")
             return self.redis_client
@@ -518,11 +538,14 @@ class WalletService:
         """
         # Check if Redis is available
         if not self.redis_client:
-            logger.warning("Redis not available, wallet deletion not persisted")
-            return {
-                "success": True,
-                "message": "Wallet deletion request processed (not persisted)"
-            }
+            logger.warning("Redis not available, attempting reconnection")
+            self._create_redis_client()
+            if not self.redis_client:
+                logger.warning("Redis reconnection failed, wallet deletion not persisted")
+                return {
+                    "success": True,
+                    "message": "Wallet deletion request processed (not persisted)"
+                }
             
         try:
             # We need to handle both storage formats:
@@ -615,11 +638,14 @@ class WalletService:
         """
         # Check if Redis is available
         if not self.redis_client:
-            logger.warning("Redis not available, chain switch not persisted")
-            return {
-                "success": False,
-                "message": "Redis not available, chain switch not persisted"
-            }
+            logger.warning("Redis not available, attempting reconnection")
+            self._create_redis_client()
+            if not self.redis_client:
+                logger.warning("Redis reconnection failed, chain switch not persisted")
+                return {
+                    "success": False,
+                    "message": "Redis not available, chain switch not persisted"
+                }
             
         try:
             # Get current wallet info
@@ -655,11 +681,11 @@ class WalletService:
                 json.dumps(wallet_info)
             )
             
-            # Update in messaging format too
-            messaging_key = f"messaging:{platform}:user:{user_id}:wallet"
+            # Update chain key separately for messaging format
+            chain_key = f"messaging:{platform}:user:{user_id}:chain"
             await self.redis_client.set(
-                messaging_key,
-                json.dumps(wallet_info)
+                chain_key,
+                chain
             )
             
             logger.info(f"Switched chain for {platform}:{user_id} to {chain}")
