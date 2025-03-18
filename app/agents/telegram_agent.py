@@ -17,7 +17,7 @@ from app.services.swap_service import SwapService
 from app.services.wallet_service import WalletService
 from app.services.smart_wallet_service import SmartWalletService
 from app.services.gemini_service import GeminiService
-from app.models.telegram import TelegramWebhookRequest
+from app.api.routes.messaging_router import TelegramMessage
 
 logger = logging.getLogger(__name__)
 
@@ -202,64 +202,63 @@ class TelegramAgent(MessagingAgent):
             Dict with response content
         """
         logger.info(f"Processing callback query: {callback_data}")
-        
+
         # Handle different callback queries
         if callback_data == "connect_wallet":
             return await self._handle_connect_command(user_id, "", wallet_address)
-        
+
         elif callback_data == "check_balance":
             return await self._handle_balance_command(user_id, "", wallet_address)
-        
+
         elif callback_data == "show_help":
             return await self._handle_help_command(user_id, "", wallet_address)
-        
+
         elif callback_data == "show_networks":
             return await self._handle_networks_command(user_id, "", wallet_address)
-        
+
         elif callback_data == "create_new_wallet":
             return await self._handle_connect_command(user_id, "new", wallet_address)
-        
+
         elif callback_data == "get_faucet":
             return await self._handle_faucet_command(user_id, "", wallet_address)
-        
+
         elif callback_data == "show_address":
             try:
                 # Get wallet data from smart wallet service
                 wallet_data = await self.wallet_service.get_smart_wallet(user_id, platform="telegram")
-                
-                if wallet_data and wallet_data.get("address"):
-                    address = wallet_data.get("address")
-                    return {
-                        "content": f"Your wallet address is:\n\n`{address}`\n\nYou can copy this address to receive funds.",
-                        "parse_mode": "Markdown"
-                    }
-                else:
+
+                if not wallet_data or not wallet_data.get("address"):
                     return {
                         "content": "You don't have a wallet connected yet. Use /connect to create one."
                     }
+                address = wallet_data.get("address")
+                return {
+                    "content": f"Your wallet address is:\n\n`{address}`\n\nYou can copy this address to receive funds.",
+                    "parse_mode": "Markdown"
+                }
             except Exception as e:
                 logger.error(f"Error showing address: {e}")
                 return {
                     "content": "There was an error retrieving your wallet address. Please try again later."
                 }
-        
+
         elif callback_data.startswith("network:"):
             network = callback_data.split(":", 1)[1]
             return await self._handle_network_command(user_id, network, wallet_address)
-            
+
         elif callback_data.startswith("select_network:"):
             network = callback_data.split(":", 1)[1]
             logger.info(f"Switching to network {network} for user {user_id}")
             return await self._handle_network_command(user_id, network, wallet_address)
-        
+
         elif callback_data.startswith("swap_approve:"):
             swap_id = callback_data.split(":", 1)[1]
             return await self._approve_swap(user_id, swap_id, wallet_address)
-        
+
         elif callback_data.startswith("swap_cancel:"):
             swap_id = callback_data.split(":", 1)[1]
             return await self._cancel_swap(user_id, swap_id, wallet_address)
-        
+
         elif callback_data == "suggest_help":
             return {
                 "content": "Here are some things you can ask me about:\n\n" +
@@ -270,10 +269,10 @@ class TelegramAgent(MessagingAgent):
                           "• What is Base/Scroll\n\n" +
                           "You can also use /help to see available commands."
             }
-            
-        elif callback_data == "suggest_swap" or callback_data == "create_wallet":
+
+        elif callback_data in {"suggest_swap", "create_wallet"}:
             return await self._handle_connect_command(user_id, "", wallet_address)
-            
+
         elif callback_data.startswith("suggest_swap_"):
             # Format: suggest_swap_TOKEN
             token = callback_data.split("_")[-1]
@@ -282,7 +281,7 @@ class TelegramAgent(MessagingAgent):
                           f"/swap [amount] {token} for [token]\n\n" +
                           f"Example: /swap 0.1 {token} for USDC"
             }
-        
+
         # Default response
         return {
             "content": "I'm not sure how to handle that request. Try using /help to see available commands."
@@ -390,12 +389,12 @@ class TelegramAgent(MessagingAgent):
                 )
             )
             return {
-                "content": f"Welcome back to Snel DeFi Assistant! 🐌\n\n" +
-                    f"Your wallet `{wallet_address[:6]}...{wallet_address[-4:]}` is connected.\n\n" +
-                    f"What would you like to do today?",
-                "metadata": {
-                    "telegram_buttons": buttons
-                }
+                "content": (
+                    f"Welcome back to Snel DeFi Assistant! 🐌\n\n"
+                    + f"Your wallet `{wallet_address[:6]}...{wallet_address[-4:]}` is connected.\n\n"
+                    + "What would you like to do today?"
+                ),
+                "metadata": {"telegram_buttons": buttons},
             }
 
         # New user flow
