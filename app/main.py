@@ -13,6 +13,7 @@ from contextvars import ContextVar
 import time
 from dotenv import load_dotenv
 import json
+from fastapi.staticfiles import StaticFiles
 
 # Load environment variables from .env files
 load_dotenv()
@@ -36,8 +37,6 @@ is_dev = environment == "development"
 logger.info(f"Environment: {environment}")
 logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
 logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
-logger.info(f"CDP_API_KEY_NAME set: {bool(os.getenv('CDP_API_KEY_NAME'))}")
-logger.info(f"USE_CDP_SDK set: {os.getenv('USE_CDP_SDK')}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -57,6 +56,10 @@ app.add_middleware(
 
 # Add error handler middleware
 app.add_middleware(ErrorHandlerMiddleware)
+
+# Mount static files
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # ---------- BEGIN ROUTER CONFIGURATION ----------
 
@@ -87,17 +90,16 @@ except (ImportError, AttributeError) as e:
 from app.api.routes.dca_router import router as dca_router
 from app.api.routes.brian_router import router as brian_router
 from app.api.routes.wallet_router import router as wallet_router
+from app.api.routes.health import health_router
 
 app.include_router(dca_router, prefix="/api/dca")
 app.include_router(brian_router, prefix="/api/brian")
 app.include_router(wallet_router, prefix="/api/wallet")
+app.include_router(health_router, prefix="/api/health")
 
-# Add health check router
-try:
-    from app.api.routes.health import router as health_router
-    app.include_router(health_router, prefix="/api/health")
-except ImportError:
-    logger.warning("Health router not found, skipping.")
+# Include wallet bridge routes
+from app.api.routes.wallet_bridge import router as wallet_bridge_router
+app.include_router(wallet_bridge_router)  # Already prefixed with /api/wallet-bridge
 
 # ---------- END ROUTER CONFIGURATION ----------
 
@@ -118,151 +120,7 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Dowse Pointless API"}
-
-# Add CDP diagnostic routes directly on the main app
-@app.get("/api/cdp-debug")
-async def cdp_debug_proxy():
-    """Debug the CDP SDK configuration."""
-    # Import needed modules
-    import inspect
-    import traceback
-    import os
-    
-    try:
-        # Import CDP components
-        from cdp import Cdp, SmartWallet
-        from eth_account import Account
-        
-        # Gather detailed information
-        debug_info = {
-            "cdp_info": {
-                "module_path": getattr(Cdp, "__module__", "unknown"),
-                "module_file": getattr(getattr(Cdp, "__module__", None), "__file__", "unknown"),
-                "has_configure": hasattr(Cdp, "configure"),
-                "has_use_server_signer": hasattr(Cdp, "use_server_signer"),
-            },
-            "smart_wallet_info": {
-                "module_path": getattr(SmartWallet, "__module__", "unknown"),
-                "has_create": hasattr(SmartWallet, "create"),
-                "create_signature": str(inspect.signature(SmartWallet.create)) if hasattr(SmartWallet, "create") else "not found",
-                "methods": [m for m in dir(SmartWallet) if not m.startswith("_")],
-            },
-            "environment": {
-                "cdp_api_key_name": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
-                "cdp_api_key_private_key": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
-                "use_cdp_sdk": os.environ.get("USE_CDP_SDK", "false"),
-                "cdp_use_managed_wallet": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
-            }
-        }
-        
-        # Try to create a test EOA
-        try:
-            test_eoa = Account.create()
-            debug_info["eoa_test"] = {
-                "address": test_eoa.address,
-                "private_key_length": len(test_eoa.key.hex()) if hasattr(test_eoa, "key") else "unknown",
-                "success": True
-            }
-        except Exception as eoa_err:
-            debug_info["eoa_test"] = {
-                "error": str(eoa_err),
-                "traceback": traceback.format_exc(),
-                "success": False
-            }
-        
-        # Try to initialize the CDP SDK
-        try:
-            # Get API keys from environment
-            api_key_name = os.getenv("CDP_API_KEY_NAME")
-            api_key_private_key = os.getenv("CDP_API_KEY_PRIVATE_KEY")
-            
-            if api_key_name and api_key_private_key:
-                # Configure the CDP SDK
-                Cdp.configure(api_key_name, api_key_private_key)
-                debug_info["cdp_initialize"] = {
-                    "success": True,
-                    "message": "CDP SDK initialized successfully"
-                }
-                
-                # See if use_server_signer works
-                try:
-                    Cdp.use_server_signer = True
-                    debug_info["cdp_initialize"]["server_signer"] = "enabled successfully"
-                except Exception as ss_err:
-                    debug_info["cdp_initialize"]["server_signer_error"] = str(ss_err)
-            else:
-                debug_info["cdp_initialize"] = {
-                    "success": False,
-                    "message": "API keys not available"
-                }
-        except Exception as cdp_err:
-            debug_info["cdp_initialize"] = {
-                "success": False,
-                "error": str(cdp_err),
-                "traceback": traceback.format_exc()
-            }
-            
-        # Try to create a SmartWallet
-        try:
-            owner = Account.from_key(test_eoa.key)
-            wallet = SmartWallet.create(account=owner)
-            debug_info["wallet_create"] = {
-                "success": True,
-                "address": wallet.address if hasattr(wallet, "address") else "unknown",
-                "wallet_repr": str(wallet),
-                "wallet_dir": dir(wallet)
-            }
-        except Exception as wallet_err:
-            debug_info["wallet_create"] = {
-                "success": False,
-                "error": str(wallet_err),
-                "traceback": traceback.format_exc()
-            }
-            
-        return debug_info
-    except Exception as e:
-        import traceback
-        return {
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-        
-@app.post("/api/test-wallet-creation")
-async def test_wallet_creation_proxy():
-    """Test wallet creation endpoint."""
-    import uuid
-    from datetime import datetime
-    import os
-    
-    try:
-        from app.services.smart_wallet_service import SmartWalletService
-        
-        # Create a new instance of SmartWalletService
-        wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
-        
-        # Generate a unique test ID
-        test_id = str(uuid.uuid4())[:8]
-        
-        # Try to create a wallet
-        result = await wallet_service.create_smart_wallet(
-            user_id=f"test-{test_id}",
-            platform="test"
-        )
-        
-        return {
-            "success": True,
-            "result": result,
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        import traceback
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-            "timestamp": datetime.now().isoformat()
-        }
+    return {"message": "Welcome to Snel Pointless API"}
 
 @app.get("/api/check-wallet/{platform}/{user_id}")
 async def check_wallet_for_user(platform: str, user_id: str):
@@ -270,16 +128,15 @@ async def check_wallet_for_user(platform: str, user_id: str):
     import os
     
     try:
-        from app.services.smart_wallet_service import SmartWalletService
+        from app.services.wallet_service import WalletService
         
-        # Create a new instance of SmartWalletService
-        wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
+        # Create a new instance of WalletService
+        redis_url = os.environ.get("REDIS_URL")
+        wallet_service = WalletService(redis_service=RedisService(redis_url=redis_url) if redis_url else None)
         
         # Get all possible wallet data
         wallet_keys = [
             f"wallet:{platform}:{user_id}",
-            f"smart_wallet:{platform}:{user_id}",
-            f"cdp_wallet:{platform}:{user_id}",
             f"messaging:{platform}:user:{user_id}:wallet"
         ]
         
@@ -302,22 +159,9 @@ async def check_wallet_for_user(platform: str, user_id: str):
             except Exception as e:
                 wallet_data[key] = f"Error: {str(e)}"
         
-        # Try the actual get_smart_wallet method
-        smart_wallet = await wallet_service.get_smart_wallet(user_id, platform)
-        
-        # Try wallet balance (don't fail if this fails)
-        balance_data = None
-        try:
-            balance_data = await wallet_service.get_wallet_balance(user_id, platform, "base_sepolia")
-        except Exception as balance_e:
-            balance_data = {"error": str(balance_e)}
-        
         return {
             "success": True,
-            "wallet_data_in_redis": wallet_data,
-            "get_smart_wallet_result": smart_wallet,
-            "balance_check": balance_data,
-            "cdp_initialized": wallet_service.cdp_initialized
+            "wallet_data_in_redis": wallet_data
         }
     except Exception as e:
         import traceback
@@ -335,14 +179,14 @@ async def test_connect_command(platform: str, user_id: str):
     
     try:
         # Import components
-        from app.services.smart_wallet_service import SmartWalletService
+        from app.services.wallet_service import WalletService 
         from app.agents.telegram_agent import TelegramAgent
         from app.services.token_service import TokenService
         from app.services.swap_service import SwapService
         
         # Initialize required services
         redis_url = os.environ.get("REDIS_URL")
-        wallet_service = SmartWalletService(redis_url=redis_url)
+        wallet_service = WalletService(redis_service=RedisService(redis_url=redis_url) if redis_url else None)
         token_service = TokenService()
         swap_service = SwapService(token_service=token_service, swap_agent=None)
         

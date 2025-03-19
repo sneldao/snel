@@ -24,14 +24,16 @@ class MessagingAgent(PointlessAgent):
     token_service: TokenService = Field(default=None)
     swap_service: SwapService = Field(default=None)
     price_agent: PriceAgent = Field(default=None)
+    gemini_service: Any = Field(default=None)
     
-    def __init__(self, token_service: TokenService, swap_service: SwapService):
+    def __init__(self, token_service: TokenService, swap_service: SwapService, gemini_service=None):
         """
         Initialize the messaging agent.
         
         Args:
             token_service: Service for token lookups
             swap_service: Service for swap operations
+            gemini_service: Optional service for AI-generated responses
         """
         # Initialize the base class with a prompt
         prompt = """You are Snel, a friendly but comically slow crypto assistant for Dowse Pointless, a DeFi platform.
@@ -63,6 +65,7 @@ class MessagingAgent(PointlessAgent):
         object.__setattr__(self, "token_service", token_service)
         object.__setattr__(self, "swap_service", swap_service)
         object.__setattr__(self, "price_agent", PriceAgent())
+        object.__setattr__(self, "gemini_service", gemini_service)
         
     async def process_message(
         self, 
@@ -88,6 +91,97 @@ class MessagingAgent(PointlessAgent):
             Response to send back to the user
         """
         try:
+            # Check if this is a command (starts with /)
+            if message and message.startswith('/'):
+                # Handle specific commands
+                command = message.split()[0].lower().strip()
+                
+                # Connect wallet
+                if command in ['/connect', '/wallet']:
+                    return self._handle_connect_wallet(platform, user_id)
+                    
+                # Balance check
+                if command in ['/balance', '/bal']:
+                    if not wallet_address:
+                        return {
+                            "content": "🐌 You need to connect a wallet first! Use /connect to set up your wallet.",
+                            "requires_wallet": True,
+                            "metadata": {
+                                "telegram_buttons": [[{"text": "🔗 Connect Wallet", "callback_data": "/connect"}]]
+                            }
+                        }
+                    return await self._handle_balance_check(wallet_address, chain_id)
+                
+                # Price check
+                if command in ['/price', '/p']:
+                    return await self._handle_price_check(message, chain_id)
+                
+                # Swap tokens
+                if command in ['/swap', '/s']:
+                    if not wallet_address:
+                        return {
+                            "content": "🐌 You need to connect a wallet first before swapping tokens! Use /connect to set up your wallet.",
+                            "requires_wallet": True,
+                            "metadata": {
+                                "telegram_buttons": [[{"text": "🔗 Connect Wallet", "callback_data": "/connect"}]]
+                            }
+                        }
+                    return await self._handle_swap_request(message, wallet_address, chain_id)
+                
+                # Help command
+                if command in ['/help', '/h', '/start']:
+                    commands = [
+                        "🔗 */connect* - Connect your wallet",
+                        "💰 */balance* - Check your balances",
+                        "💱 */swap 0.01 ETH for USDC* - Swap tokens",
+                        "📊 */price ETH* - Check token prices",
+                        "🔄 */network base* - Switch blockchain networks",
+                        "🔍 */networks* - See available networks",
+                        "ℹ️ */help* - Show this help message"
+                    ]
+                    
+                    if not wallet_address:
+                        wallet_msg = "🐌 Hi! I'm Snel, your DeFi assistant. You haven't connected a wallet yet. Use */connect* to get started!"
+                        buttons = [[{"text": "🔗 Connect Wallet", "callback_data": "/connect"}]]
+                    else:
+                        wallet_msg = f"🐌 Hi! I'm Snel, your DeFi assistant. Your wallet is connected and ready to use!"
+                        buttons = [
+                            [
+                                {"text": "💰 Balance", "callback_data": "/balance"},
+                                {"text": "💱 Swap", "callback_data": "/swap 0.01 ETH for USDC"}
+                            ]
+                        ]
+                    
+                    return {
+                        "content": f"{wallet_msg}\n\n*Available Commands:*\n" + "\n".join(commands),
+                        "metadata": {
+                            "telegram_buttons": buttons
+                        }
+                    }
+                
+                # If we get here, it's an unknown command - try AI fallback if available
+                if self.gemini_service:
+                    try:
+                        response = await self.gemini_service.answer_crypto_question(
+                            f"I received the command '{message}', but I don't understand it. Please explain what this command might mean and suggest some valid commands like /connect, /price, /swap, etc.",
+                            {"wallet_address": wallet_address} if wallet_address else None
+                        )
+                        return {
+                            "content": response,
+                            "metadata": {
+                                "telegram_buttons": [[{"text": "📚 Help", "callback_data": "/help"}]]
+                            }
+                        }
+                    except Exception as ai_error:
+                        logger.warning(f"AI fallback failed: {ai_error}")
+                
+                return {
+                    "content": f"🐌 Sorry, I don't understand the command '{command}'. Try /help to see available commands.",
+                    "metadata": {
+                        "telegram_buttons": [[{"text": "📚 Help", "callback_data": "/help"}]]
+                    }
+                }
+            
             # Check if this is a wallet connection request
             if "connect wallet" in message.lower():
                 return self._handle_connect_wallet(platform, user_id)
@@ -96,37 +190,78 @@ class MessagingAgent(PointlessAgent):
             if "balance" in message.lower() or "check balance" in message.lower():
                 if not wallet_address:
                     return {
-                        "content": "Please connect your wallet first by sending 'connect wallet'",
-                        "requires_wallet": True
+                        "content": "🐌 You need to connect a wallet first! Use /connect to set up your wallet.",
+                        "requires_wallet": True,
+                        "metadata": {
+                            "telegram_buttons": [[{"text": "🔗 Connect Wallet", "callback_data": "/connect"}]]
+                        }
                     }
                 return await self._handle_balance_check(wallet_address, chain_id)
+                
+            # Check if this is a price check request
+            if "price" in message.lower() or "how much" in message.lower():
+                return await self._handle_price_check(message, chain_id)
                 
             # Check if this is a swap request
             if "swap" in message.lower():
                 if not wallet_address:
                     return {
-                        "content": "Please connect your wallet first by sending 'connect wallet'",
-                        "requires_wallet": True
+                        "content": "🐌 You need to connect a wallet first before swapping tokens! Use /connect to set up your wallet.",
+                        "requires_wallet": True,
+                        "metadata": {
+                            "telegram_buttons": [[{"text": "🔗 Connect Wallet", "callback_data": "/connect"}]]
+                        }
                     }
                 return await self._handle_swap_request(message, wallet_address, chain_id)
-                
-            # Check if this is a price check request
-            if "price" in message.lower() or "how much is" in message.lower():
-                return await self._handle_price_check(message, chain_id)
-                
-            # Default response for unknown commands
-            return {
-                "content": "I can help you with the following commands:\n\n"
-                        "- Connect wallet\n"
-                        "- Check balance\n"
-                        "- Swap [amount] [token] for [token]\n"
-                        "- Price of [token]"
-            }
             
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
+            # For general messages, use Gemini if available
+            if self.gemini_service:
+                try:
+                    response = await self.gemini_service.answer_crypto_question(
+                        message,
+                        {"wallet_address": wallet_address} if wallet_address else None
+                    )
+                    
+                    # Add buttons based on context
+                    buttons = []
+                    if wallet_address:
+                        buttons.append([
+                            {"text": "💰 Balance", "callback_data": "/balance"},
+                            {"text": "💱 Swap", "callback_data": "/swap 0.01 ETH for USDC"}
+                        ])
+                    else:
+                        buttons.append([{"text": "🔗 Connect Wallet", "callback_data": "/connect"}])
+                    
+                    buttons.append([
+                        {"text": "📊 Prices", "callback_data": "/price ETH"},
+                        {"text": "ℹ️ Help", "callback_data": "/help"}
+                    ])
+                    
+                    return {
+                        "content": response,
+                        "metadata": {
+                            "telegram_buttons": buttons
+                        }
+                    }
+                except Exception as ai_error:
+                    logger.warning(f"Gemini response failed: {ai_error}")
+            
+            # If all else fails or no Gemini service, suggest commands
             return {
-                "content": f"Sorry, I encountered an error: {str(e)}"
+                "content": "🐌 I'm not sure what you're asking for. Try using one of these commands:\n\n*/connect* - Connect your wallet\n*/balance* - Check your balance\n*/price ETH* - Check token prices\n*/swap 0.01 ETH for USDC* - Swap tokens",
+                "metadata": {
+                    "telegram_buttons": [
+                        [{"text": "💰 Balance", "callback_data": "/balance"}],
+                        [{"text": "📊 Prices", "callback_data": "/price ETH"}],
+                        [{"text": "ℹ️ Help", "callback_data": "/help"}]
+                    ]
+                }
+            }
+                
+        except Exception as e:
+            logger.exception(f"Error processing message: {e}")
+            return {
+                "content": "🐌 Oops! I encountered an error while processing your message. Please try again or use a specific command like */help*."
             }
     
     def _handle_connect_wallet(self, platform: str, user_id: str) -> Dict[str, Any]:

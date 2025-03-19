@@ -89,6 +89,7 @@ class GeminiService:
         self,
         user_query: str,
         wallet_info: Optional[Dict[str, Any]] = None,
+        context: Optional[List[Dict[str, str]]] = None,
         max_tokens: int = 500
     ) -> str:
         """
@@ -97,6 +98,7 @@ class GeminiService:
         Args:
             user_query: The user's question
             wallet_info: Optional wallet information for context
+            context: Optional conversation context (list of role/content pairs)
             max_tokens: Maximum tokens to generate
             
         Returns:
@@ -136,6 +138,7 @@ class GeminiService:
             5. Never make up transaction data or wallet balances
             6. If you don't know something, admit it and suggest appropriate commands
             7. When discussing prices or market data, indicate these are estimates
+            8. Maintain conversation context and refer back to previous messages naturally
             
             COMMANDS USERS SHOULD USE (not you):
             - /connect - Create or connect wallet
@@ -144,36 +147,48 @@ class GeminiService:
             - /balance - Check wallet balance
             - /network [network] - Switch networks
             - /networks - View available networks
-            - /keys - Explain key management
             - /help - View all commands
             
             IMPORTANT: When suggesting commands, format them like */command* so they are clickable in Telegram.
             """
 
             # Build conversation context
-            context = "The user is interacting with a Telegram bot that provides DeFi services."
+            base_context = "The user is interacting with a Telegram bot that provides DeFi services."
             if wallet_info and wallet_info.get("wallet_address"):
-                context += f" The user has a connected wallet with address {wallet_info['wallet_address']}."
+                base_context += f" The user has a connected wallet with address {wallet_info['wallet_address']}."
 
             # Build API request with current model name
             api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
             headers = {"Content-Type": "application/json"}
 
+            # Build conversation history
+            contents = [
+                {
+                    "role": "user",
+                    "parts": [{"text": system_instruction}]
+                },
+                {
+                    "role": "model",
+                    "parts": [{"text": "I understand. I'll follow these guidelines to provide helpful information about DeFi and crypto while directing users to the appropriate commands."}]
+                }
+            ]
+
+            # Add conversation context if provided
+            if context:
+                for msg in context:
+                    contents.append({
+                        "role": msg["role"],
+                        "parts": [{"text": msg["content"]}]
+                    })
+
+            # Add current query with base context
+            contents.append({
+                "role": "user",
+                "parts": [{"text": f"Context: {base_context}\n\nUser query: {user_query}"}]
+            })
+
             payload = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": system_instruction}]
-                    },
-                    {
-                        "role": "model",
-                        "parts": [{"text": "I understand. I'll follow these guidelines to provide helpful information about DeFi and crypto while directing users to the appropriate commands for transactions."}]
-                    },
-                    {
-                        "role": "user",
-                        "parts": [{"text": f"Context: {context}\n\nUser query: {user_query}"}]
-                    }
-                ],
+                "contents": contents,
                 "generationConfig": {
                     "temperature": 0.2,
                     "topK": 40,
@@ -230,7 +245,7 @@ class GeminiService:
                         logger.info(f"Retrying with verified model: {model}")
                         self.model_name = model
                         # Call self recursively to retry
-                        return await self.answer_crypto_question(user_query, wallet_info, max_tokens)
+                        return await self.answer_crypto_question(user_query, wallet_info, context, max_tokens)
 
                 # Log error
                 logger.error(f"Error from Gemini API: {response.status_code} - {response.text}")

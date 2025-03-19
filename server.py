@@ -5,8 +5,12 @@ This file configures the environment and starts the FastAPI application.
 
 import os
 import sys
+import ssl
 import logging
+import warnings
+import urllib3
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Add the current directory to the Python path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -25,20 +29,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("Starting Dowse Pointless server")
 
-# Configure SSL verification for development
-if os.getenv("DISABLE_SSL_VERIFY", "").lower() == "true":
-    # Set a global environment variable to prevent duplicate warnings
-    os.environ["SSL_WARNING_SHOWN"] = "true"
+# Global flag to track if we've shown SSL warnings
+SSL_WARNING_SHOWN = False
+
+# Handle SSL certificate issues
+if "SSL_CERT_FILE" in os.environ:
+    # Check if the file exists
+    cert_file = os.environ["SSL_CERT_FILE"]
+    if not os.path.exists(cert_file):
+        logger.warning(f"SSL_CERT_FILE was set to a non-existent path: {cert_file}")
+        # Remove the environment variable to prevent errors
+        os.environ.pop("SSL_CERT_FILE")
+        SSL_WARNING_SHOWN = True
+
+# Disable SSL verification if needed
+if os.environ.get("DISABLE_SSL_VERIFY", "").lower() in ("true", "1", "yes"):
+    if not SSL_WARNING_SHOWN:
+        logger.warning(
+            "⚠️ SSL VERIFICATION DISABLED: This is insecure and should only be used in development."
+        )
+        SSL_WARNING_SHOWN = True
     
-    # Display a more user-friendly warning
-    logger.warning("⚠️ SECURITY WARNING: SSL certificate verification is disabled. This makes your connections less secure and should ONLY be used during development.")
+    # Disable SSL warnings
+    warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
     
-    # Disable urllib3 warnings
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    # Set default SSL context to unverified
+    try:
+        ssl._create_default_https_context = ssl._create_unverified_context
+    except AttributeError:
+        logger.warning("Failed to disable SSL verification")
 
 # Load environment variables
-from dotenv import load_dotenv
 env_path = Path(__file__).parent / '.env'
 load_dotenv(env_path)
 env_local_path = Path(__file__).parent / '.env.local'
@@ -58,23 +79,20 @@ required_vars = [
     "BRIAN_API_KEY"  # Add Brian API key as required
 ]
 
-# Check for CDP SDK if enabled
-if os.getenv("USE_CDP_SDK", "").lower() in ["true", "1", "yes"]:
-    logger.info("Coinbase CDP SDK is enabled, checking required variables")
-    required_vars.extend([
-        "CDP_API_KEY_NAME",
-        "CDP_API_KEY_PRIVATE_KEY"
-    ])
-
+# Check for required environment variables
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 if missing_vars:
     logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
     sys.exit(1)
 
+# Check for wallet bridge required variables
+if not os.getenv("WALLET_BRIDGE_URL"):
+    logger.warning("WALLET_BRIDGE_URL is not set - wallet bridge functionality may be limited")
+
 # Log important environment variables (without exposing sensitive values)
 logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
 logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
-logger.info(f"CDP_USE_MANAGED_WALLET: {os.getenv('CDP_USE_MANAGED_WALLET')}")
+logger.info(f"WALLET_BRIDGE_URL: {os.getenv('WALLET_BRIDGE_URL')}")
 
 # Import the app
 from app.main import app

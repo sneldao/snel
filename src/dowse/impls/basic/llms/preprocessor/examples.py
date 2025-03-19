@@ -1,6 +1,6 @@
 import json
 
-from emp_agents.models import AssistantMessage, ToolCall, ToolMessage, UserMessage
+from app.utils.models import AssistantMessage, ToolCall, ToolMessage, UserMessage  # Updated from emp_agents
 
 EXAMPLES = [
     [

@@ -5,7 +5,8 @@ import logging
 import json
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, Request, HTTPException, BackgroundTasks
-from app.agents.telegram_agent import TelegramAgent
+# Import at function level instead
+# from app.agents.telegram_agent import TelegramAgent
 from app.api.dependencies import get_telegram_agent
 from app.services.wallet_service import WalletService
 from app.api.dependencies import get_wallet_service
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 async def process_telegram_message(
     request: Request,
     background_tasks: BackgroundTasks,
-    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
+    telegram_agent: Any = Depends(get_telegram_agent),
     wallet_service: WalletService = Depends(get_wallet_service)
 ) -> Dict[str, Any]:
     """

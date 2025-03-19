@@ -28,6 +28,11 @@ You're not pessimistic, just comically slow and relaxed about everything.
 Occasionally make jokes about your slow pace as a snail, and how pointless it all is.
 Never use markdown formatting unless specifically requested."""
 
+# Price agent prompt
+PRICE_AGENT_PROMPT = """You are a price checking assistant. Your responses should be concise and focused on price information.
+When asked about prices, respond with the current price in a clear, simple format.
+If you don't have price information, suggest checking a specific token or ask for clarification."""
+
 class AgentFactory:
     """Factory for creating agent instances."""
     
@@ -41,30 +46,30 @@ class AgentFactory:
         """Create an agent of the specified type."""
         logger.info(f"Creating {agent_type} agent")
 
-        if agent_type == "dca":
+        if agent_type == "brian":
+            # Create a Brian agent for token transfers, bridging, and balance checking
+            return BrianAgent(
+                token_service=self.token_service
+            )
+        elif agent_type == "dca":
             return DCAAgent(
                 token_service=self.token_service,
                 redis_service=self.redis_service
+            )
+        elif agent_type == "messaging":
+            # For messaging agent, we need to create a swap service
+            swap_agent = SimpleSwapAgent()
+            swap_service = SwapService(token_service=self.token_service, swap_agent=swap_agent)
+
+            return MessagingAgent(
+                token_service=self.token_service,
+                swap_service=swap_service
             )
         elif agent_type == "price":
             # Create price agent without provider to avoid HTTPX compatibility issues
             return PriceAgent()
         elif agent_type == "swap":
             return SimpleSwapAgent()
-        elif agent_type == "messaging":
-            # For messaging agent, we need to create a swap service
-            swap_agent = SimpleSwapAgent()
-            swap_service = SwapService(token_service=self.token_service, swap_agent=swap_agent)
-            
-            return MessagingAgent(
-                token_service=self.token_service,
-                swap_service=swap_service
-            )
-        elif agent_type == "brian":
-            # Create a Brian agent for token transfers, bridging, and balance checking
-            return BrianAgent(
-                token_service=self.token_service
-            )
         else:
             # Default agent
             return PointlessAgent(prompt=BASE_PROMPT, model="gpt-4-turbo-preview")

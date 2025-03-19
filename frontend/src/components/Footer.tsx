@@ -4,8 +4,11 @@ import {
   Text,
   HStack,
   Divider,
+  Icon,
+  Tooltip,
 } from "@chakra-ui/react";
 import NextLink from "next/link";
+import { FaTelegram } from "react-icons/fa";
 
 export const Footer = () => {
   return (
@@ -57,6 +60,20 @@ export const Footer = () => {
         >
           terms
         </ChakraLink>
+        <Divider orientation="vertical" height="20px" />
+        <Tooltip label="Chat with SNEL on Telegram" placement="top">
+          <ChakraLink
+            href="https://t.me/SnelBot"
+            isExternal
+            color="blue.500"
+            _hover={{ textDecoration: "none", color: "blue.600" }}
+            display="flex"
+            alignItems="center"
+          >
+            <Icon as={FaTelegram} boxSize={4} />
+            <Text ml={1}>telegram</Text>
+          </ChakraLink>
+        </Tooltip>
       </HStack>
     </Box>
   );

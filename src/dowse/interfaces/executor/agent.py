@@ -1,10 +1,10 @@
 import logging
 from typing import Awaitable, Callable, Generic, Self, Type, TypeVar
 
-from emp_agents import AgentBase
-from emp_agents.models import Message, Provider
-from emp_agents.providers import OpenAIModelType, OpenAIProvider
-from emp_agents.utils import count_tokens
+from app.utils import AgentBase  # Updated from emp_agents
+from app.utils.models import Message, Provider  # Updated from emp_agents
+from app.utils.providers import OpenAIModelType, OpenAIProvider  # Updated from emp_agents
+from app.utils.utils import count_tokens  # Updated from emp_agents
 from pydantic import BaseModel, Field, PrivateAttr
 
 from dowse.models.message import AgentMessage

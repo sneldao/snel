@@ -1,60 +1,60 @@
 """
-Patches for modules that are no longer used but still referenced.
-This provides mock implementations to avoid import errors.
+Patches for Vercel deployment.
+This file contains monkey patches for modules that need to be modified for Vercel deployment.
 """
-import logging
-import sys
+
 import os
+import ssl
+import logging
+import urllib3
+import warnings
 
-# Create a logger for dowse
-dowse_logger = logging.getLogger("dowse")
+def patch_ssl_verification():
+    """
+    Patch SSL verification to handle issues in serverless environments.
+    """
+    # Disable SSL warnings when verification is disabled
+    if os.environ.get("DISABLE_SSL_VERIFY", "").lower() in ("true", "1", "yes"):
+        warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
+        
+        # Set default SSL context to unverified for requests
+        try:
+            ssl._create_default_https_context = ssl._create_unverified_context
+            logging.warning(
+                "⚠️ SSL VERIFICATION DISABLED: This is insecure and should only be used in development."
+            )
+        except AttributeError:
+            logging.warning("Failed to disable SSL verification")
 
-# Configure dowse logger with reasonable defaults
-def configure_dowse_logger():
-    """Configure the dowse logger with reasonable defaults."""
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    dowse_logger.addHandler(handler)
-    dowse_logger.setLevel(logging.INFO)
-    dowse_logger.info("Dowse logger monkey patched for serverless environment")
-
-# Create a module-like object to be imported as "dowse"
-class DowseMock:
-    """Mock implementation of the dowse module."""
-    logger = dowse_logger
+def patch_dowse_logger():
+    """
+    Patch the Dowse logger to work in serverless environments.
+    """
+    # Configure root logger
+    logging.basicConfig(
+        level=logging.INFO if os.environ.get("LOG_LEVEL") != "DEBUG" else logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     
-    # Add other attributes that might be accessed
-    def __getattr__(self, name):
-        # For any attributes we haven't explicitly defined, return a dummy object
-        # that returns itself for any attribute access or method call
-        return DummyObject(name)
-
-class DummyObject:
-    """A dummy object that returns itself for any attribute access or method call."""
-    def __init__(self, name):
-        self.name = name
+    # Create a Dowse logger that will be used throughout the application
+    logger = logging.getLogger("dowse")
+    logger.setLevel(logging.INFO if os.environ.get("LOG_LEVEL") != "DEBUG" else logging.DEBUG)
     
-    def __getattr__(self, name):
-        return self
+    # Ensure the logger has at least one handler
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
     
-    def __call__(self, *args, **kwargs):
-        return self
+    logger.info("Dowse logger configured for serverless environment")
 
-# Create a mock instance
-dowse_mock = DowseMock()
-
-def patch_modules():
-    """Patch sys.modules with mock implementations."""
-    # Only patch if the real module isn't already loaded
-    if 'dowse' not in sys.modules:
-        sys.modules['dowse'] = dowse_mock
+def patch_dowse_modules():
+    """
+    Apply all needed patches for Vercel deployment.
+    """
+    patch_dowse_logger()
+    patch_ssl_verification()
     
-    # Configure the logger
-    configure_dowse_logger()
-
-# Make the patch function available as a direct import
-patch_dowse_modules = patch_modules
-
-# Automatically apply the patches when this module is imported
-patch_modules() 
+if __name__ == "__main__":
+    patch_dowse_modules() 

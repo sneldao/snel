@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional, Literal
+from typing import Dict, Any, List, Optional, Literal, TYPE_CHECKING
 import logging
 import json
 import httpx
@@ -9,12 +9,14 @@ from datetime import datetime
 from dotenv import load_dotenv
 import sys
 import uuid
+import time
+import asyncio
 
 # Load environment variables from .env files
 load_dotenv()
 load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
-from app.api.dependencies import get_redis_service, get_token_service, get_wallet_service, get_wallet_service_factory, get_gemini_service
+from app.api.dependencies import get_redis_service, get_token_service, get_wallet_service, get_wallet_service_factory, get_gemini_service, get_wallet_bridge_service
 from app.agents.agent_factory import get_agent_factory
 from app.services.pipeline import Pipeline
 from app.services.token_service import TokenService
@@ -22,9 +24,9 @@ from app.services.redis_service import RedisService
 from app.agents.messaging_agent import MessagingAgent
 from app.services.swap_service import SwapService
 from app.agents.simple_swap_agent import SimpleSwapAgent
-from app.agents.telegram_agent import TelegramAgent
-from app.services.wallet_service import WalletService
 from app.services.gemini_service import GeminiService
+from app.services.telegram_service import send_telegram_message_with_buttons
+from app.services.wallet_bridge_service import WalletBridgeService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messaging"], prefix="")
@@ -34,6 +36,15 @@ WHATSAPP_API_KEY = os.getenv("WHATSAPP_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 logger.info(f"Loaded TELEGRAM_BOT_TOKEN: {TELEGRAM_BOT_TOKEN[:5]}... from environment")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+
+# Global cache for services
+_service_cache = {}
+
+# Rate limiting for Telegram API to prevent "Too Many Requests" errors
+_telegram_rate_limit = {
+    "last_request_time": 0,
+    "min_interval": 0.05  # 50ms between requests (20 per second)
+}
 
 class WhatsAppMessage(BaseModel):
     """WhatsApp message webhook payload."""
@@ -89,10 +100,19 @@ async def get_messaging_agent(
 async def get_telegram_agent(
     redis_service: RedisService = Depends(get_redis_service),
     token_service: TokenService = Depends(get_token_service),
-    wallet_service: WalletService = Depends(get_wallet_service_factory),
+    wallet_bridge_service: WalletBridgeService = Depends(get_wallet_bridge_service),
     gemini_service: GeminiService = Depends(get_gemini_service)
-) -> TelegramAgent:
+) -> Any:
     """Get an instance of TelegramAgent."""
+    # Check if we already have an instance in the cache
+    cache_key = 'telegram_agent'
+    if cache_key in _service_cache:
+        # Return the cached instance
+        return _service_cache[cache_key]
+    
+    # Import TelegramAgent here to prevent circular imports
+    from app.agents.telegram_agent import TelegramAgent
+    
     # Create a simple swap agent for the swap service
     swap_agent = SimpleSwapAgent()
     
@@ -100,12 +120,21 @@ async def get_telegram_agent(
     swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
     
     # Create and return the telegram agent
-    return TelegramAgent(
+    agent = TelegramAgent(
         token_service=token_service,
         swap_service=swap_service,
-        wallet_service=wallet_service,
-        gemini_service=gemini_service
+        wallet_bridge_service=wallet_bridge_service
     )
+    
+    # Add gemini_service as an attribute for conversational responses
+    if gemini_service:
+        agent.gemini_service = gemini_service
+    
+    # Cache the instance
+    _service_cache[cache_key] = agent
+    logger.info("Created and cached TelegramAgent instance")
+    
+    return agent
 
 @router.post("/whatsapp/webhook", response_model=Dict[str, Any])
 async def whatsapp_webhook(
@@ -175,7 +204,23 @@ async def telegram_webhook(
     try:
         # Get the raw request body for debugging
         body = await request.json()
-        logger.info(f"Received Telegram webhook: {body.get('update_id', 'unknown')}")
+        update_id = body.get('update_id', 'unknown')
+        logger.info(f"Received Telegram webhook: {update_id}")
+        
+        # Add detailed logging
+        message = body.get('message', {})
+        callback_query = body.get('callback_query', {})
+        
+        if message:
+            user_id = message.get('from', {}).get('id', 'unknown')
+            text = message.get('text', '')
+            logger.info(f"Telegram message from user {user_id}: '{text}'")
+        elif callback_query:
+            user_id = callback_query.get('from', {}).get('id', 'unknown')
+            data = callback_query.get('data', '')
+            logger.info(f"Telegram callback from user {user_id}: '{data}'")
+        else:
+            logger.warning(f"Unknown update type in Telegram webhook: {list(body.keys())}")
         
         # Process in background to avoid timeouts
         background_tasks.add_task(process_telegram_webhook, body)
@@ -345,124 +390,74 @@ async def process_whatsapp_message(
             pass
 
 async def process_telegram_webhook(update_dict: Dict[str, Any]):
-    """Process a Telegram webhook update in the background."""
+    """Process a Telegram webhook update."""
     try:
-        # Log the entire update for debugging
-        logger.info(f"Processing Telegram webhook: {json.dumps(update_dict, indent=2)}")
+        update_id = update_dict.get('update_id', 'unknown')
+        logger.info(f"Processing Telegram webhook: {update_id}")
         
-        # Create dependencies
-        redis_service = RedisService(redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
-        token_service = TokenService()
+        # Initialize services
+        redis_service = await get_redis_service()
+        token_service = await get_token_service()
+        wallet_bridge_service = await get_wallet_bridge_service()
+        logger.info("Initializing WalletBridgeService for Telegram webhook")
         
-        # Get wallet service - Always prefer SmartWalletService when CDP_SDK is enabled
-        if os.getenv("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]:
-            try:
-                from app.services.smart_wallet_service import SmartWalletService
-                wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
-                logger.info("Using SmartWalletService for Telegram webhook")
-            except Exception as e:
-                logger.error(f"Error initializing SmartWalletService: {e}")
-                logger.warning("Falling back to basic WalletService - CDP features will be unavailable")
-                wallet_service = WalletService(redis_service=redis_service)
-        else:
-            logger.info("USE_CDP_SDK is disabled, using basic WalletService")
-            wallet_service = WalletService(redis_service=redis_service)
-        
-        # Create swap agent and service
-        swap_agent = SimpleSwapAgent()
-        swap_service = SwapService(token_service=token_service, swap_agent=swap_agent)
-        
-        # Create Gemini service for AI responses
-        gemini_api_key = os.environ.get("GEMINI_API_KEY")
-        gemini_service = GeminiService(api_key=gemini_api_key) if gemini_api_key else None
-        
-        # Create the telegram agent
-        telegram_agent = TelegramAgent(
+        # Initialize Telegram agent
+        telegram_agent = await get_telegram_agent(
+            redis_service=redis_service,
             token_service=token_service,
-            swap_service=swap_service,
-            wallet_service=wallet_service,
-            gemini_service=gemini_service
+            wallet_bridge_service=wallet_bridge_service,
+            gemini_service=await get_gemini_service()
         )
+        logger.info("Successfully created TelegramAgent for webhook")
         
-        # Extract user_id from the update based on the update type
-        user_id = None
-        message_text = None
-        
-        if update_dict.get("message", {}) and update_dict["message"].get("from", {}).get("id"):
-            user_id = update_dict["message"]["from"]["id"]
-            message_text = update_dict["message"].get("text", "")
-            logger.info(f"Telegram message from user {user_id}: '{message_text}'")
-        elif update_dict.get("callback_query", {}) and update_dict["callback_query"].get("from", {}).get("id"):
-            user_id = update_dict["callback_query"]["from"]["id"]
-            callback_data = update_dict["callback_query"].get("data", "")
-            logger.info(f"Telegram callback from user {user_id}: '{callback_data}'")
-        
-        if not user_id:
-            logger.warning("No user_id found in Telegram update")
+        # Extract message data
+        message = update_dict.get('message', {})
+        if not message:
+            logger.warning("No message found in update")
             return
+            
+        # Get user ID and message text
+        user_id = str(message.get('from', {}).get('id'))
+        text = message.get('text', '')
         
-        # Check if user has a linked wallet
+        if not user_id or not text:
+            logger.warning("Missing user_id or text in message")
+            return
+            
+        logger.info(f"Telegram message from user {user_id}: '{text}'")
+        
+        # Get user's wallet address if connected
         wallet_address = None
-        key = f"messaging:telegram:user:{user_id}:wallet"
-        wallet_address = await redis_service.get(key)
+        if wallet_bridge_service:
+            try:
+                wallet_info = await wallet_bridge_service.get_wallet_info(user_id, platform="telegram")
+                if wallet_info and "address" in wallet_info:
+                    wallet_address = wallet_info["address"]
+            except Exception as e:
+                logger.warning(f"Error getting wallet info: {e}")
         
-        # Process the update with the TelegramAgent
-        result = await telegram_agent.process_telegram_update(
+        # Process the message
+        response = await telegram_agent.process_telegram_update(
             update=update_dict,
-            user_id=str(user_id),
+            user_id=user_id,
             wallet_address=wallet_address
         )
         
-        # If result contains a callback query answer, send it back
-        callback_query_id = update_dict.get("callback_query", {}).get("id")
-        if callback_query_id:
-            await send_telegram_callback_answer(callback_query_id)
-        
-        # If there's a wallet address in the result, store it
-        if result.get("wallet_address") is not None:
-            if result.get("wallet_address"):  # Non-empty wallet address
-                await redis_service.set(
-                    key=f"messaging:telegram:user:{user_id}:wallet",
-                    value=result["wallet_address"]
-                )
-                # Also store the reverse mapping
-                await redis_service.set(
-                    key=f"wallet:{result['wallet_address']}:telegram:user",
-                    value=str(user_id)
-                )
-            else:  # Empty wallet address = disconnect wallet
-                # Delete the mappings
-                old_wallet = await redis_service.get(f"messaging:telegram:user:{user_id}:wallet")
-                if old_wallet:
-                    await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
-                await redis_service.delete(f"messaging:telegram:user:{user_id}:wallet")
-        
-        # Send response back to the user
-        content = result.get("content", "")
-        if content:
-            # Check if there are any Telegram-specific buttons to include
-            buttons = None
-            if result.get("metadata", {}) and result["metadata"].get("telegram_buttons"):
-                buttons = result["metadata"]["telegram_buttons"]
-                
-            # Send the message with optional buttons
-            chat_id = None
-            if update_dict.get("message", {}) and update_dict["message"].get("chat", {}).get("id"):
-                chat_id = update_dict["message"]["chat"]["id"]
-            elif update_dict.get("callback_query", {}) and update_dict["callback_query"].get("message", {}).get("chat", {}).get("id"):
-                chat_id = update_dict["callback_query"]["message"]["chat"]["id"]
-                
-            if chat_id:
+        if response:
+            # Send the response
+            content = response.get("content", "")
+            if content:
+                logger.info(f"Sending Telegram message to {user_id} (length: {len(content)})")
                 await send_telegram_message_with_buttons(
-                    chat_id=str(chat_id),
-                    message=content,
-                    buttons=buttons
+                    chat_id=user_id,
+                    message=content
                 )
-        
+                
         logger.info(f"Successfully processed Telegram update for user {user_id}")
         
     except Exception as e:
-        logger.exception(f"Error processing Telegram webhook in background: {e}")
+        logger.exception(f"Error processing Telegram webhook: {e}")
+        # Don't raise the exception - we want to acknowledge receipt even if processing fails
 
 async def send_whatsapp_message(to: str, message: str):
     """Send a message via WhatsApp Business API."""
@@ -667,7 +662,7 @@ async def reload_env():
 @router.post("/telegram/process", response_model=Dict[str, Any])
 async def process_telegram_request(
     request: MessagingRequest,
-    telegram_agent: TelegramAgent = Depends(get_telegram_agent),
+    telegram_agent: Any = Depends(get_telegram_agent),
     redis_service: RedisService = Depends(get_redis_service)
 ):
     """
@@ -676,434 +671,162 @@ async def process_telegram_request(
     This endpoint is separate from the webhook to isolate the bot functionality
     from the web interface.
     """
+    start_time = time.time()
     try:
         # Check if this is coming from our Telegram bot
         metadata = request.metadata or {}
         is_from_bot = metadata.get("source") == "telegram_bot"
         
+        # Limit the amount of logging for performance
         logger.info(f"Processing Telegram request from {'bot' if is_from_bot else 'webhook'} for user {request.user_id}")
-        
-        # Add more verbose logging for debugging
-        if is_from_bot:
-            logger.info(f"Bot version: {metadata.get('version')}, timestamp: {metadata.get('timestamp')}")
         
         # Check if user has a linked wallet
         wallet_address = None
         if redis_service:
-            key = f"messaging:telegram:user:{request.user_id}:wallet"
-            wallet_address = await redis_service.get(key)
+            try:
+                key = f"messaging:telegram:user:{request.user_id}:wallet"
+                wallet_address = await redis_service.get(key)
+            except Exception as redis_error:
+                logger.warning(f"Error fetching wallet: {redis_error}")
         
-        # Process the message using the Telegram agent
-        result = await telegram_agent._process_telegram_message(
-            message=request.message,
-            user_id=request.user_id,
-            wallet_address=wallet_address,
-            metadata=request.metadata
-        )
+        # Process the message using the Telegram agent with timeout protection
+        try:
+            # Create a task with a timeout
+            process_task = asyncio.create_task(
+                telegram_agent._process_telegram_message(
+                    message=request.message,
+                    user_id=request.user_id,
+                    wallet_address=wallet_address,
+                    metadata=request.metadata
+                )
+            )
+            
+            # Wait for the task with a timeout (10 seconds)
+            result = await asyncio.wait_for(process_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout processing Telegram message for user {request.user_id}")
+            return {
+                "content": "Sorry, it's taking too long to process your request. Please try again later.",
+                "error": "Request timed out"
+            }
         
         # If there's a wallet address in the result, store it
         if result.get("wallet_address") is not None:
-            if result.get("wallet_address"):  # Non-empty wallet address
-                await redis_service.set(
-                    key=f"messaging:telegram:user:{request.user_id}:wallet",
-                    value=result["wallet_address"]
-                )
-                # Also store the reverse mapping
-                await redis_service.set(
-                    key=f"wallet:{result['wallet_address']}:telegram:user",
-                    value=request.user_id
-                )
-            else:  # Empty wallet address = disconnect wallet
-                # Delete the mappings
-                old_wallet = await redis_service.get(f"messaging:telegram:user:{request.user_id}:wallet")
-                if old_wallet:
-                    await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
-                await redis_service.delete(f"messaging:telegram:user:{request.user_id}:wallet")
+            try:
+                if result.get("wallet_address"):  # Non-empty wallet address
+                    await redis_service.set(
+                        key=f"messaging:telegram:user:{request.user_id}:wallet",
+                        value=result["wallet_address"]
+                    )
+                    # Also store the reverse mapping
+                    await redis_service.set(
+                        key=f"wallet:{result['wallet_address']}:telegram:user",
+                        value=request.user_id
+                    )
+                else:  # Empty wallet address = disconnect wallet
+                    # Delete the mappings
+                    old_wallet = await redis_service.get(f"messaging:telegram:user:{request.user_id}:wallet")
+                    if old_wallet:
+                        await redis_service.delete(f"wallet:{old_wallet}:telegram:user")
+                    await redis_service.delete(f"messaging:telegram:user:{request.user_id}:wallet")
+            except Exception as redis_error:
+                logger.warning(f"Error updating wallet mappings: {redis_error}")
         
         # Add a flag for the bot to identify this response
         if is_from_bot:
             if not result.get("metadata"):
                 result["metadata"] = {}
             result["metadata"]["telegram_bot_response"] = True
+            result["metadata"]["processing_time"] = f"{time.time() - start_time:.3f}s"
         
         return result
         
     except Exception as e:
-        logger.exception(f"Error processing Telegram request: {e}")
+        processing_time = time.time() - start_time
+        logger.exception(f"Error processing Telegram request (after {processing_time:.3f}s): {e}")
+        
+        # Return an appropriate error message based on the exception type
+        error_message = "Sorry, I encountered an error."
+        if isinstance(e, ValueError):
+            error_message = f"Invalid input: {str(e)}"
+        elif isinstance(e, KeyError):
+            error_message = "Missing required information."
+        elif isinstance(e, TimeoutError) or isinstance(e, asyncio.TimeoutError):
+            error_message = "Request timed out. Please try again later."
+        else:
+            error_message = "Sorry, I encountered an unexpected error. Try again later."
+        
         return {
-            "content": f"Sorry, I encountered an error: {str(e)}",
-            "error": str(e)
+            "content": error_message,
+            "error": str(e),
+            "processing_time": f"{processing_time:.3f}s"
         }
 
-async def send_telegram_message_with_buttons(chat_id: str, message: str, buttons=None):
-    """Send a message via Telegram Bot API with optional inline buttons."""
-    global TELEGRAM_BOT_TOKEN
-
-    if not TELEGRAM_BOT_TOKEN:
-        logger.warning("Telegram bot token not configured, attempting to reload from environment")
-        reload_environment_variables()
-    if not TELEGRAM_BOT_TOKEN:
-        logger.error("Failed to load Telegram bot token from environment")
-        return
-
-    try:
-        # Log the token (first few characters) for debugging
-        token_preview = (
-            f"{TELEGRAM_BOT_TOKEN[:5]}..." if TELEGRAM_BOT_TOKEN else "None"
-        )
-        logger.info(f"Sending Telegram message to {chat_id} using token: {token_preview}")
-
-        # Prepare request payload
-        payload = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "HTML"  # Allow HTML formatting
-        }
-
-        # Add reply markup if buttons are provided
-        if buttons:
-            payload["reply_markup"] = {
-                "inline_keyboard": buttons
-            }
-
-        # Send message via Telegram Bot API
-        async with httpx.AsyncClient() as client:
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-            logger.info(f"Sending request to: {url}")
-
-            response = await client.post(url, json=payload)
-
-            if response.status_code != 200:
-                logger.error(f"Telegram API error: {response.text}")
-                logger.error(f"Request payload: {payload}")
-
-                # If unauthorized, try reloading environment variables
-                if "Unauthorized" in response.text:
-                    logger.warning("Unauthorized error, attempting to reload environment variables")
-                    reload_environment_variables()
-
-                    # Try again with the new token
-                    if TELEGRAM_BOT_TOKEN:
-                        logger.info(f"Retrying with new token: {TELEGRAM_BOT_TOKEN[:5]}...")
-                        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-                        retry_response = await client.post(url, json=payload)
-
-                        if retry_response.status_code == 200:
-                            logger.info(f"Successfully sent message to Telegram chat {chat_id} after token reload")
-                            return
-                        else:
-                            logger.error(f"Telegram API error after token reload: {retry_response.text}")
-            else:
-                logger.info(f"Successfully sent message to Telegram chat {chat_id}")
-
-    except Exception as e:
-        logger.exception(f"Error sending Telegram message: {e}")
-
-async def send_telegram_callback_answer(callback_query_id: str, text: str = ""):
+async def send_telegram_callback_answer(callback_query_id: str, text: str = "", retries=1):
     """Answer a callback query to stop the loading state on the button."""
-    global TELEGRAM_BOT_TOKEN
+    global TELEGRAM_BOT_TOKEN, _telegram_rate_limit
     
     if not TELEGRAM_BOT_TOKEN:
         logger.warning("Telegram bot token not configured")
-        return
+        return False
+    
+    # Apply rate limiting
+    current_time = time.time()
+    time_since_last_request = current_time - _telegram_rate_limit["last_request_time"]
+    if time_since_last_request < _telegram_rate_limit["min_interval"]:
+        # Sleep to respect rate limit
+        await asyncio.sleep(_telegram_rate_limit["min_interval"] - time_since_last_request)
+    
+    # Update last request time
+    _telegram_rate_limit["last_request_time"] = time.time()
     
     try:
-        # Send answerCallbackQuery via Telegram Bot API
-        async with httpx.AsyncClient() as client:
+        # Prepare the payload
+        payload = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+        
+        # Send answerCallbackQuery via Telegram Bot API with timeout
+        async with httpx.AsyncClient(timeout=3.0) as client:
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-            
-            payload = {
-                "callback_query_id": callback_query_id,
-            }
-            
-            if text:
-                payload["text"] = text
             
             response = await client.post(url, json=payload)
             
             if response.status_code != 200:
-                logger.error(f"Telegram API error answering callback: {response.text}")
+                error_text = response.text
+                logger.error(f"Telegram API error answering callback: {error_text}")
+                
+                # If rate limited, retry after waiting
+                if "Too Many Requests" in error_text and retries > 0:
+                    # Extract wait time from error message, default to 1 second
+                    wait_time = 1.0
+                    try:
+                        retry_data = response.json()
+                        if retry_data.get("parameters", {}).get("retry_after"):
+                            wait_time = float(retry_data["parameters"]["retry_after"])
+                    except:
+                        pass
+                    
+                    logger.warning(f"Rate limited by Telegram API, waiting {wait_time} seconds")
+                    await asyncio.sleep(wait_time)
+                    
+                    # Update the rate limit interval
+                    _telegram_rate_limit["min_interval"] *= 1.5
+                    
+                    # Retry
+                    return await send_telegram_callback_answer(
+                        callback_query_id=callback_query_id,
+                        text=text,
+                        retries=retries-1
+                    )
+                
+                return False
             
+            return True
+            
+    except httpx.TimeoutException:
+        logger.error(f"Timeout answering callback query: {callback_query_id}")
+        return False
     except Exception as e:
         logger.exception(f"Error answering Telegram callback: {e}")
-
-@router.get("/telegram/debug")
-async def debug_telegram_agent(
-    telegram_agent: TelegramAgent = Depends(get_telegram_agent)
-):
-    """Debug endpoint to check TelegramAgent initialization."""
-    try:
-        # Check if the wallet_service is properly initialized
-        wallet_service_type = type(telegram_agent.wallet_service).__name__ if telegram_agent.wallet_service else "None"
-        wallet_service_initialized = telegram_agent.wallet_service is not None
-        
-        # Check if the command handlers are set up
-        command_handlers = list(telegram_agent.command_handlers.keys()) if telegram_agent.command_handlers else []
-        
-        # Return debug info
-        return {
-            "status": "ok",
-            "agent_type": type(telegram_agent).__name__,
-            "wallet_service_type": wallet_service_type,
-            "wallet_service_initialized": wallet_service_initialized,
-            "command_handlers": command_handlers,
-            "model_config": getattr(telegram_agent, "model_config", {}),
-        }
-    except Exception as e:
-        logger.exception(f"Error in debug endpoint: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "traceback": f"{e.__class__.__name__}: {str(e)}"
-        }
-
-@router.get("/api/check-cdp-config")
-async def check_cdp_config():
-    """Check the Coinbase Developer Platform configuration."""
-    # Check environment variables
-    cdp_api_key_name = os.environ.get("CDP_API_KEY_NAME")
-    cdp_api_key_private_key = os.environ.get("CDP_API_KEY_PRIVATE_KEY")
-    use_cdp_sdk = os.environ.get("USE_CDP_SDK", "false").lower() in ["true", "1", "yes"]
-    cdp_use_managed_wallet = os.environ.get("CDP_USE_MANAGED_WALLET", "false").lower() in ["true", "1", "yes"]
-    
-    # Check for CDP SDK module
-    try:
-        import cdp
-        cdp_sdk_installed = True
-        cdp_sdk_version = getattr(cdp, "__version__", "unknown")
-    except ImportError:
-        cdp_sdk_installed = False
-        cdp_sdk_version = None
-        
-    # Check for the SmartWalletService
-    try:
-        from app.services.smart_wallet_service import SmartWalletService
-        smart_wallet_available = True
-    except ImportError:
-        smart_wallet_available = False
-        
-    # Try initializing the SmartWalletService if all prerequisites are met
-    smart_wallet_service = None
-    initialization_error = None
-    if (use_cdp_sdk and cdp_sdk_installed and smart_wallet_available and
-        cdp_api_key_name and cdp_api_key_private_key):
-        try:
-            from app.services.smart_wallet_service import SmartWalletService
-            smart_wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
-            smart_wallet_initialized = True
-        except Exception as e:
-            smart_wallet_initialized = False
-            initialization_error = str(e)
-    else:
-        smart_wallet_initialized = False
-        
-    # Prepare recommendations
-    recommendations = []
-    
-    if not cdp_sdk_installed:
-        recommendations.append("Install CDP SDK: pip install cdp-sdk")
-        
-    if not cdp_api_key_name:
-        recommendations.append("Set CDP_API_KEY_NAME environment variable")
-        
-    if not cdp_api_key_private_key:
-        recommendations.append("Set CDP_API_KEY_PRIVATE_KEY environment variable")
-        
-    if not use_cdp_sdk:
-        recommendations.append("Set USE_CDP_SDK=true in environment variables")
-        
-    if not smart_wallet_available:
-        recommendations.append("Ensure app/services/smart_wallet_service.py exists and is importable")
-        
-    if initialization_error:
-        recommendations.append(f"Fix SmartWalletService initialization error: {initialization_error}")
-        
-    # Return the results
-    return {
-        "cdp_sdk_installed": cdp_sdk_installed,
-        "cdp_sdk_version": cdp_sdk_version,
-        "smart_wallet_available": smart_wallet_available,
-        "environment_variables": {
-            "CDP_API_KEY_NAME": bool(cdp_api_key_name),
-            "CDP_API_KEY_PRIVATE_KEY": bool(cdp_api_key_private_key),
-            "USE_CDP_SDK": use_cdp_sdk,
-            "CDP_USE_MANAGED_WALLET": cdp_use_managed_wallet
-        },
-        "smart_wallet_initialized": smart_wallet_initialized,
-        "initialization_error": initialization_error,
-        "recommendations": recommendations,
-        "status": "ready" if smart_wallet_initialized else "not_ready"
-    }
-
-@router.get("/api/cdp-diagnostics")
-async def get_cdp_diagnostics():
-    """Get detailed diagnostic information about the CDP SDK."""
-    try:
-        from app.services.smart_wallet_service import SmartWalletService
-        smart_wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
-        diagnostics = await smart_wallet_service.get_cdp_sdk_diagnostics()
-        
-        # Add some additional system information
-        diagnostics["system"] = {
-            "python_version": sys.version,
-            "platform": sys.platform,
-            "environment": os.environ.get("VERCEL_ENV", "local"),
-        }
-        
-        return diagnostics
-    except Exception as e:
-        import traceback
-        
-        # Get more detailed error information
-        error_details = traceback.format_exc()
-        
-        return {
-            "error": str(e),
-            "traceback": error_details,
-            "environment": {
-                "CDP_API_KEY_NAME": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
-                "CDP_API_KEY_PRIVATE_KEY": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
-                "USE_CDP_SDK": os.environ.get("USE_CDP_SDK", "false"),
-                "CDP_USE_MANAGED_WALLET": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
-            }
-        }
-
-@router.post("/api/test-wallet-creation")
-async def test_wallet_creation():
-    """Test wallet creation directly with SmartWalletService."""
-    try:
-        from app.services.smart_wallet_service import SmartWalletService
-        
-        # Create a new instance of SmartWalletService
-        wallet_service = SmartWalletService(redis_url=os.environ.get("REDIS_URL"))
-        
-        # Generate a unique test ID
-        test_id = str(uuid.uuid4())[:8]
-        
-        # Try to create a wallet
-        result = await wallet_service.create_smart_wallet(
-            user_id=f"test-{test_id}",
-            platform="test"
-        )
-        
-        return {
-            "result": result,
-            "time": datetime.now().isoformat(),
-            "test_id": test_id,
-        }
-    except Exception as e:
-        import traceback
-        return {
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-            "environment": {
-                "CDP_API_KEY_NAME": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
-                "CDP_API_KEY_PRIVATE_KEY": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
-                "USE_CDP_SDK": os.environ.get("USE_CDP_SDK", "false"),
-                "CDP_USE_MANAGED_WALLET": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
-            }
-        }
-
-@router.get("/api/cdp-debug")
-async def cdp_debug():
-    """Debug the CDP SDK configuration and SmartWallet.create function."""
-    try:
-        # Import CDP components
-        import inspect
-        import traceback
-        from cdp import Cdp, SmartWallet
-        from eth_account import Account
-        
-        # Gather detailed information
-        debug_info = {
-            "cdp_info": {
-                "module_path": getattr(Cdp, "__module__", "unknown"),
-                "module_file": getattr(Cdp, "__file__", "unknown"),
-                "has_configure": hasattr(Cdp, "configure"),
-                "has_use_server_signer": hasattr(Cdp, "use_server_signer"),
-            },
-            "smart_wallet_info": {
-                "module_path": getattr(SmartWallet, "__module__", "unknown"),
-                "has_create": hasattr(SmartWallet, "create"),
-                "create_signature": str(inspect.signature(SmartWallet.create)) if hasattr(SmartWallet, "create") else "not found",
-                "methods": [m for m in dir(SmartWallet) if not m.startswith("_")],
-            },
-            "environment": {
-                "cdp_api_key_name": os.environ.get("CDP_API_KEY_NAME", "")[:5] + "..." if os.environ.get("CDP_API_KEY_NAME") else "missing",
-                "cdp_api_key_private_key": "exists" if os.environ.get("CDP_API_KEY_PRIVATE_KEY") else "missing",
-                "use_cdp_sdk": os.environ.get("USE_CDP_SDK", "false"),
-                "cdp_use_managed_wallet": os.environ.get("CDP_USE_MANAGED_WALLET", "false"),
-            }
-        }
-        
-        # Try to create a test EOA
-        try:
-            test_eoa = Account.create()
-            debug_info["eoa_test"] = {
-                "address": test_eoa.address,
-                "private_key_length": len(test_eoa.key.hex()) if hasattr(test_eoa, "key") else "unknown",
-                "success": True
-            }
-        except Exception as eoa_err:
-            debug_info["eoa_test"] = {
-                "error": str(eoa_err),
-                "traceback": traceback.format_exc(),
-                "success": False
-            }
-        
-        # Try to initialize the CDP SDK
-        try:
-            # Get API keys from environment
-            api_key_name = os.getenv("CDP_API_KEY_NAME")
-            api_key_private_key = os.getenv("CDP_API_KEY_PRIVATE_KEY")
-            
-            if api_key_name and api_key_private_key:
-                # Configure the CDP SDK
-                Cdp.configure(api_key_name, api_key_private_key)
-                debug_info["cdp_initialize"] = {
-                    "success": True,
-                    "message": "CDP SDK initialized successfully"
-                }
-                
-                # See if use_server_signer works
-                try:
-                    Cdp.use_server_signer = True
-                    debug_info["cdp_initialize"]["server_signer"] = "enabled successfully"
-                except Exception as ss_err:
-                    debug_info["cdp_initialize"]["server_signer_error"] = str(ss_err)
-            else:
-                debug_info["cdp_initialize"] = {
-                    "success": False,
-                    "message": "API keys not available"
-                }
-        except Exception as cdp_err:
-            debug_info["cdp_initialize"] = {
-                "success": False,
-                "error": str(cdp_err),
-                "traceback": traceback.format_exc()
-            }
-            
-        # Try to create a SmartWallet
-        try:
-            owner = Account.from_key(test_eoa.key)
-            wallet = SmartWallet.create(account=owner)
-            debug_info["wallet_create"] = {
-                "success": True,
-                "address": wallet.address if hasattr(wallet, "address") else "unknown",
-                "wallet_repr": str(wallet),
-                "wallet_dir": dir(wallet)
-            }
-        except Exception as wallet_err:
-            debug_info["wallet_create"] = {
-                "success": False,
-                "error": str(wallet_err),
-                "traceback": traceback.format_exc()
-            }
-            
-        return debug_info
-    except Exception as e:
-        import traceback
-        return {
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+        return False

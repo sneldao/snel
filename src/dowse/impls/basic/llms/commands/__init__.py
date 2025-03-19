@@ -1,4 +1,4 @@
-from emp_agents.providers import OpenAIModelType, OpenAIProvider
+from app.utils.providers import OpenAIModelType, OpenAIProvider  # Updated from emp_agents
 from pydantic import BaseModel
 
 from dowse.interfaces import AgentExecutor

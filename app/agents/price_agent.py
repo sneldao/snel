@@ -36,13 +36,21 @@ class PriceAgent(PointlessAgent):
     token_service: TokenService = Field(default_factory=TokenService)
     
     def __init__(self, prompt: str = "", provider = None):
+        """
+        Initialize the price agent with a system prompt.
+        
+        Args:
+            prompt: The system prompt to use for this agent
+            provider: Optional provider name (legacy parameter)
+        """
         if not prompt:
             prompt = "You are a helpful assistant that processes price queries for cryptocurrencies. You extract token names from natural language questions about prices."
-        
+            
         # Ensure we're passing a string provider correctly
         if isinstance(provider, str) and provider == "openai":
             provider = None
             
+        # Initialize base class
         super().__init__(
             prompt=prompt,
             model="gpt-4-turbo-preview",
@@ -309,4 +317,16 @@ class PriceAgent(PointlessAgent):
             8453: ["ETH", "USDC", "DAI", "WETH", "CBETH"],
             534352: ["ETH", "USDC", "USDT", "DAI", "SCR"]
         }
-        return popular_tokens.get(chain_id, []) 
+        return popular_tokens.get(chain_id, [])
+
+    def _format_messages(self, user_input: str) -> List[Dict[str, str]]:
+        """Format the system prompt and user input as chat messages."""
+        # Ensure the prompt contains the word 'json' if it doesn't already
+        prompt = self.prompt
+        if "json" not in prompt.lower():
+            prompt += "\nPlease provide your response in JSON format."
+
+        return [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_input}
+        ] 

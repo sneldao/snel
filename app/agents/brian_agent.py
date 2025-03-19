@@ -292,11 +292,15 @@ class BrianAgent(PointlessAgent):
             Dictionary with response data
         """
         try:
+            # Log the incoming command for debugging
+            logger.info(f"Processing Brian command: '{command}' with chain_id: {chain_id}")
+            
             # Personalize the response with the user's name if available
             name_prefix = f"{user_name}'s" if user_name and user_name != "User" else "Your"
             
             # Check if this is a transfer command
             if re.search(r"(?:send|transfer)\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9\.]+", command, re.IGNORECASE):
+                logger.info("Detected transfer command pattern")
                 result = await self.process_transfer_command(command, chain_id, wallet_address)
                 
                 # Personalize the message if we have a user name
@@ -305,8 +309,10 @@ class BrianAgent(PointlessAgent):
                 
                 return result
             
-            # Check if this is a bridge command
-            elif re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", command, re.IGNORECASE):
+            # Check if this is a bridge command (both formats)
+            elif (re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", command, re.IGNORECASE) or
+                  re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", command, re.IGNORECASE)):
+                logger.info("Detected bridge command pattern")
                 result = await self.process_bridge_command(command, chain_id, wallet_address)
                 
                 # Personalize the message if we have a user name
@@ -317,6 +323,7 @@ class BrianAgent(PointlessAgent):
             
             # Check if this is a balance command
             elif re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+(?:[A-Za-z0-9]+\s+)?balance", command, re.IGNORECASE):
+                logger.info("Detected balance command pattern")
                 result = await self.process_balance_command(command, chain_id, wallet_address)
                 
                 # Personalize the message if we have a user name
@@ -326,13 +333,14 @@ class BrianAgent(PointlessAgent):
                 return result
             
             # If not a recognized command, return an error
+            logger.warning(f"Command not recognized as Brian API command: '{command}'")
             return AgentMessage(
                 error="Not a recognized Brian API command. Please try a transfer, bridge, or balance command.",
                 metadata={"command": command}
             ).model_dump()
             
         except Exception as e:
-            logger.error(f"Error processing Brian command: {str(e)}")
+            logger.error(f"Error processing Brian command: {str(e)}", exc_info=True)
             return AgentMessage(
                 error=f"Failed to process Brian command: {str(e)}",
                 metadata={"command": command}
@@ -372,18 +380,30 @@ class BrianAgent(PointlessAgent):
         Examples:
         - "bridge 0.1 ETH from Scroll to Base"
         - "bridge 50 USDC from scroll to arbitrum"
+        - "bridge 1 USDC to scroll"
         """
-        # Basic regex pattern to extract amount, token, source chain, and destination chain
-        pattern = r"bridge\s+(\d+(?:\.\d+)?)\s+([A-Za-z0-9]+)\s+(?:from)\s+([A-Za-z0-9]+)\s+(?:to)\s+([A-Za-z0-9]+)"
-        match = re.search(pattern, command, re.IGNORECASE)
+        # First check for full format with "from" and "to"
+        full_pattern = r"bridge\s+(\d+(?:\.\d+)?)\s+([A-Za-z0-9]+)\s+(?:from)\s+([A-Za-z0-9]+)\s+(?:to)\s+([A-Za-z0-9]+)"
+        full_match = re.search(full_pattern, command, re.IGNORECASE)
         
-        if not match:
-            raise ValueError("Invalid bridge command format. Expected: 'bridge [amount] [token] from [source chain] to [destination chain]'")
+        # Check for simplified format with just "to"
+        simple_pattern = r"bridge\s+(\d+(?:\.\d+)?)\s+([A-Za-z0-9]+)\s+(?:to)\s+([A-Za-z0-9]+)"
+        simple_match = re.search(simple_pattern, command, re.IGNORECASE)
         
-        amount = float(match.group(1))
-        token = match.group(2).upper()
-        from_chain = match.group(3).lower()
-        to_chain = match.group(4).lower()
+        if full_match:
+            amount = float(full_match.group(1))
+            token = full_match.group(2).upper()
+            from_chain = full_match.group(3).lower()
+            to_chain = full_match.group(4).lower()
+        elif simple_match:
+            amount = float(simple_match.group(1))
+            token = simple_match.group(2).upper()
+            # For the simple pattern, assume the current chain as source 
+            # (The chain_id parameter will be passed from the caller)
+            from_chain = "base"  # Default to Base as the source chain
+            to_chain = simple_match.group(3).lower()
+        else:
+            raise ValueError("Invalid bridge command format. Expected: 'bridge [amount] [token] from [source chain] to [destination chain]' or 'bridge [amount] [token] to [destination chain]'")
         
         # Map chain names to chain IDs
         chain_map = {

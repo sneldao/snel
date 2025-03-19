@@ -3,9 +3,9 @@ from enum import Enum
 from inspect import isclass
 from typing import Any, Generic, Literal, Self, TypeVar, get_args, get_origin
 
-from emp_agents import AgentBase
-from emp_agents.models import Provider
-from emp_agents.providers import OpenAIModelType, OpenAIProvider
+from app.utils import AgentBase  # Updated from emp_agents
+from app.utils.models import Provider  # Updated from emp_agents
+from app.utils.providers import OpenAIModelType, OpenAIProvider  # Updated from emp_agents
 from pydantic import BaseModel, PrivateAttr
 
 from dowse.interfaces.loaders import Loaders

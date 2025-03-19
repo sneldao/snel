@@ -1,4 +1,4 @@
-from emp_agents.models import AssistantMessage, UserMessage
+from app.utils.models import AssistantMessage, UserMessage  # Updated from emp_agents
 
 EXAMPLES = [
     [

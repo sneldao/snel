@@ -71,18 +71,29 @@ def parse_bridge_command(command: str) -> BridgeCommand:
     Examples:
     - "bridge 0.1 ETH from Scroll to Base"
     - "bridge 50 USDC from scroll to arbitrum"
+    - "bridge 1 USDC to scroll"
     """
-    # Basic regex pattern to extract amount, token, source chain, and destination chain
-    pattern = r"bridge\s+(\d+(?:\.\d+)?)\s+([A-Za-z0-9]+)\s+(?:from)\s+([A-Za-z0-9]+)\s+(?:to)\s+([A-Za-z0-9]+)"
-    match = re.search(pattern, command, re.IGNORECASE)
+    # First check for full format with "from" and "to"
+    full_pattern = r"bridge\s+(\d+(?:\.\d+)?)\s+([A-Za-z0-9]+)\s+(?:from)\s+([A-Za-z0-9]+)\s+(?:to)\s+([A-Za-z0-9]+)"
+    full_match = re.search(full_pattern, command, re.IGNORECASE)
     
-    if not match:
-        raise ValueError("Invalid bridge command format. Expected: 'bridge [amount] [token] from [source chain] to [destination chain]'")
+    # Check for simplified format with just "to"
+    simple_pattern = r"bridge\s+(\d+(?:\.\d+)?)\s+([A-Za-z0-9]+)\s+(?:to)\s+([A-Za-z0-9]+)"
+    simple_match = re.search(simple_pattern, command, re.IGNORECASE)
     
-    amount = float(match.group(1))
-    token = match.group(2).upper()
-    from_chain = match.group(3).lower()
-    to_chain = match.group(4).lower()
+    if full_match:
+        amount = float(full_match.group(1))
+        token = full_match.group(2).upper()
+        from_chain = full_match.group(3).lower()
+        to_chain = full_match.group(4).lower()
+    elif simple_match:
+        amount = float(simple_match.group(1))
+        token = simple_match.group(2).upper()
+        # For the simple pattern, assume the current chain as source
+        from_chain = "base"  # Default to Base as the source chain
+        to_chain = simple_match.group(3).lower()
+    else:
+        raise ValueError("Invalid bridge command format. Expected: 'bridge [amount] [token] from [source chain] to [destination chain]' or 'bridge [amount] [token] to [destination chain]'")
     
     # Map chain names to chain IDs
     chain_map = {
@@ -355,8 +366,12 @@ async def process_brian_command(
         wallet_address = command.get("wallet_address", "")
         chain_id = command.get("chain_id", 1)
         
+        # Log the incoming command for debugging
+        logger.info(f"Processing Brian command: '{content}' with chain_id: {chain_id}")
+        
         # Check if this is a transfer command
         if re.search(r"(?:send|transfer)\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9\.]+", content, re.IGNORECASE):
+            logger.info("Detected transfer command pattern")
             # Process as a transfer
             transfer_request = TransferRequest(
                 command=content,
@@ -365,18 +380,31 @@ async def process_brian_command(
             )
             return await process_transfer(transfer_request, redis_service)
         
-        # Check if this is a bridge command
-        elif re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE):
+        # Check if this is a bridge command - both full and simplified format
+        elif (re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE) or
+              re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE)):
+            logger.info("Detected bridge command pattern")
             # Process as a bridge
-            bridge_request = BridgeRequest(
-                command=content,
-                wallet_address=wallet_address,
-                from_chain_id=chain_id
-            )
-            return await process_bridge(bridge_request, redis_service)
+            try:
+                bridge_command = parse_bridge_command(content)
+                logger.info(f"Parsed bridge command: from chain {bridge_command.from_chain_id} to chain {bridge_command.to_chain_id}, token: {bridge_command.token}, amount: {bridge_command.amount}")
+                
+                bridge_request = BridgeRequest(
+                    command=content,
+                    wallet_address=wallet_address,
+                    from_chain_id=bridge_command.from_chain_id
+                )
+                return await process_bridge(bridge_request, redis_service)
+            except ValueError as e:
+                logger.error(f"Error parsing bridge command: {e}")
+                return {
+                    "error": f"Invalid bridge command: {str(e)}",
+                    "status": "error"
+                }
         
         # Check if this is a balance command
         elif re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+(?:[A-Za-z0-9]+\s+)?balance", content, re.IGNORECASE):
+            logger.info("Detected balance command pattern")
             # Extract token symbol if present
             token_match = re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+([A-Za-z0-9]+)\s+balance", content, re.IGNORECASE)
             token_symbol = token_match.group(1) if token_match else None
@@ -390,12 +418,13 @@ async def process_brian_command(
             return await check_balance(balance_request)
         
         # Not a recognized Brian command
+        logger.warning(f"Command not recognized as Brian API command: '{content}'")
         return {
-            "error": "Not a recognized Brian command",
+            "error": "Not a recognized Brian command. Please try a transfer, bridge, or balance command.",
             "status": "error"
         }
     except Exception as e:
-        logger.error(f"Error processing Brian command: {str(e)}")
+        logger.error(f"Error processing Brian command: {str(e)}", exc_info=True)
         return {
             "error": f"Error: {str(e)}",
             "status": "error"

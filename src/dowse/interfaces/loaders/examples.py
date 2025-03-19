@@ -1,7 +1,7 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from typing import Any
 
-from emp_agents.models import Message
+from app.utils.models import Message  # Updated from emp_agents
 from pydantic import Field
 
 from .base import Loader

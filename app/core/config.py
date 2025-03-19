@@ -49,11 +49,6 @@ class Settings(BaseSettings):
     MAIN_DOMAIN: str = os.getenv("MAIN_DOMAIN", "")
     TELEGRAM_WEBHOOK_PATH: str = os.getenv("TELEGRAM_WEBHOOK_PATH", "")
     
-    # Coinbase CDP Configuration
-    CDP_API_KEY_NAME: str = os.getenv("CDP_API_KEY_NAME", "")
-    CDP_API_KEY_PRIVATE_KEY: str = os.getenv("CDP_API_KEY_PRIVATE_KEY", "")
-    USE_CDP_SDK: str = os.getenv("USE_CDP_SDK", "")
-    CDP_VERIFY_SSL: str = os.getenv("CDP_VERIFY_SSL", "true")
     
     class Config:
         """Pydantic config class."""

@@ -37,7 +37,8 @@ async def process_command(
         
         # Check for transfer, bridge, or balance commands
         if (re.search(r"(?:send|transfer)\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9\.]+", content, re.IGNORECASE) or
-            re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE) or
+            (re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:from)\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE) or
+             re.search(r"bridge\s+\d+(?:\.\d+)?\s+[A-Za-z0-9]+\s+(?:to)\s+[A-Za-z0-9]+", content, re.IGNORECASE)) or
             re.search(r"(?:check|show|what'?s|get)\s+(?:my|the)\s+(?:[A-Za-z0-9]+\s+)?balance", content, re.IGNORECASE)):
             
             # Create a Brian agent
@@ -211,10 +212,6 @@ async def process_command(
         # Create a pipeline to process the command
         pipeline = Pipeline(
             token_service=token_service,
-            swap_agent=agent_factory.create_agent("swap"),
-            price_agent=agent_factory.create_agent("price"),
-            dca_agent=agent_factory.create_agent("dca"),
-            brian_agent=agent_factory.create_agent("brian"),
             redis_service=redis_service
         )
         

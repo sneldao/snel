@@ -72,8 +72,7 @@ class RedisService(BaseModel):
                     logger.warning("upstash_redis not installed, falling back to redis.asyncio")
                     self.client = redis.asyncio.from_url(
                         self.redis_url,
-                        decode_responses=True,
-                        ssl_cert_reqs=None
+                        decode_responses=True
                     )
                     self.is_upstash = False
                 except Exception as e:
@@ -81,16 +80,14 @@ class RedisService(BaseModel):
                     logger.warning("Falling back to redis.asyncio")
                     self.client = redis.asyncio.from_url(
                         self.redis_url,
-                        decode_responses=True,
-                        ssl_cert_reqs=None
+                        decode_responses=True
                     )
                     self.is_upstash = False
             else:
                 # For local Redis, use redis.asyncio
                 self.client = redis.asyncio.from_url(
                     self.redis_url,
-                    decode_responses=True,
-                    ssl_cert_reqs=None if "upstash" in self.redis_url.lower() else True
+                    decode_responses=True
                 )
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")

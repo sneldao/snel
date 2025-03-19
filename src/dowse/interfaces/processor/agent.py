@@ -1,9 +1,9 @@
 import logging
 from typing import Any, Callable, Generic, TypeVar
 
-from emp_agents import AgentBase
-from emp_agents.models import Provider
-from emp_agents.providers import OpenAIModelType, OpenAIProvider
+from app.utils import AgentBase  # Updated from emp_agents
+from app.utils.models import Provider  # Updated from emp_agents
+from app.utils.providers import OpenAIModelType, OpenAIProvider  # Updated from emp_agents
 from pydantic import BaseModel, Field, ValidationError
 
 from dowse.interfaces.loaders import Loaders

@@ -2,7 +2,7 @@
 name = "snel-pointless"
 version = "0.1.0"
 description = "A natural language crypto command interpreter"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["papa <papaandthejimjams@gmail.com>"]
 package-mode = false
 
 [tool.poetry.dependencies]
@@ -16,7 +16,6 @@ eth-rpc-py = "0.1.26"
 eth-account = "0.13.5"
 eth-typing = "5.2.0"
 dowse = "^0.1.6.post1"
-emp-agents = "0.3.0"
 redis = "^5.2.1"
 web3 = "^7.8.0"
 upstash-redis = "^1.2.0"
@@ -25,6 +24,7 @@ pycryptodome = "^3.21.0"
 pydantic-settings = "^2.2.1"
 openai = "^1.65.2"
 eth-utils = "^5.2.0"
+python-telegram-bot = "^22.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
@@ -44,7 +44,7 @@ line-length = 120
 pythonpath = ["src"]
 filterwarnings = [
     "ignore::DeprecationWarning:passlib.*:",
-    "ignore::DeprecationWarning:jose.*",
+    "ignore::DeprecationWarning:jose.*:",
     "ignore::DeprecationWarning:websockets.legacy.*",
     "ignore::DeprecationWarning:pytest_asyncio.*",
 ]

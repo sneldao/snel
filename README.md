@@ -12,24 +12,24 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **Multi-chain support** with automatic chain detection
 - **Persistent command storage** with Redis
 - **Messaging platform integration** (WhatsApp, Telegram)
-- **Wallet security** with Coinbase CDP integration
+- **External wallet connections** via web-based bridge
 - **AI-powered responses** using Google's Gemini API
 
 ## Wallet Technology
 
-SNEL uses Coinbase Developer Platform (CDP) to create ERC-4337 compatible smart wallets for users. These wallets provide:
+SNEL allows users to connect their existing wallets through a secure web-based wallet bridge. The wallet connection process:
 
-- **Security**: User's private keys never leave their device
-- **Account Abstraction**: More user-friendly transactions
-- **Gas Sponsoring**: Simple transactions without worrying about gas
-- **Batch Transactions**: Execute multiple operations in a single transaction
+- **Secure**: User controls their wallet and signing operations
+- **Simple**: Connect with MetaMask or other web3 wallets easily
+- **Cross-platform**: Works with Telegram and other messaging platforms
+- **Stateful**: Maintains connection state in Redis
 
 ## Telegram Bot
 
 Snel is available as a Telegram bot! Chat with [@pointless_snel_bot](https://t.me/pointless_snel_bot) to:
 
 - Check token prices
-- Create a simulated wallet
+- Connect your existing wallet
 - Swap tokens
 - Check your wallet balance
 - Get real-time crypto information
@@ -69,11 +69,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 # Gemini API for AI responses
 GEMINI_API_KEY=your_gemini_api_key
 
-# Coinbase CDP for wallet functionality
-CDP_API_KEY_NAME=your_cdp_api_key_name
-CDP_API_KEY_PRIVATE_KEY=your_cdp_api_key_private_key
-USE_CDP_SDK=true
-
 # Redis for persistent storage
 REDIS_URL=redis://localhost:6379/0
 
@@ -90,9 +85,6 @@ npm install
 # Install backend dependencies
 pip install -r requirements.txt
 
-# For CDP wallet functionality in a separate environment (recommended)
-./isolate-cdp-env.sh
-
 # Start the development server
 npm run dev
 ```
@@ -106,14 +98,35 @@ npm run dev
 3. Follow the instructions to choose a name and username for your bot
 4. Once created, you'll receive a token. Save this as your `TELEGRAM_BOT_TOKEN`
 
-### Setting Up the Webhook
+### Simplified Setup with the Run Script
 
-You need a publicly accessible HTTPS URL for your webhook:
+We've created an all-in-one setup script that handles the entire Telegram integration process:
+
+1. Make sure you have your `TELEGRAM_BOT_TOKEN` in the `.env.local` file
+2. Navigate to the telegram-bot directory:
+   ```
+   cd telegram-bot
+   ```
+3. Run the integration script:
+   ```
+   ./run.js
+   ```
+4. The script will:
+   - Check if your FastAPI server is running (and start it if needed)
+   - Check if ngrok is running (and start it if needed)
+   - Verify the Telegram integration
+   - Set up the webhook automatically
+
+This is the recommended way to set up the Telegram integration as it handles all the necessary steps in one go.
+
+### Manual Webhook Setup (Alternative)
+
+If you prefer to set up the webhook manually:
 
 1. Set the webhook using:
 
    ```
-   curl -X POST https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<YOUR_DOMAIN>/api/telegram/webhook
+   curl -X POST https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<YOUR_DOMAIN>/api/messaging/telegram/webhook
    ```
 
 2. Verify the webhook is set:
@@ -126,7 +139,7 @@ You need a publicly accessible HTTPS URL for your webhook:
 For local development, you can send test messages:
 
 ```
-curl -X POST http://localhost:8000/api/telegram/process \
+curl -X POST http://localhost:8000/api/messaging/telegram/process \
   -H "Content-Type: application/json" \
   -d '{"platform":"telegram","user_id":"123456","message":"/start"}'
 ```
@@ -136,8 +149,7 @@ curl -X POST http://localhost:8000/api/telegram/process \
 For full functionality:
 
 1. Add your Gemini API key to enable AI responses
-2. Set up Coinbase CDP credentials for wallet functionality
-3. Ensure Redis is configured for user data persistence
+2. Ensure Redis is configured for user data persistence
 
 ## Commands
 
@@ -236,7 +248,6 @@ Example commands in Telegram:
   - Coingecko (token prices)
   - Brian API (Scroll transactions)
   - Gemini (AI responses)
-  - Coinbase CDP (wallet management)
 
 ### Environment Setup
 
@@ -282,9 +293,7 @@ BRIAN_API_KEY=your_brian_api_key
 BRIAN_API_URL=https://api.brianknows.org/api/v0
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 GEMINI_API_KEY=your_gemini_api_key
-CDP_API_KEY_NAME=your_cdp_api_key_name
-CDP_API_KEY_PRIVATE_KEY=your_cdp_api_key_private_key
-USE_CDP_SDK=true
+
 ```
 
 For local development, if you encounter SSL certificate verification issues with the API services, you can set:
@@ -508,14 +517,13 @@ The application supports a variety of natural language commands:
 ## Recent Updates
 
 - Added Gemini API integration for intelligent conversational responses in the Telegram bot
-- Added Coinbase CDP integration for secure wallet management
 - Added multi-network support with ability to switch chains in Telegram
 - Added comprehensive wallet security information with `/keys` command
 - Added Brian API integration for Scroll network
 - Added cross-chain bridging functionality
 - Added token transfer capabilities
 - Added balance checking for any token
-- Added messaging platform integration (WhatsApp, Telegram)
+- Added messaging platform integration (Telegram)
 - Added skip approval functionality to streamline token swaps after approval
 - Added SSL certificate verification bypass option for local development
 - Added support for 0x API as the default swap aggregator
@@ -688,7 +696,6 @@ The application requires several environment variables to be set:
 - `BRIAN_API_KEY`: API key for Brian API (get one at https://brianknows.org)
 - `TELEGRAM_BOT_TOKEN`: Token for Telegram bot integration
 - `GEMINI_API_KEY`: API key for Google's Gemini API
-- `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, and `USE_CDP_SDK`: Credentials for Coinbase CDP
 
 ### Setting Up Swap Functionality
 
@@ -724,24 +731,11 @@ To enable Gemini AI features for the Telegram bot:
 
 Without a valid Gemini API key, the Telegram bot will have limited conversational abilities.
 
-### Setting Up Coinbase CDP
-
-To enable wallet management with Coinbase CDP:
-
-1. Visit [Coinbase Developer Platform](https://developer.coinbase.com/) and create an account
-2. Create a new project and application
-3. Get your Project ID, Client Key, and App ID
-4. Add these to your environment variables as `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, and `USE_CDP_SDK`
-5. Restart the application to ensure the keys are loaded
-
-Without valid Coinbase CDP credentials, wallet management will be limited to simulated wallets.
-
 ## Acknowledgments
 
 Snel leverages several powerful technologies and APIs to deliver its functionality:
 
 - [Google Gemini API](https://ai.google.dev/) - Powers the natural language processing capabilities
-- [Coinbase Developer Platform](https://developer.coinbase.com/) - Provides secure wallet management and Account Abstraction
 - [Brian API](https://brianknows.org) - Powers the Scroll network transactions
 - [0x Protocol](https://0x.org/) - Provides swap aggregation across multiple DEXes
 - [Upstash Redis](https://upstash.com/) - Serverless Redis for persistent storage
@@ -781,4 +775,3 @@ Detailed documentation is available in the `docs` directory:
 
 - [Vercel Deployment](docs/deployment/VERCEL.md)
 - [Telegram Bot Integration](docs/development/integrating-with-telegram.md)
-- [Coinbase Wallet Integration](docs/development/README-coinbase-wallet.md)
