@@ -3,7 +3,7 @@ Main application module.
 """
 import logging
 import os
-from fastapi import FastAPI, Request, Response, Depends
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.middleware.error_handler import ErrorHandlerMiddleware
@@ -19,12 +19,6 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
-# Make sure we have a default Redis URL if not provided in environment
-if not os.environ.get("REDIS_URL"):
-    redis_url = "redis://localhost:6379/0"
-    os.environ["REDIS_URL"] = redis_url
-    print(f"No REDIS_URL found, using default: {redis_url}")
-
 # Configure logging
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -32,11 +26,11 @@ logger = logging.getLogger(__name__)
 # Set environment variables
 environment = os.getenv("ENVIRONMENT", "production")
 is_dev = environment == "development"
+is_vercel = os.environ.get("VERCEL", "0") == "1"
 
 # Log important environment variables (without exposing sensitive values)
 logger.info(f"Environment: {environment}")
-logger.info(f"BRIAN_API_URL: {os.getenv('BRIAN_API_URL')}")
-logger.info(f"BRIAN_API_KEY set: {bool(os.getenv('BRIAN_API_KEY'))}")
+logger.info(f"Running on Vercel: {is_vercel}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -48,18 +42,22 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
 
 # Add error handler middleware
 app.add_middleware(ErrorHandlerMiddleware)
 
-# Mount static files
-static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Mount static files if not on Vercel (Vercel handles static files differently)
+if not is_vercel:
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+    if os.path.exists(static_dir):
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # ---------- BEGIN ROUTER CONFIGURATION ----------
 
@@ -95,7 +93,7 @@ from app.api.routes.health import health_router
 app.include_router(dca_router, prefix="/api/dca")
 app.include_router(brian_router, prefix="/api/brian")
 app.include_router(wallet_router, prefix="/api/wallet")
-app.include_router(health_router, prefix="/api/health")
+app.include_router(health_router)  # Health routes at root level for easier access
 
 # Include wallet bridge routes
 from app.api.routes.wallet_bridge import router as wallet_bridge_router
@@ -114,112 +112,16 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
-
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Snel Pointless API"}
-
-@app.get("/api/check-wallet/{platform}/{user_id}")
-async def check_wallet_for_user(platform: str, user_id: str):
-    """Check wallet status for a specific user."""
-    import os
-    
-    try:
-        from app.services.wallet_service import WalletService
-        
-        # Create a new instance of WalletService
-        redis_url = os.environ.get("REDIS_URL")
-        wallet_service = WalletService(redis_service=RedisService(redis_url=redis_url) if redis_url else None)
-        
-        # Get all possible wallet data
-        wallet_keys = [
-            f"wallet:{platform}:{user_id}",
-            f"messaging:{platform}:user:{user_id}:wallet"
-        ]
-        
-        redis_client = wallet_service.redis_client
-        if not redis_client:
-            return {"error": "Redis client not available"}
-        
-        # Check all possible keys
-        wallet_data = {}
-        for key in wallet_keys:
-            try:
-                data = await redis_client.get(key)
-                if data:
-                    if isinstance(data, bytes):
-                        data = data.decode('utf-8')
-                    try:
-                        wallet_data[key] = json.loads(data)
-                    except:
-                        wallet_data[key] = data
-            except Exception as e:
-                wallet_data[key] = f"Error: {str(e)}"
-        
-        return {
-            "success": True,
-            "wallet_data_in_redis": wallet_data
-        }
-    except Exception as e:
-        import traceback
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-
-@app.post("/api/test-connect-command/{platform}/{user_id}")
-async def test_connect_command(platform: str, user_id: str):
-    """Test the connect command functionality for a user."""
-    import os
-    from datetime import datetime
-    
-    try:
-        # Import components
-        from app.services.wallet_service import WalletService 
-        from app.agents.telegram_agent import TelegramAgent
-        from app.services.token_service import TokenService
-        from app.services.swap_service import SwapService
-        
-        # Initialize required services
-        redis_url = os.environ.get("REDIS_URL")
-        wallet_service = WalletService(redis_service=RedisService(redis_url=redis_url) if redis_url else None)
-        token_service = TokenService()
-        swap_service = SwapService(token_service=token_service, swap_agent=None)
-        
-        # Initialize the agent
-        agent = TelegramAgent(
-            token_service=token_service,
-            swap_service=swap_service,
-            wallet_service=wallet_service
-        )
-        
-        # Call the connect command handler
-        start_time = datetime.now()
-        connect_result = await agent._handle_connect_command(user_id=user_id)
-        end_time = datetime.now()
-        
-        # Get wallet status after connect command
-        wallet_status = await check_wallet_for_user(platform, user_id)
-        
-        return {
-            "success": True,
-            "connect_command_result": connect_result,
-            "wallet_status": wallet_status,
-            "execution_time": (end_time - start_time).total_seconds(),
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        import traceback
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-            "timestamp": datetime.now().isoformat()
-        }
+    """Root endpoint that provides basic API information."""
+    return {
+        "status": "ok",
+        "name": "Pointless Snel API",
+        "version": "0.1.0",
+        "environment": environment,
+        "timestamp": time.time()
+    }
 
 if __name__ == "__main__":
     import uvicorn

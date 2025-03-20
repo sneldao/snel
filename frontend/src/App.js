@@ -36,9 +36,15 @@ function App() {
     setIsLoading(true);
     try {
       const response = await axios.post(
-        "http://localhost:8000/api/process-command",
+        "/api/process-command",
         {
           command: command,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
         }
       );
       setResult(response.data);

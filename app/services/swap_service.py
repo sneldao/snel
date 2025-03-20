@@ -864,13 +864,46 @@ class SwapService:
                 slippage_factor = slippage / 100.0
                 minimum_received = str(int(int(buy_amount) * (1 - slippage_factor)))
 
+                # Normalize gas_usd to ensure it's a reasonable value
+                gas_usd = quote.get("gas_usd", "0")
+                try:
+                    # Clean up gas_usd value and apply reasonable limits
+                    if gas_usd and not isinstance(gas_usd, str):
+                        # Convert any non-string value to string
+                        gas_usd = str(gas_usd)
+                    
+                    # Check for scientific notation or unreasonably large values
+                    if 'e' in gas_usd.lower() or len(gas_usd) > 15:
+                        logger.warning(f"Gas USD in unusual format from {quote.get('aggregator', 'unknown')}: {gas_usd}, using default")
+                        gas_usd = "1.50"  # Use a reasonable default
+                    else:
+                        # Try to parse as float
+                        gas_float = float(gas_usd)
+                        
+                        # Apply caps based on aggregator - some tend to overestimate
+                        if quote.get("aggregator") == "0x" and gas_float > 10:
+                            logger.warning(f"Unreasonably high gas estimate from 0x: ${gas_float}, capping")
+                            gas_usd = "3.50"
+                        elif gas_float > 100:
+                            logger.warning(f"Extreme gas estimate: ${gas_float}, capping")
+                            gas_usd = "5.00"
+                        elif gas_float > 30:
+                            logger.warning(f"High gas estimate: ${gas_float}, capping")
+                            gas_usd = "10.00"
+                        elif gas_float <= 0:
+                            # Handle zero or negative values
+                            gas_usd = "1.50"
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Error processing gas_usd from {quote.get('aggregator', 'unknown')}: {e}")
+                    gas_usd = "2.00"  # Use a reasonable default
+
                 # Format for AggregatorSelection component
                 formatted_quotes.append({
                     "aggregator": quote.get("aggregator", "unknown"),
                     "protocol": quote.get("protocol", quote.get("aggregator", "unknown")),
                     "buy_amount": buy_amount,
                     "minimum_received": minimum_received,
-                    "gas_usd": quote.get("gas_usd", "0"),
+                    "gas_usd": gas_usd,
                     "gas": quote.get("gas", "500000"),
                     "to": quote.get("to", ""),
                     "data": quote.get("data", ""),

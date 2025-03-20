@@ -5,6 +5,8 @@ const API_BASE =
     : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // In a monorepo, we always use relative paths and let Next.js handle the routing
+export const API_URL = "/api";
+
 export async function processCommand(command: string) {
   const response = await fetch(`/api/process-command`, {
     method: "POST",

@@ -52,4 +52,9 @@ deploy:
 	./deploy.sh
 
 format:
-	black . 
+	black . --verbose -l 100
+	isort . --profile black
+	python -m flake8 --ignore=E501,E203,W503
+
+lint:
+	python -m flake8 --ignore=E501,E203,W503 

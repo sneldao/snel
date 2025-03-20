@@ -35,13 +35,14 @@ class PriceAgent(PointlessAgent):
     """Agent for processing price queries."""
     token_service: TokenService = Field(default_factory=TokenService)
     
-    def __init__(self, prompt: str = "", provider = None):
+    def __init__(self, prompt: str = "", provider = None, api_key: Optional[str] = None):
         """
         Initialize the price agent with a system prompt.
         
         Args:
             prompt: The system prompt to use for this agent
             provider: Optional provider name (legacy parameter)
+            api_key: OpenAI API key
         """
         if not prompt:
             prompt = "You are a helpful assistant that processes price queries for cryptocurrencies. You extract token names from natural language questions about prices."
@@ -55,7 +56,8 @@ class PriceAgent(PointlessAgent):
             prompt=prompt,
             model="gpt-4-turbo-preview",
             temperature=0.7,
-            provider=provider
+            provider=provider,
+            api_key=api_key
         )
 
     async def process_price(self, query: str) -> Dict[str, Any]:

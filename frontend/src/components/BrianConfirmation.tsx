@@ -2,23 +2,23 @@ import React from "react";
 import {
   Box,
   Text,
-  Button,
   VStack,
   HStack,
   Icon,
-  Tooltip,
   Badge,
   Alert,
   AlertIcon,
   Divider,
 } from "@chakra-ui/react";
-import { InfoIcon, WarningIcon, CheckIcon } from "@chakra-ui/icons";
-import { FaExchangeAlt, FaWallet, FaLink } from "react-icons/fa";
+import { InfoIcon } from "@chakra-ui/icons";
+import { FaExchangeAlt, FaWallet } from "react-icons/fa";
 
 interface BrianConfirmationProps {
   message: {
     type: string;
     message: string;
+    bridge_id?: string;
+    data?: any;
     transaction?: {
       to: string;
       data: string;
@@ -41,6 +41,7 @@ interface BrianConfirmationProps {
     from_chain_name?: string;
     to_chain_name?: string;
     needs_approval?: boolean;
+    dollar_amount?: number;
   };
   onConfirm: () => void;
   onCancel: () => void;
@@ -49,11 +50,11 @@ interface BrianConfirmationProps {
 export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
   message,
   metadata,
-  onConfirm,
-  onCancel,
 }) => {
   const isTransfer = message.transaction?.method === "transfer";
-  const isBridge = message.transaction?.method === "bridge";
+  const isBridge =
+    message.transaction?.method === "bridge" ||
+    message.type === "brian_confirmation";
 
   const renderIcon = () => {
     if (isTransfer) {
@@ -81,6 +82,20 @@ export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
       address.length - 4
     )}`;
   };
+
+  // Extract chain names for bridge display
+  let fromChainName = metadata?.from_chain_name;
+  let toChainName = metadata?.to_chain_name;
+
+  // If metadata doesn't have chain names but message data does (in case of brian_confirmation type)
+  if (isBridge && message.data) {
+    if (!fromChainName && message.data.from_chain) {
+      fromChainName = message.data.from_chain.name;
+    }
+    if (!toChainName && message.data.to_chain) {
+      toChainName = message.data.to_chain.name;
+    }
+  }
 
   return (
     <Box
@@ -129,6 +144,7 @@ export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
                   <Text fontWeight="semibold">Amount:</Text>
                   <Text>
                     {metadata.amount} {metadata.token_symbol}
+                    {metadata.dollar_amount && ` ($${metadata.dollar_amount})`}
                   </Text>
                 </HStack>
               )}
@@ -140,11 +156,11 @@ export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
                 </HStack>
               )}
 
-              {metadata.from_chain_name && metadata.to_chain_name && (
+              {fromChainName && toChainName && (
                 <HStack justify="space-between">
                   <Text fontWeight="semibold">Route:</Text>
                   <Text>
-                    {metadata.from_chain_name} → {metadata.to_chain_name}
+                    {fromChainName} → {toChainName}
                   </Text>
                 </HStack>
               )}
@@ -162,7 +178,8 @@ export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
         )}
 
         {/* Display note for Scroll chain transactions */}
-        {message.transaction?.chainId === 534352 && (
+        {(message.transaction?.chainId === 534352 ||
+          metadata?.to_chain_id === 534352) && (
           <Alert status="info" size="sm">
             <AlertIcon />
             <Text fontSize="sm">
@@ -170,15 +187,6 @@ export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
             </Text>
           </Alert>
         )}
-
-        <HStack spacing={4} justify="flex-end">
-          <Button size="sm" onClick={onCancel} variant="outline">
-            Cancel
-          </Button>
-          <Button size="sm" colorScheme="blue" onClick={onConfirm}>
-            Confirm
-          </Button>
-        </HStack>
       </VStack>
     </Box>
   );

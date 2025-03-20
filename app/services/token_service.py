@@ -43,7 +43,24 @@ KNOWN_TOKEN_ADDRESSES = {}
 class TokenService:
     """Service for token-related operations."""
     
-    def __init__(self):
+    def __init__(self, alchemy_key: Optional[str] = None):
+        """Initialize the token service."""
+        self.alchemy_key = alchemy_key or os.environ.get("ALCHEMY_KEY")
+        
+        # Configure RPC endpoints for each chain
+        self.rpc_endpoints = {
+            1: f"https://eth-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Ethereum
+            10: f"https://opt-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Optimism
+            137: f"https://polygon-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Polygon
+            42161: f"https://arb-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Arbitrum
+            8453: f"https://base-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Base
+            534352: f"https://scroll-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Scroll
+            43114: f"https://avalanche-mainnet.g.alchemy.com/v2/{self.alchemy_key}",  # Avalanche
+        }
+        
+        # Log configured chains
+        logger.info(f"Configured QuickNode endpoints for chains: {list(self.rpc_endpoints.keys())}")
+        
         self.moralis_api_key = os.environ.get("MORALIS_API_KEY")
         self.coingecko_api_key = os.environ.get("COINGECKO_API_KEY")
         self.quicknode_api_key = os.environ.get("QUICKNODE_API_KEY")

@@ -43,32 +43,40 @@ class BrianAPIService:
         return self.http_client
     
     async def _make_api_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        """Make an API request with proper error handling and client lifecycle management."""
-        if not self.api_key:
-            raise ValueError("BRIAN_API_KEY environment variable not set")
-
-        client = await self._get_http_client()
+        """Make an API request to the Brian API."""
         try:
-            response = await client.request(
-                method,
-                f"{self.api_url}/{endpoint}",
-                headers={
-                    "Content-Type": "application/json",
-                    "x-brian-api-key": self.api_key
-                },
-                **kwargs
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            error_text = await e.response.text()
-            logger.error(f"HTTP error from Brian API: {e.response.status_code} - {error_text}")
-            raise ValueError(
-                f"Error from Brian API: HTTP {e.response.status_code} - {error_text[:100]}"
-            ) from e
+            url = f"{self.api_url}/{endpoint}"
+            
+            # Add API key to headers if available
+            headers = kwargs.get("headers", {})
+            if self.api_key:
+                headers["x-brian-api-key"] = self.api_key
+            kwargs["headers"] = headers
+            
+            # Set longer timeout for Brian API requests
+            timeout = httpx.Timeout(60.0, connect=30.0)  # 60 seconds total, 30 seconds for connection
+            
+            async with httpx.AsyncClient(timeout=timeout, verify=self.verify_ssl) as client:
+                try:
+                    response = await client.request(method, url, **kwargs)
+                    response.raise_for_status()
+                    return response.json()
+                except httpx.TimeoutException as e:
+                    logger.error(f"Timeout connecting to Brian API: {str(e)}")
+                    raise ValueError(f"Request to Brian API timed out. Please try again.")
+                except httpx.HTTPStatusError as e:
+                    error_text = e.response.text if hasattr(e.response, 'text') else str(e)
+                    logger.error(f"HTTP error from Brian API: {error_text}")
+                    raise ValueError(f"Error from Brian API: {error_text}")
+                except httpx.RequestError as e:
+                    logger.error(f"Network error connecting to Brian API: {str(e)}")
+                    raise ValueError(f"Network error connecting to Brian API. Please check your connection.")
+                
         except Exception as e:
-            logger.error(f"Error making API request: {str(e)}")
-            raise
+            logger.error(f"Unexpected error in Brian API request: {str(e)}")
+            if isinstance(e, ValueError):
+                raise
+            raise ValueError(f"Unexpected error in Brian API request: {str(e)}")
     
     async def get_swap_transaction(
         self,
@@ -357,6 +365,20 @@ class BrianAPIService:
             logger.error(f"Error getting transfer transaction from Brian API: {str(e)}")
             raise
     
+    def _get_chain_name(self, chain_id: int) -> str:
+        """Get the chain name for a given chain ID."""
+        chain_names = {
+            1: "ethereum",
+            10: "optimism",
+            56: "bsc",
+            137: "polygon",
+            42161: "arbitrum",
+            8453: "base",
+            534352: "scroll",
+            43114: "avalanche"
+        }
+        return chain_names.get(chain_id, f"chain_{chain_id}")
+
     async def get_bridge_transaction(
         self,
         token_symbol: str,
@@ -379,27 +401,17 @@ class BrianAPIService:
             Dictionary with transaction data
         """
         try:
-            # Get chain names for better prompts
-            chain_names = {
-                1: "ethereum",
-                10: "optimism",
-                56: "bsc",
-                137: "polygon",
-                42161: "arbitrum",
-                8453: "base",
-                534352: "scroll",
-                43114: "avalanche"
-            }
+            if not self.api_key:
+                raise ValueError("BRIAN_API_KEY environment variable not set")
 
-            from_chain = chain_names.get(from_chain_id, f"chain {from_chain_id}")
-            to_chain = chain_names.get(to_chain_id, f"chain {to_chain_id}")
-
-            # Construct the prompt for Brian API
-            prompt = f"bridge {amount} {token_symbol} from {from_chain} to {to_chain}"
-
+            # Construct the prompt for Brian
+            from_chain_name = self._get_chain_name(from_chain_id)
+            to_chain_name = self._get_chain_name(to_chain_id)
+            prompt = f"bridge {amount} {token_symbol} from {from_chain_name} to {to_chain_name}"
+            
             logger.info(f"Sending bridge prompt to Brian API: {prompt}")
-
-            # Call the Brian API
+            
+            # Make the API request
             response = await self._make_api_request(
                 "POST",
                 "agent/transaction",
@@ -409,36 +421,33 @@ class BrianAPIService:
                     "chainId": str(from_chain_id)
                 }
             )
-
+            
             logger.info(f"Brian API bridge response: {json.dumps(response, indent=2)}")
-
+            
             # Extract the transaction data
             if not response.get("result") or not isinstance(response["result"], list) or len(response["result"]) == 0:
                 raise ValueError("No transaction data returned from Brian API")
-
+            
             # Get the first transaction result
             tx_result = response["result"][0]
-
+            
             # Extract the transaction steps
             steps = tx_result.get("data", {}).get("steps", [])
             if not steps:
                 raise ValueError("No transaction steps returned from Brian API")
-
+            
             # Format the transaction data for our system
             formatted_quotes = []
-
-            # Process each step (there might be approval steps and bridge steps)
+            
+            # Process each step
             for step in steps:
                 # Skip if missing required fields
                 if any(k not in step for k in ["to", "data", "value"]):
                     continue
-
-                # Determine if this is an approval or bridge step
+                
+                # Determine if this is an approval step
                 is_approval = "approve" in step.get("data", "").lower()
-
-                # Get metadata from the transaction result
-                metadata = tx_result.get("data", {})
-
+                
                 # Create a quote object
                 quote = {
                     "to": step["to"],
@@ -446,32 +455,29 @@ class BrianAPIService:
                     "value": step["value"],
                     "gas": step.get("gasLimit", "500000"),
                     "method": "bridge",
-                    "protocol": metadata.get("protocol", {}).get("name", "brian"),
+                    "protocol": tx_result.get("data", {}).get("protocol", {}).get("name", "brian"),
                     "is_approval": is_approval,
-                    "from_chain": from_chain,
-                    "to_chain": to_chain
+                    "from_chain": from_chain_name,
+                    "to_chain": to_chain_name
                 }
-
+                
                 formatted_quotes.append(quote)
-
-            # Return the formatted quotes and metadata
+            
             return {
                 "all_quotes": formatted_quotes,
                 "quotes_count": len(formatted_quotes),
                 "needs_approval": any(q.get("is_approval", False) for q in formatted_quotes),
-                "token_to_approve": tx_result.get("data", {}).get("fromToken", {}).get("address") if any(q.get("is_approval", False) for q in formatted_quotes) else None,
-                "spender": formatted_quotes[0].get("to") if any(q.get("is_approval", False) for q in formatted_quotes) else None,
                 "pending_command": prompt,
                 "metadata": {
                     "token_symbol": token_symbol,
                     "amount": amount,
                     "from_chain_id": from_chain_id,
                     "to_chain_id": to_chain_id,
-                    "from_chain_name": from_chain,
-                    "to_chain_name": to_chain
+                    "from_chain_name": from_chain_name,
+                    "to_chain_name": to_chain_name
                 }
             }
-
+            
         except Exception as e:
             logger.error(f"Error getting bridge transaction from Brian API: {str(e)}")
             raise

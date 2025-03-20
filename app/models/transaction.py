@@ -40,4 +40,6 @@ class TransactionResponse(BaseModel):
     quotes_count: Optional[int] = None
     selected_quote: Optional[Dict[str, Any]] = None
     awaitingConfirmation: Optional[bool] = None
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict) 
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    agent_type: Optional[str] = None
+    is_brian_operation: Optional[bool] = False 

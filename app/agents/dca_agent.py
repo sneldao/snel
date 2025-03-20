@@ -151,14 +151,26 @@ class DCAAgent(PointlessAgent):
     redis_service: Optional[RedisService] = None
     dca_service: Any = None  # Add this field to avoid the error
     
-    def __init__(self, token_service: Optional[TokenService] = None, redis_service: Optional[RedisService] = None):
+    def __init__(self, token_service: Optional[TokenService] = None, redis_service: Optional[RedisService] = None, api_key: Optional[str] = None):
         super().__init__(
             prompt="You are a DCA (Dollar Cost Average) Agent that helps users set up recurring cryptocurrency purchases.",
-            model="gpt-4-turbo-preview"
+            model="gpt-4-turbo-preview",
+            api_key=api_key
         )
         self.token_service = token_service
         self.redis_service = redis_service
         logger.info("DCA Agent initialized")
+    
+    async def is_dca_command(self, command: str) -> bool:
+        """Check if the command is a DCA command."""
+        command = command.lower().strip()
+        # Look for "dca" keyword at the start or with a space before it
+        if command.startswith("dca ") or " dca " in command:
+            return True
+        # Look for "dollar cost average" keyword
+        if "dollar cost average" in command:
+            return True
+        return False
     
     async def _lookup_token(self, symbol: str, chain_id: int) -> Optional[Dict[str, Any]]:
         """

@@ -21,6 +21,9 @@ export class TransactionService {
       throw new Error("Wallet not connected");
     }
 
+    // Debug logging for transaction data
+    console.log("Original transaction data:", JSON.stringify(txData, null, 2));
+
     // Check if the transaction data contains an error
     if ("error" in txData && txData.error) {
       throw new Error(txData.error);
@@ -40,6 +43,9 @@ export class TransactionService {
         throw new Error("No account available");
       }
 
+      // Format transaction parameters - handle both gasLimit and gas_limit
+      const gas = txData.gasLimit || txData.gas_limit || "300000";
+
       // Format transaction parameters
       const transaction = {
         account,
@@ -48,7 +54,7 @@ export class TransactionService {
         data: txData.data as `0x${string}`,
         value: BigInt(txData.value || "0"),
         chainId: txData.chainId || this.chainId,
-        gas: BigInt(txData.gasLimit || txData.gas_limit || "300000"),
+        gas: BigInt(gas),
       };
 
       // Ensure proper formatting
@@ -62,6 +68,21 @@ export class TransactionService {
         transaction.data = `0x${transaction.data}` as `0x${string}`;
       }
 
+      // Debug logging for formatted transaction
+      console.log(
+        "Formatted transaction:",
+        JSON.stringify(
+          {
+            ...transaction,
+            value: transaction.value.toString(),
+            gas: transaction.gas.toString(),
+            account: transaction.account,
+          },
+          null,
+          2
+        )
+      );
+
       // Verify chain ID
       if (transaction.chainId !== this.chainId) {
         console.warn(
@@ -71,9 +92,12 @@ export class TransactionService {
       }
 
       // Send transaction
+      console.log("Sending transaction...");
       const hash = await this.walletClient.sendTransaction(transaction);
+      console.log("Transaction sent with hash:", hash);
 
       // Wait for receipt
+      console.log("Waiting for transaction receipt...");
       const receipt = await this.publicClient.waitForTransactionReceipt({
         hash,
       });
@@ -82,6 +106,7 @@ export class TransactionService {
         throw new Error("Failed to get transaction receipt");
       }
 
+      console.log("Transaction receipt received:", receipt);
       return {
         hash,
         receipt,

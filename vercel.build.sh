@@ -1,28 +1,43 @@
 #!/bin/bash
 
+# Exit on error
+set -e
+
+# Debug: Print current directory and files
+echo "Current directory: $(pwd)"
+ls -la
+
 # Set NODE_ENV to production
 export NODE_ENV=production
-
-# Clear any existing NEXT_PUBLIC_API_URL
-unset NEXT_PUBLIC_API_URL
 
 # Skip tests during the build
 export SKIP_TESTS=1
 
+# Install frontend dependencies first
+echo "Installing frontend dependencies..."
+cd frontend
+npm install
+npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-config-next
+cd ..
+
 # Install Python packages from requirements.txt
-pip install -r requirements.txt
+echo "Installing Python dependencies..."
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
-# Install additional packages with specific versions if needed
-# REMOVED: no longer need to install dowse and emp-agents
-pip install eth-rpc-py==0.1.26
-
-# Install pydantic_settings which is missing from requirements.txt
-pip install pydantic_settings==2.2.1
+# Install additional packages with specific versions
+echo "Installing additional dependencies..."
+python -m pip install pydantic_settings==2.2.1
+python -m pip install eth-rpc-py==0.1.26
+python -m pip install uvicorn
+python -m pip install fastapi
 
 # Print installed packages for debugging
-pip freeze > installed_packages.txt
+echo "Generating package list..."
+python -m pip freeze > installed_packages.txt
 
-# Create necessary directories if they don't exist
+# Create necessary directories
+echo "Creating directory structure..."
 mkdir -p app/services
 mkdir -p app/api/routes
 mkdir -p app/utils
@@ -30,29 +45,32 @@ mkdir -p app/models
 mkdir -p app/agents
 mkdir -p api
 
-# Ensure that our custom providers file exists
-# This will be used instead of emp_agents
-if [ ! -f "app/utils/providers.py" ]; then
-  echo 'Creating custom providers.py file'
-  cat > app/utils/providers.py << 'EOL'
-"""
-Custom provider implementations to replace external dependencies.
-"""
+# Create Vercel entry point
+echo "Creating Vercel entry point..."
+cat > api/index.py << 'EOL'
+import sys
 import os
-import logging
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+# Add the root directory to Python path
+root_dir = str(Path(__file__).parent.parent)
+sys.path.insert(0, root_dir)
 
-class OpenAIProvider:
-    """Simple replacement for emp_agents.providers.OpenAIProvider"""
-    def __init__(self, api_key=None):
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        logger.info("Created custom OpenAIProvider")
-        
-    def __repr__(self):
-        return f"OpenAIProvider(api_key=***)"
+# Import the FastAPI app
+from app.main import app
+
+# This is the handler that Vercel will call
+handler = app
+
+# Debug: Print environment
+print("Environment variables:", dict(os.environ))
+print("Python path:", sys.path)
 EOL
-fi
+
+# Debug: Print final directory structure
+echo "Final directory structure:"
+ls -R
 
 # Ensure the script exits with success
+echo "Build script completed successfully"
 exit 0 

@@ -3,17 +3,16 @@
     "buildCommand": "chmod +x vercel.build.sh && ./vercel.build.sh",
     "builds": [
         {
-            "src": "api/index.py",
+            "src": "api/vercel.py",
             "use": "@vercel/python",
             "config": {
-                "maxDuration": 90,
-                "memory": 1024,
+                "maxDuration": 60,
+                "memory": 512,
                 "runtime": "python3.12",
-                "handler": "app",
+                "handler": "Handler",
                 "includeFiles": [
                     "app/**",
                     "api/**",
-                    "src/**",
                     "requirements.txt",
                     "*.py",
                     ".env*"
@@ -34,37 +33,63 @@
             }
         },
         {
-            "src": "frontend/package.json",
-            "use": "@vercel/next"
+            "src": "frontend/next.config.js",
+            "use": "@vercel/next",
+            "config": {
+                "buildCommand": "chmod +x build.sh && ./build.sh"
+            }
         }
     ],
     "routes": [
         {
-            "src": "/favicon.ico",
-            "dest": "/frontend/public/favicon.ico"
+            "src": "^/$",
+            "dest": "frontend/index.html"
         },
         {
-            "src": "/icon.png",
-            "dest": "/frontend/public/icon.png"
+            "src": "^/favicon.ico$",
+            "dest": "frontend/favicon.ico"
         },
         {
-            "src": "/apple-icon.png",
-            "dest": "/frontend/public/apple-icon.png"
+            "src": "^/_next/(.*)$",
+            "dest": "frontend/_next/$1"
         },
         {
-            "src": "/manifest.json",
-            "dest": "/frontend/public/manifest.json"
+            "src": "/(api/health|health|ping)",
+            "dest": "api/vercel.py",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            }
         },
         {
-            "src": "/(.*)",
-            "dest": "api/index.py"
+            "src": "/api/(.*)",
+            "methods": [
+                "OPTIONS"
+            ],
+            "dest": "api/vercel.py",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "86400"
+            }
+        },
+        {
+            "src": "/api/(.*)",
+            "dest": "api/vercel.py",
+            "headers": {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*"
+            }
         },
         {
             "handle": "filesystem"
         },
         {
             "src": "/(.*)",
-            "dest": "/frontend/$1"
+            "dest": "frontend/$1"
         }
     ],
     "regions": [
@@ -74,10 +99,12 @@
         "PYTHONUNBUFFERED": "1",
         "PYTHONPATH": ".",
         "PYTHONIOENCODING": "utf-8",
-        "QUICKNODE_ENDPOINT": "https://api.kyberswap.com",
         "VERCEL": "1",
         "LOG_LEVEL": "INFO",
         "ENABLE_FILE_LOGGING": "false",
-        "DISABLE_SSL_VERIFY": "true"
-    }
+        "NODE_ENV": "production",
+        "NEXT_PUBLIC_ALCHEMY_KEY": "${ALCHEMY_KEY}",
+        "NEXT_PUBLIC_ETH_RPC_URL": "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}"
+    },
+    "public": true
 }

@@ -462,11 +462,7 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
               {message.metadata.price_impact && (
                 <Text>Price impact: {message.metadata.price_impact}</Text>
               )}
-              {message.metadata.estimated_gas_usd && (
-                <Text>
-                  Estimated gas: ${message.metadata.estimated_gas_usd}
-                </Text>
-              )}
+              {/* Gas estimate removed - users will see actual gas in their wallet */}
             </VStack>
           )}
 

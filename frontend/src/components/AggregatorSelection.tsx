@@ -73,7 +73,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
     }
   });
 
-  // Auto-select the best quote (highest buy_amount or Brian API on Scroll)
+  // Auto-select the best quote (highest buy_amount or Brian API on Scroll) but DON'T execute it
   useEffect(() => {
     if (sortedQuotes.length > 0 && selectedIndex === null) {
       // If on Scroll, prefer Brian API
@@ -83,16 +83,16 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
         );
         if (brianIndex >= 0) {
           setSelectedIndex(brianIndex);
-          onSelect(sortedQuotes[brianIndex]);
+          // Removed the onSelect call here to prevent automatic execution
           return;
         }
       }
 
-      // Otherwise select the first (best) quote
+      // Otherwise select the first (best) quote visually
       setSelectedIndex(0);
-      onSelect(sortedQuotes[0]);
+      // Removed the onSelect call here to prevent automatic execution
     }
-  }, [sortedQuotes, selectedIndex, isScrollChain, onSelect]);
+  }, [sortedQuotes, selectedIndex, isScrollChain]); // Removed onSelect from dependencies
 
   const handleSelect = (index: number) => {
     setSelectedIndex(index);
@@ -192,11 +192,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
                 Min. received: {formatAmount(quote.minimum_received)}{" "}
                 {tokenSymbol}
               </Text>
-              <Tooltip label="Estimated gas cost in USD">
-                <Text>
-                  Gas: ${parseFloat(validateGasUsd(quote.gas_usd)).toFixed(2)}
-                </Text>
-              </Tooltip>
+              {/* Gas estimate removed - users will see actual gas in their wallet */}
             </HStack>
 
             {selectedIndex === index && (

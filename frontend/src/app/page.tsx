@@ -122,6 +122,19 @@ export default function Home() {
     try {
       setIsLoading(true);
 
+      // Add a confirmation response before executing the swap
+      const confirmSelectionResponse: Response = {
+        content: {
+          type: "message",
+          message: `Selected ${quote.protocol} for your swap. Preparing transaction...`,
+        },
+        timestamp: new Date().toISOString(),
+        isCommand: false,
+        status: "processing",
+        agentType: "swap",
+      };
+      setResponses((prev) => [...prev, confirmSelectionResponse]);
+
       // For Scroll chain, provide clearer messaging about the two-step process
       if (chainId === 534352) {
         setResponses((prev) => [
@@ -137,7 +150,7 @@ export default function Home() {
         ]);
       }
 
-      // Execute the swap
+      // Execute the swap - only do this once
       const txData = await apiService.executeSwap(address, chainId, quote);
 
       if (txData.error) {
@@ -146,7 +159,33 @@ export default function Home() {
 
       // Execute the transaction
       if (txData.to && txData.data && transactionService) {
-        await transactionService.executeTransaction(txData);
+        console.log(
+          "Transaction data received:",
+          JSON.stringify(txData, null, 2)
+        );
+        const transaction = await transactionService.executeTransaction(txData);
+        console.log("Transaction successful:", transaction);
+
+        // Add success message with block explorer link
+        const explorerLink = transactionService.getBlockExplorerLink(
+          transaction.hash
+        );
+
+        const successResponse: Response = {
+          content: {
+            type: "message",
+            message: `Transaction submitted successfully! View status on [block explorer](${explorerLink}).\n\nYour swap will be confirmed shortly and will appear in your wallet history.`,
+          },
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "success",
+          agentType: "swap",
+          metadata: {
+            txHash: transaction.hash,
+            blockExplorerLink: explorerLink,
+          },
+        };
+        setResponses((prev) => [...prev, successResponse]);
       } else {
         throw new Error("Invalid transaction data received from API");
       }
@@ -158,15 +197,34 @@ export default function Home() {
         errorMessage.includes("user denied") ||
         errorMessage.includes("User denied") ||
         errorMessage.includes("User rejected") ||
-        errorMessage.includes("rejected the request");
+        errorMessage.includes("rejected the request") ||
+        errorMessage.includes("Transaction cancelled");
+
+      // Get the transaction hash from the error if available
+      const txHashMatch = errorMessage.match(/0x[a-fA-F0-9]{64}/);
+      const txHash = txHashMatch ? txHashMatch[0] : null;
+      let formattedMessage = isUserRejection
+        ? "Transaction was cancelled by user"
+        : `Error selecting quote: ${errorMessage}`;
+
+      // If we have a transaction hash, add a link to the block explorer
+      if (txHash && transactionService) {
+        const explorerLink = transactionService.getBlockExplorerLink(txHash);
+        formattedMessage += ` [View on Explorer](${explorerLink})`;
+      }
 
       const errorResponse: Response = {
-        content: isUserRejection
-          ? "Transaction was cancelled by user"
-          : `Error selecting quote: ${errorMessage}`,
+        content: formattedMessage,
         timestamp: new Date().toISOString(),
         isCommand: false,
         status: "error",
+        metadata: txHash
+          ? {
+              txHash,
+              blockExplorerLink:
+                transactionService?.getBlockExplorerLink(txHash),
+            }
+          : undefined,
       };
       setResponses((prev) => [...prev, errorResponse]);
     } finally {
@@ -176,6 +234,181 @@ export default function Home() {
 
   const processCommand = async (command: string) => {
     try {
+      // Don't process confirmation responses as new commands
+      if (
+        [
+          "yes",
+          "y",
+          "yeah",
+          "yep",
+          "ok",
+          "okay",
+          "sure",
+          "confirm",
+          "no",
+          "n",
+          "nope",
+          "cancel",
+          "abort",
+        ].includes(command.toLowerCase().trim())
+      ) {
+        const isConfirmation = [
+          "yes",
+          "y",
+          "yeah",
+          "yep",
+          "ok",
+          "okay",
+          "sure",
+          "confirm",
+        ].includes(command.toLowerCase().trim());
+
+        // Add response indicating we're processing a confirmation
+        const confirmationResponse: Response = {
+          content: {
+            type: "message",
+            message: isConfirmation
+              ? "Processing your confirmation..."
+              : "Cancelled. Let me know if you need anything else.",
+          },
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "success",
+        };
+        setResponses((prev) => [...prev, confirmationResponse]);
+
+        // If confirmed, get quotes - BUT only for swap operations (not bridge/brian)
+        if (isConfirmation) {
+          // Find the last response that has an agent type or content type that can help identify it
+          const lastMeaningfulResponse = responses
+            .slice()
+            .reverse()
+            .find(
+              (r) =>
+                r.agentType ||
+                (r.content && typeof r.content === "object" && r.content.type)
+            );
+
+          // Check if this response was from the Brian agent or is a Brian-specific operation
+          const isBrianOperation =
+            lastMeaningfulResponse?.agentType === "brian" ||
+            (lastMeaningfulResponse?.content &&
+              typeof lastMeaningfulResponse.content === "object" &&
+              ["brian_confirmation", "transaction"].includes(
+                lastMeaningfulResponse.content.type
+              ));
+
+          // If it's a Brian operation, we just need to process the command with the backend
+          if (isBrianOperation) {
+            try {
+              // For Brian operations, directly process the command through the server
+              const data = await apiService.processCommand(
+                "yes",
+                address,
+                chainId
+              );
+
+              // Handle transaction if present
+              if (data.transaction && transactionService) {
+                console.log(
+                  "Brian transaction data received:",
+                  data.transaction
+                );
+                const transaction = await transactionService.executeTransaction(
+                  data.transaction
+                );
+
+                // Add success message with block explorer link
+                const explorerLink = transactionService.getBlockExplorerLink(
+                  transaction.hash
+                );
+                const successResponse: Response = {
+                  content: `Transaction submitted! [View on block explorer](${explorerLink})`,
+                  timestamp: new Date().toISOString(),
+                  isCommand: false,
+                  status: "success",
+                  agentType: data.agent_type || "brian",
+                  metadata: {
+                    txHash: transaction.hash,
+                    blockExplorerLink: explorerLink,
+                  },
+                };
+                setResponses((prev) => [...prev, successResponse]);
+              }
+              // We've directly handled the Brian operation, so we can return
+              return;
+            } catch (error) {
+              console.error("Error processing Brian confirmation:", error);
+              setIsLoading(false);
+              const errorResponse: Response = {
+                content: `Error executing transaction: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                timestamp: new Date().toISOString(),
+                isCommand: false,
+                status: "error",
+              };
+              setResponses((prev) => [...prev, errorResponse]);
+              return;
+            }
+          }
+
+          // For regular swap operations (non-Brian), proceed with getting quotes
+          if (!isBrianOperation) {
+            try {
+              setIsLoading(true);
+              const quotesData = await apiService.getSwapQuotes(
+                address,
+                chainId
+              );
+              setIsLoading(false);
+
+              if (quotesData.is_brian_operation) {
+                // If the backend tells us this is a Brian operation, don't try to get swap quotes
+                // Instead skip to yes processing which will execute the Brian operation
+                await processCommand("yes");
+                return;
+              }
+
+              if (quotesData.error) {
+                throw new Error(quotesData.error);
+              }
+
+              // If we have quotes, display them for selection
+              if (quotesData.quotes && quotesData.quotes.length > 0) {
+                // Display quotes for selection
+                const quotesResponse: Response = {
+                  content: quotesData,
+                  timestamp: new Date().toISOString(),
+                  isCommand: false,
+                  requires_selection: true,
+                  all_quotes: quotesData.quotes,
+                  status: "success",
+                };
+
+                setResponses((prev) => [...prev, quotesResponse]);
+              } else {
+                throw new Error("No quotes available for this swap");
+              }
+            } catch (error) {
+              console.error("Error getting swap quotes:", error);
+              setIsLoading(false);
+              const errorResponse: Response = {
+                content: `Error getting swap quotes: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                timestamp: new Date().toISOString(),
+                isCommand: false,
+                status: "error",
+              };
+              setResponses((prev) => [...prev, errorResponse]);
+            }
+          }
+        }
+
+        return; // Don't proceed with normal command processing
+      }
+
       setIsLoading(true);
 
       // Allow greeting and help commands without a wallet
@@ -273,8 +506,15 @@ export default function Home() {
 
           // Handle transaction if present
           if (data.transaction && transactionService) {
+            console.log("Transaction data received:", data.transaction);
             const processingResponse: Response = {
-              content: "Processing your transaction...",
+              content: {
+                type: "message",
+                message:
+                  typeof data.content === "object" && data.content.message
+                    ? data.content.message
+                    : "Processing your transaction...",
+              },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "processing",
@@ -282,9 +522,48 @@ export default function Home() {
             };
             setResponses((prev) => [...prev, processingResponse]);
 
-            await transactionService.executeTransaction(data.transaction);
+            try {
+              // Execute the transaction
+              console.log("Executing transaction with data:", data.transaction);
+              const transaction = await transactionService.executeTransaction(
+                data.transaction
+              );
+              console.log("Transaction successful:", transaction);
+
+              // Add success message with block explorer link
+              const explorerLink = transactionService.getBlockExplorerLink(
+                transaction.hash
+              );
+              const successResponse: Response = {
+                content: {
+                  type: "message",
+                  message: `Transaction submitted! [View on block explorer](${explorerLink})`,
+                },
+                timestamp: new Date().toISOString(),
+                isCommand: false,
+                status: "success",
+                agentType: data.agent_type || "brian",
+                metadata: {
+                  txHash: transaction.hash,
+                  blockExplorerLink: explorerLink,
+                },
+              };
+              setResponses((prev) => [...prev, successResponse]);
+            } catch (error) {
+              // Handle transaction errors (user rejected, etc)
+              const errorMessage =
+                error instanceof Error ? error.message : String(error);
+              const errorResponse: Response = {
+                content: `Transaction failed: ${errorMessage}`,
+                timestamp: new Date().toISOString(),
+                isCommand: false,
+                status: "error",
+                agentType: data.agent_type || "brian",
+              };
+              setResponses((prev) => [...prev, errorResponse]);
+            }
           } else {
-            // Regular response
+            // Regular response (no transaction)
             const botResponse: Response = {
               content: data.content || data,
               timestamp: new Date().toISOString(),
@@ -443,12 +722,39 @@ export default function Home() {
         };
         setResponses((prev) => [...prev, userConfirmation]);
 
-        if (lastResponse.content?.type === "swap_confirmation") {
+        // Find the last response that has an agent type or content type that can help identify it
+        const lastMeaningfulResponse = responses
+          .slice()
+          .reverse()
+          .find(
+            (r) =>
+              r.agentType ||
+              (r.content && typeof r.content === "object" && r.content.type)
+          );
+
+        // Check if this response was from the Brian agent or is a Brian-specific operation
+        const isBrianOperation =
+          lastMeaningfulResponse?.agentType === "brian" ||
+          (lastMeaningfulResponse?.content &&
+            typeof lastMeaningfulResponse.content === "object" &&
+            ["brian_confirmation", "transaction"].includes(
+              lastMeaningfulResponse.content.type
+            ));
+
+        if (
+          lastResponse.content?.type === "swap_confirmation" &&
+          !isBrianOperation
+        ) {
           try {
             setIsLoading(true);
             const quotesData = await apiService.getSwapQuotes(address, chainId);
 
-            if (quotesData.quotes?.length > 0) {
+            if (quotesData.is_brian_operation) {
+              // If the backend tells us this is a Brian operation, don't show quotes
+              await processCommand("yes");
+            } else if (quotesData.error) {
+              throw new Error(quotesData.error);
+            } else if (quotesData.quotes?.length > 0) {
               const quotesResponse: Response = {
                 content: "Please select a provider for your swap:",
                 timestamp: new Date().toISOString(),

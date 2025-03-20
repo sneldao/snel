@@ -262,7 +262,7 @@ class BridgeCommand(BaseModel):
     action: Literal["bridge"]
     amount: float
     token: Union[str, Dict[str, Any]]  # Token symbol or token info dict
-    from_chain_id: int  # Source chain ID
+    from_chain_id: Optional[int] = None  # Source chain ID
     to_chain_id: int  # Destination chain ID
     natural_command: Optional[str] = None  # The original command text
     metadata: Optional[Dict[str, Any]] = None

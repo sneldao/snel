@@ -1,10 +1,41 @@
-# Ignore files that don't affect the build
-README.md
-*.pyc
-__pycache__/
-.git/
+# Development and environment files
 .env.local
+.env.development
+.env.test
 .venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Git and version control
+.git/
+.gitignore
+
+# Node.js
 node_modules/
+.next/
+out/
+
+# Documentation and backup
+docs/
+backup/
+README.md
+
+# Test files
 tests/
-backup/ 
+test_*.py
+**/*.test.py
+**/*_test.py
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary and cache files
+*.log
+.DS_Store
+installed_packages.txt 

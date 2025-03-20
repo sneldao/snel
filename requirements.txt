@@ -18,3 +18,4 @@ slowapi>=0.1.9
 eth-rpc-py>=0.1.26
 eth-typing>=5.2.0
 upstash-redis>=1.2.0
+mangum>=0.17.0

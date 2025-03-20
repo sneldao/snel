@@ -30,7 +30,7 @@ class PointlessAgent(BaseModel):
         "arbitrary_types_allowed": True
     }
 
-    def __init__(self, prompt: str, model: str = "gpt-4-turbo-preview", temperature: float = 0.7, provider = None):
+    def __init__(self, prompt: str, model: str = "gpt-4-turbo-preview", temperature: float = 0.7, provider = None, api_key: Optional[str] = None):
         """
         Initialize the agent with system prompt.
         
@@ -39,6 +39,7 @@ class PointlessAgent(BaseModel):
             model: Model to use (defaults to gpt-4-turbo-preview)
             temperature: Temperature for generation (0.0 to 1.0)
             provider: Provider to use (legacy parameter, not used)
+            api_key: OpenAI API key to use (overrides environment variable)
         """
         # Initialize Pydantic model with defaults if needed
         super().__init__(
@@ -47,12 +48,28 @@ class PointlessAgent(BaseModel):
             temperature=temperature
         )
         
-        # Get OpenAI API key
-        api_key = os.environ.get("OPENAI_API_KEY")
+        # Get OpenAI API key with fallbacks
+        openai_api_key = None
+        
+        # Try to get from provided api_key first
+        if api_key:
+            openai_api_key = api_key
+            
+        # Then try provider
+        if not openai_api_key and provider and hasattr(provider, 'api_key'):
+            openai_api_key = provider.api_key
+        
+        # Finally try environment variables
+        if not openai_api_key:
+            openai_api_key = os.environ.get("OPENAI_API_KEY")
+            
+        if not openai_api_key:
+            logger.error("No OpenAI API key found in request headers, provider, or environment")
+            raise ValueError("OpenAI API key is required. Please provide it in the request headers or environment variables.")
         
         # Create client options without proxies to avoid HTTPX compatibility issues
         client_options = {
-            "api_key": api_key,
+            "api_key": openai_api_key,
         }
         
         # Check if we're in a production environment (Vercel)
@@ -62,21 +79,14 @@ class PointlessAgent(BaseModel):
         if is_production:
             client_options["timeout"] = 60.0
         
-        if provider:
-            # Check if it's an OpenAIProvider with api_key attribute
-            if hasattr(provider, 'api_key'):
-                # Create our own client using the provider's API key
-                client_options["api_key"] = provider.api_key
-                self.client = AsyncOpenAI(**client_options)
-            elif hasattr(provider, 'client'):
-                # Use the provider's client directly
-                self.client = provider.client
-            else:
-                # Fallback to creating our own client
-                logger.warning(f"Unknown provider type: {type(provider)}. Creating default client.")
-                self.client = AsyncOpenAI(**client_options)
+        if provider and hasattr(provider, 'client'):
+            # Use the provider's client directly
+            self.client = provider.client
         else:
+            # Create our own client
             self.client = AsyncOpenAI(**client_options)
+            
+        logger.info("PointlessAgent initialized successfully")
 
     def _format_messages(self, user_input: str) -> List[Dict[str, str]]:
         """Format the system prompt and user input as chat messages."""
@@ -108,6 +118,10 @@ class PointlessAgent(BaseModel):
     async def process(self, input_text: str, metadata: Optional[Dict[str, Any]] = None, response_format: Optional[Type[T]] = None) -> Dict[str, Any]:
         """Process input text and return a response."""
         try:
+            # Check if we have a client
+            if not self.client:
+                raise ValueError("OpenAI client not initialized. Please check your API key configuration.")
+                
             # Prepare messages
             messages = self._format_messages(input_text)
             

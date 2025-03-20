@@ -191,7 +191,15 @@ class RedisService(BaseModel):
 
             try:
                 value = self.client.get(key) if self.is_upstash else await self.client.get(key)
-                return json.loads(value) if value else None
+                if not value:
+                    return None
+                
+                # Try to parse as JSON
+                try:
+                    return json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    # If not valid JSON, return as is
+                    return value
             except Exception as e:
                 logger.error(f"Error in Redis get operation for key {key}: {e}")
                 return None
@@ -207,21 +215,27 @@ class RedisService(BaseModel):
                 logger.warning(f"Redis client not initialized when setting key {key}")
                 return False
 
-            # Convert value to JSON string using custom encoder
-            json_value = json.dumps(value, cls=DateTimeEncoder)
+            # If value is not already a string, convert it to JSON
+            if not isinstance(value, str):
+                try:
+                    value = json.dumps(value, cls=DateTimeEncoder)
+                except Exception as e:
+                    logger.error(f"Error serializing value for key {key}: {e}")
+                    # Fall back to string conversion
+                    value = str(value)
 
             try:
                 if self.is_upstash:
                     # Upstash Redis (synchronous)
                     result = (
-                        self.client.setex(key, expire, json_value)
+                        self.client.setex(key, expire, value)
                         if expire
-                        else self.client.set(key, json_value)
+                        else self.client.set(key, value)
                     )
                 elif expire:
-                    result = await self.client.setex(key, expire, json_value)
+                    result = await self.client.setex(key, expire, value)
                 else:
-                    result = await self.client.set(key, json_value)
+                    result = await self.client.set(key, value)
 
                 return bool(result)
             except Exception as e:
@@ -331,36 +345,99 @@ class RedisService(BaseModel):
 
     async def set_pending_command(self, wallet_address: str, command: str) -> None:
         """Store a pending command for a wallet address."""
-        key = f"pending_command:{wallet_address}"
-        if self.is_upstash:
-            self.client.set(key, command, ex=self.expire_time)
-        else:
-            await self.client.set(key, command, ex=self.expire_time)
+        # Call the new method with is_brian_operation=False to ensure swaps work correctly
+        await self.store_pending_command(wallet_address, command, is_brian_operation=False)
 
-    async def store_pending_command(self, wallet_address: str, command: str) -> None:
-        """Alias for set_pending_command for backward compatibility."""
-        await self.set_pending_command(wallet_address, command)
-
-    async def get_pending_command(self, wallet_address: str) -> Optional[str]:
-        """Get the pending command for a wallet address."""
-        key = f"pending_command:{wallet_address}"
-        return self.client.get(key) if self.is_upstash else await self.client.get(key)
-
-    async def clear_pending_command(self, wallet_address: str) -> None:
-        """Clear the pending command for a wallet address."""
-        key = f"pending_command:{wallet_address}"
-        if self.is_upstash:
-            self.client.delete(key)
-        else:
-            await self.client.delete(key)
+    async def store_pending_command(
+        self, 
+        wallet_address: str, 
+        command: str, 
+        is_brian_operation: bool = False
+    ) -> bool:
+        """Store a pending command for a wallet address."""
+        try:
+            # Store the command details
+            command_data = {
+                "command": command,
+                "timestamp": time.time(),
+                "is_brian_operation": is_brian_operation
+            }
             
-        # Also clear the pending command type if it exists
-        type_key = f"pending_command_type:{wallet_address}"
-        if self.is_upstash:
-            self.client.delete(type_key)
-        else:
-            await self.client.delete(type_key)
-    
+            # Convert to JSON string
+            command_json = json.dumps(command_data)
+            
+            logger.info(f"Storing command in Redis: {command}")
+            await self.set(
+                f"pending_command:{wallet_address}", 
+                command_json,
+                expire=3600  # 1 hour
+            )
+            
+            # Also store the agent type for easier retrieval
+            if is_brian_operation:
+                await self.set(
+                    f"pending_command_type:{wallet_address}",
+                    "brian",
+                    expire=3600  # 1 hour
+                )
+            
+            logger.info("Command stored successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error storing command: {e}")
+            return False
+
+    async def get_pending_command(self, wallet_address: str) -> Optional[Dict[str, Any]]:
+        """Get the pending command for a wallet address."""
+        try:
+            # Get the raw JSON string
+            command_json = await self.get(f"pending_command:{wallet_address}")
+            if not command_json:
+                logger.info(f"No pending command found for {wallet_address}")
+                return None
+            
+            # Parse the command data
+            try:
+                if isinstance(command_json, str):
+                    command_data = json.loads(command_json)
+                else:
+                    command_data = command_json
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding JSON for pending command: {e}")
+                # If JSON decode fails, try using the raw value
+                command_data = {"command": command_json, "timestamp": time.time()}
+            
+            # Log the retrieved command
+            logger.info(f"Retrieved pending command for {wallet_address}: {command_data}")
+            
+            # Check if this is a Brian operation
+            if command_data.get("is_brian_operation", False):
+                logger.info(f"Pending command is a Brian operation")
+                # Store that this is a Brian operation
+                await self.set(
+                    f"pending_command_type:{wallet_address}",
+                    "brian",
+                    expire=3600  # 1 hour
+                )
+            
+            return command_data
+        except Exception as e:
+            logger.error(f"Error getting pending command: {e}")
+            return None
+
+    async def clear_pending_command(self, wallet_address: str) -> bool:
+        """Clear the pending command for a wallet address."""
+        try:
+            # Clear both the command and the type
+            await self.delete(f"pending_command:{wallet_address}")
+            await self.delete(f"pending_command_type:{wallet_address}")
+            
+            logger.info(f"Deleted pending command for {wallet_address}")
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing pending command: {e}")
+            return False
+            
     async def store_token_data(self, wallet_address: str, token_data: Dict[str, Any]) -> None:
         """Store token data for a wallet address."""
         key = f"token_data:{wallet_address}"
@@ -388,6 +465,50 @@ class RedisService(BaseModel):
             return True
         except Exception as e:
             logger.warning(f"Redis connection failed: {e}. Some features may be limited.")
+            return False
+
+    async def set_with_expiry(self, key: str, value: Any, expiry_seconds: int = 3600) -> bool:
+        """
+        Set a value in Redis with an expiration time.
+        
+        Args:
+            key: The key to set
+            value: The value to set
+            expiry_seconds: The expiration time in seconds
+            
+        Returns:
+            True if the value was set, False otherwise
+        """
+        try:
+            if not self.client:
+                logger.warning(f"Redis client not initialized when setting key {key}")
+                return False
+
+            # If value is not already a string, convert it to JSON 
+            if not isinstance(value, str):
+                try:
+                    # Convert value to JSON string using custom encoder
+                    value = json.dumps(value, cls=DateTimeEncoder)
+                except Exception as e:
+                    logger.error(f"Error serializing value for key {key}: {e}")
+                    # Fall back to string conversion
+                    value = str(value)
+
+            try:
+                if self.is_upstash:
+                    # Upstash Redis (synchronous)
+                    result = self.client.setex(key, expiry_seconds, value)
+                else:
+                    # Standard Redis (asynchronous)
+                    result = await self.client.setex(key, expiry_seconds, value)
+                
+                logger.info(f"Successfully set key {key} with expiry {expiry_seconds}s")
+                return bool(result)
+            except Exception as e:
+                logger.error(f"Error in Redis set operation for key {key}: {e}")
+                return False
+        except Exception as e:
+            logger.error(f"Error setting key with expiry {key} in Redis: {e}")
             return False
 
 async def get_redis_service() -> RedisService:

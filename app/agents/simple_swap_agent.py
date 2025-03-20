@@ -84,12 +84,15 @@ class SwapResponse(BaseModel):
         # Look for patterns like:
         # - "X to Y"
         # - "X for Y"
-        # - "of X to/for Y"
-        # - "worth of X to/for Y"
+        # - "X into Y"
+        # - "of X to/for/into Y"
+        # - "worth of X to/for/into Y"
         token_patterns = [
-            r'(?:of\s+)?(\$?\w+)(?:\s+(?:to|for)\s+)(\$?\w+)',  # ETH to USDC
-            r'(?:worth\s+of\s+)?(\$?\w+)(?:\s+(?:to|for)\s+)(\$?\w+)',  # worth of ETH to USDC
-            r'(\$?\w+)(?:\s+(?:to|for)\s+)(\$?\w+)',  # ETH to USDC
+            r'(?:of\s+)?(\$?\w+)(?:\s+(?:to|for|into)\s+)(\$?\w+)',  # ETH to/for/into USDC
+            r'(?:worth\s+of\s+)?(\$?\w+)(?:\s+(?:to|for|into)\s+)(\$?\w+)',  # worth of ETH to/for/into USDC
+            r'(\$?\w+)(?:\s+(?:to|for|into)\s+)(\$?\w+)',  # ETH to/for/into USDC
+            # Fallback pattern for less structured commands
+            r'(?:of|from)\s+(\$?\w+).*?(?:to|for|into)\s+(\$?\w+)',  # of/from ETH ... to/for/into USDC
         ]
 
         for pattern in token_patterns:
@@ -113,8 +116,18 @@ class SwapResponse(BaseModel):
                     "amount_is_usd": amount_is_usd,
                     "natural_command": command
                 }
-
-        raise ValueError("Could not parse tokens from command")
+        
+        # If we reach here, we couldn't parse the tokens
+        # Try to provide a more helpful error message
+        if "swap" in command and "$" in command:
+            # We have a swap command with a dollar amount but couldn't parse tokens
+            # Check if there are any token-like words we can extract
+            potential_tokens = re.findall(r'\b([A-Za-z]{2,5})\b', command)
+            if len(potential_tokens) >= 2:
+                token_suggestions = f"Did you mean: swap {amount} {potential_tokens[0].upper()} for {potential_tokens[1].upper()}?"
+                raise ValueError(f"Could not clearly identify tokens to swap. {token_suggestions}")
+        
+        raise ValueError("Could not parse tokens from command. Please use format like 'swap 0.1 ETH for USDC' or 'swap $10 of ETH into USDC'")
 
     def get_token_in(self) -> Optional[str]:
         """Get the input token, checking all possible input token fields."""
@@ -137,8 +150,22 @@ class SwapResponse(BaseModel):
 class SimpleSwapAgent:
     """A simplified agent for processing swap commands."""
     
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None):
         self.token_service = TokenService()
+        self.api_key = api_key
+    
+    async def is_swap_command(self, command: str) -> bool:
+        """Check if the command is a swap command."""
+        command = command.lower().strip()
+        # Check for 'swap', 'exchange', 'convert', 'trade' keywords
+        swap_keywords = ["swap", "exchange", "convert", "trade"]
+        
+        # Basic heuristic: command starts with a swap keyword
+        for keyword in swap_keywords:
+            if command.startswith(keyword) or f" {keyword} " in command:
+                return True
+                
+        return False
     
     async def process_swap_command(self, command: str, chain_id: int = 1) -> Dict[str, Any]:
         """Process a swap command and return structured data."""

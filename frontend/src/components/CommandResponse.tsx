@@ -30,6 +30,7 @@ import {
   TimeIcon,
   ChatIcon,
   InfoIcon,
+  ExternalLinkIcon,
 } from "@chakra-ui/icons";
 import { SwapConfirmation } from "./SwapConfirmation";
 import { DCAConfirmation } from "./DCAConfirmation";
@@ -189,42 +190,68 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
   // Handle confirmation actions
   const handleConfirm = () => {
-    // Simulate typing "yes" in the command input
-    const inputElement = document.querySelector(
+    // Find the closest command input (improved approach that doesn't simulate key events)
+    const messageForm = document.querySelector("form");
+    const inputElement = messageForm?.querySelector(
       'input[placeholder="Type a command..."]'
-    ) as HTMLInputElement;
-    if (inputElement) {
+    ) as HTMLInputElement | null;
+
+    if (inputElement && messageForm) {
       inputElement.value = "yes";
-      inputElement.focus();
-      // Trigger the Enter key press
-      const enterEvent = new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        keyCode: 13,
-        which: 13,
+
+      // Instead of dispatching keyboard events which may have side effects,
+      // trigger the form's submit handler programmatically
+      const formSubmitEvent = new Event("submit", {
+        bubbles: true,
+        cancelable: true,
+      });
+      messageForm.dispatchEvent(formSubmitEvent);
+    } else {
+      // Fallback to simpler approach if form can't be found
+      const event = new CustomEvent("swap-confirmation", {
+        detail: { confirmed: true, command: "yes" },
         bubbles: true,
       });
-      inputElement.dispatchEvent(enterEvent);
+      document.dispatchEvent(event);
+
+      // Also set a value in session storage as another fallback
+      sessionStorage.setItem(
+        "swap_confirmation",
+        JSON.stringify({ confirmed: true, timestamp: Date.now() })
+      );
     }
   };
 
   const handleCancel = () => {
-    // Simulate typing "no" in the command input
-    const inputElement = document.querySelector(
+    // Find the closest command input (improved approach that doesn't simulate key events)
+    const messageForm = document.querySelector("form");
+    const inputElement = messageForm?.querySelector(
       'input[placeholder="Type a command..."]'
-    ) as HTMLInputElement;
-    if (inputElement) {
+    ) as HTMLInputElement | null;
+
+    if (inputElement && messageForm) {
       inputElement.value = "no";
-      inputElement.focus();
-      // Trigger the Enter key press
-      const enterEvent = new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        keyCode: 13,
-        which: 13,
+
+      // Instead of dispatching keyboard events which may have side effects,
+      // trigger the form's submit handler programmatically
+      const formSubmitEvent = new Event("submit", {
+        bubbles: true,
+        cancelable: true,
+      });
+      messageForm.dispatchEvent(formSubmitEvent);
+    } else {
+      // Fallback to simpler approach if form can't be found
+      const event = new CustomEvent("swap-confirmation", {
+        detail: { confirmed: false, command: "no" },
         bubbles: true,
       });
-      inputElement.dispatchEvent(enterEvent);
+      document.dispatchEvent(event);
+
+      // Also set a value in session storage as another fallback
+      sessionStorage.setItem(
+        "swap_confirmation",
+        JSON.stringify({ confirmed: false, timestamp: Date.now() })
+      );
     }
   };
 
@@ -259,19 +286,76 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
   // Format links in content
   const formatLinks = (text: string) => {
-    // Regex to match URLs
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
+    // Process markdown-style links first - format: [text](url)
+    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let processedText = text;
+    let mdMatch: RegExpExecArray | null;
 
+    // Define the type for the replacements
+    interface MarkdownReplacement {
+      placeholder: string;
+      text: string;
+      url: string;
+    }
+
+    // Initialize with explicit type
+    const mdReplacements = [] as MarkdownReplacement[];
+
+    // Replace markdown links with placeholders to avoid conflicts with URL regex
+    while ((mdMatch = markdownLinkRegex.exec(text)) !== null) {
+      const placeholderText = `__MARKDOWN_LINK_${mdReplacements.length}__`;
+      mdReplacements.push({
+        placeholder: placeholderText,
+        text: mdMatch[1],
+        url: mdMatch[2],
+      });
+      processedText = processedText.replace(mdMatch[0], placeholderText);
+    }
+
+    // Now process regular URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = processedText.split(urlRegex);
+
+    // Map the parts, handling both regular URLs and our markdown link placeholders
     return parts.map((part, i) => {
+      // Check if this part is a URL
       if (part.match(urlRegex)) {
         return (
           <Link key={i} href={part} isExternal color="blue.500">
-            {part}
+            {part} <Icon as={ExternalLinkIcon} mx="2px" fontSize="xs" />
           </Link>
         );
       }
-      return formatContent(part);
+
+      // Check if this part contains any of our markdown link placeholders
+      let result = part;
+      for (const replacement of mdReplacements) {
+        if (part.includes(replacement.placeholder)) {
+          // Replace the placeholder with the actual link component
+          const beforePlaceholder = part.substring(
+            0,
+            part.indexOf(replacement.placeholder)
+          );
+          const afterPlaceholder = part.substring(
+            part.indexOf(replacement.placeholder) +
+              replacement.placeholder.length
+          );
+
+          return (
+            <React.Fragment key={i}>
+              {beforePlaceholder && formatContent(beforePlaceholder)}
+              <Link href={replacement.url} isExternal color="blue.500">
+                {replacement.text}{" "}
+                <Icon as={ExternalLinkIcon} mx="2px" fontSize="xs" />
+              </Link>
+              {afterPlaceholder && formatContent(afterPlaceholder)}
+            </React.Fragment>
+          );
+        }
+      }
+
+      // If no replacements were needed, just format the content normally
+      return formatContent(result);
     });
   };
 
@@ -489,6 +573,35 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 transaction: transactionData,
               }}
               metadata={metadata}
+              onConfirm={handleConfirm}
+              onCancel={handleCancel}
+            />
+          ) : typeof content === "object" &&
+            content.type === "brian_confirmation" ? (
+            <BrianConfirmation
+              message={{
+                type: "transaction",
+                message:
+                  content.message || "Ready to execute bridge transaction",
+                transaction: content.data?.tx_steps
+                  ? {
+                      to: content.data.tx_steps[0]?.to,
+                      data: content.data.tx_steps[0]?.data,
+                      value: content.data.tx_steps[0]?.value || "0",
+                      chainId: content.data.from_chain?.id,
+                      gasLimit: content.data.tx_steps[0]?.gasLimit || "500000",
+                      method: "bridge",
+                    }
+                  : undefined,
+              }}
+              metadata={{
+                token_symbol: content.data?.token,
+                amount: content.data?.amount,
+                from_chain_id: content.data?.from_chain?.id,
+                to_chain_id: content.data?.to_chain?.id,
+                from_chain_name: content.data?.from_chain?.name,
+                to_chain_name: content.data?.to_chain?.name,
+              }}
               onConfirm={handleConfirm}
               onCancel={handleCancel}
             />

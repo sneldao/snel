@@ -1,8 +1,14 @@
 export class ApiService {
   private apiUrl: string;
+  private baseUrl: string;
 
   constructor() {
-    this.apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    // Set the base URL based on environment
+    this.baseUrl =
+      process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
+
+    // API prefix is always /api
+    this.apiUrl = `${this.baseUrl}/api`;
   }
 
   private getApiKeys() {
@@ -33,7 +39,7 @@ export class ApiService {
     chainId?: number,
     userName?: string
   ) {
-    const response = await fetch(`${this.apiUrl}/api/process-command`, {
+    const response = await fetch(`${this.apiUrl}/process-command`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -59,7 +65,7 @@ export class ApiService {
     walletAddress?: string,
     chainId?: number
   ) {
-    const response = await fetch(`${this.apiUrl}/api/swap/process-command`, {
+    const response = await fetch(`${this.apiUrl}/swap/process-command`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -80,7 +86,7 @@ export class ApiService {
   }
 
   async getSwapQuotes(walletAddress?: string, chainId?: number) {
-    const response = await fetch(`${this.apiUrl}/api/swap/get-quotes`, {
+    const response = await fetch(`${this.apiUrl}/swap/get-quotes`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -104,7 +110,7 @@ export class ApiService {
     chainId?: number,
     selectedQuote?: any
   ) {
-    const response = await fetch(`${this.apiUrl}/api/swap/execute`, {
+    const response = await fetch(`${this.apiUrl}/swap/execute`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -129,7 +135,7 @@ export class ApiService {
     walletAddress?: string,
     chainId?: number
   ) {
-    const response = await fetch(`${this.apiUrl}/api/dca/process-command`, {
+    const response = await fetch(`${this.apiUrl}/dca/process-command`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({

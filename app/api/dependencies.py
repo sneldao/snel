@@ -18,25 +18,35 @@ from app.services.wallet_bridge_service import WalletBridgeService
 load_dotenv()
 load_dotenv(".env.local", override=True)  # Override with .env.local if it exists
 
-# Singleton instance of RedisService
+# Singleton instances
 _redis_service: Optional[RedisService] = None
-
-# Singleton instance of TokenService
 _token_service: Optional[TokenService] = None
-
-# Singleton instance of WalletService
 _wallet_service: Optional[WalletService] = None
-
-# Singleton instance of GeminiService
 _gemini_service: Optional[GeminiService] = None
-
-# Singleton instance of WalletBridgeService
 _wallet_bridge_service: Optional[WalletBridgeService] = None
-
-# Singleton instance of TelegramAgent
 _telegram_agent: Optional[Any] = None
 
 logger = logging.getLogger(__name__)
+
+async def get_openai_key(x_openai_key: Optional[str] = Header(None)) -> str:
+    """Get OpenAI API key from headers or environment."""
+    api_key = x_openai_key or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="OpenAI API Key is required (either in header or environment)"
+        )
+    return api_key
+
+async def get_alchemy_key(x_alchemy_key: Optional[str] = Header(None)) -> str:
+    """Get Alchemy API key from headers or environment."""
+    api_key = x_alchemy_key or os.environ.get("ALCHEMY_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Alchemy API Key is required (either in header or environment)"
+        )
+    return api_key
 
 async def get_redis_service() -> Optional[RedisService]:
     """Get a Redis service instance if configured."""
@@ -45,12 +55,12 @@ async def get_redis_service() -> Optional[RedisService]:
         return None
     return RedisService(redis_url=redis_url)
 
-async def get_token_service() -> TokenService:
-    """Get or create token service instance."""
+async def get_token_service(alchemy_key: str = Depends(get_alchemy_key)) -> TokenService:
+    """Get or create token service instance with Alchemy key."""
     global _token_service
     
     if _token_service is None:
-        _token_service = TokenService()
+        _token_service = TokenService(alchemy_key=alchemy_key)
         
     return _token_service
 
@@ -75,34 +85,20 @@ async def get_wallet_bridge_service() -> WalletBridgeService:
 async def get_wallet_service_factory(
     wallet_service: WalletService = Depends(get_wallet_service)
 ) -> WalletService:
-    """
-    Get the wallet service.
-    
-    Returns:
-        WalletService instance
-    """
+    """Get the wallet service."""
     logger.info("Using basic WalletService")
     return wallet_service
 
 async def get_gemini_service() -> GeminiService:
-    """
-    Get a GeminiService instance.
-    
-    Uses a singleton pattern to return the same instance on subsequent calls.
-    
-    Returns:
-        GeminiService instance
-    """
+    """Get a GeminiService instance."""
     global _gemini_service
     if _gemini_service is None:
-        # Get the Gemini API key from environment
         gemini_api_key = os.environ.get("GEMINI_API_KEY")
         if not gemini_api_key:
             logger.warning("GEMINI_API_KEY not set, AI responses will be limited")
             
         _gemini_service = GeminiService(api_key=gemini_api_key)
         
-        # Try to check model availability - don't await to avoid blocking
         try:
             logger.info("GeminiService initialized")
         except Exception as e:
@@ -110,27 +106,17 @@ async def get_gemini_service() -> GeminiService:
         
     return _gemini_service
 
-async def get_openai_key(x_openai_key: Optional[str] = Header(None)) -> str:
-    """Get OpenAI API key from headers or environment."""
-    api_key = x_openai_key or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=401,
-            detail="OpenAI API Key is required (either in header or environment)"
-        )
-    return api_key
-
 async def get_swap_agent(openai_api_key: str = Depends(get_openai_key)) -> SimpleSwapAgent:
     """Get an instance of SwapAgent."""
-    return SimpleSwapAgent()
+    return SimpleSwapAgent(api_key=openai_api_key)
 
 async def get_price_agent(openai_api_key: str = Depends(get_openai_key)) -> PriceAgent:
     """Get an instance of PriceAgent."""
-    return PriceAgent(provider="openai")
+    return PriceAgent(provider="openai", api_key=openai_api_key)
 
 async def get_base_agent(openai_api_key: str = Depends(get_openai_key)) -> PointlessAgent:
     """Get an instance of BaseAgent."""
-    return PointlessAgent(prompt="", model="gpt-4-turbo-preview")
+    return PointlessAgent(prompt="", model="gpt-4-turbo-preview", api_key=openai_api_key)
 
 async def get_swap_service(
     token_service: TokenService = Depends(get_token_service),
