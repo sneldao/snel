@@ -8,7 +8,7 @@ const API_BASE =
 export const API_URL = "/api";
 
 export async function processCommand(command: string) {
-  const response = await fetch(`/api/process-command`, {
+  const response = await fetch(`${API_BASE}/api/v1/chat/process-command`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

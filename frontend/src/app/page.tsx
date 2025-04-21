@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   Box,
   Container,
+  Flex,
   VStack,
   Heading,
   Text,
@@ -32,7 +33,7 @@ import { ApiKeyModal } from "../components/ApiKeyModal";
 import { LogoModal } from "../components/LogoModal";
 import { HelpModal } from "../components/HelpModal";
 import { fetchUserProfile, getDisplayName } from "../services/profileService";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Response } from "../types/responses";
 import { SUPPORTED_CHAINS } from "../constants/chains";
 import { ApiService } from "../services/apiService";
@@ -40,19 +41,163 @@ import { TransactionService } from "../services/transactionService";
 import { DCAService } from "../services/dcaService";
 
 export default function Home() {
-  const [responses, setResponses] = useState<Response[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const toast = useToast();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  const toast = useToast();
-  const responsesEndRef = React.useRef<HTMLDivElement>(null);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const publicClient = usePublicClient();
+  
+  interface ResponseContent {
+    type?: string;
+    confirmation_type?: string;
+    pendingCommand?: string;
+    transaction?: any;
+    [key: string]: any;
+  }
+
+  interface Response {
+    content: string | ResponseContent;
+    timestamp: string;
+    isCommand: boolean;
+    status?: "pending" | "processing" | "success" | "error";
+    metadata?: any;
+    awaitingConfirmation?: boolean;
+    agentType?: "default" | "swap" | "dca" | "brian";
+    requires_selection?: boolean;
+    all_quotes?: any[];
+    type?: string;
+    confirmation_type?: string;
+    pendingCommand?: string;
+    transaction?: any;
+  }
+
+  const isResponseContent = (content: any): content is ResponseContent => {
+    return typeof content === "object" && content !== null;
+  };
+
+  const [responses, setResponses] = useState<Response[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const responsesEndRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState<string>("");
+
+  const handleCommand = async (command: string | undefined) => {
+    if (!command || !address) return;
+    if (!chainId) {
+      toast({
+        title: "Wrong Network",
+        description: "Please connect to a supported network.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiService.processCommand(command);
+      setResponses(prev => [...prev, response]);
+    } catch (error) {
+      console.error("Error processing command:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process command. Please try again.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+    setIsLoading(false);
+  };
+
+  return (
+    <Box minH="100vh" bg="gray.50">
+      <Container maxW="container.xl" py={4}>
+        <VStack spacing={8} align="stretch">
+          <Box>
+            <Flex align="center" justify="space-between" w="100%" mb={4} flexDir={{ base: "column", sm: "row" }} gap={{ base: 2, sm: 4 }}>
+              <Box cursor="pointer" onClick={() => setIsLogoModalOpen(true)}>
+                <Image src="/icon.png" alt="Logo" width={40} height={40} />
+              </Box>
+
+              <Heading as="h1" size="lg" textAlign="center">
+                SNEL
+              </Heading>
+
+              <HStack spacing={4}>
+                <Button size="sm" variant="ghost" onClick={() => setIsHelpModalOpen(true)}>
+                  <Icon as={QuestionIcon} />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setIsApiKeyModalOpen(true)}>
+                  <Icon as={SettingsIcon} />
+                </Button>
+                <WalletButton />
+              </HStack>
+            </Flex>
+          </Box>
+
+          <Box flex={1}>
+            {!isConnected ? (
+              <Alert
+                status="warning"
+                variant="subtle"
+                flexDirection="column"
+                alignItems="center"
+                justifyContent="center"
+                textAlign="center"
+                height="200px"
+              >
+                <AlertIcon boxSize="40px" mr={0} />
+                <Box mt={4}>
+                  <AlertTitle mb={1}>Connect Your Wallet</AlertTitle>
+                  <AlertDescription maxWidth="sm">
+                    Please connect your wallet to use Dowse.
+                  </AlertDescription>
+                </Box>
+              </Alert>
+            ) : (
+              <VStack spacing={4} align="stretch">
+                {responses.map((response, index) => (
+                  <CommandResponse
+                    key={index}
+                    content={response.content}
+                    timestamp={response.timestamp}
+                    isCommand={response.isCommand}
+                    status={response.status}
+                    metadata={response.metadata}
+                  />
+                ))}
+                <div ref={responsesEndRef} />
+                <VStack spacing={4} align="stretch">
+                  <CommandInput
+                    onSubmit={handleCommand}
+                    isLoading={isLoading}
+                  />
+                </VStack>
+              </VStack>
+            )}
+          </Box>
+        </VStack>
+      </Container>
+
+      <LogoModal
+        isOpen={isLogoModalOpen}
+        onClose={() => setIsLogoModalOpen(false)}
+      />
+      <HelpModal
+        isOpen={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
+      />
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+      />
+    </Box>
+  );
 
   // Initialize services
   const apiService = React.useMemo(() => new ApiService(), []);
@@ -234,179 +379,19 @@ export default function Home() {
 
   const processCommand = async (command: string) => {
     try {
-      // Don't process confirmation responses as new commands
-      if (
-        [
-          "yes",
-          "y",
-          "yeah",
-          "yep",
-          "ok",
-          "okay",
-          "sure",
-          "confirm",
-          "no",
-          "n",
-          "nope",
-          "cancel",
-          "abort",
-        ].includes(command.toLowerCase().trim())
-      ) {
-        const isConfirmation = [
-          "yes",
-          "y",
-          "yeah",
-          "yep",
-          "ok",
-          "okay",
-          "sure",
-          "confirm",
-        ].includes(command.toLowerCase().trim());
-
-        // Add response indicating we're processing a confirmation
-        const confirmationResponse: Response = {
-          content: {
-            type: "message",
-            message: isConfirmation
-              ? "Processing your confirmation..."
-              : "Cancelled. Let me know if you need anything else.",
-          },
+      // Just handle non-confirmation commands here
+      if ([
+        "yes", "y", "yeah", "yep", "ok", "okay", "sure", "confirm",
+        "no", "n", "nope", "cancel", "abort"
+      ].includes(command.toLowerCase().trim())) {
+        // We'll handle this in the handleSubmit function to avoid duplicate code
+        const userConfirmation: Response = {
+          content: command,
           timestamp: new Date().toISOString(),
-          isCommand: false,
-          status: "success",
+          isCommand: true,
         };
-        setResponses((prev) => [...prev, confirmationResponse]);
-
-        // If confirmed, get quotes - BUT only for swap operations (not bridge/brian)
-        if (isConfirmation) {
-          // Find the last response that has an agent type or content type that can help identify it
-          const lastMeaningfulResponse = responses
-            .slice()
-            .reverse()
-            .find(
-              (r) =>
-                r.agentType ||
-                (r.content && typeof r.content === "object" && r.content.type)
-            );
-
-          // Check if this response was from the Brian agent or is a Brian-specific operation
-          const isBrianOperation =
-            lastMeaningfulResponse?.agentType === "brian" ||
-            (lastMeaningfulResponse?.content &&
-              typeof lastMeaningfulResponse.content === "object" &&
-              ["brian_confirmation", "transaction"].includes(
-                lastMeaningfulResponse.content.type
-              ));
-
-          // If it's a Brian operation, we just need to process the command with the backend
-          if (isBrianOperation) {
-            try {
-              // For Brian operations, directly process the command through the server
-              const data = await apiService.processCommand(
-                "yes",
-                address,
-                chainId
-              );
-
-              // Handle transaction if present
-              if (data.transaction && transactionService) {
-                console.log(
-                  "Brian transaction data received:",
-                  data.transaction
-                );
-                const transaction = await transactionService.executeTransaction(
-                  data.transaction
-                );
-
-                // Add success message with block explorer link
-                const explorerLink = transactionService.getBlockExplorerLink(
-                  transaction.hash
-                );
-                const successResponse: Response = {
-                  content: `Transaction submitted! [View on block explorer](${explorerLink})`,
-                  timestamp: new Date().toISOString(),
-                  isCommand: false,
-                  status: "success",
-                  agentType: data.agent_type || "brian",
-                  metadata: {
-                    txHash: transaction.hash,
-                    blockExplorerLink: explorerLink,
-                  },
-                };
-                setResponses((prev) => [...prev, successResponse]);
-              }
-              // We've directly handled the Brian operation, so we can return
-              return;
-            } catch (error) {
-              console.error("Error processing Brian confirmation:", error);
-              setIsLoading(false);
-              const errorResponse: Response = {
-                content: `Error executing transaction: ${
-                  error instanceof Error ? error.message : String(error)
-                }`,
-                timestamp: new Date().toISOString(),
-                isCommand: false,
-                status: "error",
-              };
-              setResponses((prev) => [...prev, errorResponse]);
-              return;
-            }
-          }
-
-          // For regular swap operations (non-Brian), proceed with getting quotes
-          if (!isBrianOperation) {
-            try {
-              setIsLoading(true);
-              const quotesData = await apiService.getSwapQuotes(
-                address,
-                chainId
-              );
-              setIsLoading(false);
-
-              if (quotesData.is_brian_operation) {
-                // If the backend tells us this is a Brian operation, don't try to get swap quotes
-                // Instead skip to yes processing which will execute the Brian operation
-                await processCommand("yes");
-                return;
-              }
-
-              if (quotesData.error) {
-                throw new Error(quotesData.error);
-              }
-
-              // If we have quotes, display them for selection
-              if (quotesData.quotes && quotesData.quotes.length > 0) {
-                // Display quotes for selection
-                const quotesResponse: Response = {
-                  content: quotesData,
-                  timestamp: new Date().toISOString(),
-                  isCommand: false,
-                  requires_selection: true,
-                  all_quotes: quotesData.quotes,
-                  status: "success",
-                };
-
-                setResponses((prev) => [...prev, quotesResponse]);
-              } else {
-                throw new Error("No quotes available for this swap");
-              }
-            } catch (error) {
-              console.error("Error getting swap quotes:", error);
-              setIsLoading(false);
-              const errorResponse: Response = {
-                content: `Error getting swap quotes: ${
-                  error instanceof Error ? error.message : String(error)
-                }`,
-                timestamp: new Date().toISOString(),
-                isCommand: false,
-                status: "error",
-              };
-              setResponses((prev) => [...prev, errorResponse]);
-            }
-          }
-        }
-
-        return; // Don't proceed with normal command processing
+        setResponses((prev) => [...prev, userConfirmation]);
+        return;
       }
 
       setIsLoading(true);
@@ -706,14 +691,14 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (command: string) => {
+  const handleSubmit = async (command: string | undefined) => {
+    if (!command) return;
     const lastResponse = responses[responses.length - 1];
 
     if (lastResponse?.awaitingConfirmation) {
+      const lowerCommand = command.toLowerCase();
       if (
-        ["yes", "confirm", "proceed", "ok", "go ahead"].includes(
-          command.toLowerCase()
-        )
+        ["yes", "confirm", "proceed", "ok", "go ahead"].includes(lowerCommand)
       ) {
         const userConfirmation: Response = {
           content: command,
@@ -729,20 +714,23 @@ export default function Home() {
           .find(
             (r) =>
               r.agentType ||
-              (r.content && typeof r.content === "object" && r.content.type)
+              (r.content && isResponseContent(r.content) && r.content.type)
           );
 
         // Check if this response was from the Brian agent or is a Brian-specific operation
         const isBrianOperation =
           lastMeaningfulResponse?.agentType === "brian" ||
           (lastMeaningfulResponse?.content &&
-            typeof lastMeaningfulResponse.content === "object" &&
-            ["brian_confirmation", "transaction"].includes(
-              lastMeaningfulResponse.content.type
-            ));
+           isResponseContent(lastMeaningfulResponse.content) &&
+           lastMeaningfulResponse.content.type &&
+           ["brian_confirmation", "transaction"].includes(
+             lastMeaningfulResponse.content.type
+           ));
 
         if (
-          lastResponse.content?.type === "swap_confirmation" &&
+          lastResponse.content && 
+          isResponseContent(lastResponse.content) &&
+          lastResponse.content.type === "swap_confirmation" &&
           !isBrianOperation
         ) {
           try {
@@ -790,7 +778,7 @@ export default function Home() {
           await processCommand("yes");
         }
         return;
-      } else if (["no", "cancel", "stop"].includes(command.toLowerCase())) {
+      } else if (["no", "cancel", "stop"].includes(lowerCommand)) {
         const userDecline: Response = {
           content: command,
           timestamp: new Date().toISOString(),
@@ -820,37 +808,41 @@ export default function Home() {
       pb={{ base: 16, sm: 20 }}
     >
       <Container maxW="container.md" px={{ base: 2, sm: 4 }}>
-        <VStack spacing={{ base: 4, sm: 8 }}>
+        <VStack
+          spacing={{ base: 4, sm: 8 }}
+          align="stretch"
+          w="100%"
+          mb={{ base: 4, sm: 8 }}
+        >
           <Box textAlign="center" w="100%">
-            <HStack
+            <Flex
+              align="center"
               justify="space-between"
               w="100%"
               mb={4}
               flexDir={{ base: "column", sm: "row" }}
-              spacing={{ base: 2, sm: 4 }}
+              gap={{ base: 2, sm: 4 }}
             >
-              <HStack spacing={2} align="center">
-                <Box
-                  as="button"
-                  onClick={() => setIsLogoModalOpen(true)}
-                  cursor="pointer"
-                  transition="transform 0.2s"
-                  _hover={{ transform: "scale(1.1)" }}
-                >
-                  <Image
-                    src="/icon.png"
-                    alt="SNEL Logo"
-                    width={32}
-                    height={32}
-                    priority
-                    style={{
-                      marginRight: "4px",
-                      objectFit: "contain",
-                    }}
-                  />
-                </Box>
-                <Heading size={{ base: "lg", sm: "xl" }}>SNEL</Heading>
-              </HStack>
+              <Box
+                as="button"
+                onClick={() => setIsLogoModalOpen(true)}
+                cursor="pointer"
+                transition="transform 0.2s"
+                _hover={{ transform: "scale(1.1)" }}
+              >
+                <Image
+                  src="/icon.png"
+                  alt="SNEL Logo"
+                  width={32}
+                  height={32}
+                  priority
+                  style={{
+                    marginRight: "4px",
+                    objectFit: "contain",
+                  }}
+                />
+              </Box>
+              <Heading size={{ base: "lg", sm: "xl" }}>SNEL</Heading>
               <HStack spacing={{ base: 2, sm: 4 }}>
                 <Button
                   size="sm"
@@ -872,7 +864,7 @@ export default function Home() {
                 </Button>
                 <WalletButton />
               </HStack>
-            </HStack>
+            </Flex>
             <Text color="gray.600" fontSize={{ base: "md", sm: "lg" }}>
               Super poiNtlEss Lazy agents
             </Text>
@@ -938,6 +930,7 @@ export default function Home() {
                   requires_selection={response.requires_selection}
                   all_quotes={response.all_quotes}
                   onQuoteSelect={handleQuoteSelection}
+                  transaction={response.transaction}
                 />
               ))}
               <div ref={responsesEndRef} />

@@ -1,6 +1,6 @@
 # SNEL - Your Lazy AI Agent Assistant and Her Crew
 
-Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who helps users swap tokens, bridge assets across chains, check balances, and answer questions about crypto
+Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who helps users swap tokens, bridge assets across chains, check balances, and answer questions about crypto.
 
 ## Features
 
@@ -8,47 +8,67 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **Cross-chain bridging** with Brian API integration
 - **Balance checking** for any token on supported chains
 - **Natural language command processing** with snail-like wit
-- **Automatic token approval** handling with skip approval option
+- **Automatic token approval** handling
 - **Multi-chain support** with automatic chain detection
 - **Persistent command storage** with Redis
-- **Messaging platform integration** (WhatsApp, Telegram)
+- **Messaging platform integration** (Telegram)
 - **External wallet connections** via web-based bridge
 - **AI-powered responses** using Google's Gemini API
 
-## Wallet Technology
+## Project Structure
 
-SNEL allows users to connect their existing wallets through a secure web-based wallet bridge. The wallet connection process:
+The project is organized into three main components:
 
-- **Secure**: User controls their wallet and signing operations
-- **Simple**: Connect with MetaMask or other web3 wallets easily
-- **Cross-platform**: Works with Telegram and other messaging platforms
-- **Stateful**: Maintains connection state in Redis
+```
+dowse-pointless/
+├── backend/           # FastAPI backend service
+├── frontend/          # Next.js web application
+└── telegram-bot/      # Telegram bot service
+```
 
-## Telegram Bot
+### Backend Service
 
-Snel is available as a Telegram bot! Chat with [@pointless_snel_bot](https://t.me/pointless_snel_bot) to:
+The backend service provides:
+- RESTful API for token operations
+- Brian API integration for bridging
+- Redis for state management
+- WebSocket support for real-time updates
 
-- Check token prices
-- Connect your existing wallet
-- Swap tokens
-- Check your wallet balance
-- Get real-time crypto information
-- Ask general questions about crypto and DeFi
+See [backend/README.md](backend/README.md) for setup instructions.
 
-### Bot Commands
+### Frontend Application
 
-- `/start` - Start the bot
-- `/help` - Show available commands
-- `/connect` - Connect or create a wallet
-- `/price [token]` - Check token price (e.g., `/price ETH`)
-- `/swap [amount] [token] for [token]` - Create a swap (e.g., `/swap 0.1 ETH for USDC`)
-- `/balance` - Check your wallet balance
-- `/disconnect` - Disconnect your wallet
-- `/networks` - Show available networks
-- `/network [chain]` - Switch to a specific network
-- `/keys` - Learn about key management and security
+The web interface provides:
+- Wallet connection
+- Token bridging interface
+- Balance checking
+- Transaction status monitoring
 
-You can also chat with Snel naturally, asking questions like "What's the price of ETH?" or "Tell me about Scroll L2." The bot uses Google's Gemini AI to provide informative responses while maintaining a friendly, snail-themed personality.
+See [frontend/README.md](frontend/README.md) for setup instructions.
+
+### Telegram Bot
+
+Chat with [@pointless_snel_bot](https://t.me/pointless_snel_bot) to:
+- Connect your wallet
+- Bridge tokens across chains
+- Check balances
+- Get crypto information
+
+See [telegram-bot/README.md](telegram-bot/README.md) for setup instructions.
+
+## Development
+
+Each component can be developed independently. See the respective README files for detailed setup instructions.
+
+Alternatively, to start both backend and frontend in development mode simultaneously, simply run:
+```
+make dev
+```
+This will launch the FastAPI server on port 8000 and the Next.js app on port 3000.
+
+## License
+
+See [LICENSE](LICENSE) file for details.
 
 ## Setup
 

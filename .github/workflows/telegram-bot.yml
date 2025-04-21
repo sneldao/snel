@@ -1,0 +1,37 @@
+name: Telegram Bot CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'telegram-bot/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'telegram-bot/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-bot
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          BRIAN_API_KEY: ${{ secrets.BRIAN_API_KEY }}

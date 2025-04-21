@@ -1,9 +1,0 @@
-{
-  "dependencies": {
-    "@types/react": "^19.0.12",
-    "@web3-react/core": "^8.2.3",
-    "@web3-react/metamask": "^8.2.4",
-    "ethers": "^5.7.2",
-    "framer-motion": "^12.5.0"
-  }
-}
