@@ -285,7 +285,10 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   };
 
   // Format links in content
-  const formatLinks = (text: string) => {
+  const formatLinks = (text: string | undefined | null) => {
+    // Early exit if input is not a string or is empty
+    if (typeof text !== "string" || !text) return null;
+
     // Process markdown-style links first - format: [text](url)
     const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     let processedText = text;
@@ -650,7 +653,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                     </Box>
                   )}
                 </AlertDescription>
-              </Alert>
+          </Alert>
             </Box>
           ) : needsSelection ? (
             <Box mt={2} width="100%">
@@ -690,7 +693,9 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 : formatLinks(
                     typeof content === "string"
                       ? content
-                      : JSON.stringify(content, null, 2)
+                      : content !== null && content !== undefined
+                      ? JSON.stringify(content, null, 2)
+                      : ""
                   )}
             </Text>
           )}

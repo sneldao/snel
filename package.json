@@ -1,0 +1,17 @@
+{
+  "name": "dowse-pointless",
+  "version": "1.0.0",
+  "description": "Dual-Mode Crypto Assistant with Agent and Bot capabilities",
+  "scripts": {
+    "dev": "make dev",
+    "all-dev": "make all-dev",
+    "backend": "make backend-dev",
+    "frontend": "make frontend-dev",
+    "telegram": "make telegram-dev",
+    "install-deps": "make install",
+    "clean": "make clean"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

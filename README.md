@@ -1,6 +1,30 @@
-# SNEL - Your Lazy AI Agent Assistant and Her Crew
+# SNEL - Next Generation Dual-Mode Crypto Assistant
 
-Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who helps users swap tokens, bridge assets across chains, check balances, and answer questions about crypto.
+Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who helps users swap tokens, bridge assets across chains, check balances, and answer questions about crypto — now with a next-generation architecture giving users both **Agent Mode** (AI/LLM-powered, contextual, smart) and **Bot Mode** (fast, API-oriented, deterministic).
+
+## 🚀 Architecture Overview: Dual-Mode (Agent & Bot) Philosophy
+
+Snel is now built to offer both:
+
+### **Agent Mode**
+- **What:** Experience a personal crypto assistant that provides advice, understands natural language, can chain together multiple steps, recommends actions, and even follows up with you.
+- **How:** Powered by a flexible agent/dispatcher (`/api/v1/agent.py`) that uses skills/handlers and integrates advanced AI/NLP as needed.
+- **Features:** 
+    - Natural language understanding and command parsing
+    - "Skills" for swaps, bridges, balances, transfers, prices, and more
+    - Multi-step, contextual (possibly stateful) workflows
+    - Automated advice and autonomous actions
+
+### **Bot Mode**
+- **What:** Classic, stateless, high-speed API endpoints for "do X" requests (swaps, bridges, etc.) with maximum predictability.
+- **How:** Direct mapping of API calls (e.g., `/api/v1/swap`, `/api/v1/bridges`), ideal for UI elements, power users, and messaging bots.
+- **Features:**
+    - Each action is atomic and isolated
+    - Minimal interpretation – what you ask is what you get
+    - Extremely fast and easy to monitor
+
+### **Shared Service Layer**
+- All business logic (swap, bridge, balance, etc.) lives in `/services/`, so both Agent and Bot modes use identical, robust code.
 
 ## Features
 
@@ -15,13 +39,27 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 - **External wallet connections** via web-based bridge
 - **AI-powered responses** using Google's Gemini API
 
-## Project Structure
+## 📦 Project Structure
 
 The project is organized into three main components:
 
 ```
 dowse-pointless/
 ├── backend/           # FastAPI backend service
+│   └── app/
+│        ├── api/
+│        │    └── v1/
+│        │         ├── agent.py           # Agent Mode (NLP, smart, autonomous)
+│        │         ├── swap.py            # Bot Mode (stateless swap endpoint)
+│        │         ├── bridges.py         # Bot Mode (stateless bridge endpoint)
+│        │         └── ...                # Other classic endpoints as needed
+│        ├── services/
+│        │    ├── swap_service.py         # Core business logic for swaps
+│        │    ├── bridge_service.py       # Core business logic for bridging
+│        │    └── ...                     # Additional services (balance, price, etc)
+│        ├── models/
+│        │    └── commands.py             # Pydantic models for commands/requests
+│        └── ...
 ├── frontend/          # Next.js web application
 └── telegram-bot/      # Telegram bot service
 ```
@@ -106,7 +144,7 @@ npm install
 pip install -r requirements.txt
 
 # Start the development server
-npm run dev
+make dev
 ```
 
 ## Telegram Bot Setup
@@ -534,8 +572,40 @@ The application supports a variety of natural language commands:
 - Local: Available in terminal running the FastAPI server
 - Production: Check Vercel deployment logs
 
+## 🧠 Why Dual-Mode?
+
+- **Performance for Power Users:** Bot endpoints provide immediate, stateless actions for APIs, Telegram bots, and direct UI use.
+- **Intelligence for Everyone:** Agent mode opens up "just ask" user interfaces, proactive suggestions, multi-step workflows, and future LLM integrations and context-awareness.
+- **Code Reuse, Minimal Duplication:** All real logic lives in the service layer, so every endpoint (bot or agent) is always fast, correct, and maintainable.
+- **Quick iteration + Extensibility:** Want a new skill? Add a service, register a handler in agent, or a new endpoint in bot mode!
+
+## 🛣️ How It Works
+
+**Example Flows:**
+
+- **Agent Mode:**  
+  User types: "Swap $10 of ETH for USDC on Scroll, then bridge to Base"  
+  → `/agent/process` parses, plans, and executes multiple service steps  
+  → Returns confirmation, feedback, and advice
+
+- **Bot Mode:**  
+  User or UI calls `/swap/process-command` with a JSON body  
+  → Logic runs, swap is constructed and executed  
+  → Returns result, no further context or chaining
+
+## 🧩 Extending SNEL
+
+- Want a new feature or "skill"?  
+  1. Add logic to `/services/`
+  2. Register as an agent handler, bot endpoint, or both
+
+- Want a smarter agent?  
+  - Add new intent detection, chaining, and advanced context to the dispatcher.
+  - Plug in an LLM model for "unhandled" requests, fallback chat, or advice.
+
 ## Recent Updates
 
+- Added dual-mode architecture with Agent and Bot interfaces
 - Added Gemini API integration for intelligent conversational responses in the Telegram bot
 - Added multi-network support with ability to switch chains in Telegram
 - Added comprehensive wallet security information with `/keys` command

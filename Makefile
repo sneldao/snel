@@ -1,6 +1,6 @@
 # Makefile for Dowse Pointless
 
-.PHONY: help dev backend-dev frontend-dev telegram-dev install clean docker-up docker-down
+.PHONY: help dev all-dev backend-dev frontend-dev telegram-dev install clean docker-up docker-down
 
 help:
 	@echo "Available commands:"
@@ -8,10 +8,11 @@ help:
 	@echo "  make frontend-dev  - Run the frontend in development mode"
 	@echo "  make telegram-dev  - Run the telegram bot in development mode"
 	@echo "  make dev           - Start both backend and frontend concurrently"
-	@echo "  make install      - Install dependencies for all components"
-	@echo "  make clean        - Clean up cache and temporary files"
-	@echo "  make docker-up    - Start all services with Docker"
-	@echo "  make docker-down  - Stop all Docker services"
+	@echo "  make all-dev       - Start backend, frontend, and telegram bot concurrently"
+	@echo "  make install       - Install dependencies for all components"
+	@echo "  make clean         - Clean up cache and temporary files"
+	@echo "  make docker-up     - Start all services with Docker"
+	@echo "  make docker-down   - Stop all Docker services"
 
 # Backend commands
 backend-dev:
@@ -30,7 +31,12 @@ frontend-dev:
 # Development: start both backend & frontend
 dev:
 	@echo "Starting backend and frontend..."
-	@make backend-dev & make frontend-dev
+	npx concurrently --names "BACKEND,FRONTEND" --prefix-colors "blue.bold,green.bold" --kill-others "make backend-dev" "make frontend-dev"
+
+# Development: start backend, frontend, and telegram bot
+all-dev:
+	@echo "Starting backend, frontend, and telegram bot..."
+	npx concurrently --names "BACKEND,FRONTEND,TELEGRAM" --prefix-colors "blue.bold,green.bold,yellow.bold" --kill-others "make backend-dev" "make frontend-dev" "make telegram-dev"
 
 # Telegram bot commands
 telegram-dev:
@@ -77,4 +83,4 @@ format:
 	python -m flake8 --ignore=E501,E203,W503
 
 lint:
-	python -m flake8 --ignore=E501,E203,W503 
+	python -m flake8 --ignore=E501,E203,W503

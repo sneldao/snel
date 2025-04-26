@@ -46,7 +46,21 @@ export default function Home() {
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  
+
+  // Initialize services
+  const apiService = React.useMemo(() => new ApiService(), []);
+  const transactionService = React.useMemo(
+    () =>
+      walletClient && publicClient && chainId
+        ? new TransactionService(walletClient, publicClient, chainId)
+        : null,
+    [walletClient, publicClient, chainId]
+  );
+  const dcaService = React.useMemo(
+    () => (chainId ? new DCAService(chainId) : null),
+    [chainId]
+  );
+
   interface ResponseContent {
     type?: string;
     confirmation_type?: string;
@@ -100,7 +114,7 @@ export default function Home() {
     setIsLoading(true);
     try {
       const response = await apiService.processCommand(command);
-      setResponses(prev => [...prev, response]);
+      setResponses((prev) => [...prev, response]);
     } catch (error) {
       console.error("Error processing command:", error);
       toast({
@@ -119,7 +133,14 @@ export default function Home() {
       <Container maxW="container.xl" py={4}>
         <VStack spacing={8} align="stretch">
           <Box>
-            <Flex align="center" justify="space-between" w="100%" mb={4} flexDir={{ base: "column", sm: "row" }} gap={{ base: 2, sm: 4 }}>
+            <Flex
+              align="center"
+              justify="space-between"
+              w="100%"
+              mb={4}
+              flexDir={{ base: "column", sm: "row" }}
+              gap={{ base: 2, sm: 4 }}
+            >
               <Box cursor="pointer" onClick={() => setIsLogoModalOpen(true)}>
                 <Image src="/icon.png" alt="Logo" width={40} height={40} />
               </Box>
@@ -129,10 +150,18 @@ export default function Home() {
               </Heading>
 
               <HStack spacing={4}>
-                <Button size="sm" variant="ghost" onClick={() => setIsHelpModalOpen(true)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsHelpModalOpen(true)}
+                >
                   <Icon as={QuestionIcon} />
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setIsApiKeyModalOpen(true)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsApiKeyModalOpen(true)}
+                >
                   <Icon as={SettingsIcon} />
                 </Button>
                 <WalletButton />
@@ -155,7 +184,7 @@ export default function Home() {
                 <Box mt={4}>
                   <AlertTitle mb={1}>Connect Your Wallet</AlertTitle>
                   <AlertDescription maxWidth="sm">
-                    Please connect your wallet to use Dowse.
+                    Please connect your wallet to use Snel.
                   </AlertDescription>
                 </Box>
               </Alert>
@@ -197,20 +226,6 @@ export default function Home() {
         onClose={() => setIsApiKeyModalOpen(false)}
       />
     </Box>
-  );
-
-  // Initialize services
-  const apiService = React.useMemo(() => new ApiService(), []);
-  const transactionService = React.useMemo(
-    () =>
-      walletClient && publicClient && chainId
-        ? new TransactionService(walletClient, publicClient, chainId)
-        : null,
-    [walletClient, publicClient, chainId]
-  );
-  const dcaService = React.useMemo(
-    () => (chainId ? new DCAService(chainId) : null),
-    [chainId]
   );
 
   // Fetch user profile when address changes
@@ -380,10 +395,23 @@ export default function Home() {
   const processCommand = async (command: string) => {
     try {
       // Just handle non-confirmation commands here
-      if ([
-        "yes", "y", "yeah", "yep", "ok", "okay", "sure", "confirm",
-        "no", "n", "nope", "cancel", "abort"
-      ].includes(command.toLowerCase().trim())) {
+      if (
+        [
+          "yes",
+          "y",
+          "yeah",
+          "yep",
+          "ok",
+          "okay",
+          "sure",
+          "confirm",
+          "no",
+          "n",
+          "nope",
+          "cancel",
+          "abort",
+        ].includes(command.toLowerCase().trim())
+      ) {
         // We'll handle this in the handleSubmit function to avoid duplicate code
         const userConfirmation: Response = {
           content: command,
@@ -522,7 +550,7 @@ export default function Home() {
               const successResponse: Response = {
                 content: {
                   type: "message",
-                  message: `Transaction submitted! [View on block explorer](${explorerLink})`,
+                  message: `Transaction submitted! [View on block explorer](${explorerLink}).\n\nYour swap will be confirmed shortly and will appear in your wallet history.`,
                 },
                 timestamp: new Date().toISOString(),
                 isCommand: false,
@@ -721,14 +749,14 @@ export default function Home() {
         const isBrianOperation =
           lastMeaningfulResponse?.agentType === "brian" ||
           (lastMeaningfulResponse?.content &&
-           isResponseContent(lastMeaningfulResponse.content) &&
-           lastMeaningfulResponse.content.type &&
-           ["brian_confirmation", "transaction"].includes(
-             lastMeaningfulResponse.content.type
-           ));
+            isResponseContent(lastMeaningfulResponse.content) &&
+            lastMeaningfulResponse.content.type &&
+            ["brian_confirmation", "transaction"].includes(
+              lastMeaningfulResponse.content.type
+            ));
 
         if (
-          lastResponse.content && 
+          lastResponse.content &&
           isResponseContent(lastResponse.content) &&
           lastResponse.content.type === "swap_confirmation" &&
           !isBrianOperation

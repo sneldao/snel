@@ -7,8 +7,8 @@ export class ApiService {
     this.baseUrl =
       process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
 
-    // API prefix is always /api
-    this.apiUrl = `${this.baseUrl}/api`;
+    // API prefix is now /api/v1 to match backend
+    this.apiUrl = `${this.baseUrl}/api/v1`;
   }
 
   private getApiKeys() {
@@ -39,11 +39,11 @@ export class ApiService {
     chainId?: number,
     userName?: string
   ) {
-    const response = await fetch(`${this.apiUrl}/process-command`, {
+    const response = await fetch(`${this.apiUrl}/chat/process-command`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({
-        content: command,
+        command,
         wallet_address: walletAddress,
         chain_id: chainId || 1,
         user_name: userName,
