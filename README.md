@@ -7,23 +7,26 @@ Meet SNEL, a comically slow but surprisingly knowledgeable crypto snail who help
 Snel is now built to offer both:
 
 ### **Agent Mode**
+
 - **What:** Experience a personal crypto assistant that provides advice, understands natural language, can chain together multiple steps, recommends actions, and even follows up with you.
 - **How:** Powered by a flexible agent/dispatcher (`/api/v1/agent.py`) that uses skills/handlers and integrates advanced AI/NLP as needed.
-- **Features:** 
-    - Natural language understanding and command parsing
-    - "Skills" for swaps, bridges, balances, transfers, prices, and more
-    - Multi-step, contextual (possibly stateful) workflows
-    - Automated advice and autonomous actions
+- **Features:**
+  - Natural language understanding and command parsing
+  - "Skills" for swaps, bridges, balances, transfers, prices, and more
+  - Multi-step, contextual (possibly stateful) workflows
+  - Automated advice and autonomous actions
 
 ### **Bot Mode**
+
 - **What:** Classic, stateless, high-speed API endpoints for "do X" requests (swaps, bridges, etc.) with maximum predictability.
 - **How:** Direct mapping of API calls (e.g., `/api/v1/swap`, `/api/v1/bridges`), ideal for UI elements, power users, and messaging bots.
 - **Features:**
-    - Each action is atomic and isolated
-    - Minimal interpretation – what you ask is what you get
-    - Extremely fast and easy to monitor
+  - Each action is atomic and isolated
+  - Minimal interpretation – what you ask is what you get
+  - Extremely fast and easy to monitor
 
 ### **Shared Service Layer**
+
 - All business logic (swap, bridge, balance, etc.) lives in `/services/`, so both Agent and Bot modes use identical, robust code.
 
 ## Features
@@ -67,6 +70,7 @@ dowse-pointless/
 ### Backend Service
 
 The backend service provides:
+
 - RESTful API for token operations
 - Brian API integration for bridging
 - Redis for state management
@@ -77,6 +81,7 @@ See [backend/README.md](backend/README.md) for setup instructions.
 ### Frontend Application
 
 The web interface provides:
+
 - Wallet connection
 - Token bridging interface
 - Balance checking
@@ -87,6 +92,7 @@ See [frontend/README.md](frontend/README.md) for setup instructions.
 ### Telegram Bot
 
 Chat with [@pointless_snel_bot](https://t.me/pointless_snel_bot) to:
+
 - Connect your wallet
 - Bridge tokens across chains
 - Check balances
@@ -99,9 +105,11 @@ See [telegram-bot/README.md](telegram-bot/README.md) for setup instructions.
 Each component can be developed independently. See the respective README files for detailed setup instructions.
 
 Alternatively, to start both backend and frontend in development mode simultaneously, simply run:
+
 ```
 make dev
 ```
+
 This will launch the FastAPI server on port 8000 and the Next.js app on port 3000.
 
 ## License
@@ -385,11 +393,11 @@ cd frontend
 pnpm dev
 ```
 
-## Production Setup (Vercel)
+## Production Setup
 
-### Vercel Configuration
+### Vercel Frontend
 
-The project uses Vercel's serverless functions for the backend. Configuration is managed through several files:
+The frontend is deployed on Vercel. Configuration is managed through several files:
 
 - `vercel.json` - Main configuration file for Vercel deployment
 - `vercel.build.sh` - Custom build script that installs dependencies
@@ -461,18 +469,38 @@ The main configuration in `vercel.json`:
 }
 ```
 
-### Environment Variables (Vercel)
+### Northflank Backend
+
+The backend is deployed on Northflank. For detailed deployment instructions, see [NORTHFLANK_DEPLOYMENT.md](NORTHFLANK_DEPLOYMENT.md).
+
+#### Key Features of Northflank Deployment:
+
+- Containerized deployment using Docker
+- Automatic scaling based on load
+- Built-in monitoring and logging
+- Redis add-on for state management
+- Custom domain support
+
+#### Northflank Environment Variables:
+
+- `API_V1_STR`
+- `PROJECT_NAME`
+- `REDIS_URL`
+- `BRIAN_API_KEY`
+- `BRIAN_API_URL`
+- `DISABLE_SSL_VERIFY`
+- `ZEROX_API_KEY`
+- `GEMINI_API_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `COINGECKO_API_KEY`
+- `MORALIS_API_KEY`
+- `ALCHEMY_KEY`
+
+### Environment Variables (Vercel Frontend)
 
 Set these in your Vercel project settings:
 
-- `ALCHEMY_KEY`
-- `COINGECKO_API_KEY`
-- `MORALIS_API_KEY`
-- `ZEROX_API_KEY` (for 0x API access)
-- `BRIAN_API_KEY` (for Brian API access)
-- `TELEGRAM_BOT_TOKEN` (for Telegram integration)
-- `NEXT_PUBLIC_API_URL` (set to your production domain)
-- `REDIS_URL` (your Upstash Redis URL)
+- `NEXT_PUBLIC_API_URL` (set to your Northflank backend URL)
 
 ### Dependencies
 
@@ -583,28 +611,30 @@ The application supports a variety of natural language commands:
 
 **Example Flows:**
 
-- **Agent Mode:**  
-  User types: "Swap $10 of ETH for USDC on Scroll, then bridge to Base"  
-  → `/agent/process` parses, plans, and executes multiple service steps  
+- **Agent Mode:**
+  User types: "Swap $10 of ETH for USDC on Scroll, then bridge to Base"
+  → `/agent/process` parses, plans, and executes multiple service steps
   → Returns confirmation, feedback, and advice
 
-- **Bot Mode:**  
-  User or UI calls `/swap/process-command` with a JSON body  
-  → Logic runs, swap is constructed and executed  
+- **Bot Mode:**
+  User or UI calls `/swap/process-command` with a JSON body
+  → Logic runs, swap is constructed and executed
   → Returns result, no further context or chaining
 
 ## 🧩 Extending SNEL
 
-- Want a new feature or "skill"?  
+- Want a new feature or "skill"?
+
   1. Add logic to `/services/`
   2. Register as an agent handler, bot endpoint, or both
 
-- Want a smarter agent?  
+- Want a smarter agent?
   - Add new intent detection, chaining, and advanced context to the dispatcher.
   - Plug in an LLM model for "unhandled" requests, fallback chat, or advice.
 
 ## Recent Updates
 
+- Added Northflank backend deployment for production environment
 - Added dual-mode architecture with Agent and Bot interfaces
 - Added Gemini API integration for intelligent conversational responses in the Telegram bot
 - Added multi-network support with ability to switch chains in Telegram
@@ -620,6 +650,7 @@ The application supports a variety of natural language commands:
 - Enhanced token lookup functionality to better handle contract addresses
 - Improved error messages for token lookup failures
 - Added support for direct contract address input in swap commands
+- Deployed frontend to Vercel at https://stable-snel.vercel.app
 
 ## Contributing
 
