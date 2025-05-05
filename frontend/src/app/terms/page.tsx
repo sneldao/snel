@@ -22,16 +22,17 @@ export default function TermsAndConditions() {
             <Text mb={4}>
               By accessing or using Snel, an artificial intelligence agent that
               facilitates cryptocurrency swaps and interacts with other agents
-              to accomplish tasks (the "Service"), you agree to be bound by
-              these Terms and Conditions (the "Terms"). If you do not agree to
-              these Terms, you must not access or use the Service.
+              to accomplish tasks (the &quot;Service&quot;), you agree to be
+              bound by these Terms and Conditions (the &quot;Terms&quot;). If
+              you do not agree to these Terms, you must not access or use the
+              Service.
             </Text>
             <Text mb={4}>
               These Terms constitute a legally binding agreement between you and
-              the developers of Snel ("we," "us," or "our"). You acknowledge
-              that you have read, understood, and agree to be bound by these
-              Terms, which may be updated by us from time to time without notice
-              to you.
+              the developers of Snel (&quot;we,&quot; &quot;us,&quot; or
+              &quot;our&quot;). You acknowledge that you have read, understood,
+              and agree to be bound by these Terms, which may be updated by us
+              from time to time without notice to you.
             </Text>
             <Text mb={4} fontWeight="bold">
               IMPORTANT NOTICE: BY USING SNEL, YOU EXPRESSLY ACKNOWLEDGE AND
@@ -112,8 +113,8 @@ export default function TermsAndConditions() {
                 failure could lead to injury, death, or severe property damage
               </Text>
               <Text as="li">
-                Attempt prompt injection or other attacks on Snel's underlying
-                models
+                Attempt prompt injection or other attacks on Snel&apos;s
+                underlying models
               </Text>
               <Text as="li">
                 Use Snel to interact with blacklisted or sanctioned addresses or
@@ -131,12 +132,12 @@ export default function TermsAndConditions() {
               5. Disclaimer of Warranties
             </Heading>
             <Text mb={4} textTransform="uppercase">
-              The service is provided "as is" and "as available," without
-              warranty of any kind, express or implied. To the maximum extent
-              permitted by applicable law, we explicitly disclaim all
-              warranties, including any warranty of merchantability, fitness for
-              a particular purpose, non-infringement, accuracy, completeness, or
-              reliability.
+              The service is provided &quot;as is&quot; and &quot;as
+              available,&quot; without warranty of any kind, express or implied.
+              To the maximum extent permitted by applicable law, we explicitly
+              disclaim all warranties, including any warranty of
+              merchantability, fitness for a particular purpose,
+              non-infringement, accuracy, completeness, or reliability.
             </Text>
             <Text mb={4} textTransform="uppercase">
               We do not warrant that:
@@ -276,11 +277,11 @@ export default function TermsAndConditions() {
               respective officers, directors, employees, contractors, agents,
               licensors, suppliers, successors, and assigns from and against any
               claims, liabilities, damages, judgments, awards, losses, costs,
-              expenses, or fees (including reasonable attorneys' fees) arising
-              out of or relating to your violation of these Terms or your use of
-              Snel, including, but not limited to, any use of the Service's
-              content, services, and products other than as expressly authorized
-              in these Terms.
+              expenses, or fees (including reasonable attorneys&apos; fees)
+              arising out of or relating to your violation of these Terms or
+              your use of Snel, including, but not limited to, any use of the
+              Service's content, services, and products other than as expressly
+              authorized in these Terms.
             </Text>
           </Box>
 
@@ -300,7 +301,7 @@ export default function TermsAndConditions() {
               </Text>
               <Text as="li">
                 Implement kill switches or other emergency measures to suspend
-                or terminate Snel's operations if we determine, in our sole
+                or terminate Snel&apos;s operations if we determine, in our sole
                 discretion, that Snel is operating in an unintended manner or
                 poses a risk to users
               </Text>

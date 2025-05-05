@@ -478,8 +478,8 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
 
         {/* Confirmation Request */}
         <Text mt={2}>
-          Would you like me to proceed with the swap? Type 'yes' to continue or
-          'no' to cancel.
+          Would you like me to proceed with the swap? Type &apos;yes&apos; to
+          continue or &apos;no&apos; to cancel.
         </Text>
       </Box>
     );

@@ -82,8 +82,8 @@ export const ApiKeyModal = ({ isOpen, onClose }: ApiKeyModalProps) => {
             </FormControl>
 
             <Text fontSize="sm" color="gray.600" mt={4}>
-              Your API key is stored securely in your browser's local storage.
-              You can update or remove it at any time.
+              Your API key is stored securely in your browser&apos;s local
+              storage. You can update or remove it at any time.
             </Text>
 
             <Box mt={4} pt={4} borderTop="1px" borderColor="gray.200">

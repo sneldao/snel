@@ -61,7 +61,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
     {
       category: "Balance Checking",
       icon: FaBalanceScale,
-      examples: ["check my USDC balance on Scroll", "what's my ETH balance"],
+      examples: [
+        "check my USDC balance on Scroll",
+        "what&apos;s my ETH balance",
+      ],
     },
     {
       category: "Token Swaps",
