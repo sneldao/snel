@@ -22,9 +22,9 @@ async def lifespan(_: FastAPI):
     await brian_client.close()
 
 app = FastAPI(
-    title="Dowse API",
+    title="Snel API",
     version="1.0.0",
-    description="Backend API for Dowse - Cross-chain bridging and token management",
+    description="Backend API for Snel - Cross-chain bridging and token management",
     lifespan=lifespan
 )
 
