@@ -301,7 +301,7 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
   return (
     <VStack spacing={3} align="stretch">
       <Text fontSize="md" fontWeight="medium">
-        I'll set up a Dollar Cost Average (DCA) order to swap{" "}
+        I&apos;ll set up a Dollar Cost Average (DCA) order to swap{" "}
         <Text as="span" fontWeight="bold">
           {formattedAmount}
         </Text>{" "}
@@ -622,8 +622,8 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
       )}
 
       <Text fontSize="sm" mt={1}>
-        Would you like to proceed with setting up this DCA? Type 'yes' to
-        continue or 'no' to cancel.
+        Would you like to proceed with setting up this DCA? Type &apos;yes&apos;
+        to continue or &apos;no&apos; to cancel.
       </Text>
     </VStack>
   );

@@ -295,54 +295,6 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
     return amount.toString();
   };
 
-  const renderTokenInfo = (token: TokenInfo) => {
-    const { isOpen, onOpen, onClose } = useDisclosure();
-
-    return (
-      <HStack spacing={2}>
-        <Text>
-          {token.symbol} ({token.name}) {token.metadata.verified ? "✓" : "⚠️"}
-        </Text>
-        {token.metadata.links && (
-          <HStack spacing={2} ml={2}>
-            {token.metadata.links.dexscreener && (
-              <Link
-                href={token.metadata.links.dexscreener}
-                isExternal
-                color="blue.500"
-                fontSize="sm"
-              >
-                Chart <ExternalLinkIcon mx="1px" />
-              </Link>
-            )}
-            {token.metadata.links.coingecko && (
-              <Link
-                href={token.metadata.links.coingecko}
-                isExternal
-                color="blue.500"
-                fontSize="sm"
-              >
-                CoinGecko <ExternalLinkIcon mx="1px" />
-              </Link>
-            )}
-            {token.metadata.links.explorer && (
-              <Link
-                href={token.metadata.links.explorer}
-                isExternal
-                color="blue.500"
-                fontSize="sm"
-              >
-                Contract <ExternalLinkIcon mx="1px" />
-              </Link>
-            )}
-          </HStack>
-        )}
-        <InfoIcon cursor="pointer" color="blue.500" onClick={onOpen} />
-        <TokenDetailsModal isOpen={isOpen} onClose={onClose} token={token} />
-      </HStack>
-    );
-  };
-
   const renderSwapMessage = () => {
     const { amount, token_in, token_out, is_target_amount, amount_is_usd } =
       message;
@@ -351,7 +303,7 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
     return (
       <Box>
         <Text fontSize="md" mb={4}>
-          I'll help you swap {formattedAmount} of{" "}
+          I will help you swap {formattedAmount} of{" "}
           <TokenDisplay token={token_in} /> for{" "}
           <TokenDisplay token={token_out} />.
         </Text>
@@ -444,8 +396,8 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
         <VStack spacing={3} align="stretch" fontSize="md">
           {/* Token Information */}
           <VStack align="stretch" spacing={2} pl={4}>
-            {renderTokenInfo(message.token_in)}
-            {renderTokenInfo(message.token_out)}
+            <TokenDisplay token={message.token_in} />
+            <TokenDisplay token={message.token_out} />
           </VStack>
 
           {/* Swap Details */}

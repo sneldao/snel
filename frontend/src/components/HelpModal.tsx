@@ -40,6 +40,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
   const borderColor = useColorModeValue("gray.200", "gray.700");
   const headingColor = useColorModeValue("gray.700", "white");
   const textColor = useColorModeValue("gray.600", "gray.300");
+  const exampleBoxBg = useColorModeValue("gray.50", "gray.700");
 
   const examples = [
     {
@@ -118,12 +119,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         <ModalBody pb={4} px={4}>
           <SimpleGrid columns={1} spacing={3} alignItems="stretch">
             {examples.map((category, idx) => (
-              <Box
-                key={idx}
-                p={2}
-                borderRadius="md"
-                bg={useColorModeValue("gray.50", "gray.700")}
-              >
+              <Box key={idx} p={2} borderRadius="md" bg={exampleBoxBg}>
                 <Flex align="center" mb={1}>
                   <Icon
                     as={category.icon}
@@ -139,7 +135,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                   {category.examples.map((example, exIdx) => (
                     <ListItem key={exIdx} color={textColor}>
                       <Text as="span" fontFamily="mono" fontWeight="medium">
-                        "{example}"
+                        &quot;{example}&quot;
                       </Text>
                     </ListItem>
                   ))}

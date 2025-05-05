@@ -280,8 +280,8 @@ export default function TermsAndConditions() {
               expenses, or fees (including reasonable attorneys&apos; fees)
               arising out of or relating to your violation of these Terms or
               your use of Snel, including, but not limited to, any use of the
-              Service's content, services, and products other than as expressly
-              authorized in these Terms.
+              Service&apos;s content, services, and products other than as
+              expressly authorized in these Terms.
             </Text>
           </Box>
 
@@ -371,7 +371,7 @@ export default function TermsAndConditions() {
               AI agents to fulfill your requests. We do not control these third
               parties and assume no responsibility for their actions, services,
               or content. Your use of any third-party service is subject to that
-              third party's terms and privacy policies.
+              third party&apos;s terms and privacy policies.
             </Text>
 
             <Heading as="h3" size="md" mb={2}>

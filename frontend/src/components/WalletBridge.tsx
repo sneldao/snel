@@ -171,7 +171,7 @@ export default function WalletBridge() {
     };
 
     setup();
-  }, [hasRequiredParams, uid, source]);
+  }, [hasRequiredParams, uid, source, fetchConnectionStatus]);
 
   // If user is already connected, offer to complete the connection
   useEffect(() => {
