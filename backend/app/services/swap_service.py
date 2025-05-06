@@ -5,7 +5,7 @@ import httpx
 
 # Get the 0x API URL and API key from environment variables
 ZEROEX_API_URL = os.getenv("ZEROEX_API_URL", "https://api.0x.org")
-ZEROEX_API_KEY = os.getenv("ZEROX_API_KEY", "")  # Note: Using ZEROX_API_KEY from .env (with typo)
+ZEROEX_API_KEY = os.getenv("ZEROEX_API_KEY", "")  # Correct environment variable name for 0x API key
 
 async def fetch_swap_quote(from_token: str, to_token: str, amount: Decimal, chain_id: int, decimals: int = 18) -> Dict[str, Any]:
     """Fetches a swap quote from the 0x API."""
