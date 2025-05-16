@@ -39,6 +39,15 @@ export class ApiService {
     chainId?: number,
     userName?: string
   ) {
+    // Check if this is a swap command
+    const swapMatch = command.match(
+      /swap\s+([\d\.]+)\s+(\S+)\s+(to|for)\s+(\S+)/i
+    );
+    if (swapMatch) {
+      return this.processSwapCommand(command, walletAddress, chainId);
+    }
+
+    // For other commands, use the chat endpoint
     const response = await fetch(`${this.apiUrl}/chat/process-command`, {
       method: "POST",
       headers: this.getHeaders(),
@@ -47,7 +56,6 @@ export class ApiService {
         wallet_address: walletAddress,
         chain_id: chainId || 1,
         user_name: userName,
-        openai_api_key: this.getApiKeys().openaiKey,
       }),
     });
 
@@ -66,13 +74,29 @@ export class ApiService {
     walletAddress?: string,
     chainId?: number
   ) {
+    if (!walletAddress) {
+      return {
+        content: "Please connect your wallet to perform swaps.",
+        agent_type: "default",
+        status: "error",
+      };
+    }
+
+    if (!chainId) {
+      return {
+        content: "Please connect to a supported network to perform swaps.",
+        agent_type: "default",
+        status: "error",
+      };
+    }
+
     const response = await fetch(`${this.apiUrl}/swap/process-command`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify({
         command,
         wallet_address: walletAddress,
-        chain_id: chainId || 1,
+        chain_id: chainId,
       }),
     });
 

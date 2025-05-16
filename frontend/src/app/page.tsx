@@ -98,6 +98,30 @@ export default function Home() {
   const responsesEndRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState<string>("");
 
+  // Initialize or update welcome message based on wallet state
+  useEffect(() => {
+    const welcomeMessage: Response = {
+      content: isConnected
+        ? chainId && chainId in SUPPORTED_CHAINS
+          ? `Good morning! How can I help you with crypto today? You're connected to ${
+              SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
+            }.`
+          : "Please switch to a supported network to continue."
+        : "Good morning! Please connect your wallet to get started.",
+      timestamp: new Date().toISOString(),
+      isCommand: false,
+      status: "success" as const,
+    };
+
+    setResponses((prev) =>
+      prev.length === 0
+        ? [welcomeMessage]
+        : prev[0].isCommand
+        ? [welcomeMessage, ...prev]
+        : prev.map((r, i) => (i === 0 ? welcomeMessage : r))
+    );
+  }, [isConnected, chainId]);
+
   // Fetch user profile when address changes
   useEffect(() => {
     const fetchProfile = async () => {
@@ -148,8 +172,22 @@ export default function Home() {
   }, [responses]);
 
   const handleCommand = async (command: string | undefined) => {
-    if (!command || !address) return;
-    if (!chainId) {
+    if (!command) return;
+
+    // Check if wallet is connected
+    if (!isConnected) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet to use Snel.",
+        status: "warning",
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Check if chain is supported
+    if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
       toast({
         title: "Wrong Network",
         description: "Please connect to a supported network.",
@@ -162,8 +200,36 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      const response = await apiService.processCommand(command);
-      setResponses((prev) => [...prev, response]);
+      // Add command to responses immediately to show user input
+      const timestamp = new Date().toISOString();
+      setResponses((prev) => [
+        ...prev,
+        {
+          content: command,
+          timestamp,
+          isCommand: true,
+          status: "pending",
+        },
+      ]);
+
+      // Process command with wallet info
+      const response = await apiService.processCommand(
+        command,
+        address, // Pass wallet address
+        chainId, // Pass chain ID
+        userProfile?.name // Pass user name if available
+      );
+
+      // Add response
+      setResponses((prev) => [
+        ...prev,
+        {
+          ...response,
+          timestamp: new Date().toISOString(),
+          isCommand: false,
+          status: "success",
+        },
+      ]);
     } catch (error) {
       console.error("Error processing command:", error);
       toast({

@@ -46,12 +46,12 @@ const config = createConfig(
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
 
     // Required App Info
-    appName: "Pointless",
+    appName: "Snel",
 
     // Optional App Info
-    appDescription: "super pointless lazy agents",
-    appUrl: "https://snel-pointless.vercel.app", // your app's url
-    appIcon: "https://pointless.xyz/logo.png", // your app's icon
+    appDescription: "SNEL",
+    appUrl: "https://stable-snel.netlify.app", // your app's url
+    appIcon: "https://stable-snel.netlify.app/icon.png", // your app's icon
   })
 );
 

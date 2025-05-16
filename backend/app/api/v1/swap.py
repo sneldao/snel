@@ -1,5 +1,5 @@
 """
-Swap aggregator endpoints using 0x API.
+Swap aggregator endpoints using 0x API with Permit2.
 """
 import re
 from fastapi import APIRouter, HTTPException
@@ -34,6 +34,8 @@ class QuoteResponseItem(BaseModel):
     to: str
     data: str
     value: str
+    permit2: Optional[Dict[str, Any]]  # Added for Permit2 support
+    zid: Optional[str]  # Added for transaction tracking
 
 class SwapExecuteRequest(BaseModel):
     wallet_address: str
@@ -90,7 +92,6 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
     if is_scroll_chain:
         try:
             # Return a response indicating this is a Brian operation
-            # The frontend will handle this differently
             return {
                 "is_brian_operation": True,
                 "token_out": {"symbol": to_token, "decimals": 18},
@@ -104,29 +105,34 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
     # For other chains or if Brian API failed, use 0x API
     if not is_scroll_chain:
         try:
-            data = await fetch_swap_quote(from_token=from_token, to_token=to_token, amount=amt, chain_id=req.chain_id)
+            data = await fetch_swap_quote(
+                from_token=from_token,
+                to_token=to_token,
+                amount=amt,
+                chain_id=req.chain_id,
+                taker_address=req.wallet_address
+            )
+
+            quote = QuoteResponseItem(
+                aggregator="0x",
+                protocol="0x",
+                buy_amount=data.get("buyAmount", "0"),
+                minimum_received=data.get("minBuyAmount", "0"),
+                gas=str(data.get("gas", "")),
+                gas_usd="",  # Could calculate this if needed
+                to=data.get("to", ""),
+                data=data.get("data", ""),
+                value=data.get("value", "0"),
+                permit2=data.get("permit2"),
+                zid=data.get("zid")
+            )
+            return {
+                "quotes": [quote.model_dump()],
+                "token_out": {"symbol": to_token, "decimals": 18},  # Default decimals, could fetch from token contract
+                "is_brian_operation": False
+            }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error fetching quote: {e}") from e
-
-        # Default token decimals to 18 (most ERC20 tokens use this)
-        token_decimals = 18
-
-        quote = QuoteResponseItem(
-            aggregator="0x",
-            protocol="0x",
-            buy_amount=data.get("buyAmount", "0"),
-            minimum_received=data.get("buyAmount", "0"),
-            gas=str(data.get("gas", "")),
-            gas_usd="",
-            to=data.get("to", ""),
-            data=data.get("data", ""),
-            value=data.get("value", "0")
-        )
-        return {
-            "quotes": [quote.model_dump()],
-            "token_out": {"symbol": to_token, "decimals": token_decimals},
-            "is_brian_operation": False
-        }
 
 # 3. Build swap transaction
 @router.post("/execute")

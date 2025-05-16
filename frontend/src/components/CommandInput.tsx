@@ -143,6 +143,11 @@ export const CommandInput = ({
               {isChainSupported ? currentChainName : "Unsupported Network"}
             </Badge>
           )}
+          {!isConnected && (
+            <Badge colorScheme="yellow" variant="subtle" fontSize="sm">
+              Wallet Not Connected
+            </Badge>
+          )}
           <Popover placement="top">
             <PopoverTrigger>
               <IconButton
@@ -195,42 +200,36 @@ export const CommandInput = ({
               placeholder={
                 isDisabled
                   ? "Please set your OpenAI API key to start"
-                  : `Type a command or question (e.g., 'swap 1 usdc for eth')${
-                      currentChainName ? ` on ${currentChainName} network` : ""
-                    }`
+                  : !isConnected
+                  ? "Please connect your wallet to start"
+                  : !isChainSupported
+                  ? "Please switch to a supported network"
+                  : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
               }
+              isDisabled={isDisabled || !isConnected || !isChainSupported}
+              size="sm"
+              rows={1}
               resize="none"
-              minH="60px"
-              maxLength={280}
-              bg="white"
-              isDisabled={isLoading || isDisabled}
+              _focus={{
+                borderColor: "blue.500",
+                boxShadow: "0 0 0 1px var(--chakra-colors-blue-500)",
+              }}
             />
-            <HStack justify="space-between">
-              <Text fontSize="sm" color="gray.500">
-                {command.length}/280 • Press Enter to send
-              </Text>
-              <Button
-                colorScheme="twitter"
-                isLoading={isLoading}
-                onClick={handleSubmit}
-                leftIcon={<ChatIcon />}
-                px={6}
-                isDisabled={!command.trim() || isDisabled}
-              >
-                Send
-              </Button>
-            </HStack>
-            <Text fontSize="xs" color="gray.500" textAlign="center">
-              By using Snel, you agree to our{" "}
-              <Link
-                as={NextLink}
-                href="/terms"
-                color="blue.500"
-                textDecoration="underline"
-              >
-                terms
-              </Link>
-            </Text>
+            <Button
+              onClick={handleSubmit}
+              isLoading={isLoading}
+              isDisabled={
+                isDisabled ||
+                !isConnected ||
+                !isChainSupported ||
+                !command.trim()
+              }
+              colorScheme="blue"
+              size="sm"
+              width="full"
+            >
+              Send
+            </Button>
           </VStack>
         </HStack>
       </VStack>

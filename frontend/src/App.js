@@ -73,7 +73,7 @@ function App() {
       <Box minH="100vh" bg="gray.50" py={10}>
         <Container maxW="container.md">
           <VStack spacing={8}>
-            <Heading>Dowse Command Processor</Heading>
+            <Heading>Snel Command Processor</Heading>
             <Text color="gray.600" textAlign="center">
               Enter a command like &quot;swap $10 for $UNI and then send half of
               it to the dev papajams.eth 😊&quot;

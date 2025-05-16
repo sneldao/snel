@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any, Union
 from decimal import Decimal
 from app.services.brian.client import brian_client
+from app.services.chat_history import chat_history_service
+from app.api.v1.swap import process_swap_command, SwapCommand
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -57,59 +59,72 @@ async def process_command(command: ChatCommand):
 
         # Check if the command is a greeting
         cmd_lower = command.command.lower().strip()
-        if cmd_lower in greeting_responses:
-            return ChatResponse(
+        if cmd_lower in greeting_responses and chat_history_service.should_respond_to_greeting(
+            command.wallet_address, command.user_name, cmd_lower
+        ):
+            response = ChatResponse(
                 content=greeting_responses[cmd_lower],
                 agent_type="default",
                 status="success"
             )
+            chat_history_service.add_entry(
+                command.wallet_address,
+                command.user_name,
+                'greeting',
+                cmd_lower,
+                response.dict()
+            )
+            return response
 
         # Check if this is a swap command
         swap_match = re.match(r"swap\s+([\d\.]+)\s+(\S+)\s+(to|for)\s+(\S+)", command.command, re.IGNORECASE)
         if swap_match:
-            amount, from_token, _, to_token = swap_match.groups()
+            # If no wallet address, return error
+            if not command.wallet_address:
+                return ChatResponse(
+                    content="Please connect your wallet to perform swaps.",
+                    agent_type="default",
+                    status="error"
+                )
+            
+            # If no chain ID, return error
+            if not command.chain_id:
+                return ChatResponse(
+                    content="Please connect to a supported network to perform swaps.",
+                    agent_type="default",
+                    status="error"
+                )
 
-            # Check if this is Scroll chain (chain ID 534352)
-            is_scroll_chain = command.chain_id == 534352
-
-            # For Scroll chain, use Brian API directly
-            if is_scroll_chain and command.wallet_address:
-                try:
-                    # Get swap transaction from Brian API
-                    swap_data = await brian_client.get_swap_transaction(
-                        from_token=from_token,
-                        to_token=to_token,
-                        amount=Decimal(amount),
-                        chain_id=command.chain_id,
-                        wallet_address=command.wallet_address
-                    )
-
-                    # Return transaction data for the frontend to execute
-                    return ChatResponse(
-                        content={
-                            "type": "brian_confirmation",
-                            "message": f"Ready to swap {amount} {from_token} to {to_token} on Scroll using Brian API",
-                            "data": swap_data
-                        },
-                        agent_type="brian",
-                        awaiting_confirmation=True,
-                        transaction=swap_data.get("transaction"),
-                        status="success"
-                    )
-                except Exception as e:
-                    # If Brian API fails, suggest using the swap command
-                    return ChatResponse(
-                        content=f"I couldn't process your swap directly. Please try using the 'swap' command instead. Error: {str(e)}",
-                        agent_type="default",
-                        status="error"
-                    )
-
-            # For other chains, suggest using the swap command
-            return ChatResponse(
-                content=f"To swap {amount} {from_token} for {to_token}, please use the swap command directly by typing 'swap {amount} {from_token} for {to_token}'.",
-                agent_type="default",
-                status="success"
-            )
+            # Forward to swap endpoint
+            try:
+                swap_response = await process_swap_command(SwapCommand(
+                    command=command.command,
+                    wallet_address=command.wallet_address,
+                    chain_id=command.chain_id
+                ))
+                
+                response = ChatResponse(
+                    content=swap_response,
+                    agent_type="swap",
+                    awaiting_confirmation=True,
+                    status="success"
+                )
+                
+                chat_history_service.add_entry(
+                    command.wallet_address,
+                    command.user_name,
+                    'swap',
+                    command.command,
+                    response.dict()
+                )
+                return response
+                
+            except Exception as e:
+                return ChatResponse(
+                    content=f"Failed to process swap: {str(e)}",
+                    agent_type="default",
+                    status="error"
+                )
 
         # For other commands, use OpenAI
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -122,6 +137,12 @@ async def process_command(command: ChatCommand):
             context += f"Current chain ID: {command.chain_id}\n"
         if command.user_name:
             context += f"User name: {command.user_name}\n"
+            
+        # Add recent conversation history
+        context += chat_history_service.get_recent_context(
+            command.wallet_address,
+            command.user_name
+        )
 
         # Call OpenAI's API with the updated client
         response = client.chat.completions.create(
@@ -132,12 +153,23 @@ async def process_command(command: ChatCommand):
             ]
         )
         answer = response.choices[0].message.content
-
-        return ChatResponse(
+        
+        chat_response = ChatResponse(
             content=answer,
             agent_type="default",
             status="success"
         )
+        
+        chat_history_service.add_entry(
+            command.wallet_address,
+            command.user_name,
+            'general',
+            command.command,
+            chat_response.dict()
+        )
+        
+        return chat_response
+        
     except Exception as e:
         return ChatResponse(
             content=f"Sorry, I encountered an error: {str(e)}",

@@ -1,4 +1,4 @@
-# Makefile for Dowse Pointless
+# Makefile for Snel
 
 .PHONY: help dev all-dev backend-dev frontend-dev telegram-dev install clean docker-up docker-down
 
