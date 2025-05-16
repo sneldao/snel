@@ -7,6 +7,11 @@
   package = "@netlify/plugin-nextjs"
 
 [[redirects]]
+  from = "/.well-known/*"
+  to = "/.well-known/:splat"
+  status = 200
+
+[[redirects]]
   from = "/api/*"
   to = "https://p02--snel-web-app--wxd25gkpcp8m.code.run/api/:splat"
   status = 200
