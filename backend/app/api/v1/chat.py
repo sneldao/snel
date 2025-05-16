@@ -18,6 +18,7 @@ class ChatCommand(BaseModel):
     wallet_address: Optional[str] = None
     chain_id: Optional[int] = None
     user_name: Optional[str] = None
+    openai_api_key: Optional[str] = None  # Accept user-supplied key
 
 class ChatResponse(BaseModel):
     """Chat command response model."""
@@ -33,7 +34,8 @@ class ChatResponse(BaseModel):
 async def process_command(command: ChatCommand):
     """Process a chat command using OpenAI's GPT model."""
     try:
-        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+        # Prefer user-supplied key, fallback to env
+        OPENAI_API_KEY = command.openai_api_key or os.getenv("OPENAI_API_KEY")
         if not OPENAI_API_KEY:
             return ChatResponse(
                 content="No OpenAI API key configured. Please add your API key in the settings.",

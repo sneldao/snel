@@ -47,6 +47,7 @@ export class ApiService {
         wallet_address: walletAddress,
         chain_id: chainId || 1,
         user_name: userName,
+        openai_api_key: this.getApiKeys().openaiKey,
       }),
     });
 

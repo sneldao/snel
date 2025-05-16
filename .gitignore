@@ -93,3 +93,6 @@ out/
 .vercel/
 .qodo
 .vercel
+
+# Ignore research directory
+research/

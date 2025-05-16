@@ -47,7 +47,7 @@ Snel is now built to offer both:
 The project is organized into three main components:
 
 ```
-dowse-pointless/
+snel/
 ├── backend/           # FastAPI backend service
 │   └── app/
 │        ├── api/
@@ -64,7 +64,6 @@ dowse-pointless/
 │        │    └── commands.py             # Pydantic models for commands/requests
 │        └── ...
 ├── frontend/          # Next.js web application
-└── telegram-bot/      # Telegram bot service
 ```
 
 ### Backend Service
@@ -91,14 +90,12 @@ See [frontend/README.md](frontend/README.md) for setup instructions.
 
 ### Telegram Bot
 
-Chat with [@pointless_snel_bot](https://t.me/pointless_snel_bot) to:
+Chat with [@stable_snel_bot](https://t.me/stable_snel_bot) to:
 
 - Connect your wallet
 - Bridge tokens across chains
 - Check balances
 - Get crypto information
-
-See [telegram-bot/README.md](telegram-bot/README.md) for setup instructions.
 
 ## Development
 
@@ -138,8 +135,6 @@ GEMINI_API_KEY=your_gemini_api_key
 # Redis for persistent storage
 REDIS_URL=redis://localhost:6379/0
 
-# Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 ```
 
 ### Installation
@@ -154,79 +149,6 @@ pip install -r requirements.txt
 # Start the development server
 make dev
 ```
-
-## Telegram Bot Setup
-
-### Creating Your Bot with BotFather
-
-1. Open Telegram and search for @BotFather
-2. Send the command `/newbot` to create a new bot
-3. Follow the instructions to choose a name and username for your bot
-4. Once created, you'll receive a token. Save this as your `TELEGRAM_BOT_TOKEN`
-
-### Simplified Setup with the Run Script
-
-We've created an all-in-one setup script that handles the entire Telegram integration process:
-
-1. Make sure you have your `TELEGRAM_BOT_TOKEN` in the `.env.local` file
-2. Navigate to the telegram-bot directory:
-   ```
-   cd telegram-bot
-   ```
-3. Run the integration script:
-   ```
-   ./run.js
-   ```
-4. The script will:
-   - Check if your FastAPI server is running (and start it if needed)
-   - Check if ngrok is running (and start it if needed)
-   - Verify the Telegram integration
-   - Set up the webhook automatically
-
-This is the recommended way to set up the Telegram integration as it handles all the necessary steps in one go.
-
-### Manual Webhook Setup (Alternative)
-
-If you prefer to set up the webhook manually:
-
-1. Set the webhook using:
-
-   ```
-   curl -X POST https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<YOUR_DOMAIN>/api/messaging/telegram/webhook
-   ```
-
-2. Verify the webhook is set:
-   ```
-   curl -X GET https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo
-   ```
-
-### Testing Locally
-
-For local development, you can send test messages:
-
-```
-curl -X POST http://localhost:8000/api/messaging/telegram/process \
-  -H "Content-Type: application/json" \
-  -d '{"platform":"telegram","user_id":"123456","message":"/start"}'
-```
-
-### Configuring Bot AI and Wallet Features
-
-For full functionality:
-
-1. Add your Gemini API key to enable AI responses
-2. Ensure Redis is configured for user data persistence
-
-## Commands
-
-- `/start` - Start the bot and receive an introduction
-- `/help` - Show available commands
-- `/connect` - Create a new wallet
-- `/balance` - Check your wallet balance
-- `/price [symbol]` - Get the price of a cryptocurrency
-- `/swap [amount] [from] for [to]` - Swap tokens
-- `/faucet` - Get instructions for receiving testnet ETH
-- `/disconnect` - Disconnect your wallet
 
 ## Brian API Integration
 
@@ -283,23 +205,6 @@ The project includes integration with messaging platforms like WhatsApp and Tele
 - Price checking for tokens
 - Natural language command processing
 
-### Telegram Integration
-
-To set up Telegram integration:
-
-1. Create a Telegram bot using BotFather
-2. Get your bot token
-3. Add the token to your environment variables as `TELEGRAM_BOT_TOKEN`
-4. Set up a webhook URL for your bot (pointing to your API endpoint)
-5. Enable the Telegram integration in your application
-
-Example commands in Telegram:
-
-- `/connect` - Connect your wallet
-- `/balance` - Check your wallet balance
-- `/swap 0.1 ETH for USDC` - Swap tokens
-- `/price ETH` - Check token price
-
 ## Local Development Setup
 
 ### Prerequisites
@@ -320,8 +225,8 @@ Example commands in Telegram:
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/snel-pointless.git
-cd snel-pointless
+git clone https://github.com/sneld/snel.git
+cd snel
 ```
 
 2. Create and activate a Python virtual environment:
@@ -357,7 +262,6 @@ REDIS_URL=your_upstash_redis_url  # Format: rediss://default:token@hostname:port
 ZEROX_API_KEY=your_0x_api_key
 BRIAN_API_KEY=your_brian_api_key
 BRIAN_API_URL=https://api.brianknows.org/api/v0
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 GEMINI_API_KEY=your_gemini_api_key
 
 ```
@@ -491,7 +395,6 @@ The backend is deployed on Northflank. For detailed deployment instructions, see
 - `DISABLE_SSL_VERIFY`
 - `ZEROX_API_KEY`
 - `GEMINI_API_KEY`
-- `TELEGRAM_BOT_TOKEN`
 - `COINGECKO_API_KEY`
 - `MORALIS_API_KEY`
 - `ALCHEMY_KEY`
@@ -526,8 +429,7 @@ The backend supports these origins:
 allow_origins=[
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://snel-pointless.vercel.app",
-    "https://snel-pointless-git-main-papas-projects-5b188431.vercel.app",
+    "https://stable-snel.vercel.app",
 ]
 ```
 
@@ -636,8 +538,6 @@ The application supports a variety of natural language commands:
 
 - Added Northflank backend deployment for production environment
 - Added dual-mode architecture with Agent and Bot interfaces
-- Added Gemini API integration for intelligent conversational responses in the Telegram bot
-- Added multi-network support with ability to switch chains in Telegram
 - Added comprehensive wallet security information with `/keys` command
 - Added Brian API integration for Scroll network
 - Added cross-chain bridging functionality
@@ -662,28 +562,10 @@ The application supports a variety of natural language commands:
 
 MIT
 
-## Underpinned by Dowse
-
-Dowse is a Python library that enables you to build intelligent agents capable of:
-
-- Parsing natural language commands and questions
-- Classifying inputs into different types (e.g. commands vs questions)
-- Executing structured commands based on natural language requests
-- Responding to user queries with relevant information
-- Building complex pipelines for command processing
-
-### Key Features
-
-- **Natural Language Processing**: Convert human language into structured commands
-- **Flexible Pipeline Architecture**: Build custom processing flows with branching logic
-- **Built-in Command Handlers**: Ready-to-use handlers for common operations
-- **Extensible Design**: Easy to add new command types and handlers
-- **Async Support**: Built for high-performance async/await operations
-
 ## Project Structure
 
 ```
-dowse-pointless/
+snel/
 ├── api/              # API entry point for Vercel
 ├── app/              # Main application code
 │   ├── agents/       # Agent implementations (Brian, Swap, etc.)
@@ -773,37 +655,6 @@ poetry run python tests/test_serverless.py
 poetry run python tests/test_redis.py
 ```
 
-## Notes on Dowse Implementation Challenges
-
-During our attempt to integrate Dowse for natural language command processing, we encountered several challenges that led us to implement our own command parsing solution:
-
-### Type System Complexity
-
-- Dowse's type system is highly opinionated and tightly coupled with Pydantic
-- The generic type parameters for Pipeline, Classifier, and Executor were difficult to align with our use case
-- Validation errors were hard to resolve due to complex inheritance patterns
-
-### Architecture Constraints
-
-- Dowse's Pipeline architecture assumes a specific flow that didn't match our swap/price query needs
-- The built-in classifiers and executors were too rigid for our token swap use case
-- Custom implementations required extensive boilerplate to satisfy Dowse's type system
-
-### Integration Issues
-
-- Difficulty integrating with our existing token address and chain management
-- Challenges with error handling and transaction flow control
-- Limited flexibility in command parsing and response formatting
-
-### Alternative Solution
-
-- Implemented a simpler, more focused command parsing system
-- Direct control over swap command validation and execution
-- Better integration with our existing token price and swap infrastructure
-- More maintainable and easier to extend for our specific use case
-
-These notes are provided to help future development decisions and to document why we chose a custom implementation over the Dowse framework.
-
 ## Configuration
 
 ### Environment Variables
@@ -815,7 +666,6 @@ The application requires several environment variables to be set:
 - `OPENAI_API_KEY`: API key for OpenAI services
 - `ZEROX_API_KEY`: API key for 0x Protocol swap functionality (get one at https://dashboard.0x.org)
 - `BRIAN_API_KEY`: API key for Brian API (get one at https://brianknows.org)
-- `TELEGRAM_BOT_TOKEN`: Token for Telegram bot integration
 - `GEMINI_API_KEY`: API key for Google's Gemini API
 
 ### Setting Up Swap Functionality
@@ -840,32 +690,6 @@ To enable Brian API functionality:
 5. Restart the application to ensure the key is loaded
 
 Without a valid Brian API key, Scroll network functionality may be limited.
-
-### Setting Up Gemini API
-
-To enable Gemini AI features for the Telegram bot:
-
-1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey) and create an account
-2. Generate an API key for Gemini
-3. Add the key to your environment variables as `GEMINI_API_KEY`
-4. Restart the application to ensure the key is loaded
-
-Without a valid Gemini API key, the Telegram bot will have limited conversational abilities.
-
-## Acknowledgments
-
-Snel leverages several powerful technologies and APIs to deliver its functionality:
-
-- [Google Gemini API](https://ai.google.dev/) - Powers the natural language processing capabilities
-- [Brian API](https://brianknows.org) - Powers the Scroll network transactions
-- [0x Protocol](https://0x.org/) - Provides swap aggregation across multiple DEXes
-- [Upstash Redis](https://upstash.com/) - Serverless Redis for persistent storage
-- [Vercel](https://vercel.com) - Hosts the frontend and serverless backend
-- [FastAPI](https://fastapi.tiangolo.com/) - Powers the backend API
-- [Next.js](https://nextjs.org/) - Powers the frontend application
-- [Telegram Bot API](https://core.telegram.org/bots/api) - Enables the Telegram bot integration
-
-Special thanks to the development team and all the open-source contributors who made this project possible.
 
 ## Running Locally
 
@@ -895,4 +719,30 @@ This will start the FastAPI server on port 8000 (or the port specified in your e
 Detailed documentation is available in the `docs` directory:
 
 - [Vercel Deployment](docs/deployment/VERCEL.md)
-- [Telegram Bot Integration](docs/development/integrating-with-telegram.md)
+
+## Note: Saved Git Stash
+
+There is a saved git stash containing previous work-in-progress changes related to the delegation kit and other experiments.
+
+- To view the stash:
+  ```sh
+  git stash list
+  ```
+- To see what is in the stash:
+  ```sh
+  git stash show -p
+  ```
+- To apply the stash (without removing it):
+  ```sh
+  git stash apply
+  ```
+- To apply and remove the stash:
+  ```sh
+  git stash pop
+  ```
+- To remove the stash if no longer needed:
+  ```sh
+  git stash drop
+  ```
+
+**Use the stash to selectively reintroduce code as needed, and avoid repeating previous issues.**
