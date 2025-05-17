@@ -9,9 +9,12 @@ import {
   Alert,
   AlertIcon,
   Divider,
+  Button,
+  Flex,
+  useToast,
 } from "@chakra-ui/react";
 import { InfoIcon } from "@chakra-ui/icons";
-import { FaExchangeAlt, FaWallet } from "react-icons/fa";
+import { FaExchangeAlt, FaWallet, FaArrowRight } from "react-icons/fa";
 
 interface BrianConfirmationProps {
   message: {
@@ -45,12 +48,39 @@ interface BrianConfirmationProps {
   };
   onConfirm: () => void;
   onCancel: () => void;
+  onExecute?: (transaction: any) => void;
 }
 
 export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
   message,
   metadata,
+  onConfirm,
+  onCancel,
+  onExecute,
 }) => {
+  const toast = useToast();
+  const [isExecuting, setIsExecuting] = React.useState(false);
+
+  const handleExecute = () => {
+    if (message.transaction && onExecute) {
+      setIsExecuting(true);
+      try {
+        onExecute(message.transaction);
+      } catch (error) {
+        console.error("Failed to execute transaction:", error);
+        toast({
+          title: "Transaction Failed",
+          description: error instanceof Error ? error.message : "Unknown error",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      } finally {
+        setIsExecuting(false);
+      }
+    }
+  };
+
   const isTransfer = message.transaction?.method === "transfer";
   const isBridge =
     message.transaction?.method === "bridge" ||
@@ -186,6 +216,21 @@ export const BrianConfirmation: React.FC<BrianConfirmationProps> = ({
               Transactions on Scroll may take longer to confirm
             </Text>
           </Alert>
+        )}
+
+        {/* Add button to manually execute transaction */}
+        {message.transaction && onExecute && (
+          <Flex justify="center" mt={2} mb={2}>
+            <Button
+              leftIcon={<FaArrowRight />}
+              colorScheme="blue"
+              onClick={handleExecute}
+              isLoading={isExecuting}
+              loadingText="Sending"
+            >
+              Send to Wallet
+            </Button>
+          </Flex>
         )}
       </VStack>
     </Box>

@@ -24,8 +24,11 @@ Backend service for the Snel cross-chain bridging and token management platform.
    ```
 
 3. Run the development server:
+
    ```bash
    uvicorn app.main:app --reload
+
+   uvicorn app.main:app --reload --port 8000
    ```
 
 ## Docker Setup

@@ -11,42 +11,33 @@ import logging
 from contextlib import asynccontextmanager
 
 from app.api.v1 import bridges, chat, swap
-from app.protocols.manager import ProtocolManager
+from app.protocols.registry import protocol_registry
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Create protocol manager instance
-protocol_manager = ProtocolManager()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Startup: nothing to do
     yield
     # Shutdown: close all protocol clients
-    for protocol in protocol_manager.protocols.values():
-        if hasattr(protocol, 'close'):
-            await protocol.close()
+    await protocol_registry.close()
 
 app = FastAPI(
-    title="Snel API",
+    title="SNEL API",
+    description="API for SNEL - Cross-Chain Crypto Assistant",
     version="1.0.0",
-    description="Backend API for Snel - Cross-chain bridging and token management",
     lifespan=lifespan
 )
 
-# CORS middleware configuration
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://stable-snel.vercel.app",
-        "https://stable-station.vercel.app",
-    ],  # Configured for production
+    allow_origins=["*"],  # Allows all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Error handler
@@ -58,10 +49,14 @@ async def global_exception_handler(_: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
-# Include routers
-app.include_router(bridges.router, prefix="/api/v1")
+# Include routers - preserve original path structure for frontend compatibility
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(swap.router, prefix="/api/v1")
+app.include_router(bridges.router, prefix="/api/v1")
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to SNEL API. See /docs for API documentation."}
 
 @app.get("/health")
 async def health_check():

@@ -22,6 +22,7 @@ import {
   UnorderedList,
   Flex,
   Code,
+  useToast,
 } from "@chakra-ui/react";
 import {
   CheckCircleIcon,
@@ -38,6 +39,9 @@ import { BrianConfirmation } from "./BrianConfirmation";
 import AggregatorSelection from "./AggregatorSelection";
 import { FaExchangeAlt, FaCalendarAlt, FaRobot } from "react-icons/fa";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { TransactionService } from "../services/transactionService";
+import { useWalletClient, usePublicClient, useChainId } from "wagmi";
+import { executeTransaction } from "../lib/api";
 
 interface CommandResponseProps {
   content: string | any; // Updated to accept structured content
@@ -96,6 +100,85 @@ const formatSwapResponse = (
   }
 };
 
+// Add this function to format detailed error messages
+const formatErrorMessage = (errorContent: any): React.ReactNode => {
+  // If it's a standard error string
+  if (typeof errorContent === "string") {
+    if (errorContent.includes("Unable to find a valid swap route")) {
+      return (
+        <Box>
+          <Text mb={2}>
+            I couldn&apos;t find a valid swap route for this transaction. I
+            tried:
+          </Text>
+          <UnorderedList pl={4} spacing={1}>
+            <ListItem>0x Protocol</ListItem>
+            <ListItem>Brian Protocol</ListItem>
+          </UnorderedList>
+          <Text mt={2}>This could be due to:</Text>
+          <UnorderedList pl={4} spacing={1}>
+            <ListItem>Insufficient liquidity for this pair</ListItem>
+            <ListItem>Minimum amount requirements not met</ListItem>
+            <ListItem>Temporary issues with the protocols</ListItem>
+          </UnorderedList>
+          <Text mt={2}>
+            Please try a different token pair, adjust the amount, or try again
+            later.
+          </Text>
+        </Box>
+      );
+    }
+
+    // Handle other specific error cases
+    if (errorContent.includes("Slippage tolerance exceeded")) {
+      return (
+        <Box>
+          <Text mb={2}>The price moved too much during the transaction.</Text>
+          <Text>You can try again with:</Text>
+          <UnorderedList pl={4} spacing={1}>
+            <ListItem>A smaller amount</ListItem>
+            <ListItem>A higher slippage tolerance (default is 0.5%)</ListItem>
+          </UnorderedList>
+        </Box>
+      );
+    }
+  }
+
+  // If it's an object with detailed error information
+  if (typeof errorContent === "object" && errorContent !== null) {
+    if (errorContent.protocols_tried) {
+      return (
+        <Box>
+          <Text mb={2}>
+            I couldn&apos;t complete the swap. I tried these protocols:
+          </Text>
+          <UnorderedList pl={4} spacing={1}>
+            {errorContent.protocols_tried.map(
+              (protocol: string, idx: number) => (
+                <ListItem key={idx}>{protocol}</ListItem>
+              )
+            )}
+          </UnorderedList>
+          {errorContent.reason && (
+            <Text mt={2}>Reason: {errorContent.reason}</Text>
+          )}
+          {errorContent.suggestion && (
+            <Text mt={2}>Suggestion: {errorContent.suggestion}</Text>
+          )}
+        </Box>
+      );
+    }
+
+    // Fall back to displaying the error message
+    if (errorContent.message) {
+      return <Text>{errorContent.message}</Text>;
+    }
+  }
+
+  // Default case: return the original error content
+  return <Text>{String(errorContent)}</Text>;
+};
+
 export const CommandResponse: React.FC<CommandResponseProps> = ({
   content,
   timestamp,
@@ -112,6 +195,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   const [currentStep, setCurrentStep] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(false);
   const [showTokenInfo, setShowTokenInfo] = React.useState(false);
+  const [isExecuting, setIsExecuting] = React.useState(false);
+  const [txResponse, setTxResponse] = React.useState<any>(null);
+  const toast = useToast();
+
+  // Get wallet client and public client for transaction execution
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
+  const chainId = useChainId();
 
   // Extract transaction data from content if available
   const transactionData =
@@ -505,6 +596,82 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
   const { getUserDisplayName, profile } = useUserProfile();
 
+  // Add a handler to execute transactions
+  const handleExecuteTransaction = React.useCallback(async () => {
+    if (!transactionData || !walletClient || !publicClient) {
+      toast({
+        title: "Transaction Error",
+        description: "Missing transaction data or wallet connection",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setIsExecuting(true);
+
+      // Initialize transaction service
+      const txService = new TransactionService(
+        walletClient,
+        publicClient,
+        chainId
+      );
+
+      // Execute the transaction
+      const result = await txService.executeTransaction(transactionData);
+
+      setTxResponse(result);
+
+      toast({
+        title: "Transaction Sent",
+        description: `Transaction hash: ${result.hash}`,
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to execute transaction:", error);
+      toast({
+        title: "Transaction Failed",
+        description: error instanceof Error ? error.message : "Unknown error",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [transactionData, walletClient, publicClient, chainId, toast]);
+
+  // Execute the transaction automatically when a transaction is displayed
+  React.useEffect(() => {
+    // Check if we have transaction data that needs to be executed
+    const shouldExecuteTransaction =
+      (isBrianTransaction ||
+        (typeof content === "object" && content?.type === "swap_quotes")) &&
+      transactionData &&
+      !isExecuting &&
+      !txResponse;
+
+    if (shouldExecuteTransaction) {
+      // Add a small delay to ensure UI renders first
+      const timeoutId = setTimeout(() => {
+        handleExecuteTransaction();
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [
+    content,
+    transactionData,
+    isBrianTransaction,
+    isExecuting,
+    txResponse,
+    handleExecuteTransaction,
+  ]);
+
   return (
     <Box
       p={3}
@@ -579,9 +746,9 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 metadata={metadata}
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
+                onExecute={handleExecuteTransaction}
               />
-            ) : typeof content === "object" &&
-              content.type === "brian_confirmation" ? (
+            ) : content.type === "brian_confirmation" ? (
               <BrianConfirmation
                 message={{
                   type: "transaction",
@@ -609,6 +776,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 }}
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
+                onExecute={handleExecuteTransaction}
               />
             ) : isDCASuccess ? (
               <Box mt={2} mb={2}>
@@ -724,9 +892,23 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
             )}
 
             {status === "error" && (
-              <Badge colorScheme="red" alignSelf="flex-start" mt={2}>
-                Error
-              </Badge>
+              <Box mt={3}>
+                <Alert status="error" variant="left-accent" borderRadius="md">
+                  <AlertIcon />
+                  <Box>
+                    <AlertTitle mb={1}>Transaction Failed</AlertTitle>
+                    <AlertDescription>
+                      {typeof content === "object" && content?.error
+                        ? formatErrorMessage(content.error)
+                        : typeof content === "object" && content?.message
+                        ? formatErrorMessage(content.message)
+                        : typeof content === "string"
+                        ? formatErrorMessage(content)
+                        : "An error occurred. Please try again."}
+                    </AlertDescription>
+                  </Box>
+                </Alert>
+              </Box>
             )}
 
             {status === "success" &&

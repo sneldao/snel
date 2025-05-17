@@ -45,8 +45,24 @@ ERC20_ABI = [
 class TokenService:
     def __init__(self):
         """Initialize the token service with Redis cache if available."""
+        self.use_redis = False
+        self.cache = None
         redis_url = os.getenv("REDIS_URL")
-        self.cache = Redis.from_url(redis_url) if redis_url else None
+        
+        # In-memory cache fallback
+        self.memory_cache = {}
+        
+        # Try to connect to Redis if URL is provided
+        if redis_url:
+            try:
+                self.cache = Redis.from_url(redis_url)
+                # Test connection
+                self.cache.ping()
+                self.use_redis = True
+                print("Connected to Redis successfully")
+            except Exception as e:
+                print(f"Redis connection failed: {e}. Using in-memory cache instead.")
+                self.use_redis = False
         
         # Initialize Web3 providers for each chain
         self.web3_providers: Dict[int, AsyncWeb3] = {}
@@ -96,7 +112,7 @@ class TokenService:
         """
         Get token information by chain ID and identifier (address or symbol).
         Tries multiple sources in order:
-        1. Redis cache
+        1. Redis or memory cache
         2. Common tokens (ETH, WETH, etc.)
         3. Token lists
         4. On-chain data
@@ -104,14 +120,22 @@ class TokenService:
         identifier = identifier.lower()
         
         # Try cache first
-        if self.cache:
-            cached = self.cache.get(f"token:{chain_id}:{identifier}")
-            if cached:
-                return json.loads(cached)
+        if self.use_redis and self.cache:
+            try:
+                cached = self.cache.get(f"token:{chain_id}:{identifier}")
+                if cached:
+                    return json.loads(cached)
+            except Exception as e:
+                print(f"Redis get error: {e}")
+        elif f"token:{chain_id}:{identifier}" in self.memory_cache:
+            return self.memory_cache[f"token:{chain_id}:{identifier}"]
 
         # Check if it's a common token
-        if identifier in ["eth", "weth"]:
-            return await self._get_native_token_info(chain_id, identifier)
+        if identifier in ["eth", "weth", "usdc", "usdt", "dai"]:
+            token_info = await self._get_native_token_info(chain_id, identifier)
+            if token_info:
+                await self._cache_token_info(chain_id, identifier, token_info)
+                return token_info
 
         # Try token lists
         token_info = await self._get_token_from_lists(chain_id, identifier)
@@ -129,7 +153,7 @@ class TokenService:
         return None
 
     async def _get_native_token_info(self, chain_id: int, symbol: str) -> Dict[str, Any]:
-        """Get information for native tokens (ETH, WETH)."""
+        """Get information for native tokens and common stablecoins."""
         if symbol == "eth":
             return {
                 "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
@@ -147,6 +171,8 @@ class TokenService:
                 1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
                 42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
                 137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+                10: "0x4200000000000000000000000000000000000006",
+                8453: "0x4200000000000000000000000000000000000006",
             }
             return {
                 "address": weth_addresses.get(chain_id, ""),
@@ -155,6 +181,63 @@ class TokenService:
                 "metadata": {
                     "verified": True,
                     "source": "native",
+                    "decimals": 18
+                }
+            }
+        elif symbol == "usdc":
+            # USDC addresses for common chains
+            usdc_addresses = {
+                1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+                42161: "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+                137: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+                10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+                8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            }
+            return {
+                "address": usdc_addresses.get(chain_id, ""),
+                "symbol": "USDC",
+                "name": "USDC",
+                "metadata": {
+                    "verified": True,
+                    "source": "token_list",
+                    "decimals": 6
+                }
+            }
+        elif symbol == "usdt":
+            # USDT addresses for common chains
+            usdt_addresses = {
+                1: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+                42161: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+                137: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+                10: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+                8453: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+            }
+            return {
+                "address": usdt_addresses.get(chain_id, ""),
+                "symbol": "USDT",
+                "name": "Tether USD",
+                "metadata": {
+                    "verified": True,
+                    "source": "token_list",
+                    "decimals": 6
+                }
+            }
+        elif symbol == "dai":
+            # DAI addresses for common chains
+            dai_addresses = {
+                1: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+                42161: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+                137: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
+                10: "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+                8453: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+            }
+            return {
+                "address": dai_addresses.get(chain_id, ""),
+                "symbol": "DAI",
+                "name": "Dai Stablecoin",
+                "metadata": {
+                    "verified": True,
+                    "source": "token_list",
                     "decimals": 18
                 }
             }
@@ -230,14 +313,22 @@ class TokenService:
             return None
 
     async def _cache_token_info(self, chain_id: int, identifier: str, token_info: Dict[str, Any]):
-        """Cache token information in Redis."""
-        if self.cache:
-            key = f"token:{chain_id}:{identifier}"
-            self.cache.setex(
-                key,
-                timedelta(hours=24),  # Cache for 24 hours
-                json.dumps(token_info)
-            )
+        """Cache token information in Redis or memory."""
+        key = f"token:{chain_id}:{identifier}"
+        
+        # Cache in memory
+        self.memory_cache[key] = token_info
+        
+        # Also cache in Redis if available
+        if self.use_redis and self.cache:
+            try:
+                self.cache.setex(
+                    key,
+                    timedelta(hours=24),  # Cache for 24 hours
+                    json.dumps(token_info)
+                )
+            except Exception as e:
+                print(f"Redis cache error: {e}")
 
     async def get_chain_name(self, chain_id: int) -> str:
         """Get the name of a chain from its ID."""

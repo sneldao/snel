@@ -49,7 +49,33 @@ async def process_command(command: ChatCommand):
                     chain_id=command.chain_id
                 ))
                 
-                # Check for errors in swap response
+                # Check for error responses with detailed information
+                if isinstance(swap_response, dict) and not swap_response.get("success", True):
+                    error_details = swap_response.get("error_details", {})
+                    error_message = error_details.get("error") or swap_response.get("message", "Unknown error")
+                    protocols_tried = error_details.get("protocols_tried", [])
+                    suggestion = error_details.get("suggestion", "Please try a different approach.")
+                    
+                    # Format the error content with the detailed information
+                    error_content = {
+                        "message": error_message,
+                        "protocols_tried": protocols_tried,
+                        "suggestion": suggestion,
+                        "type": "error"
+                    }
+                    
+                    if "technical_details" in error_details:
+                        error_content["technical_details"] = error_details["technical_details"]
+                    
+                    return ChatResponse(
+                        content=error_content,
+                        agent_type="swap",
+                        awaiting_confirmation=False,
+                        status="error",
+                        metadata=error_details
+                    )
+                
+                # Check for simple error field (for backward compatibility)
                 if "error" in swap_response:
                     return ChatResponse(
                         content=swap_response["error"],
@@ -82,7 +108,12 @@ async def process_command(command: ChatCommand):
                 # Log the technical error
                 logger.exception("Error processing swap confirmation")
                 return ChatResponse(
-                    content="I encountered an issue while processing your swap. Please try again.",
+                    content={
+                        "message": "I encountered an issue while processing your swap. Please try again.",
+                        "protocols_tried": [],
+                        "suggestion": "This might be a temporary issue. Please try again in a few moments.",
+                        "type": "error"
+                    },
                     agent_type="swap",
                     status="error",
                     metadata={"technical_details": str(e)}
@@ -155,7 +186,33 @@ async def process_command(command: ChatCommand):
                     chain_id=command.chain_id
                 ))
                 
-                # Check for errors in swap response
+                # Check for error responses with detailed information
+                if isinstance(swap_response, dict) and not swap_response.get("success", True):
+                    error_details = swap_response.get("error_details", {})
+                    error_message = error_details.get("error") or swap_response.get("message", "Unknown error")
+                    protocols_tried = error_details.get("protocols_tried", [])
+                    suggestion = error_details.get("suggestion", "Please try a different approach.")
+                    
+                    # Format the error content with the detailed information
+                    error_content = {
+                        "message": error_message,
+                        "protocols_tried": protocols_tried,
+                        "suggestion": suggestion,
+                        "type": "error"
+                    }
+                    
+                    if "technical_details" in error_details:
+                        error_content["technical_details"] = error_details["technical_details"]
+                    
+                    return ChatResponse(
+                        content=error_content,
+                        agent_type="swap",
+                        awaiting_confirmation=False,
+                        status="error",
+                        metadata=error_details
+                    )
+                
+                # Check for simple error field (for backward compatibility)
                 if "error" in swap_response:
                     return ChatResponse(
                         content=swap_response["error"],
@@ -188,7 +245,12 @@ async def process_command(command: ChatCommand):
                 # Log the technical error
                 logger.exception("Error processing swap command")
                 return ChatResponse(
-                    content="I encountered an issue while preparing your swap. Please try again.",
+                    content={
+                        "message": "I encountered an issue while preparing your swap. Please try again.",
+                        "protocols_tried": [],
+                        "suggestion": "This might be a temporary issue. Please try again in a few moments.",
+                        "type": "error"
+                    },
                     agent_type="swap",
                     status="error",
                     metadata={"technical_details": str(e)}

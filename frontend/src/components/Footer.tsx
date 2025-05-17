@@ -42,14 +42,6 @@ export const Footer = () => {
           <Text as="span" mx={2} color="gray.400">
             |
           </Text>
-          <ChakraLink
-            href="https://hey.xyz/u/pointless"
-            isExternal
-            color="blue.500"
-            _hover={{ textDecoration: "none", color: "blue.600" }}
-          >
-            pointless
-          </ChakraLink>
         </Text>
         <Divider orientation="vertical" height="20px" />
         <ChakraLink
