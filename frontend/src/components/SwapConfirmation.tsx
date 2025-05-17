@@ -45,7 +45,7 @@ interface VerificationLinks {
 interface SwapConfirmationProps {
   message: {
     type: "swap_confirmation";
-    amount: number;
+    amount?: number;
     token_in: TokenInfo;
     token_out: TokenInfo;
     is_target_amount: boolean;
@@ -288,7 +288,10 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const formatAmount = (amount: number, isUsd: boolean) => {
+  const formatAmount = (amount: number | undefined | null, isUsd: boolean) => {
+    if (amount === undefined || amount === null) {
+      return "0";
+    }
     if (isUsd) {
       return `$${amount.toFixed(2)}`;
     }
@@ -296,6 +299,16 @@ export const SwapConfirmation: React.FC<SwapConfirmationProps> = ({
   };
 
   const renderSwapMessage = () => {
+    if (!message) {
+      return (
+        <Box>
+          <Text fontSize="md" color="red.500">
+            Error: Invalid swap confirmation message
+          </Text>
+        </Box>
+      );
+    }
+
     const { amount, token_in, token_out, is_target_amount, amount_is_usd } =
       message;
     const formattedAmount = formatAmount(amount, amount_is_usd);

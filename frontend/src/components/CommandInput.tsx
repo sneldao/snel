@@ -40,6 +40,11 @@ const SUPPORTED_CHAINS = {
   137: "Polygon",
   43114: "Avalanche",
   534352: "Scroll",
+  56: "BSC",
+  59144: "Linea",
+  5000: "Mantle",
+  81457: "Blast",
+  34443: "Mode",
 } as const;
 
 const EXAMPLE_COMMANDS = [

@@ -401,7 +401,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         return {
           name: "SNEL",
           handle: "@snel",
-          avatarSrc: "/avatars/🐌.png",
+          avatarSrc: "/icon.png",
         };
     }
   };
@@ -519,13 +519,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
       <HStack spacing={2} mb={2} alignItems="flex-start">
         <Avatar
           size="sm"
-          name={
-            isCommand
-              ? getUserDisplayName()
-              : agentType === "swap"
-              ? "Wheeler-Dealer"
-              : "SNEL"
-          }
+          name={isCommand ? getUserDisplayName() : "SNEL"}
           src={isCommand ? profile?.avatar || undefined : avatarSrc}
           bg={isCommand ? "blue.500" : "gray.500"}
         />
@@ -538,9 +532,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
             >
               {isCommand
                 ? `@${getUserDisplayName().toLowerCase().replace(/\s+/g, "_")}`
-                : agentType === "swap"
-                ? "@wheeler_dealer"
-                : "@snel"}
+                : handle}
             </Badge>
             <Text
               fontSize="xs"
@@ -549,193 +541,204 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
               ml={1}
               noOfLines={1}
             >
-              {timestamp}
+              {new Date(timestamp).toLocaleTimeString()}
             </Text>
           </HStack>
 
-          {isSwapConfirmation ? (
-            <SwapConfirmation
-              message={content}
-              onConfirm={handleConfirm}
-              onCancel={handleCancel}
-            />
-          ) : isDCAConfirmation ? (
-            <DCAConfirmation
-              message={content}
-              onConfirm={handleConfirm}
-              onCancel={handleCancel}
-            />
-          ) : isBrianTransaction ? (
-            <BrianConfirmation
-              message={{
-                type: "transaction",
-                message:
-                  typeof content === "object" && content.message
-                    ? content.message
-                    : "Ready to execute transaction",
-                transaction: transactionData,
-              }}
-              metadata={metadata}
-              onConfirm={handleConfirm}
-              onCancel={handleCancel}
-            />
-          ) : typeof content === "object" &&
-            content.type === "brian_confirmation" ? (
-            <BrianConfirmation
-              message={{
-                type: "transaction",
-                message:
-                  content.message || "Ready to execute bridge transaction",
-                transaction: content.data?.tx_steps
-                  ? {
-                      to: content.data.tx_steps[0]?.to,
-                      data: content.data.tx_steps[0]?.data,
-                      value: content.data.tx_steps[0]?.value || "0",
-                      chainId: content.data.from_chain?.id,
-                      gasLimit: content.data.tx_steps[0]?.gasLimit || "500000",
-                      method: "bridge",
-                    }
-                  : undefined,
-              }}
-              metadata={{
-                token_symbol: content.data?.token,
-                amount: content.data?.amount,
-                from_chain_id: content.data?.from_chain?.id,
-                to_chain_id: content.data?.to_chain?.id,
-                from_chain_name: content.data?.from_chain?.name,
-                to_chain_name: content.data?.to_chain?.name,
-              }}
-              onConfirm={handleConfirm}
-              onCancel={handleCancel}
-            />
-          ) : isDCASuccess ? (
-            <Box mt={2} mb={2}>
-              <Alert status="success" rounded="md">
-                <AlertIcon />
-                <AlertTitle>Success!</AlertTitle>
-                <AlertDescription>
-                  {content.type === "dca_order_created"
-                    ? "DCA order successfully created. You'll be swapping the specified amount on your chosen schedule."
-                    : content.message || "DCA order setup complete."}
-                  {content?.type === "error" &&
-                    content?.content?.includes("minimum") && (
-                      <Box mt={2}>
-                        <Alert status="warning" rounded="md" size="sm">
-                          <AlertIcon />
-                          <Box>
-                            <AlertTitle fontSize="sm">
-                              DCA Requirements:
-                            </AlertTitle>
-                            <AlertDescription fontSize="xs">
-                              <UnorderedList spacing={1} pl={4}>
-                                <ListItem>
-                                  Only available on Base chain
-                                </ListItem>
-                                <ListItem>Minimum $5 per swap</ListItem>
-                                <ListItem>Uses WETH instead of ETH</ListItem>
-                              </UnorderedList>
-                            </AlertDescription>
-                          </Box>
-                        </Alert>
+          <Box width="100%">
+            {isCommand ? (
+              <Text
+                color={textColor}
+                whiteSpace="pre-wrap"
+                wordBreak="break-word"
+              >
+                {content}
+              </Text>
+            ) : isSwapConfirmation ? (
+              <SwapConfirmation
+                message={content}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+              />
+            ) : isDCAConfirmation ? (
+              <DCAConfirmation
+                message={content}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+              />
+            ) : isBrianTransaction ? (
+              <BrianConfirmation
+                message={{
+                  type: "transaction",
+                  message:
+                    typeof content === "object" && content.message
+                      ? content.message
+                      : "Ready to execute transaction",
+                  transaction: transactionData,
+                }}
+                metadata={metadata}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+              />
+            ) : typeof content === "object" &&
+              content.type === "brian_confirmation" ? (
+              <BrianConfirmation
+                message={{
+                  type: "transaction",
+                  message:
+                    content.message || "Ready to execute bridge transaction",
+                  transaction: content.data?.tx_steps
+                    ? {
+                        to: content.data.tx_steps[0]?.to,
+                        data: content.data.tx_steps[0]?.data,
+                        value: content.data.tx_steps[0]?.value || "0",
+                        chainId: content.data.from_chain?.id,
+                        gasLimit:
+                          content.data.tx_steps[0]?.gasLimit || "500000",
+                        method: "bridge",
+                      }
+                    : undefined,
+                }}
+                metadata={{
+                  token_symbol: content.data?.token,
+                  amount: content.data?.amount,
+                  from_chain_id: content.data?.from_chain?.id,
+                  to_chain_id: content.data?.to_chain?.id,
+                  from_chain_name: content.data?.from_chain?.name,
+                  to_chain_name: content.data?.to_chain?.name,
+                }}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+              />
+            ) : isDCASuccess ? (
+              <Box mt={2} mb={2}>
+                <Alert status="success" rounded="md">
+                  <AlertIcon />
+                  <AlertTitle>Success!</AlertTitle>
+                  <AlertDescription>
+                    {content.type === "dca_order_created"
+                      ? "DCA order successfully created. You'll be swapping the specified amount on your chosen schedule."
+                      : content.message || "DCA order setup complete."}
+                    {content?.type === "error" &&
+                      content?.content?.includes("minimum") && (
+                        <Box mt={2}>
+                          <Alert status="warning" rounded="md" size="sm">
+                            <AlertIcon />
+                            <Box>
+                              <AlertTitle fontSize="sm">
+                                DCA Requirements:
+                              </AlertTitle>
+                              <AlertDescription fontSize="xs">
+                                <UnorderedList spacing={1} pl={4}>
+                                  <ListItem>
+                                    Only available on Base chain
+                                  </ListItem>
+                                  <ListItem>Minimum $5 per swap</ListItem>
+                                  <ListItem>Uses WETH instead of ETH</ListItem>
+                                </UnorderedList>
+                              </AlertDescription>
+                            </Box>
+                          </Alert>
+                        </Box>
+                      )}
+                    {metadata?.order_id && (
+                      <Box mt={1}>
+                        <Text>Order ID: {metadata.order_id}</Text>
                       </Box>
                     )}
-                  {metadata?.order_id && (
-                    <Box mt={1}>
-                      <Text>Order ID: {metadata.order_id}</Text>
-                    </Box>
-                  )}
-                  {metadata?.details?.duration && (
-                    <Box mt={1}>
-                      <Text>
-                        Schedule: {metadata.details.frequency} for{" "}
-                        {metadata.details.duration} days
-                      </Text>
-                    </Box>
-                  )}
-                </AlertDescription>
-          </Alert>
-            </Box>
-          ) : needsSelection ? (
-            <Box mt={2} width="100%">
-              <AggregatorSelection
-                quotes={all_quotes}
-                tokenSymbol={metadata?.token_out_symbol || "tokens"}
-                tokenDecimals={metadata?.token_out_decimals || 18}
-                onSelect={handleQuoteSelect}
-              />
-            </Box>
-          ) : (
-            <Text
-              fontSize="sm"
-              color={textColor}
-              wordBreak="break-word"
-              overflowWrap="break-word"
-              whiteSpace="pre-wrap"
-            >
-              {typeof content === "string"
-                ? formatLinks(
-                    content.startsWith('{"response":')
-                      ? JSON.parse(content).response
-                      : content
-                  )
-                : typeof content === "object" &&
-                  content !== null &&
-                  content.text
-                ? formatLinks(content.text)
-                : typeof content === "object" &&
-                  content !== null &&
-                  content.message
-                ? formatLinks(content.message)
-                : typeof content === "object" &&
-                  content !== null &&
-                  content.response
-                ? formatLinks(content.response)
-                : formatLinks(
-                    typeof content === "string"
-                      ? content
-                      : content !== null && content !== undefined
-                      ? JSON.stringify(content, null, 2)
-                      : ""
-                  )}
-            </Text>
-          )}
-
-          {awaitingConfirmation &&
-            false && ( // Disabling this confirmation section as requested
-              <HStack spacing={2} mt={2}>
-                <Badge colorScheme="yellow" alignSelf="flex-start">
-                  Needs Confirmation
-                </Badge>
-                <Button size="xs" colorScheme="green" onClick={handleConfirm}>
-                  Confirm
-                </Button>
-                <Button size="xs" colorScheme="red" onClick={handleCancel}>
-                  Cancel
-                </Button>
-              </HStack>
+                    {metadata?.details?.duration && (
+                      <Box mt={1}>
+                        <Text>
+                          Schedule: {metadata.details.frequency} for{" "}
+                          {metadata.details.duration} days
+                        </Text>
+                      </Box>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              </Box>
+            ) : needsSelection ? (
+              <Box mt={2} width="100%">
+                <AggregatorSelection
+                  quotes={all_quotes}
+                  tokenSymbol={metadata?.token_out_symbol || "tokens"}
+                  tokenDecimals={metadata?.token_out_decimals || 18}
+                  onSelect={handleQuoteSelect}
+                />
+              </Box>
+            ) : (
+              <Text
+                fontSize="sm"
+                color={textColor}
+                wordBreak="break-word"
+                overflowWrap="break-word"
+                whiteSpace="pre-wrap"
+              >
+                {typeof content === "string"
+                  ? formatLinks(
+                      content.startsWith('{"response":')
+                        ? JSON.parse(content).response
+                        : content
+                    )
+                  : typeof content === "object" &&
+                    content !== null &&
+                    content.text
+                  ? formatLinks(content.text)
+                  : typeof content === "object" &&
+                    content !== null &&
+                    content.message
+                  ? formatLinks(content.message)
+                  : typeof content === "object" &&
+                    content !== null &&
+                    content.response
+                  ? formatLinks(content.response)
+                  : formatLinks(
+                      typeof content === "string"
+                        ? content
+                        : content !== null && content !== undefined
+                        ? JSON.stringify(content, null, 2)
+                        : ""
+                    )}
+              </Text>
             )}
 
-          {status === "processing" && (
-            <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
-              Processing
-            </Badge>
-          )}
+            {awaitingConfirmation &&
+              false && ( // Disabling this confirmation section as requested
+                <HStack spacing={2} mt={2}>
+                  <Badge colorScheme="yellow" alignSelf="flex-start">
+                    Needs Confirmation
+                  </Badge>
+                  <Button size="xs" colorScheme="green" onClick={handleConfirm}>
+                    Confirm
+                  </Button>
+                  <Button size="xs" colorScheme="red" onClick={handleCancel}>
+                    Cancel
+                  </Button>
+                </HStack>
+              )}
 
-          {status === "error" && (
-            <Badge colorScheme="red" alignSelf="flex-start" mt={2}>
-              Error
-            </Badge>
-          )}
-
-          {status === "success" &&
-            !isCommand &&
-            !isSwapConfirmation &&
-            !isDCAConfirmation &&
-            !isDCASuccess && (
-              <Badge colorScheme="green" alignSelf="flex-start" mt={2}>
-                Success
+            {status === "processing" && (
+              <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
+                Processing
               </Badge>
             )}
+
+            {status === "error" && (
+              <Badge colorScheme="red" alignSelf="flex-start" mt={2}>
+                Error
+              </Badge>
+            )}
+
+            {status === "success" &&
+              !isCommand &&
+              !isSwapConfirmation &&
+              !isDCAConfirmation &&
+              !isDCASuccess && (
+                <Badge colorScheme="green" alignSelf="flex-start" mt={2}>
+                  Success
+                </Badge>
+              )}
+          </Box>
         </VStack>
       </HStack>
     </Box>

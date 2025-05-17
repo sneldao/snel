@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import {
@@ -45,7 +45,7 @@ export default function WalletBridge() {
     uid && (action === "connect" || action === "transaction") && callback;
 
   // Function to fetch connection status
-  const fetchConnectionStatus = async () => {
+  const fetchConnectionStatus = useCallback(async () => {
     if (!source || !uid) return null;
 
     try {
@@ -62,7 +62,7 @@ export default function WalletBridge() {
       console.error("Error fetching connection status:", error);
       return null;
     }
-  };
+  }, [source, uid]);
 
   // Function to complete the connection
   const completeConnection = async () => {

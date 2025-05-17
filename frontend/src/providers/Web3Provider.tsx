@@ -10,35 +10,82 @@ import {
   polygon,
   avalanche,
   scroll,
+  bsc,
+  linea,
+  mantle,
+  blast,
+  mode,
+  gnosis,
+  zkSync,
+  taiko,
+  type Chain,
 } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 
+// Define RPC URLs
+const ALCHEMY_SUPPORTED_CHAINS = {
+  [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
+  [base.id]: `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
+  [optimism.id]: `https://opt-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
+  [arbitrum.id]: `https://arb-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
+  [polygon.id]: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
+} as const;
+
+const PUBLIC_RPC_URLS = {
+  [avalanche.id]: `https://avalanche-mainnet.infura.io/v3/${process.env.NEXT_PUBLIC_INFURA_KEY}`,
+  [scroll.id]: "https://rpc.scroll.io",
+  [bsc.id]: "https://bsc-dataseed.binance.org",
+  [linea.id]: "https://rpc.linea.build",
+  [mantle.id]: "https://rpc.mantle.xyz",
+  [blast.id]: "https://rpc.blast.io",
+  [mode.id]: "https://mainnet.mode.network",
+  [gnosis.id]: "https://rpc.gnosischain.com",
+  [zkSync.id]: "https://mainnet.era.zksync.io",
+  [taiko.id]: "https://rpc.test.taiko.xyz",
+} as const;
+
+// Combine all supported chains
+const ALL_SUPPORTED_CHAINS = [
+  // Layer 1
+  mainnet,
+  bsc,
+  gnosis,
+  // Layer 2 & Rollups
+  base,
+  optimism,
+  arbitrum,
+  polygon,
+  linea,
+  scroll,
+  zkSync,
+  mode,
+  taiko,
+  // Other Networks
+  avalanche,
+  mantle,
+  blast,
+] as const satisfies readonly [Chain, ...Chain[]];
+
 const config = createConfig(
   getDefaultConfig({
     // Your dApp's chains
-    chains: [base, mainnet, optimism, arbitrum, polygon, avalanche, scroll],
+    chains: ALL_SUPPORTED_CHAINS,
     transports: {
-      // RPC URL for each chain
-      [base.id]: http(
-        `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
+      ...Object.entries(ALCHEMY_SUPPORTED_CHAINS).reduce(
+        (acc, [chainId, url]) => ({
+          ...acc,
+          [chainId]: http(url),
+        }),
+        {}
       ),
-      [mainnet.id]: http(
-        `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
+      ...Object.entries(PUBLIC_RPC_URLS).reduce(
+        (acc, [chainId, url]) => ({
+          ...acc,
+          [chainId]: http(url),
+        }),
+        {}
       ),
-      [optimism.id]: http(
-        `https://opt-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
-      ),
-      [arbitrum.id]: http(
-        `https://arb-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
-      ),
-      [polygon.id]: http(
-        `https://polygon-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`
-      ),
-      [avalanche.id]: http(
-        `https://avalanche-mainnet.infura.io/v3/${process.env.NEXT_PUBLIC_INFURA_KEY}`
-      ),
-      [scroll.id]: http(`https://rpc.scroll.io`),
     },
 
     // Required API Keys
@@ -50,8 +97,8 @@ const config = createConfig(
 
     // Optional App Info
     appDescription: "SNEL",
-    appUrl: "https://stable-snel.netlify.app", // your app's url
-    appIcon: "https://stable-snel.netlify.app/icon.png", // your app's icon
+    appUrl: "https://stable-snel.netlify.app",
+    appIcon: "https://stable-snel.netlify.app/icon.png",
   })
 );
 

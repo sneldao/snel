@@ -38,7 +38,6 @@ import { Response } from "../types/responses";
 import { SUPPORTED_CHAINS } from "../constants/chains";
 import { ApiService } from "../services/apiService";
 import { TransactionService } from "../services/transactionService";
-import { DCAService } from "../services/dcaService";
 
 export default function Home() {
   const toast = useToast();
@@ -55,10 +54,6 @@ export default function Home() {
         ? new TransactionService(walletClient, publicClient, chainId)
         : null,
     [walletClient, publicClient, chainId]
-  );
-  const dcaService = React.useMemo(
-    () => (chainId ? new DCAService(chainId) : null),
-    [chainId]
   );
 
   interface ResponseContent {
@@ -202,22 +197,20 @@ export default function Home() {
     try {
       // Add command to responses immediately to show user input
       const timestamp = new Date().toISOString();
-      setResponses((prev) => [
-        ...prev,
-        {
-          content: command,
-          timestamp,
-          isCommand: true,
-          status: "pending",
-        },
-      ]);
+      const commandResponse = {
+        content: command,
+        timestamp,
+        isCommand: true,
+        status: "success" as const,
+      };
+      setResponses((prev) => [...prev, commandResponse]);
 
       // Process command with wallet info
       const response = await apiService.processCommand(
         command,
-        address, // Pass wallet address
-        chainId, // Pass chain ID
-        userProfile?.name // Pass user name if available
+        address,
+        chainId,
+        userProfile?.name
       );
 
       // Add response

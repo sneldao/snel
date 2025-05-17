@@ -1,3 +1,6 @@
+"""
+FastAPI application entry point.
+"""
 from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
@@ -8,18 +11,23 @@ import logging
 from contextlib import asynccontextmanager
 
 from app.api.v1 import bridges, chat, swap
-from app.services.brian.client import brian_client
+from app.protocols.manager import ProtocolManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Create protocol manager instance
+protocol_manager = ProtocolManager()
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Startup: nothing to do
     yield
-    # Shutdown: close the Brian client
-    await brian_client.close()
+    # Shutdown: close all protocol clients
+    for protocol in protocol_manager.protocols.values():
+        if hasattr(protocol, 'close'):
+            await protocol.close()
 
 app = FastAPI(
     title="Snel API",

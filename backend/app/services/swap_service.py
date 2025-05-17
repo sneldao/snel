@@ -1,86 +1,124 @@
 """
-Swap service using 0x API with Permit2.
+Swap service implementation using multiple protocol aggregators.
 """
+from typing import Dict, Any, Optional
 from decimal import Decimal
-from typing import Dict, Any
-import os
-import httpx
+from app.services.brian.client import brian_client
+from app.services.token_service import token_service
+import logging
 
-# Get the 0x API URL and API key from environment variables
-ZEROEX_API_URL = os.getenv("ZEROEX_API_URL", "https://api.0x.org")
-ZEROX_API_KEY = os.getenv("ZEROX_API_KEY", "")  # Updated environment variable name
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-async def fetch_swap_quote(from_token: str, to_token: str, amount: Decimal, chain_id: int, taker_address: str, decimals: int = 18) -> Dict[str, Any]:
-    """Fetches a swap quote from the 0x API using Permit2."""
-    sell_amount = int(amount * (Decimal(10) ** decimals))
+class SwapService:
+    async def get_quote(
+        self, 
+        from_token: str,
+        to_token: str,
+        amount: Decimal,
+        chain_id: int,
+        wallet_address: str,
+        protocol_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get a quote for swapping tokens.
+        Returns user-friendly messages for the frontend and logs technical details.
+        """
+        try:
+            # Log the request
+            logger.info(f"Getting quote for swap: {amount} {from_token} -> {to_token} on chain {chain_id}")
+            
+            # Get token information
+            from_token_info = await token_service.get_token_info(chain_id, from_token)
+            to_token_info = await token_service.get_token_info(chain_id, to_token)
+            
+            if not from_token_info or not to_token_info:
+                logger.error(f"Token info not found. From: {from_token_info}, To: {to_token_info}")
+                return {
+                    "error": "One or both tokens are not supported on this chain.",
+                    "technical_details": f"Token info not found for {from_token} or {to_token} on chain {chain_id}"
+                }
 
-    # Prepare headers with API key and version
-    headers = {
-        "0x-api-key": ZEROX_API_KEY,
-        "0x-version": "v2"
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # First get a price quote
-            price_resp = await client.get(
-                f"{ZEROEX_API_URL}/swap/permit2/price",
-                params={
-                    "sellToken": from_token,
-                    "buyToken": to_token,
-                    "sellAmount": str(sell_amount),
-                    "chainId": chain_id,
-                    "taker": taker_address
-                },
-                headers=headers
+            # Get quote from Brian
+            quote = await brian_client.get_swap_transaction(
+                from_token=from_token_info["address"] or from_token,
+                to_token=to_token_info["address"] or to_token,
+                amount=float(amount),
+                chain_id=chain_id,
+                wallet_address=wallet_address
             )
-            price_resp.raise_for_status()
-            price_data = price_resp.json()
 
-            # If price looks good, get the firm quote
-            quote_resp = await client.get(
-                f"{ZEROEX_API_URL}/swap/permit2/quote",
-                params={
-                    "sellToken": from_token,
-                    "buyToken": to_token,
-                    "sellAmount": str(sell_amount),
-                    "chainId": chain_id,
-                    "taker": taker_address,
-                    "slippageBps": "100"  # Default 1% slippage
-                },
-                headers=headers
-            )
-            quote_resp.raise_for_status()
-            quote_data = quote_resp.json()
+            # If there's an error, it's already user-friendly from the Brian client
+            if "error" in quote:
+                logger.error(f"Brian API error: {quote.get('technical_details')}")
+                return {
+                    "error": quote["message"],
+                    "technical_details": quote.get("technical_details", "Unknown error")
+                }
 
+            # Log success
+            logger.info(f"Successfully got quote from Brian: {quote.get('metadata', {})}")
+            
             return {
-                "buyAmount": quote_data.get("buyAmount"),
-                "minBuyAmount": quote_data.get("minBuyAmount"),
-                "price": float(quote_data.get("buyAmount", 0)) / float(sell_amount) if sell_amount else 0,
-                "gas": quote_data.get("gas"),
-                "gasPrice": quote_data.get("gasPrice"),
-                "permit2": quote_data.get("permit2"),
-                "to": quote_data.get("transaction", {}).get("to"),
-                "data": quote_data.get("transaction", {}).get("data"),
-                "value": quote_data.get("transaction", {}).get("value", "0"),
-                "chainId": chain_id,
-                "zid": quote_data.get("zid")
+                "success": True,
+                "protocol": "brian",
+                "steps": quote["steps"],
+                "metadata": quote["metadata"]
             }
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error occurred: {e.response.status_code} - {e.response.text}")
-        raise
-    except Exception as e:
-        print(f"Error fetching swap quote: {str(e)}")
-        raise
 
-async def build_swap_transaction(quote: Dict[str, Any], chain_id: int) -> Dict[str, Any]:
-    """Builds a swap transaction from a quote."""
-    return {
-        "to": quote.get("to", ""),
-        "data": quote.get("data", ""),
-        "value": quote.get("value", "0"),
-        "gas_limit": quote.get("gas", "500000"),  # Default gas limit if not provided
-        "chainId": chain_id,
-        "permit2": quote.get("permit2"),  # Include Permit2 data for frontend
-        "zid": quote.get("zid")  # Include ZID for tracking
-    }
+        except Exception as e:
+            logger.exception("Unexpected error in get_quote")
+            return {
+                "error": "Unable to get a quote at this time. Please try again later.",
+                "technical_details": str(e)
+            }
+
+    async def build_transaction(
+        self,
+        quote: Dict[str, Any],
+        chain_id: int,
+        wallet_address: str
+    ) -> Dict[str, Any]:
+        """Build the transaction for execution."""
+        try:
+            # The quote already contains the transaction data from Brian
+            return {
+                "success": True,
+                "transaction": quote
+            }
+        except Exception as e:
+            logger.exception("Error building transaction")
+            return {
+                "error": "Unable to prepare the transaction. Please try again.",
+                "technical_details": str(e)
+            }
+
+    async def get_token_info(
+        self,
+        token_address: str,
+        chain_id: int,
+        protocol_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get token information using the preferred or specified protocol.
+        
+        Args:
+            token_address: Token address to get info for
+            chain_id: Chain ID for the token
+            protocol_name: Optional specific protocol to use
+        """
+        protocol = None
+        if protocol_name:
+            protocol = self.protocol_manager.get_protocol(protocol_name)
+            if not protocol or not protocol.is_supported(chain_id):
+                return None
+        else:
+            protocol = self.protocol_manager.get_preferred_protocol(chain_id)
+            if not protocol:
+                return None
+
+        return await protocol.get_token_info(token_address, chain_id)
+
+# Global instance
+swap_service = SwapService()

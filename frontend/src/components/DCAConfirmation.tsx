@@ -592,8 +592,8 @@ export const DCAConfirmation: React.FC<DCAConfirmationProps> = ({
               <Text as="span" fontWeight="bold">
                 Important:
               </Text>{" "}
-              The OpenOcean DCA API is in beta. Always monitor your DCA orders
-              regularly.
+              DCA orders are executed automatically. Always monitor your orders
+              and ensure you have sufficient balance.
             </Text>
           </HStack>
         </VStack>

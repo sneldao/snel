@@ -11,8 +11,11 @@ from decimal import Decimal
 from app.services.brian.client import brian_client
 from app.services.chat_history import chat_history_service
 from app.api.v1.swap import process_swap_command, SwapCommand
+import logging
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+logger = logging.getLogger(__name__)
 
 class ChatCommand(BaseModel):
     """Chat command request model."""
@@ -36,11 +39,60 @@ class ChatResponse(BaseModel):
 async def process_command(command: ChatCommand):
     """Process a chat command using OpenAI's GPT model."""
     try:
+        # Check if this is a swap confirmation
+        if command.command.lower().strip() == "yes":
+            # Forward to swap endpoint
+            try:
+                swap_response = await process_swap_command(SwapCommand(
+                    command=command.command,
+                    wallet_address=command.wallet_address,
+                    chain_id=command.chain_id
+                ))
+                
+                # Check for errors in swap response
+                if "error" in swap_response:
+                    return ChatResponse(
+                        content=swap_response["error"],
+                        agent_type="swap",
+                        awaiting_confirmation=False,
+                        status="error",
+                        metadata={
+                            "technical_details": swap_response.get("technical_details", "Unknown error")
+                        }
+                    )
+                
+                response = ChatResponse(
+                    content=swap_response["content"],
+                    agent_type="swap",
+                    awaiting_confirmation=False,
+                    status="success",
+                    metadata=swap_response.get("metadata")
+                )
+                
+                chat_history_service.add_entry(
+                    command.wallet_address,
+                    command.user_name,
+                    'swap',
+                    command.command,
+                    response.dict()
+                )
+                return response
+                
+            except Exception as e:
+                # Log the technical error
+                logger.exception("Error processing swap confirmation")
+                return ChatResponse(
+                    content="I encountered an issue while processing your swap. Please try again.",
+                    agent_type="swap",
+                    status="error",
+                    metadata={"technical_details": str(e)}
+                )
+
         # Prefer user-supplied key, fallback to env
         OPENAI_API_KEY = command.openai_api_key or os.getenv("OPENAI_API_KEY")
         if not OPENAI_API_KEY:
             return ChatResponse(
-                content="No OpenAI API key configured. Please add your API key in the settings.",
+                content="I need an OpenAI API key to help you. Please add your API key in the settings.",
                 status="error",
                 error="No OpenAI API key configured."
             )
@@ -76,14 +128,14 @@ async def process_command(command: ChatCommand):
             )
             return response
 
-        # Check if this is a swap command
+        # Check for swap command
         swap_match = re.match(r"swap\s+([\d\.]+)\s+(\S+)\s+(to|for)\s+(\S+)", command.command, re.IGNORECASE)
         if swap_match:
             # If no wallet address, return error
             if not command.wallet_address:
                 return ChatResponse(
                     content="Please connect your wallet to perform swaps.",
-                    agent_type="default",
+                    agent_type="swap",
                     status="error"
                 )
             
@@ -91,7 +143,7 @@ async def process_command(command: ChatCommand):
             if not command.chain_id:
                 return ChatResponse(
                     content="Please connect to a supported network to perform swaps.",
-                    agent_type="default",
+                    agent_type="swap",
                     status="error"
                 )
 
@@ -103,11 +155,24 @@ async def process_command(command: ChatCommand):
                     chain_id=command.chain_id
                 ))
                 
+                # Check for errors in swap response
+                if "error" in swap_response:
+                    return ChatResponse(
+                        content=swap_response["error"],
+                        agent_type="swap",
+                        awaiting_confirmation=False,
+                        status="error",
+                        metadata={
+                            "technical_details": swap_response.get("technical_details", "Unknown error")
+                        }
+                    )
+                
                 response = ChatResponse(
-                    content=swap_response,
+                    content=swap_response["content"],
                     agent_type="swap",
                     awaiting_confirmation=True,
-                    status="success"
+                    status="success",
+                    metadata=swap_response.get("metadata")
                 )
                 
                 chat_history_service.add_entry(
@@ -120,10 +185,13 @@ async def process_command(command: ChatCommand):
                 return response
                 
             except Exception as e:
+                # Log the technical error
+                logger.exception("Error processing swap command")
                 return ChatResponse(
-                    content=f"Failed to process swap: {str(e)}",
-                    agent_type="default",
-                    status="error"
+                    content="I encountered an issue while preparing your swap. Please try again.",
+                    agent_type="swap",
+                    status="error",
+                    metadata={"technical_details": str(e)}
                 )
 
         # For other commands, use OpenAI

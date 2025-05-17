@@ -1,116 +1,121 @@
 """
-Brian API client service.
+Brian API client implementation.
 """
-import os
-import logging
-import httpx
 from typing import Dict, Any, Optional
-from decimal import Decimal
-
-logger = logging.getLogger(__name__)
+import httpx
+from fastapi import HTTPException
+import os
+import json
 
 class BrianClient:
-    """Client for interacting with the Brian API."""
-
     def __init__(self):
-        """Initialize the Brian API client."""
         self.api_key = os.getenv("BRIAN_API_KEY")
-        self.api_url = os.getenv("BRIAN_API_URL", "https://api.brianknows.org/api/v0")
-        self.verify_ssl = os.getenv("DISABLE_SSL_VERIFY", "").lower() not in ("true", "1", "yes")
-        self.http_client = None
-
         if not self.api_key:
-            logger.warning("BRIAN_API_KEY environment variable not set")
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create an HTTP client."""
-        if self.http_client is None or self.http_client.is_closed:
-            self.http_client = httpx.AsyncClient(
-                verify=self.verify_ssl,
-                timeout=30.0,
-                headers={"Authorization": f"Bearer {self.api_key}"}
-            )
-        return self.http_client
-
-    async def close(self):
-        """Close the HTTP client."""
-        if self.http_client and not self.http_client.is_closed:
-            await self.http_client.aclose()
-
-    async def get_quote(self, from_token: str, to_token: str, amount: Decimal,
-                       from_chain_id: int, to_chain_id: int) -> Dict[str, Any]:
-        """Get a quote for bridging tokens."""
-        client = await self._get_client()
-        response = await client.get(
-            f"{self.api_url}/quote",
-            params={
-                "fromToken": from_token,
-                "toToken": to_token,
-                "amount": str(amount),
-                "fromChainId": from_chain_id,
-                "toChainId": to_chain_id
-            }
-        )
-        response.raise_for_status()
-        return response.json()
-
-    async def execute_bridge(self, quote_id: str, wallet_address: str) -> Dict[str, Any]:
-        """Execute a bridge transaction."""
-        client = await self._get_client()
-        response = await client.post(
-            f"{self.api_url}/bridge",
-            json={
-                "quoteId": quote_id,
-                "walletAddress": wallet_address
-            }
-        )
-        response.raise_for_status()
-        return response.json()
-
-    async def get_balance(self, wallet_address: str, chain_id: int,
-                         token_address: Optional[str] = None) -> Dict[str, Any]:
-        """Get token balance for a wallet."""
-        client = await self._get_client()
-        params = {
-            "walletAddress": wallet_address,
-            "chainId": chain_id
+            raise ValueError("BRIAN_API_KEY environment variable is not set")
+        
+        self.base_url = "https://api.brianknows.org/api/v0"
+        self.headers = {
+            "x-brian-api-key": self.api_key,
+            "Content-Type": "application/json"
         }
-        if token_address:
-            params["tokenAddress"] = token_address
 
-        response = await client.get(
-            f"{self.api_url}/balance",
-            params=params
-        )
-        response.raise_for_status()
-        return response.json()
+    async def get_swap_transaction(self, from_token: str, to_token: str, amount: float, chain_id: int, wallet_address: str) -> Dict[str, Any]:
+        """Get a swap transaction from Brian API."""
+        try:
+            # Format the prompt according to Brian's examples
+            prompt = f"swap {amount} {from_token} for {to_token}"
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/agent/transaction",
+                    headers=self.headers,
+                    json={
+                        "prompt": prompt,
+                        "chainId": str(chain_id),  # Brian expects string
+                        "address": wallet_address
+                    },
+                    timeout=30.0  # Increased timeout for reliability
+                )
 
-    async def get_transaction_status(self, tx_hash: str, chain_id: int) -> Dict[str, Any]:
-        """Get the status of a transaction."""
-        client = await self._get_client()
-        response = await client.get(
-            f"{self.api_url}/transaction/{tx_hash}",
-            params={"chainId": chain_id}
-        )
-        response.raise_for_status()
-        return response.json()
+                if response.status_code == 404:
+                    return {
+                        "error": "user_friendly",
+                        "message": "This swap pair is not available at the moment. Please try a different pair or amount.",
+                        "technical_details": f"Brian API returned 404: {response.text}"
+                    }
+                
+                if response.status_code == 400:
+                    return {
+                        "error": "user_friendly",
+                        "message": "Invalid swap parameters. Please check your token symbols and try again.",
+                        "technical_details": f"Brian API returned 400: {response.text}"
+                    }
 
-    async def get_swap_transaction(self, from_token: str, to_token: str, amount: Decimal,
-                                  chain_id: int, wallet_address: str) -> Dict[str, Any]:
-        """Get a swap transaction from the Brian API."""
-        client = await self._get_client()
-        response = await client.post(
-            f"{self.api_url}/swap",
-            json={
-                "fromToken": from_token,
-                "toToken": to_token,
-                "amount": str(amount),
-                "chainId": chain_id,
-                "walletAddress": wallet_address
+                if response.status_code != 200:
+                    return {
+                        "error": "user_friendly",
+                        "message": "The swap service is temporarily unavailable. Please try again later.",
+                        "technical_details": f"Brian API returned {response.status_code}: {response.text}"
+                    }
+
+                data = response.json()
+                
+                # Check if we got a valid result
+                if not data.get("result") or not data["result"]:
+                    return {
+                        "error": "user_friendly",
+                        "message": "Unable to find a valid swap route. Please try a different amount or token pair.",
+                        "technical_details": "Brian API returned empty result"
+                    }
+
+                # Extract the relevant transaction data
+                transaction = data["result"][0]
+                steps = transaction.get("data", {}).get("steps", [])
+                
+                if not steps:
+                    return {
+                        "error": "user_friendly",
+                        "message": "No valid swap route found. Please try a different amount or token pair.",
+                        "technical_details": "Brian API returned no steps"
+                    }
+
+                # Return formatted transaction data
+                return {
+                    "success": True,
+                    "steps": steps,
+                    "metadata": {
+                        "gas_cost_usd": transaction["data"].get("gasCostUSD"),
+                        "from_amount_usd": transaction["data"].get("fromAmountUSD"),
+                        "to_amount_usd": transaction["data"].get("toAmountUSD"),
+                        "to_amount_min": transaction["data"].get("toAmountMin"),
+                        "protocol": transaction["data"].get("protocol", {}).get("name")
+                    }
+                }
+
+        except httpx.TimeoutException:
+            return {
+                "error": "user_friendly",
+                "message": "The request took too long to process. Please try again.",
+                "technical_details": "Request timeout"
             }
-        )
-        response.raise_for_status()
-        return response.json()
+        except httpx.RequestError as e:
+            return {
+                "error": "user_friendly",
+                "message": "Unable to connect to the swap service. Please try again later.",
+                "technical_details": f"Request error: {str(e)}"
+            }
+        except json.JSONDecodeError:
+            return {
+                "error": "user_friendly",
+                "message": "Received invalid response from the swap service. Please try again.",
+                "technical_details": "JSON decode error"
+            }
+        except Exception as e:
+            return {
+                "error": "user_friendly",
+                "message": "An unexpected error occurred. Please try again later.",
+                "technical_details": f"Unexpected error: {str(e)}"
+            }
 
-# Create a singleton instance
-brian_client = BrianClient()
+# Global instance
+brian_client = BrianClient() 
