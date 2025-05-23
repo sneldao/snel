@@ -16,11 +16,7 @@ help:
 
 # Backend commands
 backend-dev:
-	cd backend && \
-	python -m venv .venv && \
-	. .venv/bin/activate && \
-	pip install -r requirements.txt && \
-	uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+	cd backend && ./start.sh
 
 # Frontend commands
 frontend-dev:
@@ -49,7 +45,7 @@ telegram-dev:
 # Install dependencies for all components
 install:
 	# Backend
-	cd backend && python -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt
+	cd backend && chmod +x start.sh && ./start.sh --install-only
 	# Frontend
 	cd frontend && npm install
 	# Telegram bot

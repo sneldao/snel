@@ -44,7 +44,7 @@ git clone https://github.com/sneldao/snel.git
 cd snel
 
 # Backend
-pip install -r requirements.txt
+cd backend && ./start.sh
 
 # Frontend
 cd frontend && npm install
@@ -65,6 +65,35 @@ REDIS_URL=redis://localhost:6379/0  # Optional
 ```bash
 make dev  # Starts both backend and frontend
 ```
+
+### Backend Start Script
+
+The `start.sh` script in the backend directory automates the setup and running of the backend server:
+
+```bash
+cd backend && ./start.sh
+```
+
+This script:
+
+- Creates a virtual environment if it doesn't exist
+- Activates the virtual environment
+- Installs all required dependencies (including python-dotenv)
+- Creates a .env file from .env.example if needed
+- Starts the uvicorn server
+
+**Options:**
+
+- Run with `--install-only` to only set up the environment without starting the server:
+  ```bash
+  ./start.sh --install-only
+  ```
+
+**Troubleshooting:**
+
+- If you encounter dependency issues, the script will install core dependencies first
+- The script handles common errors and provides helpful messages
+- Always run the script from the backend directory
 
 ## 🌐 Deployment
 

@@ -71,20 +71,20 @@ async def process_swap_command(cmd: SwapCommand) -> Dict[str, Any]:
                     "protocols_tried": []
                 }
             }
-        
+
         # Get quotes for the confirmed swap
         try:
             quotes = await get_swap_quotes(SwapQuotesRequest(
                 wallet_address=cmd.wallet_address,
                 chain_id=cmd.chain_id
             ))
-            
+
             # Pass through the response - it already handles errors in the new format
             return quotes
-            
+
         except Exception as e:
             logger.exception("Error getting swap quotes")
-            
+
             # Return structured error response
             return {
                 "success": False,
@@ -121,7 +121,7 @@ async def process_swap_command(cmd: SwapCommand) -> Dict[str, Any]:
         }
 
     amount_str, token_in_symbol, token_out_symbol = m.groups()
-    
+
     try:
         amount = float(amount_str)
     except ValueError:
@@ -229,7 +229,7 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
         meta = last_swaps.get(req.wallet_address)
         if not meta:
             raise HTTPException(status_code=400, detail="No pending swap to quote")
-            
+
         # Get quotes from swap service
         quote_result = await swap_service.get_quote(
             from_token_id=meta["from_token"],
@@ -238,7 +238,7 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
             chain_id=req.chain_id,
             wallet_address=req.wallet_address
         )
-        
+
         # Check for errors
         if "error" in quote_result:
             # Prepare detailed error response
@@ -247,35 +247,35 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
                 "protocols_tried": quote_result.get("protocols_tried", []),
                 "suggestion": quote_result.get("suggestion", "Please try a different token pair or amount.")
             }
-            
+
             if "technical_details" in quote_result:
                 error_response["technical_details"] = quote_result["technical_details"]
-                
+
             if "protocol_errors" in quote_result:
                 error_response["protocol_errors"] = quote_result["protocol_errors"]
-                
+
             # Return a structured error response to the client
             return {
                 "success": False,
                 "error_details": error_response,
                 "message": error_response["error"]
             }
-            
+
         # Get token info for display
         to_token = await protocol_registry.resolve_token(req.chain_id, meta["to_token"])
-        
+
         # Format the response
         protocol_name = quote_result.get("protocol", "unknown")
         steps = quote_result.get("steps", [])
         metadata = quote_result.get("metadata", {})
-        
+
         # Create a standardized quote response
         formatted_quote = {
             "protocol": protocol_name,
             "metadata": metadata,
             "steps": steps
         }
-        
+
         # Create token output info
         token_out_info = {}
         if to_token:
@@ -288,7 +288,7 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
                     "decimals": 18
                 }
             }
-        
+
         # Return in the expected format
         return {
             "success": True,
@@ -296,24 +296,47 @@ async def get_swap_quotes(req: SwapQuotesRequest) -> Dict[str, Any]:
             "token_out": token_out_info,
             "protocol": protocol_name
         }
-        
+
     except Exception as e:
         logger.exception(f"Error getting quotes: {str(e)}")
-        
-        # Return a structured error response for unexpected errors
+
+        # Extract error message
+        error_message = str(e)
+
+        # Create user-friendly error message based on common errors
+        user_message = "Unable to process swap request."
+        suggestion = "This might be a temporary issue. Please try again in a few moments."
+
+        if "not supported" in error_message.lower():
+            user_message = "This token pair is not supported on the selected chain."
+            suggestion = "Try a different token pair or switch to another blockchain network."
+        elif "insufficient liquidity" in error_message.lower():
+            user_message = "Insufficient liquidity for this swap."
+            suggestion = "Try a smaller amount or a different token pair."
+        elif "slippage" in error_message.lower():
+            user_message = "Slippage too high for this swap."
+            suggestion = "Try a smaller amount or adjust slippage tolerance."
+        elif "api key" in error_message.lower():
+            user_message = "API key issue with swap provider."
+            suggestion = "Please contact support to resolve this issue."
+        elif "route" in error_message.lower():
+            user_message = "No valid swap route found."
+            suggestion = "Try a different token pair or switch to another blockchain network."
+
+        # Return a structured error response
         error_response = {
-            "error": "Unable to process swap request. Please try again.",
-            "technical_details": str(e),
+            "error": user_message,
+            "technical_details": error_message,
             "protocols_tried": [],
-            "suggestion": "This might be a temporary issue. Please try again in a few moments."
+            "suggestion": suggestion
         }
-        
+
         return {
             "success": False,
             "error_details": error_response,
-            "message": error_response["error"]
+            "message": user_message
         }
-        
+
 @router.post("/build-transaction")
 async def build_transaction(req: SwapQuotesRequest) -> Dict[str, Any]:
     """Build a transaction from a swap quote."""
@@ -322,7 +345,7 @@ async def build_transaction(req: SwapQuotesRequest) -> Dict[str, Any]:
         meta = last_swaps.get(req.wallet_address)
         if not meta:
             raise HTTPException(status_code=400, detail="No pending swap to build transaction for")
-            
+
         # Get quote first
         quote_result = await swap_service.get_quote(
             from_token_id=meta["from_token"],
@@ -331,33 +354,33 @@ async def build_transaction(req: SwapQuotesRequest) -> Dict[str, Any]:
             chain_id=req.chain_id,
             wallet_address=req.wallet_address
         )
-        
+
         # Check for errors
         if "error" in quote_result:
             raise HTTPException(
                 status_code=400,
                 detail=quote_result["error"]
             )
-            
+
         # Build transaction
         tx_result = await swap_service.build_transaction(
             quote=quote_result,
-            chain_id=req.chain_id, 
+            chain_id=req.chain_id,
             wallet_address=req.wallet_address
         )
-        
+
         # Check for errors
         if "error" in tx_result:
             raise HTTPException(
                 status_code=400,
                 detail=tx_result["error"]
             )
-            
+
         return {
             "transaction": tx_result["transaction"],
             "protocol": quote_result.get("protocol", "unknown")
         }
-        
+
     except Exception as e:
         logger.exception(f"Error building transaction: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -374,7 +397,7 @@ async def test_swap_system() -> Dict[str, Any]:
                 "name": protocol.name if hasattr(protocol, "name") else protocol_id,
                 "supported_chains": protocol.supported_chains if hasattr(protocol, "supported_chains") else []
             })
-            
+
         # Check token registry
         sample_tokens = []
         for token_id in ["eth", "usdc", "weth"]:
@@ -385,7 +408,7 @@ async def test_swap_system() -> Dict[str, Any]:
                     "symbol": token.symbol,
                     "chains": list(token.addresses.keys())
                 })
-                
+
         return {
             "status": "healthy",
             "protocols": protocols,

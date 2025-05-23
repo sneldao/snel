@@ -26,8 +26,13 @@ Backend service for the Snel cross-chain bridging and token management platform.
 3. Run the development server:
 
    ```bash
-   uvicorn app.main:app --reload
+   # Option 1: Use the start script (recommended)
+   ./start.sh
 
+   # Option 2: Manual startup
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
    uvicorn app.main:app --reload --port 8000
    ```
 

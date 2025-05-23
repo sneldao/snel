@@ -17,7 +17,7 @@ class SwapService:
         self.registry = protocol_registry
 
     async def get_quote(
-        self, 
+        self,
         from_token_id: str,
         to_token_id: str,
         amount: Decimal,
@@ -27,7 +27,7 @@ class SwapService:
     ) -> Dict[str, Any]:
         """
         Get a quote for swapping tokens with fallback mechanism.
-        
+
         Args:
             from_token_id: Source token identifier (symbol or address)
             to_token_id: Destination token identifier (symbol or address)
@@ -35,21 +35,21 @@ class SwapService:
             chain_id: Chain ID to use
             wallet_address: User's wallet address
             protocol_id: Optional specific protocol to use
-            
+
         Returns:
             Quote response or error information
         """
         try:
             # Log the request
             logger.info(f"Getting quote for swap: {amount} {from_token_id} -> {to_token_id} on chain {chain_id}")
-            
+
             # Resolve token information
             from_token = await self.registry.resolve_token(chain_id, from_token_id)
             to_token = await self.registry.resolve_token(chain_id, to_token_id)
-            
+
             logger.info(f"From token info: {from_token}")
             logger.info(f"To token info: {to_token}")
-            
+
             if not from_token:
                 logger.error(f"From token info not found: {from_token_id} on chain {chain_id}")
                 return {
@@ -58,7 +58,7 @@ class SwapService:
                     "protocols_tried": [],
                     "suggestion": "Please check the token symbol or try a different token."
                 }
-                
+
             if not to_token:
                 logger.error(f"To token info not found: {to_token_id} on chain {chain_id}")
                 return {
@@ -67,11 +67,11 @@ class SwapService:
                     "protocols_tried": [],
                     "suggestion": "Please check the token symbol or try a different token."
                 }
-            
+
             # Track which protocols we tried and their specific errors
             tried_protocols = []
             protocol_errors = {}
-            
+
             # Try using the specified protocol first
             if protocol_id:
                 protocol = self.registry.get_protocol(protocol_id)
@@ -92,7 +92,7 @@ class SwapService:
                         logger.error(f"Error with specified protocol {protocol_id}: {error_msg}")
                         protocol_errors[protocol_id] = error_msg
                         # Continue to auto-select protocol
-                        
+
             # Get supported protocols and try them in preferred order
             supported_protocols = self.registry.get_supported_protocols(chain_id)
             if not supported_protocols:
@@ -103,7 +103,7 @@ class SwapService:
                     "protocols_tried": tried_protocols,
                     "suggestion": "Try using a different blockchain network."
                 }
-            
+
             # Try each protocol until one works
             error_details = []
             for protocol in supported_protocols:
@@ -112,6 +112,33 @@ class SwapService:
                     tried_protocols.append(protocol_id)
                     try:
                         logger.info(f"Trying protocol: {protocol_id}")
+                        # Check if tokens are supported on this chain
+                        if not from_token.is_supported_on_chain(chain_id):
+                            error_msg = f"Token {from_token.symbol} is not supported on chain {chain_id}"
+                            protocol_errors[protocol_id] = error_msg
+                            error_details.append(f"{protocol_id} error: {error_msg}")
+                            logger.error(error_msg)
+                            continue
+
+                        if not to_token.is_supported_on_chain(chain_id):
+                            error_msg = f"Token {to_token.symbol} is not supported on chain {chain_id}"
+                            protocol_errors[protocol_id] = error_msg
+                            error_details.append(f"{protocol_id} error: {error_msg}")
+                            logger.error(error_msg)
+                            continue
+
+                        # Get token addresses
+                        from_address = from_token.get_address(chain_id)
+                        to_address = to_token.get_address(chain_id)
+
+                        if not from_address or not to_address:
+                            error_msg = f"Missing token address for {from_token.symbol} or {to_token.symbol} on chain {chain_id}"
+                            protocol_errors[protocol_id] = error_msg
+                            error_details.append(f"{protocol_id} error: {error_msg}")
+                            logger.error(error_msg)
+                            continue
+
+                        # Try to get quote
                         protocol_quote = await protocol.get_quote(
                             from_token=from_token,
                             to_token=to_token,
@@ -126,7 +153,7 @@ class SwapService:
                         protocol_errors[protocol_id] = error_msg
                         error_details.append(f"{protocol_id} error: {error_msg}")
                         logger.error(f"{protocol_id} error: {error_msg}")
-            
+
             # If we get here, all protocols failed
             # Generate a user-friendly suggestion based on common error patterns
             suggestion = "Please try a different token pair or adjust the amount."
@@ -136,7 +163,7 @@ class SwapService:
                 suggestion = "The amount may be below the minimum required. Try increasing the amount."
             elif any("slippage" in err.lower() for err in protocol_errors.values()):
                 suggestion = "High price impact detected. Try reducing the amount or try again when market conditions improve."
-            
+
             return {
                 "error": "Unable to find a valid swap route for these tokens.",
                 "technical_details": " | ".join(error_details),
@@ -144,7 +171,7 @@ class SwapService:
                 "protocol_errors": protocol_errors,
                 "suggestion": suggestion
             }
-            
+
         except Exception as e:
             error_msg = str(e)
             logger.exception(f"Unexpected error in get_quote: {error_msg}")
@@ -168,22 +195,22 @@ class SwapService:
                     "error": "Invalid quote format. Missing protocol information.",
                     "technical_details": "Quote missing protocol field"
                 }
-                
+
             protocol_id = quote["protocol"]
             protocol = self.registry.get_protocol(protocol_id)
-            
+
             if not protocol:
                 return {
                     "error": f"Protocol {protocol_id} not found.",
                     "technical_details": f"Protocol {protocol_id} not registered"
                 }
-                
+
             transaction = await protocol.build_transaction(
                 quote=quote,
                 chain_id=chain_id,
                 wallet_address=wallet_address
             )
-            
+
             return {
                 "success": True,
                 "transaction": transaction
@@ -199,7 +226,7 @@ class SwapService:
         """Format a protocol quote response in a standardized format."""
         if not quote.get("success", False):
             return quote
-            
+
         # Quote is already standardized
         return {
             "success": True,
