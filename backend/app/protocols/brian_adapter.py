@@ -166,8 +166,10 @@ class BrianAdapter:
             return {
                 "success": True,
                 "protocol": "brian",
-                "steps": steps,
-                "transaction": steps[0] if steps else {},  # First step contains transaction data
+                "steps": steps,  # Return all steps for multi-step transactions
+                "total_steps": len(steps),
+                "requires_multi_step": len(steps) > 1,
+                "transaction": steps[0] if steps else {},  # First step for immediate execution
                 "metadata": {
                     "gas_cost_usd": transaction_data.get("gasCostUSD"),
                     "from_amount_usd": transaction_data.get("fromAmountUSD"),
@@ -184,7 +186,8 @@ class BrianAdapter:
                         "address": to_address,
                         "symbol": to_token.symbol,
                         "decimals": to_token.decimals
-                    }
+                    },
+                    "all_steps": steps  # Include all steps in metadata
                 }
             }
 

@@ -45,6 +45,9 @@ const SUPPORTED_CHAINS = {
   5000: "Mantle",
   81457: "Blast",
   34443: "Mode",
+  324: "zkSync Era",
+  100: "Gnosis",
+  167004: "Taiko",
 } as const;
 
 const EXAMPLE_COMMANDS = [

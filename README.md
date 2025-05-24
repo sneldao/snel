@@ -1,139 +1,239 @@
-# SNEL - Cross-Chain Crypto Assistant
+# SNEL - AI-Powered Cross-Chain DeFi Assistant
 
-SNEL is a modern DeFi platform with a Next.js frontend and FastAPI backend that helps users swap tokens, bridge assets across chains, and manage their crypto portfolio through natural language interactions.
+> **Smart, Natural, Efficient, Limitless** - Your AI companion for seamless DeFi operations across 16+ blockchain networks.
 
-## 🌟 Key Features
+SNEL transforms complex DeFi operations into simple natural language commands. Execute swaps, bridge assets, and manage your portfolio across multiple blockchains with the power of AI - no more complex interfaces or manual protocol navigation.
 
-- **Multi-Chain Support**: Ethereum, Base, Arbitrum, Optimism, Polygon, Avalanche, Scroll, BSC, Linea, Mantle, Blast, Mode, Gnosis, zkSync Era, Taiko, and Starknet
-- **Protocol Integration**: 0x API and Brian API with automatic protocol selection
-- **Natural Language Interface**: Chat-like interaction for all operations
-- **Cross-Chain Operations**: Seamless token swaps and bridging across chains
-- **Portfolio Management**: Balance checking and transaction monitoring
-- **Modern UI**: Responsive Next.js frontend with real-time updates and wallet integration
+## ✨ Key Features
+
+### 🤖 **AI-Powered Interface**
+
+- **Natural language commands**: `"swap 1 ETH for USDC"` or `"bridge $100 to Base"`
+- **Context-aware responses** with step-by-step guidance
+- **Smart protocol selection** for optimal pricing and gas efficiency
+
+### 🌐 **Multi-Chain Support (16+ Networks)**
+
+- **Layer 1**: Ethereum, Polygon, Avalanche, BNB Chain, Gnosis
+- **Layer 2**: Base, Arbitrum, Optimism, Scroll, zkSync Era, Linea, Mantle, Blast, Mode, Taiko
+- **Seamless cross-chain operations** with automatic network detection
+
+### 🔄 **Advanced Transaction Handling**
+
+- **Multi-step transaction flows** with clear progress indication
+- **Approval + Swap sequences** handled automatically
+- **Real-time status updates** with block explorer links
+- **Intelligent error handling** with actionable suggestions
+
+### 💱 **DEX Aggregation**
+
+- **0x Protocol** integration for professional-grade liquidity
+- **Brian API** for AI-powered DeFi operations
+- **Automatic protocol selection** based on chain and trade size
+- **Real-time quotes** with gas estimation
+
+### 🔐 **Secure & User-Friendly**
+
+- **ConnectKit/Wagmi** integration with 50+ wallet support
+- **Non-custodial** - your keys, your crypto
+- **Transaction simulation** before execution
+- **Comprehensive error handling** for failed transactions
 
 ## 🏗️ Architecture
 
+### Frontend (Next.js 14 + TypeScript)
+
+```
+├── 🎨 Chakra UI - Modern, accessible components
+├── 🔗 Wagmi + ConnectKit - Web3 wallet integration
+├── 🔄 React Query - Efficient data fetching
+├── 📱 Responsive design - Mobile-first approach
+└── 🎯 TypeScript - Type-safe development
+```
+
+### Backend (FastAPI + Python)
+
+```
+├── 🚀 FastAPI - High-performance async API
+├── 🧠 OpenAI GPT - Natural language processing
+├── 🔄 Redis - Session & cache management
+├── 🌐 Multi-protocol integration (0x, Brian)
+└── 📊 Comprehensive logging & monitoring
+```
+
+### Project Structure
+
 ```
 snel/
-├── backend/           # FastAPI backend service
-│   └── app/
-│       ├── api/      # API endpoints
-│       ├── protocols/ # Protocol implementations
-│       ├── services/ # Business logic
-│       └── config/   # Configuration
-├── frontend/         # Next.js web application
-    ├── components/   # React components
-    ├── pages/       # Next.js pages
-    └── hooks/       # Custom React hooks
+├── frontend/          # Next.js application
+│   ├── src/
+│   │   ├── components/    # React components
+│   │   ├── services/      # API & transaction services
+│   │   ├── hooks/         # Custom React hooks
+│   │   └── types/         # TypeScript definitions
+├── backend/           # FastAPI application
+│   ├── app/
+│   │   ├── api/          # API endpoints
+│   │   ├── services/     # Business logic
+│   │   ├── protocols/    # DEX integrations
+│   │   └── config/       # Configuration
+└── docs/             # Documentation
+```
+
+## 💬 Usage Examples
+
+### Basic Swaps
+
+```
+"swap 1 ETH for USDC"
+"swap $100 worth of USDC for WBTC"
+"exchange 0.5 BNB for CAKE on BSC"
+```
+
+### Cross-Chain Operations
+
+```
+"bridge 0.1 ETH from Ethereum to Base"
+"move 100 USDC from Polygon to Arbitrum"
+```
+
+### Portfolio Management
+
+```
+"show my ETH balance"
+"check my portfolio on Base"
+"what's my USDC balance across all chains"
+```
+
+### Market Information
+
+```
+"what's the price of ETH?"
+"show me USDC/ETH rate"
+"get current gas prices on Ethereum"
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.10+
-- Node.js 18+
-- Redis (optional)
+- **Node.js** 18+ and **npm**
+- **Python** 3.9+ and **pip**
+- **Redis** server
+- **API Keys**: OpenAI, 0x Protocol, Brian API, WalletConnect
 
-### Setup
-
-1. Clone and install dependencies:
+### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/sneldao/snel.git
+git clone <repository-url>
 cd snel
 
-# Backend
-cd backend && ./start.sh
+# Backend setup
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 
-# Frontend
-cd frontend && npm install
+# Frontend setup
+cd ../frontend
+npm install
 ```
 
-2. Configure environment:
+### 2. Environment Configuration
 
-```bash
-# Create .env file with:
+**Backend `.env`:**
+
+```env
+OPENAI_API_KEY=sk-...
+ZEROX_API_KEY=your_0x_key
+BRIAN_API_KEY=your_brian_key
+REDIS_URL=redis://localhost:6379
+ENVIRONMENT=development
+```
+
+**Frontend `.env.local`:**
+
+```env
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
 NEXT_PUBLIC_API_URL=http://localhost:8000
-ZEROX_API_KEY=your_0x_api_key
-BRIAN_API_KEY=your_brian_api_key
-REDIS_URL=redis://localhost:6379/0  # Optional
 ```
 
-3. Run development servers:
+### 3. Launch Application
 
 ```bash
-make dev  # Starts both backend and frontend
-```
+# Terminal 1: Start Redis
+redis-server
 
-### Backend Start Script
-
-The `start.sh` script in the backend directory automates the setup and running of the backend server:
-
-```bash
+# Terminal 2: Start Backend
 cd backend && ./start.sh
+
+# Terminal 3: Start Frontend
+cd frontend && npm run dev
 ```
 
-This script:
+**🎉 Access at:** http://localhost:3000
 
-- Creates a virtual environment if it doesn't exist
-- Activates the virtual environment
-- Installs all required dependencies (including python-dotenv)
-- Creates a .env file from .env.example if needed
-- Starts the uvicorn server
+## 🔧 Development
 
-**Options:**
+### Key Components
 
-- Run with `--install-only` to only set up the environment without starting the server:
-  ```bash
-  ./start.sh --install-only
-  ```
+**Multi-Step Transaction System:**
 
-**Troubleshooting:**
+- `TransactionFlowService` - Manages complex transaction sequences
+- `TransactionProgress` - Visual progress indicator
+- `MultiStepTransactionService` - Frontend transaction orchestration
 
-- If you encounter dependency issues, the script will install core dependencies first
-- The script handles common errors and provides helpful messages
-- Always run the script from the backend directory
+**AI Agent System:**
+
+- Enhanced system prompts with capability awareness
+- Context-aware responses based on user's current network
+- Intelligent protocol selection and error handling
+
+### API Documentation
+
+**Interactive API docs:** http://localhost:8000/docs
+
+**Key Endpoints:**
+
+- `POST /api/v1/swap/process-command` - Execute swap commands
+- `POST /api/v1/chat/process-command` - AI chat interface
+- `POST /api/v1/swap/complete-step` - Multi-step transaction handling
+- `GET /api/v1/swap/flow-status/{address}` - Transaction flow status
 
 ## 🌐 Deployment
 
-The application is deployed across multiple platforms for optimal performance:
+**Production URLs:**
 
-- **Frontend**: Deployed on Netlify with automatic builds from the main branch
+- **Frontend**: [https://stable-snel.netlify.app](https://stable-snel.netlify.app)
+- **Backend**: Hosted on Northflank with auto-scaling
 
-  - Production: [https://stable-snel.netlify.app](https://stable-snel.netlify.app)
-  - Preview deployments for pull requests
+**Deployment Stack:**
 
-- **Backend**: Hosted on Northflank for scalability
-  - Containerized deployment with automatic scaling
-  - Built-in monitoring and logging
-  - Redis integration for state management
+- **Frontend**: Netlify with automatic builds
+- **Backend**: Northflank containerized deployment
+- **Database**: Redis for session management
+- **Monitoring**: Built-in logging and error tracking
 
-## 🗺️ Roadmap
+## 🤝 Contributing
 
-1. **Bot Mode Implementation**
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md).
 
-   - Fast, stateless API endpoints
-   - Direct protocol integrations
-   - Optimized for UI elements and power users
-
-2. **Protocol Expansion**
-
-   - Additional DEX aggregators
-   - More chain-specific protocols
-   - Cross-chain messaging protocols
-
-3. **Advanced Features**
-
-   - Portfolio analytics
-   - DeFi strategy recommendations
-   - Gas optimization across chains
-
-4. **Platform Integration**
-   - Mobile app development
-   - Browser extension
-   - Additional messaging platforms
+1. **Fork** the repository
+2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
+3. **Commit** changes: `git commit -m 'Add amazing feature'`
+4. **Push** to branch: `git push origin feature/amazing-feature`
+5. **Open** a Pull Request
 
 ## 📄 License
 
-[MIT License](LICENSE)
+This project is licensed under the **MIT License** - see [LICENSE](LICENSE) for details.
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
+- **Documentation**: [Wiki](https://github.com/your-repo/wiki)
+
+---
+
+**Built with ❤️ for the DeFi community**

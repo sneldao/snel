@@ -75,14 +75,22 @@ const config = createConfig(
       ...Object.entries(ALCHEMY_SUPPORTED_CHAINS).reduce(
         (acc, [chainId, url]) => ({
           ...acc,
-          [chainId]: http(url),
+          [chainId]: http(url, {
+            // Disable retries to prevent retrying cancelled transactions
+            retryCount: 0,
+            retryDelay: 0,
+          }),
         }),
         {}
       ),
       ...Object.entries(PUBLIC_RPC_URLS).reduce(
         (acc, [chainId, url]) => ({
           ...acc,
-          [chainId]: http(url),
+          [chainId]: http(url, {
+            // Disable retries to prevent retrying cancelled transactions
+            retryCount: 0,
+            retryDelay: 0,
+          }),
         }),
         {}
       ),

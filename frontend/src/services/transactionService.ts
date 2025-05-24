@@ -24,6 +24,9 @@ export class TransactionService {
     // Debug logging for transaction data
     console.log("Original transaction data:", JSON.stringify(txData, null, 2));
 
+    // Create an abort controller to handle cancellations
+    const abortController = new AbortController();
+
     // Check if the transaction data contains an error
     if ("error" in txData && txData.error) {
       throw new Error(txData.error);
@@ -91,15 +94,36 @@ export class TransactionService {
         transaction.chainId = this.chainId;
       }
 
-      // Send transaction
+      // Send transaction with immediate cancellation detection
       console.log("Sending transaction...");
-      const hash = await this.walletClient.sendTransaction(transaction);
+
+      // Wrap in a promise that can be cancelled immediately
+      const sendTransactionPromise = this.walletClient.sendTransaction(transaction);
+
+      // Race the transaction against the abort signal and timeout
+      const hash = await Promise.race([
+        sendTransactionPromise,
+        new Promise((_, reject) => {
+          abortController.signal.addEventListener('abort', () => {
+            reject(new Error('Transaction cancelled by user'));
+          });
+        }),
+        // Add a timeout to prevent hanging on user rejection
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            if (abortController.signal.aborted) {
+              reject(new Error('Transaction cancelled by user'));
+            }
+          }, 30000); // 30 second timeout
+        })
+      ]);
+
       console.log("Transaction sent with hash:", hash);
 
       // Wait for receipt
       console.log("Waiting for transaction receipt...");
       const receipt = await this.publicClient.waitForTransactionReceipt({
-        hash,
+        hash: hash as `0x${string}`,
       });
 
       if (!receipt) {
@@ -114,8 +138,27 @@ export class TransactionService {
       };
     } catch (error) {
       console.error("Transaction error:", error);
+
+      // If it's a user rejection, immediately abort to prevent retries
+      if (error instanceof Error && this.isUserRejection(error)) {
+        abortController.abort();
+        console.log("User rejected transaction - aborting to prevent retries");
+      }
+
       throw this.formatTransactionError(error);
     }
+  }
+
+  private isUserRejection(error: Error): boolean {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("user rejected") ||
+      message.includes("user denied") ||
+      message.includes("rejected the request") ||
+      message.includes("transaction signature") ||
+      message.includes("user cancelled") ||
+      message.includes("cancelled by user")
+    );
   }
 
   private formatTransactionError(error: unknown): Error {
@@ -124,14 +167,7 @@ export class TransactionService {
     }
 
     // Check for user rejection
-    if (
-      error.message.includes("user rejected") ||
-      error.message.includes("User rejected") ||
-      error.message.includes("User denied") ||
-      error.message.includes("user denied") ||
-      error.message.includes("rejected the request") ||
-      error.message.includes("transaction signature")
-    ) {
+    if (this.isUserRejection(error)) {
       return new Error("Transaction cancelled");
     }
 

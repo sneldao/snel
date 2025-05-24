@@ -48,10 +48,10 @@ class TokenService:
         self.use_redis = False
         self.cache = None
         redis_url = os.getenv("REDIS_URL")
-        
+
         # In-memory cache fallback
         self.memory_cache = {}
-        
+
         # Try to connect to Redis if URL is provided
         if redis_url:
             try:
@@ -63,11 +63,11 @@ class TokenService:
             except Exception as e:
                 print(f"Redis connection failed: {e}. Using in-memory cache instead.")
                 self.use_redis = False
-        
+
         # Initialize Web3 providers for each chain
         self.web3_providers: Dict[int, AsyncWeb3] = {}
         self._setup_web3_providers()
-        
+
         # Default token lists by chain
         self.token_lists = {
             1: [  # Ethereum
@@ -81,6 +81,34 @@ class TokenService:
             137: [  # Polygon
                 "https://tokens.coingecko.com/polygon-pos/all.json",
                 "https://raw.githubusercontent.com/sushiswap/list/master/lists/token-lists/default-token-list/tokens/polygon.json",
+            ],
+            10: [  # Optimism
+                "https://tokens.coingecko.com/optimistic-ethereum/all.json",
+                "https://static.optimism.io/optimism.tokenlist.json",
+            ],
+            8453: [  # Base
+                "https://tokens.coingecko.com/base/all.json",
+                "https://raw.githubusercontent.com/ethereum-optimism/ethereum-optimism.github.io/master/optimism.tokenlist.json",
+            ],
+            56: [  # BSC
+                "https://tokens.coingecko.com/binance-smart-chain/all.json",
+                "https://raw.githubusercontent.com/pancakeswap/token-list/main/lists/pancakeswap-extended.json",
+            ],
+            43114: [  # Avalanche
+                "https://tokens.coingecko.com/avalanche/all.json",
+                "https://raw.githubusercontent.com/traderjoe-xyz/joe-tokenlists/main/joe.tokenlist.json",
+            ],
+            5000: [  # Mantle
+                "https://tokens.coingecko.com/mantle/all.json",
+            ],
+            81457: [  # Blast
+                "https://tokens.coingecko.com/blast/all.json",
+            ],
+            59144: [  # Linea
+                "https://tokens.coingecko.com/linea/all.json",
+            ],
+            324: [  # zkSync Era
+                "https://tokens.coingecko.com/zksync/all.json",
             ],
         }
 
@@ -97,6 +125,9 @@ class TokenService:
             324: os.getenv("ZKSYNC_RPC_URL", "https://mainnet.era.zksync.io"),
             59144: os.getenv("LINEA_RPC_URL", "https://rpc.linea.build"),
             534352: os.getenv("SCROLL_RPC_URL", "https://rpc.scroll.io"),
+            43114: os.getenv("AVAX_RPC_URL", "https://api.avax.network/ext/bc/C/rpc"),
+            5000: os.getenv("MANTLE_RPC_URL", "https://rpc.mantle.xyz"),
+            81457: os.getenv("BLAST_RPC_URL", "https://rpc.blast.io"),
         }
 
         # Initialize providers
@@ -118,7 +149,7 @@ class TokenService:
         4. On-chain data
         """
         identifier = identifier.lower()
-        
+
         # Try cache first
         if self.use_redis and self.cache:
             try:
@@ -246,7 +277,7 @@ class TokenService:
     async def _get_token_from_lists(self, chain_id: int, identifier: str) -> Optional[Dict[str, Any]]:
         """Fetch token information from token lists."""
         lists = self.token_lists.get(chain_id, [])
-        
+
         async with aiohttp.ClientSession() as session:
             for list_url in lists:
                 try:
@@ -254,10 +285,10 @@ class TokenService:
                         if response.status == 200:
                             data = await response.json()
                             tokens = data.get("tokens", [])
-                            
+
                             # Search by address or symbol
                             for token in tokens:
-                                if (token.get("address", "").lower() == identifier or 
+                                if (token.get("address", "").lower() == identifier or
                                     token.get("symbol", "").lower() == identifier):
                                     return {
                                         "address": token["address"],
@@ -315,10 +346,10 @@ class TokenService:
     async def _cache_token_info(self, chain_id: int, identifier: str, token_info: Dict[str, Any]):
         """Cache token information in Redis or memory."""
         key = f"token:{chain_id}:{identifier}"
-        
+
         # Cache in memory
         self.memory_cache[key] = token_info
-        
+
         # Also cache in Redis if available
         if self.use_redis and self.cache:
             try:
@@ -385,4 +416,4 @@ class TokenService:
         return chain_names.get(chain_id, f"Chain {chain_id}")
 
 # Global instance
-token_service = TokenService() 
+token_service = TokenService()

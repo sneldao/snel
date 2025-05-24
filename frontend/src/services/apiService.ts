@@ -39,9 +39,9 @@ export class ApiService {
     chainId?: number,
     userName?: string
   ) {
-    // Check if this is a swap command
+    // Check if this is a swap command - support multiple formats
     const swapMatch = command.match(
-      /swap\s+([\d\.]+)\s+(\S+)\s+(to|for)\s+(\S+)/i
+      /swap\s+(?:\$?[\d\.]+\s+(?:of|worth\s+of)\s+\S+\s+(?:to|for)\s+\S+|[\d\.]+\s+\S+\s+(?:to|for)\s+\S+)/i
     );
     if (swapMatch) {
       return this.processSwapCommand(command, walletAddress, chainId);
@@ -175,6 +175,63 @@ export class ApiService {
       throw new Error(
         errorData.detail || `Error ${response.status}: ${response.statusText}`
       );
+    }
+
+    return response.json();
+  }
+
+  // Multi-step transaction methods
+  async completeTransactionStep(
+    walletAddress: string,
+    chainId: number,
+    txHash: string,
+    success: boolean = true,
+    error?: string
+  ) {
+    const response = await fetch(`${this.apiUrl}/swap/complete-step`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        wallet_address: walletAddress,
+        chain_id: chainId,
+        tx_hash: txHash,
+        success,
+        error,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to complete transaction step: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getTransactionFlowStatus(walletAddress: string) {
+    const response = await fetch(`${this.apiUrl}/swap/flow-status/${walletAddress}`, {
+      method: "GET",
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get flow status: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async cancelTransactionFlow(walletAddress: string, chainId: number) {
+    const response = await fetch(`${this.apiUrl}/swap/cancel-flow`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        wallet_address: walletAddress,
+        chain_id: chainId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to cancel flow: ${response.statusText}`);
     }
 
     return response.json();

@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 from decimal import Decimal
 import logging
 from app.protocols.registry import protocol_registry
-from app.models.token import token_registry
+from app.services.token_service import token_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

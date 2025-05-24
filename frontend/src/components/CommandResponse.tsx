@@ -36,11 +36,18 @@ import {
 import { SwapConfirmation } from "./SwapConfirmation";
 import { DCAConfirmation } from "./DCAConfirmation";
 import { BrianConfirmation } from "./BrianConfirmation";
+import { TransactionProgress } from "./TransactionProgress";
 import AggregatorSelection from "./AggregatorSelection";
 import { FaExchangeAlt, FaCalendarAlt, FaRobot } from "react-icons/fa";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { ApiService } from "../services/apiService";
+import {
+  useAccount,
+  useChainId,
+  useWalletClient,
+  usePublicClient,
+} from "wagmi";
 import { TransactionService } from "../services/transactionService";
-import { useWalletClient, usePublicClient, useChainId } from "wagmi";
 import { executeTransaction } from "../lib/api";
 
 interface CommandResponseProps {
@@ -197,12 +204,189 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   const [showTokenInfo, setShowTokenInfo] = React.useState(false);
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [txResponse, setTxResponse] = React.useState<any>(null);
+  const [multiStepState, setMultiStepState] = React.useState<{
+    steps: any[];
+    currentStep: number;
+    totalSteps: number;
+    isComplete: boolean;
+    error?: string;
+  } | null>(null);
   const toast = useToast();
 
-  // Get wallet client and public client for transaction execution
+  // Wallet and chain info
+  const { address } = useAccount();
+  const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  const chainId = useChainId();
+
+  // Services
+  const apiService = React.useMemo(() => new ApiService(), []);
+  const transactionService = React.useMemo(
+    () =>
+      walletClient && publicClient && chainId
+        ? new TransactionService(walletClient, publicClient, chainId)
+        : null,
+    [walletClient, publicClient, chainId]
+  );
+
+  // Multi-step transaction handler
+  const handleMultiStepTransaction = React.useCallback(
+    async (txData: any) => {
+      if (!transactionService || !address || !chainId) {
+        toast({
+          title: "Error",
+          description: "Wallet not properly connected",
+          status: "error",
+          duration: 5000,
+        });
+        return;
+      }
+
+      // Initialize multi-step state
+      const flowInfo = txData.flow_info || {};
+      const currentStepNumber = flowInfo.current_step || 1;
+
+      try {
+        setIsExecuting(true);
+        setMultiStepState({
+          steps: [
+            {
+              step: flowInfo.current_step || 1,
+              stepType: flowInfo.step_type || "approval",
+              status: "executing",
+              description: txData.message || "Executing transaction...",
+            },
+          ],
+          currentStep: flowInfo.current_step || 1,
+          totalSteps: flowInfo.total_steps || 1,
+          isComplete: false,
+        });
+
+        // Execute the transaction
+        const result = await transactionService.executeTransaction(
+          txData.transaction
+        );
+
+        if (result.success) {
+          // Update step as completed
+          setMultiStepState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  steps: prev.steps.map((step) =>
+                    step.step === (flowInfo.current_step || 1)
+                      ? { ...step, status: "completed", hash: result.hash }
+                      : step
+                  ),
+                }
+              : null
+          );
+
+          // Notify backend of completion and get next step
+          const nextStepResponse = await apiService.completeTransactionStep(
+            address,
+            chainId,
+            result.hash as string,
+            true
+          );
+
+          if (nextStepResponse.success && nextStepResponse.has_next_step) {
+            // There's a next step - execute it
+            const nextTxData = nextStepResponse.content;
+
+            // Add next step to state
+            setMultiStepState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    steps: [
+                      ...prev.steps,
+                      {
+                        step: nextTxData.flow_info.current_step,
+                        stepType: nextTxData.flow_info.step_type,
+                        status: "pending",
+                        description: nextTxData.message,
+                      },
+                    ],
+                    currentStep: nextTxData.flow_info.current_step,
+                  }
+                : null
+            );
+
+            // Small delay before next step
+            setTimeout(() => {
+              handleMultiStepTransaction(nextTxData);
+            }, 2000);
+          } else {
+            // Transaction flow complete
+            setMultiStepState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    isComplete: true,
+                  }
+                : null
+            );
+
+            toast({
+              title: "Success!",
+              description: "All transaction steps completed successfully",
+              status: "success",
+              duration: 5000,
+            });
+          }
+        } else {
+          throw new Error("Transaction failed");
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        // Update step as failed
+        setMultiStepState((prev) =>
+          prev
+            ? {
+                ...prev,
+                steps: prev.steps.map((step) =>
+                  step.step === currentStepNumber
+                    ? { ...step, status: "failed", error: errorMessage }
+                    : step
+                ),
+                error: errorMessage,
+              }
+            : null
+        );
+
+        // Notify backend of failure
+        if (address && chainId) {
+          try {
+            await apiService.completeTransactionStep(
+              address,
+              chainId,
+              "",
+              false,
+              errorMessage
+            );
+          } catch (e) {
+            console.error(
+              "Failed to notify backend of transaction failure:",
+              e
+            );
+          }
+        }
+
+        toast({
+          title: "Transaction Failed",
+          description: errorMessage,
+          status: "error",
+          duration: 5000,
+        });
+      } finally {
+        setIsExecuting(false);
+      }
+    },
+    [transactionService, address, chainId, apiService, toast]
+  );
 
   // Extract transaction data from content if available
   const transactionData =
@@ -270,9 +454,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     typeof content === "object" && content?.type === "dca_confirmation";
   const isSwapSuccess =
     typeof content === "object" && content?.type === "swap_success";
+  const isSwapTransaction =
+    typeof content === "object" && content?.type === "swap_transaction";
   const isDCASuccess =
     typeof content === "object" &&
     (content?.type === "dca_success" || content?.type === "dca_order_created");
+  const isMultiStepTransaction =
+    typeof content === "object" && content?.type === "multi_step_transaction";
   const isBrianTransaction =
     (typeof content === "object" &&
       content?.type === "transaction" &&
@@ -647,13 +835,23 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
 
   // Execute the transaction automatically when a transaction is displayed
   React.useEffect(() => {
-    // Check if we have transaction data that needs to be executed
+    // Handle multi-step transactions
+    if (isMultiStepTransaction && !isExecuting && !multiStepState) {
+      const timeoutId = setTimeout(() => {
+        handleMultiStepTransaction(content);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Check if we have single-step transaction data that needs to be executed
     const shouldExecuteTransaction =
       (isBrianTransaction ||
+        isSwapTransaction ||
         (typeof content === "object" && content?.type === "swap_quotes")) &&
       transactionData &&
       !isExecuting &&
-      !txResponse;
+      !txResponse &&
+      !isMultiStepTransaction;
 
     if (shouldExecuteTransaction) {
       // Add a small delay to ensure UI renders first
@@ -667,9 +865,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     content,
     transactionData,
     isBrianTransaction,
+    isSwapTransaction,
+    isMultiStepTransaction,
     isExecuting,
     txResponse,
+    multiStepState,
     handleExecuteTransaction,
+    handleMultiStepTransaction,
   ]);
 
   return (
@@ -732,6 +934,37 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 message={content}
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
+              />
+            ) : isMultiStepTransaction ? (
+              <Box>
+                <Text color={textColor} mb={3}>
+                  {typeof content === "object" && content.message
+                    ? content.message
+                    : "Executing multi-step transaction..."}
+                </Text>
+                {multiStepState && (
+                  <TransactionProgress
+                    steps={multiStepState.steps}
+                    currentStep={multiStepState.currentStep}
+                    totalSteps={multiStepState.totalSteps}
+                    chainId={chainId}
+                    isComplete={multiStepState.isComplete}
+                    error={multiStepState.error}
+                  />
+                )}
+              </Box>
+            ) : isSwapTransaction ? (
+              <BrianConfirmation
+                message={{
+                  type: "transaction",
+                  message:
+                    content.message || "Ready to execute swap transaction",
+                  transaction: transactionData,
+                }}
+                metadata={metadata}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+                onExecute={handleExecuteTransaction}
               />
             ) : isBrianTransaction ? (
               <BrianConfirmation

@@ -72,6 +72,8 @@ class TokenRegistry:
                 8453: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
                 43114: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
                 59144: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+                5000: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # Mantle
+                81457: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # Blast
             }
         ))
 
@@ -121,6 +123,10 @@ class TokenRegistry:
                 324: "0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4",
                 # Gnosis USDC
                 100: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83",
+                # Mantle USDC
+                5000: "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9",
+                # Blast USDC
+                81457: "0x4300000000000000000000000000000000000003",
             }
         ))
 
