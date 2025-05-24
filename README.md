@@ -198,6 +198,140 @@ cd frontend && npm run dev
 - **Database**: Redis for session management
 - **Monitoring**: Built-in logging and error tracking
 
+## 🏆 Global Agent Hackathon 2025 - Roadmap
+
+SNEL is participating in the Global Agent Hackathon with ambitious enhancements to transform our platform into the ultimate AI-powered DeFi operating system.
+
+### 🎯 **Phase 1: Multi-Agent DeFi Orchestrator**
+
+_Target: Best Use of Agno ($5,000 Grand Prize)_
+
+**"SNEL Multi-Agent DeFi Orchestrator"** - Transform SNEL into a sophisticated multi-agent system using Agno:
+
+#### 🤖 **Core Agent Enhancement:**
+
+**Portfolio Management Agent:**
+
+- Analyzes user's holdings across all 16+ supported chains
+- Provides intelligent rebalancing suggestions based on risk tolerance
+- **Stablecoin Risk Assessment**: Specialized focus on stablecoin portfolio vs other assets
+- Helps users clearly assess their level of risk exposure
+- Optimizes portfolio allocation according to user preferences (conservative, moderate, aggressive)
+- Cross-chain portfolio optimization for gas efficiency
+
+**Risk Assessment Agent:**
+
+- Real-time evaluation of smart contract risks and protocol security
+- Market volatility analysis and correlation assessment
+- Impermanent loss calculations for LP positions
+- Stablecoin depeg risk monitoring (USDC, USDT, DAI, etc.)
+- Regulatory risk assessment across different jurisdictions
+
+**Yield Optimization Agent:**
+
+- Discovers optimal yield farming opportunities across protocols
+- Compares APY vs risk ratios for informed decision making
+- Automated yield strategy execution with user approval
+- Stablecoin-specific yield opportunities (Aave, Compound, Curve)
+
+**MEV Protection Agent:**
+
+- Detects and prevents MEV attacks during transactions
+- Optimal transaction timing and routing
+- Private mempool integration for sensitive transactions
+
+#### 💬 **Enhanced User Experience:**
+
+```
+User: "Optimize my portfolio - I have 60% stablecoins but want more yield"
+→ Portfolio Agent: Analyzes current allocation across chains
+→ Risk Agent: Assesses market conditions and user risk tolerance
+→ Yield Agent: Finds optimal stablecoin yield strategies
+→ Result: "Move 20% USDC to Aave on Polygon (8.5% APY), keep 40% stable for safety"
+```
+
+### 🎯 **Phase 2: Automated Protocol Discovery**
+
+_Target: Best Use of Browser Use ($2,500 Grand Prize)_
+
+**"SNEL Stable Scout"** - Add automated protocol discovery and interaction using Browser Use:
+
+#### 🔍 **Protocol Discovery Engine:**
+
+**Stablecoin-Focused Discovery:**
+
+- Automatically scout new DeFi protocols with stablecoin opportunities
+- Monitor DeFiLlama, CoinGecko, and protocol announcements
+- Track new stablecoin yield farming pools and strategies
+- Identify emerging stablecoin protocols and their risk profiles
+
+**Yield Opportunity Monitoring:**
+
+- Real-time tracking of APY changes across protocols
+- Alert system for new high-yield stablecoin opportunities
+- Automated risk assessment of new protocols
+- Historical yield performance analysis
+
+**Market Intelligence:**
+
+- Monitor crypto Twitter, Discord, and forums for alpha
+- Track whale movements and large stablecoin transfers
+- Sentiment analysis for market timing
+- Early detection of protocol issues or exploits
+
+#### 🤖 **Automated Interactions:**
+
+- **Governance Participation**: Auto-vote on DAO proposals based on user preferences
+- **Airdrop Optimization**: Strategic protocol interactions for potential airdrops
+- **Portfolio Rebalancing**: Automated execution of agent recommendations
+- **Yield Harvesting**: Automatic compound and reinvestment strategies
+
+### 🚀 **Implementation Timeline:**
+
+#### **Week 1-2: Multi-Agent Foundation**
+
+- [ ] Integrate Agno framework
+- [ ] Implement Portfolio Management Agent
+- [ ] Build Risk Assessment Agent core logic
+- [ ] Create agent communication protocols
+
+#### **Week 3: Stablecoin Specialization**
+
+- [ ] Develop stablecoin risk assessment algorithms
+- [ ] Implement cross-chain portfolio analysis
+- [ ] Build yield optimization for stablecoin strategies
+- [ ] Create user preference learning system
+
+#### **Week 4: Browser Automation**
+
+- [ ] Integrate Browser Use framework
+- [ ] Implement protocol discovery automation
+- [ ] Build yield monitoring system
+- [ ] Create automated interaction workflows
+
+#### **Week 5: Integration & Testing**
+
+- [ ] Connect multi-agent system with browser automation
+- [ ] Comprehensive testing across all supported chains
+- [ ] User interface enhancements for new features
+- [ ] Performance optimization and security audits
+
+### 📊 **Success Metrics:**
+
+- **Portfolio Optimization**: 15%+ improvement in risk-adjusted returns
+- **Discovery Efficiency**: 50+ new protocols discovered and assessed weekly
+- **User Engagement**: 3x increase in transaction volume through intelligent recommendations
+- **Risk Reduction**: 25% reduction in user exposure to high-risk protocols
+
+### 🎬 **Demo Scenarios:**
+
+1. **"I want to optimize my $50k stablecoin portfolio for maximum yield with medium risk"**
+2. **"Find me the best new stablecoin farming opportunities this week"**
+3. **"Rebalance my portfolio to reduce risk while maintaining 8%+ APY"**
+4. **"Monitor the market and alert me of any stablecoin depeg risks"**
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md).
