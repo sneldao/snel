@@ -56,7 +56,7 @@ interface CommandResponseProps {
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
-  agentType?: "default" | "swap" | "dca" | "brian";
+  agentType?: "default" | "swap" | "dca" | "brian" | "bridge";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
@@ -394,6 +394,40 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     (typeof content === "object" && content?.transaction) ||
     (typeof content === "object" && content?.content?.transaction);
 
+  // Debug logging for bridge transactions
+  React.useEffect(() => {
+    if (
+      agentType === "bridge" ||
+      (typeof content === "object" && content?.type === "bridge_ready")
+    ) {
+      console.log("Bridge transaction debug:", {
+        agentType,
+        content,
+        transaction,
+        transactionData,
+        isBridgeTransaction,
+        shouldExecuteTransaction:
+          (isBrianTransaction ||
+            isBridgeTransaction ||
+            isSwapTransaction ||
+            (typeof content === "object" && content?.type === "swap_quotes")) &&
+          transactionData &&
+          !isExecuting &&
+          !txResponse &&
+          !isMultiStepTransaction,
+      });
+    }
+  }, [
+    agentType,
+    content,
+    transaction,
+    transactionData,
+    isBridgeTransaction,
+    isExecuting,
+    txResponse,
+    isMultiStepTransaction,
+  ]);
+
   const isError = status === "error";
   const isSuccess = status === "success";
   const needsConfirmation = awaitingConfirmation;
@@ -466,6 +500,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
       content?.type === "transaction" &&
       agentType === "brian") ||
     (agentType === "brian" && transactionData);
+  const isBridgeTransaction =
+    (typeof content === "object" &&
+      content?.type === "bridge_ready" &&
+      agentType === "bridge") ||
+    (agentType === "bridge" && transactionData) ||
+    (typeof content === "object" && content?.requires_transaction);
 
   // Handle confirmation actions
   const handleConfirm = () => {
@@ -676,6 +716,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
           handle: "@brian",
           avatarSrc: "/avatars/🤖.png",
         };
+      case "bridge":
+        return {
+          name: "Bridge Agent",
+          handle: "@bridge",
+          avatarSrc: "/avatars/🌉.png",
+        };
       default:
         return {
           name: "SNEL",
@@ -695,6 +741,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         return <Icon as={FaCalendarAlt} color="green.500" />;
       case "brian":
         return <Icon as={FaRobot} color="purple.500" />;
+      case "bridge":
+        return <Icon as={FaExchangeAlt} color="orange.500" />;
       default:
         return <Icon as={FaRobot} color="gray.500" />;
     }
@@ -846,6 +894,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     // Check if we have single-step transaction data that needs to be executed
     const shouldExecuteTransaction =
       (isBrianTransaction ||
+        isBridgeTransaction ||
         isSwapTransaction ||
         (typeof content === "object" && content?.type === "swap_quotes")) &&
       transactionData &&
@@ -865,6 +914,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     content,
     transactionData,
     isBrianTransaction,
+    isBridgeTransaction,
     isSwapTransaction,
     isMultiStepTransaction,
     isExecuting,
@@ -977,6 +1027,39 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                   transaction: transactionData,
                 }}
                 metadata={metadata}
+                onConfirm={handleConfirm}
+                onCancel={handleCancel}
+                onExecute={handleExecuteTransaction}
+              />
+            ) : isBridgeTransaction ? (
+              <BrianConfirmation
+                message={{
+                  type: "transaction",
+                  message:
+                    typeof content === "object" && content.message
+                      ? content.message
+                      : "Ready to execute bridge transaction",
+                  transaction: transactionData,
+                }}
+                metadata={{
+                  ...metadata,
+                  token_symbol:
+                    typeof content === "object" ? content.token : undefined,
+                  amount:
+                    typeof content === "object" ? content.amount : undefined,
+                  from_chain_name:
+                    typeof content === "object"
+                      ? content.from_chain
+                      : undefined,
+                  to_chain_name:
+                    typeof content === "object" ? content.to_chain : undefined,
+                  protocol:
+                    typeof content === "object" ? content.protocol : undefined,
+                  estimated_time:
+                    typeof content === "object"
+                      ? content.estimated_time
+                      : undefined,
+                }}
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
                 onExecute={handleExecuteTransaction}

@@ -47,6 +47,15 @@ export class ApiService {
       return this.processSwapCommand(command, walletAddress, chainId);
     }
 
+    // Check if this is a bridge command
+    const bridgeMatch = command.match(
+      /bridge\s+[\d\.]+\s+\S+\s+(?:from\s+\S+\s+)?to\s+\S+/i
+    );
+    if (bridgeMatch) {
+      // For now, let it go through the chat endpoint which will recognize it
+      // In the future, we could add a dedicated processBridgeCommand method
+    }
+
     // For other commands, use the chat endpoint
     const response = await fetch(`${this.apiUrl}/chat/process-command`, {
       method: "POST",

@@ -71,7 +71,7 @@ export default function Home() {
     status?: "pending" | "processing" | "success" | "error";
     metadata?: any;
     awaitingConfirmation?: boolean;
-    agentType?: "default" | "swap" | "dca" | "brian";
+    agentType?: "default" | "swap" | "dca" | "brian" | "bridge";
     requires_selection?: boolean;
     all_quotes?: any[];
     type?: string;
@@ -213,6 +213,13 @@ export default function Home() {
         userProfile?.name
       );
 
+      // Debug logging for bridge commands
+      if (command.toLowerCase().includes("bridge")) {
+        console.log("Bridge command API response:", response);
+        console.log("Response agentType:", response.agentType);
+        console.log("Response transaction:", response.transaction);
+      }
+
       // Add response
       setResponses((prev) => [
         ...prev,
@@ -306,6 +313,9 @@ export default function Home() {
                     isCommand={response.isCommand}
                     status={response.status}
                     metadata={response.metadata}
+                    agentType={response.agentType}
+                    transaction={response.transaction}
+                    awaitingConfirmation={response.awaitingConfirmation}
                   />
                 ))}
                 <div ref={responsesEndRef} />

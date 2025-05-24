@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any, Union
 from decimal import Decimal
 from app.services.chat_history import chat_history_service
 from app.api.v1.swap import process_swap_command, SwapCommand
+from app.api.v1.bridge import process_bridge_command, BridgeCommand
 from app.config.agent_config import AgentConfig, AgentMode
 import logging
 
@@ -235,6 +236,46 @@ async def process_command(command: ChatCommand):
                 response.model_dump()
             )
             return response
+
+        # Check for bridge command
+        bridge_match = re.match(r"bridge\s+([\d\.]+)\s+(\S+)\s+(from\s+\S+\s+)?to\s+(\S+)", command.command, re.IGNORECASE)
+        if bridge_match:
+            # If no wallet address, return error
+            if not command.wallet_address:
+                return ChatResponse(
+                    content="Please connect your wallet to perform bridges.",
+                    agent_type="bridge",
+                    status="error"
+                )
+
+            # If no chain ID, return error
+            if not command.chain_id:
+                return ChatResponse(
+                    content="Please connect to a supported network to perform bridges.",
+                    agent_type="bridge",
+                    status="error"
+                )
+
+            # Forward to bridge endpoint
+            try:
+                bridge_response = await process_bridge_command(BridgeCommand(
+                    command=command.command,
+                    wallet_address=command.wallet_address,
+                    chain_id=command.chain_id
+                ))
+                return bridge_response
+            except Exception as e:
+                logger.exception("Error processing bridge command")
+                return ChatResponse(
+                    content={
+                        "message": "I encountered an issue while preparing your bridge. Please try again.",
+                        "suggestion": "This might be a temporary issue. Please try again in a few moments.",
+                        "type": "error"
+                    },
+                    agent_type="bridge",
+                    status="error",
+                    metadata={"technical_details": str(e)}
+                )
 
         # Check for swap command
         swap_match = re.match(r"swap\s+([\d\.]+)\s+(\S+)\s+(to|for)\s+(\S+)", command.command, re.IGNORECASE)
