@@ -97,22 +97,6 @@ snel/
 "move 100 USDC from Polygon to Arbitrum"
 ```
 
-### Portfolio Management
-
-```
-"show my ETH balance"
-"check my portfolio on Base"
-"what's my USDC balance across all chains"
-```
-
-### Market Information
-
-```
-"what's the price of ETH?"
-"show me USDC/ETH rate"
-"get current gas prices on Ethereum"
-```
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -228,12 +212,6 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 This project is licensed under the **MIT License** - see [LICENSE](LICENSE) for details.
 
-## 🆘 Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- **Documentation**: [Wiki](https://github.com/your-repo/wiki)
-
 ---
 
-**Built with ❤️ for the DeFi community**
+**Built with ❤️ by papa**

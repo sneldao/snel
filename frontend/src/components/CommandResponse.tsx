@@ -394,6 +394,34 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     (typeof content === "object" && content?.transaction) ||
     (typeof content === "object" && content?.content?.transaction);
 
+  // Check for various response types (moved before useEffect that uses them)
+  const isConfirmation =
+    typeof content === "object" && content?.type === "confirmation";
+  const isSwapConfirmation =
+    typeof content === "object" && content?.type === "swap_confirmation";
+  const isDCAConfirmation =
+    typeof content === "object" && content?.type === "dca_confirmation";
+  const isSwapSuccess =
+    typeof content === "object" && content?.type === "swap_success";
+  const isSwapTransaction =
+    typeof content === "object" && content?.type === "swap_transaction";
+  const isDCASuccess =
+    typeof content === "object" &&
+    (content?.type === "dca_success" || content?.type === "dca_order_created");
+  const isMultiStepTransaction =
+    typeof content === "object" && content?.type === "multi_step_transaction";
+  const isBrianTransaction =
+    (typeof content === "object" &&
+      content?.type === "transaction" &&
+      agentType === "brian") ||
+    (agentType === "brian" && transactionData);
+  const isBridgeTransaction =
+    (typeof content === "object" &&
+      content?.type === "bridge_ready" &&
+      agentType === "bridge") ||
+    (agentType === "bridge" && transactionData) ||
+    (typeof content === "object" && content?.requires_transaction);
+
   // Debug logging for bridge transactions
   React.useEffect(() => {
     if (
@@ -423,6 +451,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     transaction,
     transactionData,
     isBridgeTransaction,
+    isBrianTransaction,
+    isSwapTransaction,
     isExecuting,
     txResponse,
     isMultiStepTransaction,
@@ -478,34 +508,6 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
       setCurrentStep(0);
     }
   }, [isLoading]);
-
-  // Check for various response types
-  const isConfirmation =
-    typeof content === "object" && content?.type === "confirmation";
-  const isSwapConfirmation =
-    typeof content === "object" && content?.type === "swap_confirmation";
-  const isDCAConfirmation =
-    typeof content === "object" && content?.type === "dca_confirmation";
-  const isSwapSuccess =
-    typeof content === "object" && content?.type === "swap_success";
-  const isSwapTransaction =
-    typeof content === "object" && content?.type === "swap_transaction";
-  const isDCASuccess =
-    typeof content === "object" &&
-    (content?.type === "dca_success" || content?.type === "dca_order_created");
-  const isMultiStepTransaction =
-    typeof content === "object" && content?.type === "multi_step_transaction";
-  const isBrianTransaction =
-    (typeof content === "object" &&
-      content?.type === "transaction" &&
-      agentType === "brian") ||
-    (agentType === "brian" && transactionData);
-  const isBridgeTransaction =
-    (typeof content === "object" &&
-      content?.type === "bridge_ready" &&
-      agentType === "bridge") ||
-    (agentType === "bridge" && transactionData) ||
-    (typeof content === "object" && content?.requires_transaction);
 
   // Handle confirmation actions
   const handleConfirm = () => {
