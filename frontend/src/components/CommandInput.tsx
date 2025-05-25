@@ -55,6 +55,8 @@ const EXAMPLE_COMMANDS = [
   "send 5 ETH to @papajams",
   "what is the price of ETH?",
   "how much UNI can I get for 1 ETH?",
+  "analyze my portfolio",
+  "what's my portfolio allocation?",
 ];
 
 export const CommandInput = ({
@@ -85,8 +87,24 @@ export const CommandInput = ({
       return;
     }
 
+    const isPortfolioQuery = /portfolio|allocation|holdings|assets/i.test(
+      command.toLowerCase()
+    );
+
+    // Check if it's a portfolio analysis command
+    if (isPortfolioQuery) {
+      if (!isConnected) {
+        toast({
+          title: "Wallet not connected",
+          description: "Please connect your wallet to analyze your portfolio",
+          status: "warning",
+          duration: 5000,
+        });
+        return;
+      }
+    }
     // Check if it's a swap command and validate chain
-    if (command.toLowerCase().includes("swap")) {
+    else if (command.toLowerCase().includes("swap")) {
       if (!isConnected) {
         toast({
           title: "Wallet not connected",

@@ -4,7 +4,7 @@ Bridge command processing endpoint.
 import re
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, Union
 from decimal import Decimal
 
@@ -16,19 +16,19 @@ logger = logging.getLogger(__name__)
 
 class BridgeCommand(BaseModel):
     """Bridge command request model."""
-    command: str
-    wallet_address: str
-    chain_id: int
+    command: str = Field(description="Bridge command string")
+    wallet_address: str = Field(description="User wallet address")
+    chain_id: int = Field(description="Current chain ID")
 
 class BridgeResponse(BaseModel):
     """Bridge command response model."""
     content: Union[str, Dict[str, Any]]
     agentType: str = "bridge"
-    metadata: Optional[Dict[str, Any]] = None
-    awaiting_confirmation: Optional[bool] = False
+    metadata: Optional[Dict[str, Any]] = Field(default=None)
+    awaiting_confirmation: Optional[bool] = Field(default=False)
     status: str = "success"
-    error: Optional[str] = None
-    transaction: Optional[Dict[str, Any]] = None
+    error: Optional[str] = Field(default=None)
+    transaction: Optional[Dict[str, Any]] = Field(default=None)
 
 def parse_bridge_command(command: str) -> Dict[str, Any]:
     """Parse a bridge command to extract parameters."""

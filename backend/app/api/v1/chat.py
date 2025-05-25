@@ -5,7 +5,7 @@ import os
 import re
 from openai import OpenAI
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, Union
 from decimal import Decimal
 from app.services.chat_history import chat_history_service
@@ -87,21 +87,21 @@ Remember: I'm built for efficient DeFi operations. Keep interactions focused and
 
 class ChatCommand(BaseModel):
     """Chat command request model."""
-    command: str
-    wallet_address: Optional[str] = None
-    chain_id: Optional[int] = None
-    user_name: Optional[str] = None
-    openai_api_key: Optional[str] = None  # Accept user-supplied key
+    command: str = Field(description="Chat command string")
+    wallet_address: Optional[str] = Field(default=None, description="User wallet address")
+    chain_id: Optional[int] = Field(default=None, description="Current chain ID")
+    user_name: Optional[str] = Field(default=None, description="User name")
+    openai_api_key: Optional[str] = Field(default=None, description="User-supplied OpenAI API key")
 
 class ChatResponse(BaseModel):
     """Chat command response model."""
-    content: Union[str, Dict[str, Any]]
-    agent_type: Optional[str] = "default"
-    metadata: Optional[Dict[str, Any]] = None
-    awaiting_confirmation: Optional[bool] = False
-    status: Optional[str] = "success"
-    error: Optional[str] = None
-    transaction: Optional[Dict[str, Any]] = None
+    content: Union[str, dict[str, Any]]
+    agent_type: Optional[str] = Field(default="default")
+    metadata: Optional[dict[str, Any]] = Field(default=None)
+    awaiting_confirmation: Optional[bool] = Field(default=False)
+    status: Optional[str] = Field(default="success")
+    error: Optional[str] = Field(default=None)
+    transaction: Optional[dict[str, Any]] = Field(default=None)
 
 @router.post("/process-command")
 async def process_command(command: ChatCommand):

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 import logging
 from contextlib import asynccontextmanager
 
-from app.api.v1 import bridges, chat, swap, bridge
+from app.api.v1 import bridges, chat, swap, bridge, agno
 from app.protocols.registry import protocol_registry
 
 # Configure logging
@@ -54,6 +54,7 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(swap.router, prefix="/api/v1")
 app.include_router(bridge.router, prefix="/api/v1")
 app.include_router(bridges.router, prefix="/api/v1")
+app.include_router(agno.router, prefix="/api/v1/agno")
 
 @app.get("/")
 async def root():

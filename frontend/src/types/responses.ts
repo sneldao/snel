@@ -41,7 +41,7 @@ export type Response = {
   awaitingConfirmation?: boolean;
   confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
-  agentType?: "default" | "swap" | "dca" | "brian" | "bridge";
+  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "agno";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
@@ -56,4 +56,6 @@ export type Response = {
     aggregator: string;
   };
   transaction?: TransactionData;
+  summary?: string;
+  fullAnalysis?: string;
 };

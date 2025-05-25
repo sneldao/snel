@@ -38,7 +38,12 @@ import { DCAConfirmation } from "./DCAConfirmation";
 import { BrianConfirmation } from "./BrianConfirmation";
 import { TransactionProgress } from "./TransactionProgress";
 import AggregatorSelection from "./AggregatorSelection";
-import { FaExchangeAlt, FaCalendarAlt, FaRobot } from "react-icons/fa";
+import {
+  FaExchangeAlt,
+  FaCalendarAlt,
+  FaRobot,
+  FaChartPie,
+} from "react-icons/fa";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { ApiService } from "../services/apiService";
 import {
@@ -49,6 +54,8 @@ import {
 } from "wagmi";
 import { TransactionService } from "../services/transactionService";
 import { executeTransaction } from "../lib/api";
+import { PortfolioSummary } from "./PortfolioSummary";
+import { AgnoResponse } from "../services/agnoService";
 
 interface CommandResponseProps {
   content: string | any; // Updated to accept structured content
@@ -56,7 +63,7 @@ interface CommandResponseProps {
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
-  agentType?: "default" | "swap" | "dca" | "brian" | "bridge";
+  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "agno";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
@@ -724,6 +731,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
           handle: "@bridge",
           avatarSrc: "/avatars/🌉.png",
         };
+      case "agno":
+        return {
+          name: "Portfolio Agent",
+          handle: "@portfolio",
+          avatarSrc: "/avatars/📊.png",
+        };
       default:
         return {
           name: "SNEL",
@@ -745,6 +758,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         return <Icon as={FaRobot} color="purple.500" />;
       case "bridge":
         return <Icon as={FaExchangeAlt} color="orange.500" />;
+      case "agno":
+        return <Icon as={FaChartPie} color="teal.500" />;
       default:
         return <Icon as={FaRobot} color="gray.500" />;
     }
@@ -1095,6 +1110,21 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 onConfirm={handleConfirm}
                 onCancel={handleCancel}
                 onExecute={handleExecuteTransaction}
+              />
+            ) : agentType === "agno" ? (
+              <PortfolioSummary
+                response={
+                  typeof content === "object"
+                    ? (content as any)
+                    : {
+                        content: typeof content === "string" ? content : "",
+                        summary: undefined,
+                        fullAnalysis: undefined,
+                        agentType: "agno",
+                        status: "success",
+                        intermediateSteps: [],
+                      }
+                }
               />
             ) : isDCASuccess ? (
               <Box mt={2} mb={2}>

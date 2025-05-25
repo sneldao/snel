@@ -39,6 +39,36 @@ export class ApiService {
     chainId?: number,
     userName?: string
   ) {
+    // Check if this is a portfolio analysis command
+    if (/portfolio|allocation|holdings|assets/i.test(command.toLowerCase())) {
+      const response = await fetch(`${this.apiUrl}/agno/portfolio-analysis`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          prompt: command,
+          wallet_address: walletAddress,
+          chain_id: chainId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.detail || `Error ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      return {
+        content: data.result,
+        summary: data.summary,
+        fullAnalysis: data.full_analysis,
+        agentType: "agno",
+        status: "success",
+      };
+    }
+
     // Check if this is a swap command - support multiple formats
     const swapMatch = command.match(
       /swap\s+(?:\$?[\d\.]+\s+(?:of|worth\s+of)\s+\S+\s+(?:to|for)\s+\S+|[\d\.]+\s+\S+\s+(?:to|for)\s+\S+)/i
@@ -210,17 +240,22 @@ export class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to complete transaction step: ${response.statusText}`);
+      throw new Error(
+        `Failed to complete transaction step: ${response.statusText}`
+      );
     }
 
     return response.json();
   }
 
   async getTransactionFlowStatus(walletAddress: string) {
-    const response = await fetch(`${this.apiUrl}/swap/flow-status/${walletAddress}`, {
-      method: "GET",
-      headers: this.getHeaders(),
-    });
+    const response = await fetch(
+      `${this.apiUrl}/swap/flow-status/${walletAddress}`,
+      {
+        method: "GET",
+        headers: this.getHeaders(),
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to get flow status: ${response.statusText}`);

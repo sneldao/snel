@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 class BridgeRequest(BaseModel):
     """Request to bridge tokens across chains."""
-    from_token: str = Field(..., description="Source token symbol or address")
-    to_token: str = Field(..., description="Destination token symbol or address")
-    amount: Decimal = Field(..., description="Amount to bridge")
-    from_chain_id: int = Field(..., description="Source chain ID")
-    to_chain_id: int = Field(..., description="Destination chain ID")
-    wallet_address: str = Field(..., description="Wallet address")
+    from_token: str = Field(description="Source token symbol or address")
+    to_token: str = Field(description="Destination token symbol or address")
+    amount: Decimal = Field(description="Amount to bridge")
+    from_chain_id: int = Field(description="Source chain ID")
+    to_chain_id: int = Field(description="Destination chain ID")
+    wallet_address: str = Field(description="Wallet address")
 
 class BridgeQuoteResponse(BaseModel):
     """Response containing bridge quote information."""
@@ -33,20 +33,20 @@ class BridgeExecuteResponse(BaseModel):
     from_chain_id: int
     to_chain_id: int
     status: str
-    estimated_time: Optional[int] = None
+    estimated_time: Optional[int] = Field(default=None)
 
 class BalanceRequest(BaseModel):
     """Request to check token balance."""
-    wallet_address: str = Field(..., description="Wallet address")
-    chain_id: int = Field(..., description="Chain ID")
-    token_address: Optional[str] = Field(None, description="Token address (optional)")
+    wallet_address: str = Field(description="Wallet address")
+    chain_id: int = Field(description="Chain ID")
+    token_address: Optional[str] = Field(default=None, description="Token address (optional)")
 
 class TokenBalance(BaseModel):
     """Token balance information."""
     token_symbol: str
     token_address: str
     balance: Decimal
-    usd_value: Optional[Decimal] = None
+    usd_value: Optional[Decimal] = Field(default=None)
 
 class BalanceResponse(BaseModel):
     """Response containing token balances."""
@@ -59,6 +59,6 @@ class TransactionStatus(BaseModel):
     transaction_hash: str
     status: str
     chain_id: int
-    block_number: Optional[int] = None
-    confirmations: Optional[int] = None
-    error: Optional[str] = None
+    block_number: Optional[int] = Field(default=None)
+    confirmations: Optional[int] = Field(default=None)
+    error: Optional[str] = Field(default=None)

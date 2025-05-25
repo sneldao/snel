@@ -3,7 +3,7 @@ Swap aggregator endpoints using the protocol registry architecture.
 """
 import re
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
 from decimal import Decimal
 from app.services.swap_service import swap_service
@@ -21,24 +21,24 @@ last_swaps: Dict[str, Dict[str, Any]] = {}
 
 # Request/Response models
 class SwapCommand(BaseModel):
-    command: str
-    wallet_address: str
-    chain_id: int
+    command: str = Field(description="Swap command string")
+    wallet_address: str = Field(description="User wallet address")
+    chain_id: int = Field(description="Current chain ID")
 
 class SwapQuotesRequest(BaseModel):
-    wallet_address: str
-    chain_id: int
+    wallet_address: str = Field(description="User wallet address")
+    chain_id: int = Field(description="Current chain ID")
 
 class SwapQuoteResponse(BaseModel):
     protocol: str
     rate: float
-    gas_cost_usd: Optional[float] = None
-    from_amount_usd: Optional[float] = None
-    to_amount_usd: Optional[float] = None
-    gas_limit: Optional[str] = None
-    gas_price: Optional[str] = None
-    steps: List[Dict[str, Any]]
-    metadata: Dict[str, Any] = {}
+    gas_cost_usd: Optional[float] = Field(default=None)
+    from_amount_usd: Optional[float] = Field(default=None)
+    to_amount_usd: Optional[float] = Field(default=None)
+    gas_limit: Optional[str] = Field(default=None)
+    gas_price: Optional[str] = Field(default=None)
+    steps: list[dict[str, Any]]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 # This function is no longer needed - token_service handles formatting
 

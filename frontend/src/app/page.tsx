@@ -71,13 +71,15 @@ export default function Home() {
     status?: "pending" | "processing" | "success" | "error";
     metadata?: any;
     awaitingConfirmation?: boolean;
-    agentType?: "default" | "swap" | "dca" | "brian" | "bridge";
+    agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "agno";
     requires_selection?: boolean;
     all_quotes?: any[];
     type?: string;
     confirmation_type?: string;
     pendingCommand?: string;
     transaction?: any;
+    summary?: string;
+    fullAnalysis?: string;
   }
 
   const isResponseContent = (content: any): content is ResponseContent => {
@@ -308,7 +310,11 @@ export default function Home() {
                 {responses.map((response, index) => (
                   <CommandResponse
                     key={index}
-                    content={response.content}
+                    content={
+                      response.agentType === "agno"
+                        ? response
+                        : response.content
+                    }
                     timestamp={response.timestamp}
                     isCommand={response.isCommand}
                     status={response.status}

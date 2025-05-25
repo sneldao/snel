@@ -3,7 +3,7 @@ Token models and registry for cross-chain token handling.
 """
 from typing import Dict, Any, Optional, List
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TokenType(str, Enum):
@@ -20,14 +20,14 @@ class TokenInfo(BaseModel):
     symbol: str
     decimals: int
     type: TokenType
-    logo_uri: Optional[str] = None
+    logo_uri: Optional[str] = Field(default=None)
     verified: bool = False
 
     # Chain-specific addresses
-    addresses: Dict[int, str] = {}
+    addresses: dict[int, str] = Field(default_factory=dict)
 
     # Optional metadata
-    metadata: Dict[str, Any] = {}
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     def get_address(self, chain_id: int) -> Optional[str]:
         """Get token address for specific chain."""
