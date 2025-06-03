@@ -18,7 +18,16 @@ import {
   HStack,
   Button,
   Icon,
+  SimpleGrid,
 } from "@chakra-ui/react";
+import {
+  FaExchangeAlt,
+  FaLink,
+  FaWallet,
+  FaCoins,
+  FaChartPie,
+  FaSearch,
+} from "react-icons/fa";
 import {
   useAccount,
   usePublicClient,
@@ -409,23 +418,130 @@ export default function MainApp() {
 
           <Box flex={1}>
             {!isConnected ? (
-              <Alert
-                status="warning"
-                variant="subtle"
-                flexDirection="column"
-                alignItems="center"
-                justifyContent="center"
-                textAlign="center"
-                height="200px"
-              >
-                <AlertIcon boxSize="40px" mr={0} />
-                <Box mt={4}>
-                  <AlertTitle mb={1}>Connect Your Wallet</AlertTitle>
-                  <AlertDescription maxWidth="sm">
-                    Please connect your wallet to use Snel.
-                  </AlertDescription>
+              <VStack spacing={6} align="center" justify="center" py={8}>
+                {/* Logo */}
+                <Box position="relative" width="60px" height="60px">
+                  <Image
+                    src="/icon.png"
+                    alt="SNEL Logo"
+                    width={60}
+                    height={60}
+                    priority
+                    style={{ objectFit: "contain" }}
+                  />
                 </Box>
-              </Alert>
+
+                {/* Platform Capabilities */}
+                <VStack spacing={4} align="center">
+                  <SimpleGrid columns={3} spacing={4} maxW="400px">
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="gray.50"
+                    >
+                      <Icon as={FaExchangeAlt} color="blue.500" boxSize={4} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        textAlign="center"
+                      >
+                        Token Transfers
+                      </Text>
+                    </VStack>
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="gray.50"
+                    >
+                      <Icon as={FaLink} color="blue.500" boxSize={4} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        textAlign="center"
+                      >
+                        Cross-Chain Bridging
+                      </Text>
+                    </VStack>
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="gray.50"
+                    >
+                      <Icon as={FaWallet} color="blue.500" boxSize={4} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        textAlign="center"
+                      >
+                        Balance Checking
+                      </Text>
+                    </VStack>
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="gray.50"
+                    >
+                      <Icon as={FaCoins} color="blue.500" boxSize={4} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        textAlign="center"
+                      >
+                        Token Swaps
+                      </Text>
+                    </VStack>
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="gray.50"
+                    >
+                      <Icon as={FaChartPie} color="blue.500" boxSize={4} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        textAlign="center"
+                      >
+                        Portfolio Analysis
+                      </Text>
+                    </VStack>
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="gray.50"
+                    >
+                      <Icon as={FaSearch} color="blue.500" boxSize={4} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        textAlign="center"
+                      >
+                        Protocol Research
+                      </Text>
+                    </VStack>
+                  </SimpleGrid>
+
+                  {/* Hint about help modal */}
+                  <Text fontSize="xs" color="gray.500" textAlign="center">
+                    Click ? above for specific commands <br />
+                    Click ⚙️ above to configure API keys
+                  </Text>
+                </VStack>
+
+                {/* Connect Wallet Button */}
+                <WalletButton />
+              </VStack>
             ) : (
               <VStack spacing={4} align="stretch">
                 {responses.map((response, index) => (
