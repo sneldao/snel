@@ -39,11 +39,12 @@ class AgentConfig:
         "cross_chain_bridging": AgentCapability(
             name="Cross-Chain Bridging",
             description="Bridge assets between different blockchain networks",
-            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56],
+            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352],
             required_protocols=["brian"],
             examples=[
                 "bridge 0.1 ETH from Ethereum to Base",
-                "move 100 USDC from Polygon to Arbitrum"
+                "move 100 USDC from Polygon to Arbitrum",
+                "bridge ETH from Base to Scroll"
             ]
         ),
         "portfolio_management": AgentCapability(

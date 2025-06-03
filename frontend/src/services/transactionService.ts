@@ -111,10 +111,8 @@ export class TransactionService {
         // Add a timeout to prevent hanging on user rejection
         new Promise((_, reject) => {
           setTimeout(() => {
-            if (abortController.signal.aborted) {
-              reject(new Error('Transaction cancelled by user'));
-            }
-          }, 30000); // 30 second timeout
+            reject(new Error('Transaction timeout - please try again'));
+          }, 60000); // 60 second timeout (increased for user consideration time)
         })
       ]);
 
@@ -157,7 +155,19 @@ export class TransactionService {
       message.includes("rejected the request") ||
       message.includes("transaction signature") ||
       message.includes("user cancelled") ||
-      message.includes("cancelled by user")
+      message.includes("cancelled by user") ||
+      message.includes("user canceled") ||
+      message.includes("canceled by user") ||
+      message.includes("transaction cancelled") ||
+      message.includes("transaction canceled") ||
+      message.includes("request rejected") ||
+      message.includes("denied transaction") ||
+      message.includes("signature denied") ||
+      message.includes("user abort") ||
+      message.includes("spam filter") ||
+      message.includes("request blocked") ||
+      message.includes("too many requests") ||
+      message.includes("rate limit")
     );
   }
 

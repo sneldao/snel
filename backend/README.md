@@ -18,13 +18,18 @@ High-performance FastAPI backend for the SNEL cross-chain DeFi assistant with AI
 app/
 ├── api/                 # API endpoints
 │   └── v1/
-│       ├── chat.py         # AI chat interface
+│       ├── chat.py         # Unified command processing
 │       ├── swap.py         # Swap operations
-│       └── health.py       # Health checks
+│       ├── bridges.py      # Bridge operations
+│       ├── agno.py         # Portfolio analysis
+│       └── websocket.py    # WebSocket connections
 ├── services/            # Business logic
-│   ├── swap_service.py     # Swap orchestration
-│   ├── token_service.py    # Token information
-│   ├── chat_history.py     # Chat persistence
+│   ├── command_processor.py    # Unified command processing
+│   ├── unified_command_parser.py # Command parsing
+│   ├── swap_service.py         # Swap orchestration
+│   ├── token_service.py        # Token information
+│   ├── chat_history.py         # Chat persistence
+│   ├── agno_agent.py          # Portfolio analysis agent
 │   └── transaction_flow_service.py # Multi-step transactions
 ├── protocols/           # DEX integrations
 │   ├── zerox_adapter.py    # 0x Protocol integration
@@ -116,15 +121,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ### Core Endpoints
 
 ```python
-# Chat Interface
-POST /api/v1/chat/process-command
+# Unified Command Processing (Primary Interface)
+POST /api/v1/chat/process-command  # Handles all commands: transfer, bridge, swap, portfolio
 GET  /api/v1/chat/agent-info
 
-# Swap Operations
+# Specialized Operations (Legacy/Direct Access)
 POST /api/v1/swap/process-command
 POST /api/v1/swap/quotes
 POST /api/v1/swap/complete-step
 GET  /api/v1/swap/flow-status/{wallet_address}
+
+# Portfolio Analysis
+POST /api/v1/agno/analyze-portfolio
 
 # Health & Monitoring
 GET  /api/v1/health

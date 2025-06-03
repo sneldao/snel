@@ -1,6 +1,14 @@
+import {
+  PortfolioService,
+  PortfolioAnalysis,
+  AnalysisProgress,
+} from "./portfolioService";
+import { websocketService } from "./websocketService";
+
 export class ApiService {
   private apiUrl: string;
   private baseUrl: string;
+  private _portfolioService: PortfolioService | null = null;
 
   constructor() {
     // Set the base URL based on environment
@@ -9,6 +17,13 @@ export class ApiService {
 
     // API prefix is now /api/v1 to match backend
     this.apiUrl = `${this.baseUrl}/api/v1`;
+  }
+
+  get portfolioService(): PortfolioService {
+    if (!this._portfolioService) {
+      this._portfolioService = new PortfolioService(this);
+    }
+    return this._portfolioService;
   }
 
   private getApiKeys() {
@@ -37,45 +52,67 @@ export class ApiService {
     command: string,
     walletAddress?: string,
     chainId?: number,
-    userName?: string
+    userName?: string,
+    onProgress?: (progress: AnalysisProgress) => void
   ) {
     // Check if this is a portfolio analysis command
-    if (/portfolio|allocation|holdings|assets/i.test(command.toLowerCase())) {
-      const response = await fetch(`${this.apiUrl}/agno/portfolio-analysis`, {
-        method: "POST",
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          prompt: command,
-          wallet_address: walletAddress,
-          chain_id: chainId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.detail || `Error ${response.status}: ${response.statusText}`
-        );
+    if (
+      /portfolio|allocation|holdings|assets|analyze/i.test(
+        command.toLowerCase()
+      )
+    ) {
+      if (!walletAddress) {
+        return {
+          content: {
+            error: "Wallet address is required for portfolio analysis",
+            type: "error",
+          },
+          agentType: "agno",
+          status: "error",
+        };
       }
+      
+      try {
+        // Use WebSocket for real-time updates
+        const analysis = await this.portfolioService.analyzePortfolio(
+          command,
+          walletAddress,
+          chainId,
+          onProgress
+        );
 
-      const data = await response.json();
-
-      return {
-        content: data.result,
-        summary: data.summary,
-        fullAnalysis: data.full_analysis,
-        agentType: "agno",
-        status: "success",
-      };
+        return {
+          content: {
+            analysis,
+            type: "portfolio",
+          },
+          agentType: "agno",
+          status: "success",
+        };
+      } catch (error) {
+        console.error("Portfolio analysis failed:", error);
+        
+        // Make sure WebSocket is disconnected
+        websocketService.disconnect();
+        
+        // Return service unavailability information
+        return {
+          content: {
+            error: error instanceof Error ? error.message : "Portfolio analysis failed",
+            type: "error",
+            serviceStatus: {
+              portfolio: false,
+              exa: false
+            }
+          },
+          agentType: "agno",
+          status: "error",
+        };
+      }
     }
 
-    // Check if this is a swap command - support multiple formats
-    const swapMatch = command.match(
-      /swap\s+(?:\$?[\d\.]+\s+(?:of|worth\s+of)\s+\S+\s+(?:to|for)\s+\S+|[\d\.]+\s+\S+\s+(?:to|for)\s+\S+)/i
-    );
-    if (swapMatch) {
-      return this.processSwapCommand(command, walletAddress, chainId);
-    }
+    // Let swap commands go through the chat endpoint for consistent handling
+    // The chat endpoint will detect and route swap commands properly
 
     // Check if this is a bridge command
     const bridgeMatch = command.match(
@@ -113,40 +150,8 @@ export class ApiService {
     walletAddress?: string,
     chainId?: number
   ) {
-    if (!walletAddress) {
-      return {
-        content: "Please connect your wallet to perform swaps.",
-        agent_type: "default",
-        status: "error",
-      };
-    }
-
-    if (!chainId) {
-      return {
-        content: "Please connect to a supported network to perform swaps.",
-        agent_type: "default",
-        status: "error",
-      };
-    }
-
-    const response = await fetch(`${this.apiUrl}/swap/process-command`, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        command,
-        wallet_address: walletAddress,
-        chain_id: chainId,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        errorData.detail || `Error ${response.status}: ${response.statusText}`
-      );
-    }
-
-    return response.json();
+    // Use the unified chat endpoint for consistency
+    return this.processCommand(command, walletAddress, chainId);
   }
 
   async getSwapQuotes(walletAddress?: string, chainId?: number) {
@@ -279,5 +284,76 @@ export class ApiService {
     }
 
     return response.json();
+  }
+
+  // Add method to execute portfolio actions
+  async executePortfolioAction(action: any) {
+    try {
+      return await this.portfolioService.executeAction(action);
+    } catch (error) {
+      console.error("Failed to execute portfolio action:", error);
+      throw error;
+    }
+  }
+
+  // Add these methods to support the PortfolioService
+  async post(endpoint: string, data: any) {
+    console.log("Sending request to:", `${this.apiUrl}${endpoint}`);
+    console.log("Request payload:", JSON.stringify(data, null, 2));
+
+    try {
+      const response = await fetch(`${this.apiUrl}${endpoint}`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("API Error Response:", errorText);
+        
+        // Try to parse error as JSON
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.detail) {
+            throw new Error(errorJson.detail);
+          }
+        } catch (parseError) {
+          // If parsing fails, use the original error
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      console.log("Response status:", response.status);
+      console.log("Response data:", responseData);
+
+      return responseData;
+    } catch (error) {
+      console.error("API request failed:", {
+        endpoint,
+        error,
+        requestData: data,
+      });
+      throw error;
+    }
+  }
+  
+  /**
+   * Check if a service is available by testing the connection
+   */
+  async checkServiceAvailability(service: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.apiUrl}/health?service=${service}`, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error(`Service ${service} availability check failed:`, error);
+      return false;
+    }
   }
 }

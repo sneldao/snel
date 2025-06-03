@@ -1,0 +1,42 @@
+# Core dependencies
+fastapi==0.109.0
+uvicorn==0.27.0
+python-dotenv==1.0.0
+pydantic==2.5.3
+sse-starlette==1.6.5
+
+# Agent Framework
+agno==1.0.0
+browser-use==1.0.0
+duckduckgo-search==4.4.0
+yfinance==0.2.36
+
+# AI/ML
+openai==1.12.0
+anthropic==0.19.0
+
+# Web3
+web3==6.15.1
+eth-account==0.10.0
+
+# Database
+redis==5.0.1
+aioredis==2.0.1
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.4
+
+# Utilities
+python-dateutil==2.8.2
+aiohttp==3.9.3
+requests==2.31.0
+PyYAML==6.0.2
+tenacity==8.2.3
+cachetools==5.3.2
+
+# Development
+pytest==8.0.0
+black==24.1.1
+isort==5.13.2
+flake8==7.0.0 

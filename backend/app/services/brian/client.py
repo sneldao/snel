@@ -6,6 +6,8 @@ import httpx
 from fastapi import HTTPException
 import os
 import json
+from app.utils.chain_utils import ChainRegistry
+from app.utils.brian_api_utils import BrianAPIUtils
 
 class BrianClient:
     def __init__(self):
@@ -26,9 +28,43 @@ class BrianClient:
             from_chain_name = self._get_chain_name(from_chain_id)
             to_chain_name = self._get_chain_name(to_chain_id)
 
-            # Format the prompt for bridging - match Brian API examples exactly
-            # Example from docs: "I want to bridge 10 USDC from Ethereum to Arbitrum"
-            prompt = f"I want to bridge {amount} {token} from {from_chain_name} to {to_chain_name}"
+            # Format the prompt for bridging - use exact format from Brian API docs
+            # Documentation example: "I want to bridge 10 USDC from Ethereum to Arbitrum"
+
+            # Try different prompt formats based on Brian API examples
+            # First, let's try with more standard amounts and see if very small amounts are the issue
+            if float(amount) < 0.001:
+                # For very small amounts, suggest a larger amount
+                return {
+                    "error": "user_friendly",
+                    "message": f"Amount {amount} {token.upper()} is too small for bridging. Please try an amount of at least 0.001 {token.upper()}.",
+                    "technical_details": f"Amount {amount} below minimum bridge threshold"
+                }
+
+            # Use exact chain names that Brian expects
+            # Based on documentation, try different chain name formats
+            chain_name_mapping = {
+                "Base": "Base",
+                "Arbitrum": "Arbitrum",
+                "Scroll": "Scroll",
+                "Optimism": "Optimism",
+                "Ethereum": "Ethereum",
+                "Polygon": "Polygon"
+            }
+
+            # Try alternative names if the standard ones don't work
+            from_chain_alt = chain_name_mapping.get(from_chain_name, from_chain_name)
+            to_chain_alt = chain_name_mapping.get(to_chain_name, to_chain_name)
+
+            # Try multiple prompt formats - Brian API can be sensitive to exact wording
+            prompt_variations = [
+                f"I want to bridge {amount} {token.upper()} from {from_chain_alt} to {to_chain_alt}",
+                f"bridge {amount} {token.upper()} from {from_chain_alt} to {to_chain_alt}",
+                f"Bridge {amount} {token} from {from_chain_alt} to {to_chain_alt}",
+            ]
+
+            # Start with the first prompt format (matches documentation)
+            prompt = prompt_variations[0]
 
             # Validate wallet address
             if not wallet_address or wallet_address.strip() == "":
@@ -43,15 +79,19 @@ class BrianClient:
             print(f"From chain: {from_chain_id} ({from_chain_name}), To chain: {to_chain_id} ({to_chain_name})")
             print(f"Wallet address: {wallet_address}")
 
+            # Prepare request payload
+            request_payload = {
+                "prompt": prompt,
+                "chainId": str(from_chain_id),  # Brian expects string, use source chain
+                "address": wallet_address
+            }
+            print(f"Request payload: {json.dumps(request_payload, indent=2)}")
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.base_url}/agent/transaction",
                     headers=self.headers,
-                    json={
-                        "prompt": prompt,
-                        "chainId": str(from_chain_id),  # Brian expects string, use source chain
-                        "address": wallet_address
-                    },
+                    json=request_payload,
                     timeout=30.0
                 )
 
@@ -70,6 +110,22 @@ class BrianClient:
                         "message": "Invalid bridge parameters. Please check your token and chain selection.",
                         "technical_details": f"Brian API returned 400: {response.text}"
                     }
+
+                if response.status_code == 500:
+                    print(f"Brian API 500 error for bridge: {response.text}")
+                    # Check if it's a token-specific issue
+                    if token.upper() != "ETH":
+                        return {
+                            "error": "user_friendly",
+                            "message": f"Bridge for {token.upper()} is not currently supported. We currently support ETH bridging. Please try bridging ETH instead.",
+                            "technical_details": f"Brian API returned 500: {response.text}"
+                        }
+                    else:
+                        return {
+                            "error": "user_friendly",
+                            "message": f"Bridge from {from_chain_name} to {to_chain_name} is not currently supported. Please try a different route.",
+                            "technical_details": f"Brian API returned 500: {response.text}"
+                        }
 
                 if response.status_code != 200:
                     print(f"Brian API error {response.status_code} for bridge: {response.text}")
@@ -258,21 +314,36 @@ class BrianClient:
                 "technical_details": f"Unexpected error: {str(e)}"
             }
 
+    async def get_transfer_transaction(self, token: str, amount: float, to_address: str, chain_id: int, wallet_address: str) -> Dict[str, Any]:
+        """Get a transfer transaction from Brian API."""
+        # Format the prompt according to Brian's examples
+        chain_name = ChainRegistry.get_chain_name(chain_id)
+        prompt = f"transfer {amount} {token} to {to_address} on {chain_name}"
+
+        # Use shared Brian API utilities
+        result = await BrianAPIUtils.make_brian_api_call(
+            base_url=self.base_url,
+            headers=self.headers,
+            prompt=prompt,
+            chain_id=chain_id,
+            wallet_address=wallet_address,
+            operation="transfer",
+            timeout=30.0
+        )
+
+        # Add transfer-specific fields to successful responses
+        if result.get("success"):
+            result.update({
+                "toAddress": to_address,
+                "fromChainId": chain_id,
+                "toChainId": chain_id,  # Same chain for transfers
+            })
+
+        return result
+
     def _get_chain_name(self, chain_id: int) -> str:
         """Map chain ID to a human-readable chain name."""
-        chain_map = {
-            1: "Ethereum",  # Capitalize to match Brian API examples
-            10: "Optimism",
-            56: "BSC",
-            137: "Polygon",
-            42161: "Arbitrum",  # Match Brian API examples exactly
-            8453: "Base",
-            43114: "Avalanche",
-            59144: "Linea",
-            324: "ZK Sync",
-            534352: "Scroll"
-        }
-        return chain_map.get(chain_id, f"chain{chain_id}")
+        return ChainRegistry.get_chain_name(chain_id)
 
 # Global instance
 brian_client = BrianClient()

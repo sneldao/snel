@@ -1,7 +1,7 @@
 """
 Protocol adapter interface for standardizing interactions with swap protocols.
 """
-from typing import Dict, Any, Optional, Protocol, List
+from typing import Dict, Any, Protocol, List
 from decimal import Decimal
 from app.models.token import TokenInfo
 
@@ -55,16 +55,14 @@ class ProtocolAdapter(Protocol):
         self,
         quote: Dict[str, Any],
         chain_id: int,
-        wallet_address: str,
     ) -> Dict[str, Any]:
         """
         Build a transaction from a quote.
-        
+
         Args:
             quote: Quote from get_quote
             chain_id: Chain ID to use
-            wallet_address: User's wallet address
-            
+
         Returns:
             Transaction data ready for execution
         """

@@ -129,5 +129,69 @@ class ChatHistoryService:
 
         return context
 
+    def store_pending_transaction(self,
+                                wallet_address: Optional[str],
+                                user_name: Optional[str],
+                                transaction_type: str,
+                                transaction_data: Dict[str, Any]):
+        """Store a pending transaction for confirmation."""
+        key = f"pending_tx:{wallet_address or ''}:{user_name or ''}"
+
+        pending_tx = {
+            'type': transaction_type,
+            'data': transaction_data,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+        if self.use_redis:
+            try:
+                # Store with 10-minute expiration
+                self.redis.setex(
+                    key,
+                    timedelta(minutes=10),
+                    json.dumps(pending_tx)
+                )
+            except Exception as e:
+                print(f"Redis set error for pending tx: {str(e)}. Falling back to memory store.")
+                self.use_redis = False
+                self.memory_store[key] = pending_tx
+        else:
+            self.memory_store[key] = pending_tx
+
+    def get_pending_transaction(self,
+                              wallet_address: Optional[str],
+                              user_name: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Get pending transaction for confirmation."""
+        key = f"pending_tx:{wallet_address or ''}:{user_name or ''}"
+
+        if self.use_redis:
+            try:
+                pending_str = self.redis.get(key)
+                return json.loads(pending_str) if pending_str else None
+            except Exception as e:
+                print(f"Redis get error for pending tx: {str(e)}. Falling back to memory store.")
+                self.use_redis = False
+                return self.memory_store.get(key)
+        else:
+            return self.memory_store.get(key)
+
+    def clear_pending_transaction(self,
+                                wallet_address: Optional[str],
+                                user_name: Optional[str]):
+        """Clear pending transaction after confirmation or cancellation."""
+        key = f"pending_tx:{wallet_address or ''}:{user_name or ''}"
+
+        if self.use_redis:
+            try:
+                self.redis.delete(key)
+            except Exception as e:
+                print(f"Redis delete error for pending tx: {str(e)}. Falling back to memory store.")
+                self.use_redis = False
+                if key in self.memory_store:
+                    del self.memory_store[key]
+        else:
+            if key in self.memory_store:
+                del self.memory_store[key]
+
 # Create a singleton instance
 chat_history_service = ChatHistoryService()

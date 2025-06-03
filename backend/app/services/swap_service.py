@@ -1,11 +1,10 @@
 """
 Swap service implementation using multiple protocol aggregators.
 """
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from decimal import Decimal
 import logging
 from app.protocols.registry import protocol_registry
-from app.services.token_service import token_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,6 +49,34 @@ class SwapService:
             logger.info(f"From token info: {from_token}")
             logger.info(f"To token info: {to_token}")
 
+            # For Brian protocol, create minimal token objects if resolution fails
+            # Brian handles token resolution internally
+            if not from_token and protocol_id == "brian":
+                logger.info(f"Creating minimal token object for Brian: {from_token_id}")
+                from app.models.token import TokenInfo
+                from_token = TokenInfo(
+                    id=from_token_id.lower(),
+                    name=from_token_id.upper(),
+                    symbol=from_token_id.upper(),
+                    decimals=18,
+                    type="unknown",
+                    verified=False,
+                    addresses={}
+                )
+
+            if not to_token and protocol_id == "brian":
+                logger.info(f"Creating minimal token object for Brian: {to_token_id}")
+                from app.models.token import TokenInfo
+                to_token = TokenInfo(
+                    id=to_token_id.lower(),
+                    name=to_token_id.upper(),
+                    symbol=to_token_id.upper(),
+                    decimals=18,
+                    type="unknown",
+                    verified=False,
+                    addresses={}
+                )
+
             if not from_token:
                 logger.error(f"From token info not found: {from_token_id} on chain {chain_id}")
                 return {
@@ -79,6 +106,11 @@ class SwapService:
                     try:
                         logger.info(f"Using specified protocol: {protocol_id}")
                         tried_protocols.append(protocol_id)
+
+                        # Brian protocol handles token resolution internally
+                        if protocol_id == "brian":
+                            logger.info("Using specified Brian protocol - skipping token validation")
+
                         protocol_quote = await protocol.get_quote(
                             from_token=from_token,
                             to_token=to_token,
@@ -86,7 +118,7 @@ class SwapService:
                             chain_id=chain_id,
                             wallet_address=wallet_address
                         )
-                        return self._format_quote_response(protocol_quote, protocol.protocol_id, chain_id)
+                        return self._format_quote_response(protocol_quote, chain_id)
                     except Exception as e:
                         error_msg = str(e)
                         logger.error(f"Error with specified protocol {protocol_id}: {error_msg}")
@@ -112,7 +144,21 @@ class SwapService:
                     tried_protocols.append(protocol_id)
                     try:
                         logger.info(f"Trying protocol: {protocol_id}")
-                        # Check if tokens are supported on this chain
+
+                        # Brian protocol handles token resolution internally
+                        if protocol_id == "brian":
+                            logger.info("Using Brian protocol - skipping token validation")
+                            protocol_quote = await protocol.get_quote(
+                                from_token=from_token,
+                                to_token=to_token,
+                                amount=amount,
+                                chain_id=chain_id,
+                                wallet_address=wallet_address
+                            )
+                            logger.info(f"Successfully got quote from {protocol_id}")
+                            return self._format_quote_response(protocol_quote, chain_id)
+
+                        # For other protocols, check token support
                         if not from_token.is_supported_on_chain(chain_id):
                             error_msg = f"Token {from_token.symbol} is not supported on chain {chain_id}"
                             protocol_errors[protocol_id] = error_msg
@@ -147,7 +193,7 @@ class SwapService:
                             wallet_address=wallet_address
                         )
                         logger.info(f"Successfully got quote from {protocol_id}")
-                        return self._format_quote_response(protocol_quote, protocol_id, chain_id)
+                        return self._format_quote_response(protocol_quote, chain_id)
                     except Exception as e:
                         error_msg = str(e)
                         protocol_errors[protocol_id] = error_msg
@@ -185,8 +231,7 @@ class SwapService:
     async def build_transaction(
         self,
         quote: Dict[str, Any],
-        chain_id: int,
-        wallet_address: str
+        chain_id: int
     ) -> Dict[str, Any]:
         """Build the transaction for execution."""
         try:
@@ -207,8 +252,7 @@ class SwapService:
 
             transaction = await protocol.build_transaction(
                 quote=quote,
-                chain_id=chain_id,
-                wallet_address=wallet_address
+                chain_id=chain_id
             )
 
             return {
@@ -222,20 +266,18 @@ class SwapService:
                 "technical_details": str(e)
             }
 
-    def _format_quote_response(self, quote: Dict[str, Any], protocol_id: str, chain_id: int) -> Dict[str, Any]:
+    def _format_quote_response(self, quote: Dict[str, Any], chain_id: int) -> Dict[str, Any]:
         """Format a protocol quote response in a standardized format."""
         if not quote.get("success", False):
             return quote
 
-        # Quote is already standardized
-        return {
-            "success": True,
-            "protocol": protocol_id,
-            "steps": quote.get("steps", []),
-            "transaction": quote.get("transaction", {}),
-            "metadata": quote.get("metadata", {}),
-            "chain_id": chain_id
-        }
+        # Protocol adapters (like Brian) already format responses properly
+        # Just add chain_id if missing
+        formatted_quote = quote.copy()
+        if "chain_id" not in formatted_quote:
+            formatted_quote["chain_id"] = chain_id
+
+        return formatted_quote
 
 # Global instance
 swap_service = SwapService()

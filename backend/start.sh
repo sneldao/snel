@@ -48,17 +48,41 @@ fi
 echo -e "${BLUE}Activating virtual environment...${NC}"
 source .venv/bin/activate
 
+# Upgrade pip first
+echo -e "${BLUE}Upgrading pip...${NC}"
+python -m pip install --upgrade pip
+
 # Install dependencies if needed
 echo -e "${BLUE}Installing dependencies...${NC}"
 
-# Install python-dotenv first (the one that's causing the error)
+# Install python-dotenv first
 pip install python-dotenv
 
-# Install other core dependencies
+# Install core dependencies
 echo -e "${BLUE}Installing core dependencies...${NC}"
 pip install fastapi uvicorn httpx pydantic redis python-jose passlib bcrypt openai aiohttp
 
-# Try to install the rest, but don't fail if some can't be installed
+# Install web3 dependencies first
+echo -e "${BLUE}Installing web3 dependencies...${NC}"
+pip install "web3>=6.0.0" eth-utils eth-abi eth-account eth-typing
+
+# Install and setup agno properly
+echo -e "${BLUE}Setting up agno and its dependencies...${NC}"
+pip uninstall -y agno || true  # Remove any existing installation
+pip install -U agno --no-cache-dir
+
+# Install Exa and Firecrawl for real data integration
+echo -e "${BLUE}Installing Exa and Firecrawl for real data integration...${NC}"
+pip install exa-py firecrawl-py
+
+# Initialize agno
+echo -e "${BLUE}Initializing agno...${NC}"
+if ! command -v ag &> /dev/null; then
+    echo -e "${YELLOW}Setting up agno CLI...${NC}"
+    python -m agno.cli init || echo -e "${YELLOW}Agno CLI init skipped. You may need to run 'ag init' manually.${NC}"
+fi
+
+# Try to install the rest of the requirements
 echo -e "${BLUE}Installing additional dependencies...${NC}"
 pip install -r requirements.txt || echo -e "${YELLOW}Some dependencies could not be installed, but core functionality should work.${NC}"
 

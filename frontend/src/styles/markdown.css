@@ -1,0 +1,147 @@
+.markdown-content {
+  color: var(--chakra-colors-gray-100);
+  line-height: 1.6;
+  font-size: 0.95em;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  color: var(--chakra-colors-gray-50);
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  letter-spacing: -0.02em;
+}
+
+.markdown-content h1 {
+  font-size: 1.5em;
+}
+
+.markdown-content h2 {
+  font-size: 1.3em;
+}
+
+.markdown-content h3 {
+  font-size: 1.1em;
+}
+
+.markdown-content p {
+  margin-bottom: 1em;
+  color: var(--chakra-colors-gray-300);
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin-left: 1.25em;
+  margin-bottom: 1em;
+  color: var(--chakra-colors-gray-300);
+}
+
+.markdown-content li {
+  margin-bottom: 0.4em;
+  line-height: 1.5;
+}
+
+.markdown-content code {
+  background: var(--chakra-colors-whiteAlpha-200);
+  padding: 0.2em 0.4em;
+  border-radius: 0.3em;
+  font-size: 0.9em;
+  font-family: var(--chakra-fonts-mono);
+  color: var(--chakra-colors-blue-200);
+}
+
+.markdown-content pre {
+  background: var(--chakra-colors-whiteAlpha-100);
+  padding: 1em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-content blockquote {
+  border-left: 2px solid var(--chakra-colors-blue-500);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--chakra-colors-gray-400);
+  font-style: italic;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--chakra-colors-whiteAlpha-200);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--chakra-colors-whiteAlpha-50);
+  font-weight: 600;
+  color: var(--chakra-colors-gray-200);
+}
+
+.markdown-content td {
+  color: var(--chakra-colors-gray-300);
+}
+
+.markdown-content a {
+  color: var(--chakra-colors-blue-400);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  border-bottom: 1px dotted var(--chakra-colors-blue-600);
+}
+
+.markdown-content a:hover {
+  color: var(--chakra-colors-blue-300);
+  border-bottom-style: solid;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.markdown-content {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Custom Components */
+.allocation-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.allocation-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.strategy-card {
+  transition: all 0.2s ease;
+}
+
+.strategy-card:hover {
+  background: var(--chakra-colors-whiteAlpha-100);
+}

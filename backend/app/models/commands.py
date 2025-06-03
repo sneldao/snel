@@ -1,39 +1,10 @@
 """
-API request and response models.
+API request and response models for legacy endpoints.
+Note: Bridge models removed - bridges now handled by unified chat processor.
 """
 from typing import Optional
 from decimal import Decimal
 from pydantic import BaseModel, Field
-
-class BridgeRequest(BaseModel):
-    """Request to bridge tokens across chains."""
-    from_token: str = Field(description="Source token symbol or address")
-    to_token: str = Field(description="Destination token symbol or address")
-    amount: Decimal = Field(description="Amount to bridge")
-    from_chain_id: int = Field(description="Source chain ID")
-    to_chain_id: int = Field(description="Destination chain ID")
-    wallet_address: str = Field(description="Wallet address")
-
-class BridgeQuoteResponse(BaseModel):
-    """Response containing bridge quote information."""
-    quote_id: str
-    from_token: str
-    to_token: str
-    from_amount: Decimal
-    to_amount: Decimal
-    from_chain_id: int
-    to_chain_id: int
-    fee_amount: Decimal
-    fee_token: str
-    expiry: int
-    
-class BridgeExecuteResponse(BaseModel):
-    """Response after executing a bridge transaction."""
-    transaction_hash: str
-    from_chain_id: int
-    to_chain_id: int
-    status: str
-    estimated_time: Optional[int] = Field(default=None)
 
 class BalanceRequest(BaseModel):
     """Request to check token balance."""

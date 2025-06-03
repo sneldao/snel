@@ -33,16 +33,26 @@ const ALCHEMY_SUPPORTED_CHAINS = {
 } as const;
 
 const PUBLIC_RPC_URLS = {
-  [avalanche.id]: `https://avalanche-mainnet.infura.io/v3/${process.env.NEXT_PUBLIC_INFURA_KEY}`,
-  [scroll.id]: "https://rpc.scroll.io",
-  [bsc.id]: "https://bsc-dataseed.binance.org",
-  [linea.id]: "https://rpc.linea.build",
-  [mantle.id]: "https://rpc.mantle.xyz",
-  [blast.id]: "https://rpc.blast.io",
-  [mode.id]: "https://mainnet.mode.network",
-  [gnosis.id]: "https://rpc.gnosischain.com",
-  [zkSync.id]: "https://mainnet.era.zksync.io",
-  [taiko.id]: "https://rpc.test.taiko.xyz",
+  [avalanche.id]:
+    process.env.NEXT_PUBLIC_AVALANCHE_RPC_URL ||
+    "https://api.avax.network/ext/bc/C/rpc",
+  [scroll.id]:
+    process.env.NEXT_PUBLIC_SCROLL_RPC_URL || "https://rpc.scroll.io",
+  [bsc.id]:
+    process.env.NEXT_PUBLIC_BSC_RPC_URL || "https://bsc-dataseed.binance.org",
+  [linea.id]:
+    process.env.NEXT_PUBLIC_LINEA_RPC_URL || "https://rpc.linea.build",
+  [mantle.id]:
+    process.env.NEXT_PUBLIC_MANTLE_RPC_URL || "https://rpc.mantle.xyz",
+  [blast.id]: process.env.NEXT_PUBLIC_BLAST_RPC_URL || "https://rpc.blast.io",
+  [mode.id]:
+    process.env.NEXT_PUBLIC_MODE_RPC_URL || "https://mainnet.mode.network",
+  [gnosis.id]:
+    process.env.NEXT_PUBLIC_GNOSIS_RPC_URL || "https://rpc.gnosischain.com",
+  [zkSync.id]:
+    process.env.NEXT_PUBLIC_ZKSYNC_RPC_URL || "https://mainnet.era.zksync.io",
+  [taiko.id]:
+    process.env.NEXT_PUBLIC_TAIKO_RPC_URL || "https://rpc.test.taiko.xyz",
 } as const;
 
 // Combine all supported chains

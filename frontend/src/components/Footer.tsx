@@ -29,30 +29,16 @@ export const Footer = () => {
       backgroundColor="rgba(255, 255, 255, 0.9)"
       zIndex="banner"
     >
-      <HStack spacing={2} justify="center" wrap="wrap">
-        <Text>
-          <ChakraLink
-            href="https://hey.xyz/u/papajams"
-            isExternal
-            color="blue.500"
-            _hover={{ textDecoration: "none", color: "blue.600" }}
-          >
-            papa
-          </ChakraLink>
-          <Text as="span" mx={2} color="gray.400">
-            |
-          </Text>
-        </Text>
-        <Divider orientation="vertical" height="20px" />
+      <HStack spacing={4} justify="center" wrap="wrap">
         <ChakraLink
-          as={NextLink}
-          href="/terms"
+          href="https://hey.xyz/u/papajams"
+          isExternal
           color="blue.500"
           _hover={{ textDecoration: "none", color: "blue.600" }}
         >
-          terms
+          papa
         </ChakraLink>
-        <Divider orientation="vertical" height="20px" />
+
         <Tooltip label="Chat with SNEL on Telegram" placement="top">
           <ChakraLink
             href="https://t.me/pointless_snel_bot"
@@ -66,6 +52,15 @@ export const Footer = () => {
             <Text ml={1}>telegram</Text>
           </ChakraLink>
         </Tooltip>
+
+        <ChakraLink
+          as={NextLink}
+          href="/terms"
+          color="blue.500"
+          _hover={{ textDecoration: "none", color: "blue.600" }}
+        >
+          terms
+        </ChakraLink>
       </HStack>
     </Box>
   );

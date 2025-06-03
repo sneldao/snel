@@ -6,8 +6,8 @@ import httpx
 import json
 import logging
 from decimal import Decimal
-from typing import Dict, Any, Optional, List
-from app.models.token import TokenInfo, TokenType
+from typing import Dict, Any, List
+from app.models.token import TokenInfo
 
 logger = logging.getLogger(__name__)
 
@@ -162,34 +162,108 @@ class BrianAdapter:
             solver = transaction.get("solver", "")
             protocol_name = solver or transaction_data.get("protocol", {}).get("name", "brian")
 
-            # Format response in standardized format
-            return {
-                "success": True,
-                "protocol": "brian",
-                "steps": steps,  # Return all steps for multi-step transactions
-                "total_steps": len(steps),
-                "requires_multi_step": len(steps) > 1,
-                "transaction": steps[0] if steps else {},  # First step for immediate execution
-                "metadata": {
-                    "gas_cost_usd": transaction_data.get("gasCostUSD"),
-                    "from_amount_usd": transaction_data.get("fromAmountUSD"),
-                    "to_amount_usd": transaction_data.get("toAmountUSD"),
-                    "to_amount_min": transaction_data.get("toAmountMin"),
-                    "source": protocol_name,
-                    "description": transaction_data.get("description", ""),
-                    "from_token": {
-                        "address": from_address,
-                        "symbol": from_token.symbol,
-                        "decimals": from_token.decimals
-                    },
-                    "to_token": {
-                        "address": to_address,
-                        "symbol": to_token.symbol,
-                        "decimals": to_token.decimals
-                    },
-                    "all_steps": steps  # Include all steps in metadata
-                }
+            # Extract token information directly from Brian's response
+            from_token_data = transaction_data.get("fromToken", {})
+            to_token_data = transaction_data.get("toToken", {})
+
+            # Use Brian's token information directly - no need for additional lookups
+            from_address = from_token_data.get("address", "")
+            to_address = to_token_data.get("address", "")
+
+            # Brian provides complete token info, use it directly
+            from_token_info = {
+                "address": from_address,
+                "symbol": from_token_data.get("symbol", from_token.symbol),
+                "decimals": from_token_data.get("decimals", from_token.decimals),
+                "name": from_token_data.get("name", from_token.name)
             }
+
+            to_token_info = {
+                "address": to_address,
+                "symbol": to_token_data.get("symbol", to_token.symbol),
+                "decimals": to_token_data.get("decimals", to_token.decimals),
+                "name": to_token_data.get("name", to_token.name)
+            }
+
+            # Format response in standardized format
+            # Check if this is a multi-step transaction
+            is_multi_step = len(steps) > 1
+
+            if is_multi_step:
+                # Format steps for backend compatibility
+                formatted_steps = []
+                for step in steps:
+                    formatted_steps.append({
+                        "to": step.get("to", ""),
+                        "data": step.get("data", ""),
+                        "value": step.get("value", "0"),
+                        "gasLimit": step.get("gasLimit", "500000"),
+                        "chainId": chain_id
+                    })
+
+                # For multi-step transactions, return flow information
+                return {
+                    "success": True,
+                    "protocol": "brian",
+                    "requires_multi_step": True,
+                    "total_steps": len(steps),
+                    "current_step": 1,
+                    "step_type": "approval" if len(steps) > 1 else "swap",
+                    "steps": formatted_steps,  # Add formatted steps for backend
+                    "transaction": {
+                        "to": steps[0].get("to", ""),
+                        "data": steps[0].get("data", ""),
+                        "value": steps[0].get("value", "0"),
+                        "chainId": chain_id,
+                        "gasLimit": steps[0].get("gasLimit", "500000"),
+                        "method": "approval" if len(steps) > 1 else "swap"
+                    },
+                    "flow_info": {
+                        "current_step": 1,
+                        "total_steps": len(steps),
+                        "step_type": "approval" if len(steps) > 1 else "swap",
+                        "operation_type": "swap"
+                    },
+                    "metadata": {
+                        "gas_cost_usd": transaction_data.get("gasCostUSD"),
+                        "from_amount_usd": transaction_data.get("fromAmountUSD"),
+                        "to_amount_usd": transaction_data.get("toAmountUSD"),
+                        "to_amount_min": transaction_data.get("toAmountMin"),
+                        "source": protocol_name,
+                        "description": transaction_data.get("description", ""),
+                        "from_token": from_token_info,
+                        "to_token": to_token_info,
+                        "all_steps": steps,  # Include all steps in metadata
+                        "brian_response": transaction_data  # Include full Brian response for debugging
+                    }
+                }
+            else:
+                # Single step transaction
+                return {
+                    "success": True,
+                    "protocol": "brian",
+                    "requires_multi_step": False,
+                    "total_steps": 1,
+                    "transaction": {
+                        "to": steps[0].get("to", ""),
+                        "data": steps[0].get("data", ""),
+                        "value": steps[0].get("value", "0"),
+                        "chainId": chain_id,
+                        "gasLimit": steps[0].get("gasLimit", "500000"),
+                        "method": "swap"
+                    },
+                    "metadata": {
+                        "gas_cost_usd": transaction_data.get("gasCostUSD"),
+                        "from_amount_usd": transaction_data.get("fromAmountUSD"),
+                        "to_amount_usd": transaction_data.get("toAmountUSD"),
+                        "to_amount_min": transaction_data.get("toAmountMin"),
+                        "source": protocol_name,
+                        "description": transaction_data.get("description", ""),
+                        "from_token": from_token_info,
+                        "to_token": to_token_info,
+                        "brian_response": transaction_data  # Include full Brian response for debugging
+                    }
+                }
 
         except httpx.TimeoutException:
             logger.error("Brian API timeout")
@@ -211,14 +285,20 @@ class BrianAdapter:
         self,
         quote: Dict[str, Any],
         chain_id: int,
-        wallet_address: str,
     ) -> Dict[str, Any]:
         """Build transaction from quote."""
-        # Brian quotes already include transaction data in the first step
-        if "steps" not in quote or not quote["steps"]:
-            raise ValueError("Invalid quote format - missing steps")
+        # Brian quotes include transaction data either in 'transaction' field (single-step)
+        # or in 'steps' array (multi-step)
 
-        tx_data = quote["steps"][0]
+        if "transaction" in quote:
+            # Single-step transaction
+            tx_data = quote["transaction"]
+        elif "steps" in quote and quote["steps"]:
+            # Multi-step transaction - use first step
+            tx_data = quote["steps"][0]
+        else:
+            raise ValueError("Invalid quote format - missing transaction data")
+
         return {
             "to": tx_data.get("to", ""),
             "data": tx_data.get("data", ""),

@@ -53,10 +53,12 @@ const SUPPORTED_CHAINS = {
 const EXAMPLE_COMMANDS = [
   "swap 1 usdc for eth",
   "send 5 ETH to @papajams",
-  "what is the price of ETH?",
-  "how much UNI can I get for 1 ETH?",
+  "bridge 0.1 ETH from Scroll to Base",
   "analyze my portfolio",
-  "what's my portfolio allocation?",
+  "tell me about Aave",
+  "what's my USDC balance?",
+  "show me my risk assessment",
+  "research Compound protocol",
 ];
 
 export const CommandInput = ({

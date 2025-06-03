@@ -20,3 +20,4 @@ pypdf>=4.0.0  # Required by agno for document processing
 exa-py>=1.0.0  # Required by agno for enhanced analysis
 newspaper4k>=0.1.0  # Required by agno for web scraping
 sqlalchemy>=2.0.0  # Required by agno for database operations
+firecrawl-py>=0.0.16  # For web scraping DeFi protocol data

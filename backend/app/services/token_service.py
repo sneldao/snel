@@ -317,14 +317,24 @@ class TokenService:
             # Create contract instance
             contract = web3.eth.contract(address=Web3.to_checksum_address(address), abi=ERC20_ABI)
 
-            # Fetch token information concurrently
-            name_coro = contract.functions.name().call()
-            symbol_coro = contract.functions.symbol().call()
-            decimals_coro = contract.functions.decimals().call()
+            # Fetch token information with error handling for each call
+            try:
+                name = await contract.functions.name().call()
+            except Exception as e:
+                print(f"Failed to get token name for {address}: {e}")
+                name = "Unknown Token"
 
-            name, symbol, decimals = await asyncio.gather(
-                name_coro, symbol_coro, decimals_coro
-            )
+            try:
+                symbol = await contract.functions.symbol().call()
+            except Exception as e:
+                print(f"Failed to get token symbol for {address}: {e}")
+                symbol = "UNKNOWN"
+
+            try:
+                decimals = await contract.functions.decimals().call()
+            except Exception as e:
+                print(f"Failed to get token decimals for {address}: {e}")
+                decimals = 18
 
             return {
                 "address": address,

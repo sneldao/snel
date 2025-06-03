@@ -7,43 +7,31 @@ import {
   Text,
   Badge,
   Icon,
-  List,
   ListItem,
-  ListIcon,
   Spinner,
-  Link,
   Alert,
   AlertIcon,
   AlertTitle,
   AlertDescription,
-  Divider,
   useColorModeValue,
   Button,
   UnorderedList,
-  Flex,
-  Code,
   useToast,
+  Progress,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  useDisclosure,
+  SimpleGrid,
 } from "@chakra-ui/react";
-import {
-  CheckCircleIcon,
-  QuestionIcon,
-  WarningIcon,
-  TimeIcon,
-  ChatIcon,
-  InfoIcon,
-  ExternalLinkIcon,
-} from "@chakra-ui/icons";
-import { SwapConfirmation } from "./SwapConfirmation";
-import { DCAConfirmation } from "./DCAConfirmation";
-import { BrianConfirmation } from "./BrianConfirmation";
+import { CheckCircleIcon } from "@chakra-ui/icons";
+import { UnifiedConfirmation } from "./UnifiedConfirmation";
 import { TransactionProgress } from "./TransactionProgress";
 import AggregatorSelection from "./AggregatorSelection";
-import {
-  FaExchangeAlt,
-  FaCalendarAlt,
-  FaRobot,
-  FaChartPie,
-} from "react-icons/fa";
+import { FaExchangeAlt, FaChartPie } from "react-icons/fa";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { ApiService } from "../services/apiService";
 import {
@@ -53,9 +41,15 @@ import {
   usePublicClient,
 } from "wagmi";
 import { TransactionService } from "../services/transactionService";
-import { executeTransaction } from "../lib/api";
-import { PortfolioSummary } from "./PortfolioSummary";
-import { AgnoResponse } from "../services/agnoService";
+import { EnhancedPortfolioSummary } from "./EnhancedPortfolioSummary";
+import { Chat } from "./Chat";
+import { formatErrorMessage } from "../utils/errorFormatting";
+import { formatLinks } from "../utils/linkFormatting";
+import { useCommandActions } from "../hooks/useCommandActions";
+import { getAgentInfo, type AgentType } from "../utils/agentInfo";
+// Removed LoadingSteps import - no longer needed
+
+// Removed unused helper functions - now handled by PortfolioSummary component
 
 interface CommandResponseProps {
   content: string | any; // Updated to accept structured content
@@ -63,152 +57,38 @@ interface CommandResponseProps {
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
-  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "agno";
+  agentType?: AgentType;
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];
   onQuoteSelect?: (response: any, quote: any) => void;
   transaction?: any;
+  onActionClick?: (action: any) => void;
 }
 
-type TokenInfo = {
-  address?: string;
-  symbol?: string;
-  name?: string;
-  verified?: boolean;
-  source?: string;
-  warning?: string;
-};
+// Removed TokenInfo type - no longer needed
 
-const LoadingSteps = [
-  "Processing your command...",
-  "Classifying command type...",
-  "Getting token information...",
-  "Converting amounts...",
-  "Getting best swap route...",
-  "Preparing transaction...",
-];
+// Removed LoadingSteps - now imported from constants
 
-const formatSwapResponse = (
-  content: string
-): { preview: string; success: boolean } => {
-  try {
-    if (content.includes("SwapArgs")) {
-      const match = content.match(/amount_in=(\d+),\s*amount_out=(\d+)/);
-      if (match) {
-        const amountIn = parseFloat(match[1]) / 1e18;
-        const amountOut = parseFloat(match[2]) / 1e18;
-        return {
-          preview: `I'll swap ${amountIn.toFixed(
-            4
-          )} ETH for approximately ${amountOut.toFixed(
-            4
-          )} UNI tokens.\n\nDoes this look good? Reply with 'yes' to confirm or 'no' to cancel.`,
-          success: true,
-        };
-      }
-    }
-    return { preview: content, success: false };
-  } catch (error) {
-    return { preview: content, success: false };
-  }
-};
+// Removed formatSwapResponse and formatErrorMessage - now imported from utils
 
-// Add this function to format detailed error messages
-const formatErrorMessage = (errorContent: any): React.ReactNode => {
-  // If it's a standard error string
-  if (typeof errorContent === "string") {
-    if (errorContent.includes("Unable to find a valid swap route")) {
-      return (
-        <Box>
-          <Text mb={2}>
-            I couldn&apos;t find a valid swap route for this transaction. I
-            tried:
-          </Text>
-          <UnorderedList pl={4} spacing={1}>
-            <ListItem>0x Protocol</ListItem>
-            <ListItem>Brian Protocol</ListItem>
-          </UnorderedList>
-          <Text mt={2}>This could be due to:</Text>
-          <UnorderedList pl={4} spacing={1}>
-            <ListItem>Insufficient liquidity for this pair</ListItem>
-            <ListItem>Minimum amount requirements not met</ListItem>
-            <ListItem>Temporary issues with the protocols</ListItem>
-          </UnorderedList>
-          <Text mt={2}>
-            Please try a different token pair, adjust the amount, or try again
-            later.
-          </Text>
-        </Box>
-      );
-    }
+// Removed ProgressStep component - now imported from shared
 
-    // Handle other specific error cases
-    if (errorContent.includes("Slippage tolerance exceeded")) {
-      return (
-        <Box>
-          <Text mb={2}>The price moved too much during the transaction.</Text>
-          <Text>You can try again with:</Text>
-          <UnorderedList pl={4} spacing={1}>
-            <ListItem>A smaller amount</ListItem>
-            <ListItem>A higher slippage tolerance (default is 0.5%)</ListItem>
-          </UnorderedList>
-        </Box>
-      );
-    }
-  }
-
-  // If it's an object with detailed error information
-  if (typeof errorContent === "object" && errorContent !== null) {
-    if (errorContent.protocols_tried) {
-      return (
-        <Box>
-          <Text mb={2}>
-            I couldn&apos;t complete the swap. I tried these protocols:
-          </Text>
-          <UnorderedList pl={4} spacing={1}>
-            {errorContent.protocols_tried.map(
-              (protocol: string, idx: number) => (
-                <ListItem key={idx}>{protocol}</ListItem>
-              )
-            )}
-          </UnorderedList>
-          {errorContent.reason && (
-            <Text mt={2}>Reason: {errorContent.reason}</Text>
-          )}
-          {errorContent.suggestion && (
-            <Text mt={2}>Suggestion: {errorContent.suggestion}</Text>
-          )}
-        </Box>
-      );
-    }
-
-    // Fall back to displaying the error message
-    if (errorContent.message) {
-      return <Text>{errorContent.message}</Text>;
-    }
-  }
-
-  // Default case: return the original error content
-  return <Text>{String(errorContent)}</Text>;
-};
-
-export const CommandResponse: React.FC<CommandResponseProps> = ({
-  content,
-  timestamp,
-  isCommand,
-  status = "success",
-  awaitingConfirmation = false,
-  agentType = "default",
-  metadata,
-  requires_selection = false,
-  all_quotes = [],
-  onQuoteSelect,
-  transaction,
-}) => {
-  const [currentStep, setCurrentStep] = React.useState(0);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [showTokenInfo, setShowTokenInfo] = React.useState(false);
+export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
+  const {
+    content,
+    timestamp,
+    isCommand,
+    status = "success",
+    awaitingConfirmation = false,
+    agentType = "default",
+    metadata,
+    requires_selection = false,
+    all_quotes = [],
+    onQuoteSelect,
+    transaction,
+    onActionClick,
+  } = props;
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [txResponse, setTxResponse] = React.useState<any>(null);
   const [multiStepState, setMultiStepState] = React.useState<{
@@ -218,7 +98,15 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     isComplete: boolean;
     error?: string;
   } | null>(null);
+  const [userRejected, setUserRejected] = React.useState(false);
   const toast = useToast();
+
+  // Modal state for portfolio analysis
+  const {
+    isOpen: isPortfolioModalOpen,
+    onOpen: onPortfolioModalOpen,
+    onClose: onPortfolioModalClose,
+  } = useDisclosure();
 
   // Wallet and chain info
   const { address } = useAccount();
@@ -349,6 +237,16 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         const errorMessage =
           error instanceof Error ? error.message : String(error);
 
+        // Check if this is a user rejection
+        const isUserRejection =
+          errorMessage.toLowerCase().includes("cancelled") ||
+          errorMessage.toLowerCase().includes("rejected") ||
+          errorMessage.toLowerCase().includes("user denied");
+
+        if (isUserRejection) {
+          setUserRejected(true);
+        }
+
         // Update step as failed
         setMultiStepState((prev) =>
           prev
@@ -383,16 +281,20 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         }
 
         toast({
-          title: "Transaction Failed",
-          description: errorMessage,
-          status: "error",
+          title: isUserRejection
+            ? "Transaction Cancelled"
+            : "Transaction Failed",
+          description: isUserRejection
+            ? "You cancelled the transaction"
+            : errorMessage,
+          status: isUserRejection ? "warning" : "error",
           duration: 5000,
         });
       } finally {
         setIsExecuting(false);
       }
     },
-    [transactionService, address, chainId, apiService, toast]
+    [transactionService, address, chainId, apiService, toast, setUserRejected]
   );
 
   // Extract transaction data from content if available
@@ -402,16 +304,16 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     (typeof content === "object" && content?.content?.transaction);
 
   // Check for various response types (moved before useEffect that uses them)
-  const isConfirmation =
-    typeof content === "object" && content?.type === "confirmation";
   const isSwapConfirmation =
     typeof content === "object" && content?.type === "swap_confirmation";
   const isDCAConfirmation =
     typeof content === "object" && content?.type === "dca_confirmation";
-  const isSwapSuccess =
-    typeof content === "object" && content?.type === "swap_success";
   const isSwapTransaction =
-    typeof content === "object" && content?.type === "swap_transaction";
+    (typeof content === "object" && content?.type === "swap_transaction") ||
+    (typeof content === "object" &&
+      content?.type === "swap_ready" &&
+      agentType === "swap") ||
+    (agentType === "swap" && transactionData);
   const isDCASuccess =
     typeof content === "object" &&
     (content?.type === "dca_success" || content?.type === "dca_order_created");
@@ -426,24 +328,42 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     (typeof content === "object" &&
       content?.type === "bridge_ready" &&
       agentType === "bridge") ||
+    (typeof content === "object" &&
+      content?.type === "bridge_transaction" &&
+      agentType === "bridge") ||
     (agentType === "bridge" && transactionData) ||
-    (typeof content === "object" && content?.requires_transaction);
+    (typeof content === "object" &&
+      content?.requires_transaction &&
+      agentType === "bridge");
+  const isTransferTransaction =
+    (typeof content === "object" &&
+      content?.type === "transfer_confirmation" &&
+      agentType === "transfer") ||
+    (typeof content === "object" &&
+      content?.type === "transfer_ready" &&
+      agentType === "transfer") ||
+    (agentType === "transfer" && transactionData);
 
-  // Debug logging for bridge transactions
+  // Debug logging for bridge and transfer transactions
   React.useEffect(() => {
     if (
       agentType === "bridge" ||
-      (typeof content === "object" && content?.type === "bridge_ready")
+      agentType === "transfer" ||
+      (typeof content === "object" && content?.type === "bridge_ready") ||
+      (typeof content === "object" && content?.type === "transfer_confirmation")
     ) {
-      console.log("Bridge transaction debug:", {
+      console.log("Transaction debug:", {
         agentType,
         content,
         transaction,
         transactionData,
         isBridgeTransaction,
+        isTransferTransaction,
+        contentType: typeof content === "object" ? content?.type : "string",
         shouldExecuteTransaction:
           (isBrianTransaction ||
             isBridgeTransaction ||
+            isTransferTransaction ||
             isSwapTransaction ||
             (typeof content === "object" && content?.type === "swap_quotes")) &&
           transactionData &&
@@ -458,6 +378,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     transaction,
     transactionData,
     isBridgeTransaction,
+    isTransferTransaction,
     isBrianTransaction,
     isSwapTransaction,
     isExecuting,
@@ -465,9 +386,6 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     isMultiStepTransaction,
   ]);
 
-  const isError = status === "error";
-  const isSuccess = status === "success";
-  const needsConfirmation = awaitingConfirmation;
   const needsSelection =
     requires_selection && all_quotes && all_quotes.length > 0;
 
@@ -481,109 +399,15 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
   );
   const textColor = useColorModeValue("gray.800", "white");
 
-  // Extract token information from metadata
-  const tokenInInfo: TokenInfo = metadata
-    ? {
-        address: metadata.token_in_address,
-        symbol: metadata.token_in_symbol,
-        name: metadata.token_in_name,
-        verified: metadata.token_in_verified,
-        source: metadata.token_in_source,
-      }
-    : {};
+  // Removed token info extraction - no longer needed
 
-  const tokenOutInfo: TokenInfo = metadata
-    ? {
-        address: metadata.token_out_address,
-        symbol: metadata.token_out_symbol,
-        name: metadata.token_out_name,
-        verified: metadata.token_out_verified,
-        source: metadata.token_out_source,
-      }
-    : {};
+  // Removed loading progress effect - no longer needed
 
-  // Simulate progress through steps when loading
-  React.useEffect(() => {
-    if (isLoading) {
-      const interval = setInterval(() => {
-        setCurrentStep((prev) =>
-          prev < LoadingSteps.length - 1 ? prev + 1 : prev
-        );
-      }, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setCurrentStep(0);
-    }
-  }, [isLoading]);
+  // Using imported command actions hook
+  const { handleConfirm, handleCancel, handlePredefinedQuery } =
+    useCommandActions();
 
-  // Handle confirmation actions
-  const handleConfirm = () => {
-    // Find the closest command input (improved approach that doesn't simulate key events)
-    const messageForm = document.querySelector("form");
-    const inputElement = messageForm?.querySelector(
-      'input[placeholder="Type a command..."]'
-    ) as HTMLInputElement | null;
-
-    if (inputElement && messageForm) {
-      inputElement.value = "yes";
-
-      // Instead of dispatching keyboard events which may have side effects,
-      // trigger the form's submit handler programmatically
-      const formSubmitEvent = new Event("submit", {
-        bubbles: true,
-        cancelable: true,
-      });
-      messageForm.dispatchEvent(formSubmitEvent);
-    } else {
-      // Fallback to simpler approach if form can't be found
-      const event = new CustomEvent("swap-confirmation", {
-        detail: { confirmed: true, command: "yes" },
-        bubbles: true,
-      });
-      document.dispatchEvent(event);
-
-      // Also set a value in session storage as another fallback
-      sessionStorage.setItem(
-        "swap_confirmation",
-        JSON.stringify({ confirmed: true, timestamp: Date.now() })
-      );
-    }
-  };
-
-  const handleCancel = () => {
-    // Find the closest command input (improved approach that doesn't simulate key events)
-    const messageForm = document.querySelector("form");
-    const inputElement = messageForm?.querySelector(
-      'input[placeholder="Type a command..."]'
-    ) as HTMLInputElement | null;
-
-    if (inputElement && messageForm) {
-      inputElement.value = "no";
-
-      // Instead of dispatching keyboard events which may have side effects,
-      // trigger the form's submit handler programmatically
-      const formSubmitEvent = new Event("submit", {
-        bubbles: true,
-        cancelable: true,
-      });
-      messageForm.dispatchEvent(formSubmitEvent);
-    } else {
-      // Fallback to simpler approach if form can't be found
-      const event = new CustomEvent("swap-confirmation", {
-        detail: { confirmed: false, command: "no" },
-        bubbles: true,
-      });
-      document.dispatchEvent(event);
-
-      // Also set a value in session storage as another fallback
-      sessionStorage.setItem(
-        "swap_confirmation",
-        JSON.stringify({ confirmed: false, timestamp: Date.now() })
-      );
-    }
-  };
-
-  // Handle quote selection
+  // Handle quote selection (local implementation needed for specific signature)
   const handleQuoteSelect = (quote: any) => {
     if (onQuoteSelect) {
       onQuoteSelect(
@@ -603,249 +427,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     }
   };
 
-  const formatContent = (text: string) => {
-    return text.split("\n").map((line, i) => (
-      <React.Fragment key={i}>
-        {line}
-        {i < text.split("\n").length - 1 && <br />}
-      </React.Fragment>
-    ));
-  };
+  // Removed formatContent - no longer needed
 
-  // Format links in content
-  const formatLinks = (text: string | undefined | null) => {
-    // Early exit if input is not a string or is empty
-    if (typeof text !== "string" || !text) return null;
+  // Using imported getAgentInfo function
+  const { handle, avatarSrc } = getAgentInfo(agentType);
 
-    // Process markdown-style links first - format: [text](url)
-    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-    let processedText = text;
-    let mdMatch: RegExpExecArray | null;
+  // Using imported getAgentIcon function
 
-    // Define the type for the replacements
-    interface MarkdownReplacement {
-      placeholder: string;
-      text: string;
-      url: string;
-    }
-
-    // Initialize with explicit type
-    const mdReplacements = [] as MarkdownReplacement[];
-
-    // Replace markdown links with placeholders to avoid conflicts with URL regex
-    while ((mdMatch = markdownLinkRegex.exec(text)) !== null) {
-      const placeholderText = `__MARKDOWN_LINK_${mdReplacements.length}__`;
-      mdReplacements.push({
-        placeholder: placeholderText,
-        text: mdMatch[1],
-        url: mdMatch[2],
-      });
-      processedText = processedText.replace(mdMatch[0], placeholderText);
-    }
-
-    // Now process regular URLs
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = processedText.split(urlRegex);
-
-    // Map the parts, handling both regular URLs and our markdown link placeholders
-    return parts.map((part, i) => {
-      // Check if this part is a URL
-      if (part.match(urlRegex)) {
-        return (
-          <Link key={i} href={part} isExternal color="blue.500">
-            {part} <Icon as={ExternalLinkIcon} mx="2px" fontSize="xs" />
-          </Link>
-        );
-      }
-
-      // Check if this part contains any of our markdown link placeholders
-      let result = part;
-      for (const replacement of mdReplacements) {
-        if (part.includes(replacement.placeholder)) {
-          // Replace the placeholder with the actual link component
-          const beforePlaceholder = part.substring(
-            0,
-            part.indexOf(replacement.placeholder)
-          );
-          const afterPlaceholder = part.substring(
-            part.indexOf(replacement.placeholder) +
-              replacement.placeholder.length
-          );
-
-          return (
-            <React.Fragment key={i}>
-              {beforePlaceholder && formatContent(beforePlaceholder)}
-              <Link href={replacement.url} isExternal color="blue.500">
-                {replacement.text}{" "}
-                <Icon as={ExternalLinkIcon} mx="2px" fontSize="xs" />
-              </Link>
-              {afterPlaceholder && formatContent(afterPlaceholder)}
-            </React.Fragment>
-          );
-        }
-      }
-
-      // If no replacements were needed, just format the content normally
-      return formatContent(result);
-    });
-  };
-
-  // Render status icon
-  const renderStatusIcon = () => {
-    if (status === "pending") {
-      return <InfoIcon color="blue.500" />;
-    } else if (status === "processing") {
-      return <Spinner size="sm" color="blue.500" />;
-    } else if (status === "success") {
-      return <CheckCircleIcon color="green.500" />;
-    } else if (status === "error") {
-      return <WarningIcon color="red.500" />;
-    }
-    return null;
-  };
-
-  // Get agent name and avatar based on agent type
-  const getAgentInfo = () => {
-    switch (agentType) {
-      case "swap":
-        return {
-          name: "Swap Agent",
-          handle: "@swap",
-          avatarSrc: "/avatars/🕴️.png",
-        };
-      case "dca":
-        return {
-          name: "DCA Agent",
-          handle: "@dca",
-          avatarSrc: "/avatars/📊.png",
-        };
-      case "brian":
-        return {
-          name: "Brian Agent",
-          handle: "@brian",
-          avatarSrc: "/avatars/🤖.png",
-        };
-      case "bridge":
-        return {
-          name: "Bridge Agent",
-          handle: "@bridge",
-          avatarSrc: "/avatars/🌉.png",
-        };
-      case "agno":
-        return {
-          name: "Portfolio Agent",
-          handle: "@portfolio",
-          avatarSrc: "/avatars/📊.png",
-        };
-      default:
-        return {
-          name: "SNEL",
-          handle: "@snel",
-          avatarSrc: "/icon.png",
-        };
-    }
-  };
-
-  const { name, handle, avatarSrc } = getAgentInfo();
-
-  const getAgentIcon = () => {
-    switch (agentType) {
-      case "swap":
-        return <Icon as={FaExchangeAlt} color="blue.500" />;
-      case "dca":
-        return <Icon as={FaCalendarAlt} color="green.500" />;
-      case "brian":
-        return <Icon as={FaRobot} color="purple.500" />;
-      case "bridge":
-        return <Icon as={FaExchangeAlt} color="orange.500" />;
-      case "agno":
-        return <Icon as={FaChartPie} color="teal.500" />;
-      default:
-        return <Icon as={FaRobot} color="gray.500" />;
-    }
-  };
-
-  // Render token information if available
-  const renderTokenInfo = () => {
-    if (!metadata || isCommand || !isSuccess) return null;
-
-    // Only show token info for swap transactions
-    if (!content.includes("swap") && !content.includes("Swap")) return null;
-
-    return (
-      <Box mt={3} fontSize="sm">
-        <Divider mb={2} />
-        <Text fontWeight="bold" mb={1}>
-          Token Information:
-        </Text>
-
-        {tokenInInfo.symbol && (
-          <Box mb={2}>
-            <Text fontWeight="semibold">From: {tokenInInfo.symbol}</Text>
-            {tokenInInfo.name && (
-              <Text color="gray.600">{tokenInInfo.name}</Text>
-            )}
-            {tokenInInfo.address && (
-              <Text fontSize="xs" color="gray.500" wordBreak="break-all">
-                Address: {tokenInInfo.address}
-              </Text>
-            )}
-            {tokenInInfo.verified && (
-              <Badge colorScheme="green" fontSize="xs">
-                Verified
-              </Badge>
-            )}
-            {tokenInInfo.source && (
-              <Text fontSize="xs" color="gray.500">
-                Source: {tokenInInfo.source}
-              </Text>
-            )}
-          </Box>
-        )}
-
-        {tokenOutInfo.symbol && (
-          <Box>
-            <Text fontWeight="semibold">To: {tokenOutInfo.symbol}</Text>
-            {tokenOutInfo.name && (
-              <Text color="gray.600">{tokenOutInfo.name}</Text>
-            )}
-            {tokenOutInfo.address && (
-              <Text fontSize="xs" color="gray.500" wordBreak="break-all">
-                Address: {tokenOutInfo.address}
-              </Text>
-            )}
-            {tokenOutInfo.verified ? (
-              <Badge colorScheme="green" fontSize="xs">
-                Verified
-              </Badge>
-            ) : (
-              <Badge colorScheme="yellow" fontSize="xs">
-                Unverified
-              </Badge>
-            )}
-            {tokenOutInfo.source && (
-              <Text fontSize="xs" color="gray.500">
-                Source: {tokenOutInfo.source}
-              </Text>
-            )}
-          </Box>
-        )}
-
-        {(!tokenInInfo.verified || !tokenOutInfo.verified) && (
-          <Alert status="warning" mt={2} size="sm" borderRadius="md">
-            <AlertIcon />
-            <Box>
-              <AlertTitle fontSize="xs">Caution</AlertTitle>
-              <AlertDescription fontSize="xs">
-                One or more tokens in this transaction are unverified. Always
-                double-check contract addresses before proceeding.
-              </AlertDescription>
-            </Box>
-          </Alert>
-        )}
-      </Box>
-    );
-  };
+  // Removed renderTokenInfo - now using imported TokenInfo component
 
   const { getUserDisplayName, profile } = useUserProfile();
 
@@ -859,6 +448,11 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
         duration: 5000,
         isClosable: true,
       });
+      return;
+    }
+
+    // Don't execute if user already rejected
+    if (userRejected) {
       return;
     }
 
@@ -886,20 +480,54 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
       });
     } catch (error) {
       console.error("Failed to execute transaction:", error);
-      toast({
-        title: "Transaction Failed",
-        description: error instanceof Error ? error.message : "Unknown error",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
+
+      // Check if this is a user rejection
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      const isUserRejection =
+        errorMessage.toLowerCase().includes("cancelled") ||
+        errorMessage.toLowerCase().includes("rejected") ||
+        errorMessage.toLowerCase().includes("user denied");
+
+      if (isUserRejection) {
+        setUserRejected(true);
+        toast({
+          title: "Transaction Cancelled",
+          description: "You cancelled the transaction",
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: "Transaction Failed",
+          description: errorMessage,
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     } finally {
       setIsExecuting(false);
     }
-  }, [transactionData, walletClient, publicClient, chainId, toast]);
+  }, [
+    transactionData,
+    walletClient,
+    publicClient,
+    chainId,
+    toast,
+    userRejected,
+  ]);
+
+  // Don't reset user rejection state automatically - let user manually retry if needed
 
   // Execute the transaction automatically when a transaction is displayed
   React.useEffect(() => {
+    // Don't auto-execute if user has rejected
+    if (userRejected) {
+      return;
+    }
+
     // Handle multi-step transactions
     if (isMultiStepTransaction && !isExecuting && !multiStepState) {
       const timeoutId = setTimeout(() => {
@@ -912,12 +540,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     const shouldExecuteTransaction =
       (isBrianTransaction ||
         isBridgeTransaction ||
+        isTransferTransaction ||
         isSwapTransaction ||
         (typeof content === "object" && content?.type === "swap_quotes")) &&
       transactionData &&
       !isExecuting &&
       !txResponse &&
-      !isMultiStepTransaction;
+      !isMultiStepTransaction &&
+      !userRejected;
 
     if (shouldExecuteTransaction) {
       // Add a small delay to ensure UI renders first
@@ -932,14 +562,27 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
     transactionData,
     isBrianTransaction,
     isBridgeTransaction,
+    isTransferTransaction,
     isSwapTransaction,
     isMultiStepTransaction,
     isExecuting,
     txResponse,
     multiStepState,
+    userRejected,
     handleExecuteTransaction,
     handleMultiStepTransaction,
   ]);
+
+  // Extract portfolio analysis data for modal
+  const portfolioAnalysis =
+    typeof content === "object" && content.analysis ? content.analysis : null;
+
+  // Function to handle portfolio action clicks
+  const handleActionClick = (action: any) => {
+    if (onActionClick) {
+      onActionClick(action);
+    }
+  };
 
   return (
     <Box
@@ -991,16 +634,38 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 {content}
               </Text>
             ) : isSwapConfirmation ? (
-              <SwapConfirmation
-                message={content}
-                onConfirm={handleConfirm}
+              <UnifiedConfirmation
+                agentType="swap"
+                content={{
+                  message:
+                    typeof content === "object" && content.message
+                      ? content.message
+                      : "Ready to swap tokens",
+                  type: "swap_confirmation",
+                  details: typeof content === "object" ? content : {},
+                }}
+                transaction={transactionData}
+                metadata={metadata}
+                onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
+                isLoading={isExecuting}
               />
             ) : isDCAConfirmation ? (
-              <DCAConfirmation
-                message={content}
-                onConfirm={handleConfirm}
+              <UnifiedConfirmation
+                agentType="swap"
+                content={{
+                  message:
+                    typeof content === "object" && content.message
+                      ? content.message
+                      : "Ready to set up DCA",
+                  type: "dca_confirmation",
+                  details: typeof content === "object" ? content : {},
+                }}
+                transaction={transactionData}
+                metadata={metadata}
+                onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
+                isLoading={isExecuting}
               />
             ) : isMultiStepTransaction ? (
               <Box>
@@ -1021,43 +686,71 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 )}
               </Box>
             ) : isSwapTransaction ? (
-              <BrianConfirmation
-                message={{
-                  type: "transaction",
+              <UnifiedConfirmation
+                agentType="swap"
+                content={{
                   message:
                     content.message || "Ready to execute swap transaction",
-                  transaction: transactionData,
+                  type: "swap_transaction",
+                  details:
+                    typeof content === "object" ? content.details || {} : {},
                 }}
+                transaction={transactionData}
                 metadata={metadata}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
                 onExecute={handleExecuteTransaction}
+                onCancel={handleCancel}
+                isLoading={isExecuting}
               />
             ) : isBrianTransaction ? (
-              <BrianConfirmation
-                message={{
-                  type: "transaction",
+              <UnifiedConfirmation
+                agentType="transfer"
+                content={{
                   message:
                     typeof content === "object" && content.message
                       ? content.message
                       : "Ready to execute transaction",
-                  transaction: transactionData,
+                  type: "transaction",
+                  details:
+                    typeof content === "object" ? content.details || {} : {},
                 }}
+                transaction={transactionData}
                 metadata={metadata}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
                 onExecute={handleExecuteTransaction}
+                onCancel={handleCancel}
+                isLoading={isExecuting}
               />
             ) : isBridgeTransaction ? (
-              <BrianConfirmation
-                message={{
-                  type: "transaction",
+              <UnifiedConfirmation
+                agentType="bridge"
+                content={{
                   message:
                     typeof content === "object" && content.message
                       ? content.message
                       : "Ready to execute bridge transaction",
-                  transaction: transactionData,
+                  type: "bridge_transaction",
+                  details: {
+                    token:
+                      typeof content === "object" ? content.token : undefined,
+                    amount:
+                      typeof content === "object" ? content.amount : undefined,
+                    source_chain:
+                      typeof content === "object"
+                        ? content.from_chain
+                        : undefined,
+                    destination_chain:
+                      typeof content === "object"
+                        ? content.to_chain
+                        : undefined,
+                    protocol:
+                      typeof content === "object"
+                        ? content.protocol
+                        : undefined,
+                    ...(typeof content === "object"
+                      ? content.details || {}
+                      : {}),
+                  },
                 }}
+                transaction={transactionData}
                 metadata={{
                   ...metadata,
                   token_symbol:
@@ -1077,28 +770,86 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                       ? content.estimated_time
                       : undefined,
                 }}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
                 onExecute={handleExecuteTransaction}
+                onCancel={handleCancel}
+                isLoading={isExecuting}
+              />
+            ) : isTransferTransaction ? (
+              <UnifiedConfirmation
+                agentType="transfer"
+                content={{
+                  message:
+                    typeof content === "object" && content.message
+                      ? content.message
+                      : "Ready to execute transfer transaction",
+                  type: "transfer_transaction",
+                  details:
+                    typeof content === "object" && content.details
+                      ? {
+                          token: content.details.token,
+                          amount: content.details.amount,
+                          destination: content.details.destination,
+                          resolved_address: content.details.resolved_address,
+                          chain: content.details.chain,
+                          ...content.details,
+                        }
+                      : {},
+                }}
+                transaction={transactionData}
+                metadata={{
+                  ...metadata,
+                  token_symbol:
+                    typeof content === "object" && content.details
+                      ? content.details.token
+                      : undefined,
+                  amount:
+                    typeof content === "object" && content.details
+                      ? content.details.amount
+                      : undefined,
+                  recipient:
+                    typeof content === "object" && content.details
+                      ? content.details.resolved_address ||
+                        content.details.destination
+                      : undefined,
+                  chain_name:
+                    typeof content === "object" && content.details
+                      ? content.details.chain
+                      : undefined,
+                  estimated_gas:
+                    typeof content === "object" && content.details
+                      ? content.details.estimated_gas
+                      : undefined,
+                }}
+                onExecute={handleExecuteTransaction}
+                onCancel={handleCancel}
+                isLoading={isExecuting}
               />
             ) : content.type === "brian_confirmation" ? (
-              <BrianConfirmation
-                message={{
-                  type: "transaction",
+              <UnifiedConfirmation
+                agentType="bridge"
+                content={{
                   message:
                     content.message || "Ready to execute bridge transaction",
-                  transaction: content.data?.tx_steps
+                  type: "brian_confirmation",
+                  details: {
+                    token: content.data?.token,
+                    amount: content.data?.amount,
+                    source_chain: content.data?.from_chain?.name,
+                    destination_chain: content.data?.to_chain?.name,
+                  },
+                }}
+                transaction={
+                  content.data?.tx_steps
                     ? {
                         to: content.data.tx_steps[0]?.to,
                         data: content.data.tx_steps[0]?.data,
                         value: content.data.tx_steps[0]?.value || "0",
-                        chainId: content.data.from_chain?.id,
-                        gasLimit:
+                        chain_id: content.data.from_chain?.id,
+                        gas_limit:
                           content.data.tx_steps[0]?.gasLimit || "500000",
-                        method: "bridge",
                       }
-                    : undefined,
-                }}
+                    : undefined
+                }
                 metadata={{
                   token_symbol: content.data?.token,
                   amount: content.data?.amount,
@@ -1107,25 +858,76 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                   from_chain_name: content.data?.from_chain?.name,
                   to_chain_name: content.data?.to_chain?.name,
                 }}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
                 onExecute={handleExecuteTransaction}
+                onCancel={handleCancel}
+                isLoading={isExecuting}
               />
-            ) : agentType === "agno" ? (
-              <PortfolioSummary
-                response={
-                  typeof content === "object"
-                    ? (content as any)
-                    : {
-                        content: typeof content === "string" ? content : "",
-                        summary: undefined,
-                        fullAnalysis: undefined,
-                        agentType: "agno",
-                        status: "success",
-                        intermediateSteps: [],
+            ) : agentType === "agno" || agentType === "portfolio" ? (
+              <VStack spacing={4} align="stretch" w="100%">
+                {/* Enhanced Portfolio Summary */}
+                <EnhancedPortfolioSummary
+                  response={{
+                    analysis:
+                      typeof content === "object"
+                        ? content.analysis
+                        : undefined,
+                    summary:
+                      typeof content === "object"
+                        ? content.analysis?.summary
+                        : content,
+                    fullAnalysis:
+                      typeof content === "object"
+                        ? content.analysis?.fullAnalysis
+                        : undefined,
+                    content:
+                      typeof content === "object"
+                        ? content.analysis?.summary
+                        : content,
+                    status: status,
+                    metadata: metadata,
+                  }}
+                  onActionClick={handleActionClick}
+                  isLoading={status === "processing"}
+                />
+
+                {/* Action Buttons */}
+                <HStack spacing={4} justify="center" mt={4}>
+                  <Button
+                    colorScheme="blue"
+                    size="md"
+                    onClick={onPortfolioModalOpen}
+                    leftIcon={<Icon as={FaChartPie} />}
+                  >
+                    Deep Dive Analysis
+                  </Button>
+                  <Box position="relative">
+                    <Button
+                      colorScheme="teal"
+                      size="md"
+                      isDisabled
+                      opacity={0.5}
+                      onClick={() =>
+                        handlePredefinedQuery("optimize my portfolio")
                       }
-                }
-              />
+                      leftIcon={<Icon as={FaExchangeAlt} />}
+                    >
+                      Optimize Portfolio
+                    </Button>
+                    <Badge
+                      position="absolute"
+                      top="-8px"
+                      right="-8px"
+                      colorScheme="orange"
+                      fontSize="xs"
+                      px={2}
+                      py={1}
+                      borderRadius="md"
+                    >
+                      Coming Soon
+                    </Badge>
+                  </Box>
+                </HStack>
+              </VStack>
             ) : isDCASuccess ? (
               <Box mt={2} mb={2}>
                 <Alert status="success" rounded="md">
@@ -1233,11 +1035,396 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
                 </HStack>
               )}
 
-            {status === "processing" && (
-              <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
-                Processing
-              </Badge>
-            )}
+            {status === "processing" &&
+              (agentType === "agno" || agentType === "portfolio") && (
+                <VStack spacing={4} align="stretch" w="100%" mt={4}>
+                  {/* Portfolio Analysis Loading State */}
+                  <Box
+                    p={6}
+                    bg="linear-gradient(135deg, #EBF8FF 0%, #E0F2FE 100%)"
+                    borderRadius="lg"
+                    borderWidth="1px"
+                    borderColor="blue.200"
+                    position="relative"
+                    overflow="hidden"
+                  >
+                    <Box
+                      position="absolute"
+                      top={0}
+                      left={0}
+                      right={0}
+                      height="4px"
+                      bg="blue.500"
+                    >
+                      <Box
+                        height="100%"
+                        width="30%"
+                        bg="blue.300"
+                        position="absolute"
+                        animation="pulse 1.5s infinite"
+                        sx={{
+                          "@keyframes pulse": {
+                            "0%": { left: "-30%", opacity: 0.6 },
+                            "100%": { left: "100%", opacity: 0.8 },
+                          },
+                        }}
+                      />
+                    </Box>
+
+                    <HStack mb={6} justify="space-between" align="start">
+                      <VStack align="start" spacing={2}>
+                        <HStack spacing={3}>
+                          <Icon as={FaChartPie} boxSize={6} color="blue.500" />
+                          <Text
+                            fontSize="xl"
+                            fontWeight="bold"
+                            color="gray.800"
+                          >
+                            Portfolio Analysis
+                          </Text>
+                          <Badge colorScheme="blue" variant="subtle">
+                            In Progress
+                          </Badge>
+                        </HStack>
+                        <Text color="gray.600" fontSize="sm">
+                          Analyzing on-chain data and DeFi protocols...
+                        </Text>
+                      </VStack>
+                    </HStack>
+
+                    <VStack spacing={4} align="stretch">
+                      {/* Blockchain Data Section - Loading State */}
+                      <Box
+                        p={4}
+                        bg="whiteAlpha.800"
+                        borderRadius="lg"
+                        borderWidth="1px"
+                        borderColor="blue.200"
+                      >
+                        <HStack mb={3} justify="space-between">
+                          <HStack>
+                            <Text
+                              fontSize="sm"
+                              color="blue.700"
+                              fontWeight="bold"
+                            >
+                              🔗 BLOCKCHAIN DATA
+                            </Text>
+                          </HStack>
+                          <Spinner size="sm" color="blue.500" />
+                        </HStack>
+                        <SimpleGrid columns={[2, 4]} spacing={4}>
+                          {[1, 2, 3, 4].map((i) => (
+                            <Box key={i}>
+                              <Text fontSize="xs" color="blue.600">
+                                {
+                                  [
+                                    "Portfolio Value",
+                                    "Active Chains",
+                                    "Token Count",
+                                    "Risk Level",
+                                  ][i - 1]
+                                }
+                              </Text>
+                              <Text fontSize="sm" color="gray.500">
+                                Loading...
+                              </Text>
+                            </Box>
+                          ))}
+                        </SimpleGrid>
+                      </Box>
+
+                      {/* Protocol Discovery Section - Loading State */}
+                      <Box
+                        p={4}
+                        bg="whiteAlpha.800"
+                        borderRadius="lg"
+                        borderWidth="1px"
+                        borderColor="purple.200"
+                      >
+                        <HStack mb={3} justify="space-between">
+                          <HStack>
+                            <Text
+                              fontSize="sm"
+                              color="purple.700"
+                              fontWeight="bold"
+                            >
+                              🔍 PROTOCOL DISCOVERY
+                            </Text>
+                          </HStack>
+                          <Spinner size="sm" color="purple.500" />
+                        </HStack>
+                        <Text fontSize="sm" color="gray.600">
+                          Searching for yield opportunities and DeFi
+                          protocols...
+                        </Text>
+                      </Box>
+
+                      {/* AI Analysis Section - Loading State */}
+                      <Box
+                        p={4}
+                        bg="whiteAlpha.800"
+                        borderRadius="lg"
+                        borderWidth="1px"
+                        borderColor="green.200"
+                      >
+                        <HStack mb={3}>
+                          <Text
+                            fontSize="sm"
+                            color="green.700"
+                            fontWeight="bold"
+                          >
+                            🧠 AI ANALYSIS
+                          </Text>
+                          <Spinner size="sm" color="green.500" ml={2} />
+                        </HStack>
+                        <Text color="green.800" fontSize="sm" lineHeight="1.6">
+                          Generating insights and recommendations based on your
+                          portfolio data...
+                        </Text>
+                      </Box>
+                    </VStack>
+                  </Box>
+
+                  {/* Progress Indicators with Real-time Updates */}
+                  <Box
+                    p={4}
+                    bg="gray.800"
+                    borderRadius="lg"
+                    borderWidth="1px"
+                    borderColor="gray.700"
+                    color="white"
+                  >
+                    <VStack spacing={4} align="stretch">
+                      <HStack justify="space-between">
+                        <HStack>
+                          <Icon as={FaChartPie} color="blue.400" />
+                          <Text fontSize="md" fontWeight="bold">
+                            Analyzing Your Portfolio
+                          </Text>
+                        </HStack>
+                        <Badge colorScheme="blue" variant="solid">
+                          In Progress
+                        </Badge>
+                      </HStack>
+
+                      <Text fontSize="sm" color="gray.300">
+                        Running comprehensive analysis with AI agents and
+                        real-time data. Results will appear in this chat when
+                        complete.
+                      </Text>
+
+                      {/* Progress Steps with Real-time Status */}
+                      <VStack
+                        spacing={3}
+                        align="stretch"
+                        bg="gray.900"
+                        p={3}
+                        borderRadius="md"
+                      >
+                        <HStack spacing={3}>
+                          <Text fontSize="md" color="blue.400">
+                            🔗
+                          </Text>
+                          <VStack align="start" spacing={1} flex={1}>
+                            <Text
+                              fontSize="sm"
+                              fontWeight="medium"
+                              color="blue.300"
+                            >
+                              Fetching blockchain data
+                            </Text>
+                            <Text fontSize="xs" color="gray.500">
+                              Querying Alchemy API for wallet:
+                              0x1e17B4FB12B29045b29475f74E536Db97Ddc5D40
+                            </Text>
+                            <Progress
+                              value={100}
+                              size="xs"
+                              colorScheme="blue"
+                              borderRadius="full"
+                              bg="whiteAlpha.200"
+                              hasStripe
+                              w="100%"
+                            />
+                          </VStack>
+                          <CheckCircleIcon color="green.400" boxSize={3} />
+                        </HStack>
+
+                        <HStack spacing={3}>
+                          <Text fontSize="md" color="green.400">
+                            💰
+                          </Text>
+                          <VStack align="start" spacing={1} flex={1}>
+                            <Text
+                              fontSize="sm"
+                              fontWeight="medium"
+                              color="green.300"
+                            >
+                              Analyzing token balances
+                            </Text>
+                            <Text fontSize="xs" color="gray.500">
+                              Processing token data from Base chain
+                            </Text>
+                            <Progress
+                              value={80}
+                              size="xs"
+                              colorScheme="green"
+                              borderRadius="full"
+                              bg="whiteAlpha.200"
+                              hasStripe
+                              isAnimated
+                              w="100%"
+                            />
+                          </VStack>
+                        </HStack>
+
+                        <HStack spacing={3}>
+                          <Text fontSize="md" color="purple.400">
+                            🔍
+                          </Text>
+                          <VStack align="start" spacing={1} flex={1}>
+                            <Text
+                              fontSize="sm"
+                              fontWeight="medium"
+                              color="purple.300"
+                            >
+                              Discovering DeFi protocols
+                            </Text>
+                            <Text fontSize="xs" color="gray.500">
+                              Executing Exa search for yield opportunities
+                            </Text>
+                            <Progress
+                              value={60}
+                              size="xs"
+                              colorScheme="purple"
+                              borderRadius="full"
+                              bg="whiteAlpha.200"
+                              hasStripe
+                              isAnimated
+                              w="100%"
+                            />
+                          </VStack>
+                        </HStack>
+
+                        <HStack spacing={3} opacity={0.6}>
+                          <Text fontSize="md" color="orange.400">
+                            🔥
+                          </Text>
+                          <VStack align="start" spacing={1} flex={1}>
+                            <Text
+                              fontSize="sm"
+                              fontWeight="medium"
+                              color="orange.300"
+                            >
+                              Scraping protocol details
+                            </Text>
+                            <Progress
+                              value={10}
+                              size="xs"
+                              colorScheme="orange"
+                              borderRadius="full"
+                              bg="whiteAlpha.200"
+                              hasStripe
+                              isAnimated
+                              w="100%"
+                            />
+                          </VStack>
+                        </HStack>
+
+                        <HStack spacing={3} opacity={0.4}>
+                          <Text fontSize="md" color="teal.400">
+                            🧠
+                          </Text>
+                          <VStack align="start" spacing={1} flex={1}>
+                            <Text
+                              fontSize="sm"
+                              fontWeight="medium"
+                              color="teal.300"
+                            >
+                              Running AI analysis
+                            </Text>
+                            <Progress
+                              value={0}
+                              size="xs"
+                              colorScheme="teal"
+                              borderRadius="full"
+                              bg="whiteAlpha.200"
+                              w="100%"
+                            />
+                          </VStack>
+                        </HStack>
+
+                        <HStack spacing={3} opacity={0.4}>
+                          <Text fontSize="md" color="yellow.400">
+                            💡
+                          </Text>
+                          <VStack align="start" spacing={1} flex={1}>
+                            <Text
+                              fontSize="sm"
+                              fontWeight="medium"
+                              color="yellow.300"
+                            >
+                              Generating recommendations
+                            </Text>
+                            <Progress
+                              value={0}
+                              size="xs"
+                              colorScheme="yellow"
+                              borderRadius="full"
+                              bg="whiteAlpha.200"
+                              w="100%"
+                            />
+                          </VStack>
+                        </HStack>
+                      </VStack>
+
+                      {/* Terminal-like Log Display */}
+                      <Box
+                        bg="black"
+                        p={2}
+                        borderRadius="md"
+                        fontSize="xs"
+                        fontFamily="monospace"
+                        maxH="100px"
+                        overflowY="auto"
+                        color="green.300"
+                      >
+                        <Text>
+                          INFO: Analyzing portfolio for wallet:
+                          0x1e17B4FB12B29045b29475f74E536Db97Ddc5D40, chain:
+                          8453
+                        </Text>
+                        <Text>
+                          INFO: Fetching fresh portfolio data from Alchemy API
+                        </Text>
+                        <Text>
+                          INFO: Made 42 blockchain API calls to retrieve token
+                          data
+                        </Text>
+                        <Text>
+                          INFO: Starting Exa search for: yield opportunities on
+                          Base chain
+                        </Text>
+                        <Text>
+                          INFO: Exa search successful, found 2 results
+                        </Text>
+                        <Text>
+                          INFO: Executing additional Exa search strategies...
+                        </Text>
+                      </Box>
+                    </VStack>
+                  </Box>
+                </VStack>
+              )}
+
+            {status === "processing" &&
+              agentType !== "agno" &&
+              agentType !== "portfolio" && (
+                <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
+                  Processing
+                </Badge>
+              )}
 
             {status === "error" && (
               <Box mt={3}>
@@ -1271,6 +1458,28 @@ export const CommandResponse: React.FC<CommandResponseProps> = ({
           </Box>
         </VStack>
       </HStack>
+
+      {/* Portfolio Analysis Modal - Embedded Chat Experience */}
+      <Modal
+        isOpen={isPortfolioModalOpen}
+        onClose={onPortfolioModalClose}
+        size="full"
+        motionPreset="slideInBottom"
+      >
+        <ModalOverlay backdropFilter="blur(4px)" />
+        <ModalContent borderRadius="xl" overflow="hidden">
+          <ModalHeader bg="blue.600" color="white">
+            <HStack>
+              <Icon as={FaChartPie} />
+              <Text>Portfolio Deep Dive Analysis</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton color="white" />
+          <ModalBody p={0}>
+            <Chat portfolioMode={true} initialAnalysis={portfolioAnalysis} />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

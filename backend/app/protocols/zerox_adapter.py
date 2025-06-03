@@ -4,7 +4,7 @@
 import os
 import httpx
 from decimal import Decimal
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from app.models.token import TokenInfo, TokenType
 
 
@@ -169,7 +169,6 @@ class ZeroXAdapter:
         self,
         quote: Dict[str, Any],
         chain_id: int,
-        wallet_address: str,
     ) -> Dict[str, Any]:
         """Build transaction from quote."""
         # 0x quotes already include transaction data

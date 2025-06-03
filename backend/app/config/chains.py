@@ -162,4 +162,17 @@ def is_protocol_supported(chain_id: int, protocol: str) -> bool:
 
 def get_chain_info(chain_id: int) -> Optional[ChainInfo]:
     """Get information about a specific chain."""
-    return CHAINS.get(chain_id) 
+    return CHAINS.get(chain_id)
+
+def get_chain_id_by_name(chain_name: str) -> Optional[int]:
+    """Get chain ID by chain name (case-insensitive)."""
+    chain_name_lower = chain_name.lower()
+    for chain_id, chain_info in CHAINS.items():
+        if chain_info.name.lower() == chain_name_lower:
+            return chain_id
+    return None
+
+def get_chain_name(chain_id: int) -> str:
+    """Get chain name by chain ID."""
+    chain = CHAINS.get(chain_id)
+    return chain.name if chain else f"Chain {chain_id}"

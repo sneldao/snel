@@ -26,6 +26,8 @@ import {
   FaCoins,
   FaArrowRight,
   FaBalanceScale,
+  FaChartLine,
+  FaSearch,
 } from "react-icons/fa";
 import { BsArrowLeftRight } from "react-icons/bs";
 import Image from "next/image";
@@ -62,10 +64,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
     {
       category: "Balance Checking",
       icon: FaBalanceScale,
-      examples: [
-        "check my USDC balance on Scroll",
-        "what&apos;s my ETH balance",
-      ],
+      examples: ["check my USDC balance on Scroll", "what's my ETH balance"],
     },
     {
       category: "Token Swaps",
@@ -73,9 +72,23 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
       examples: ["swap 1 ETH for USDC", "swap $100 worth of USDC for ETH"],
     },
     {
-      category: "DCA Orders",
-      icon: FaCoins,
-      examples: ["** coming soon **", "** coming soon **"],
+      category: "Portfolio Analysis",
+      icon: FaChartLine,
+      examples: [
+        "analyze my portfolio",
+        "what's my portfolio allocation?",
+        "show me my risk assessment",
+      ],
+    },
+    {
+      category: "Protocol Research",
+      icon: FaSearch,
+      examples: [
+        "tell me about Aave",
+        "what is Uniswap?",
+        "research Compound protocol",
+        "how does Curve work?",
+      ],
     },
   ];
 
