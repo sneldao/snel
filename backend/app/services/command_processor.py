@@ -787,7 +787,27 @@ If the user is asking about something that was recently discussed (like a protoc
             )
 
     async def _process_greeting(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process greeting commands."""
+        """Process greeting and self-awareness commands."""
+        # Awareness triggers
+        about_triggers = [
+            "who are you", "what are you", "what can you do", "about you", "about snel", "your purpose", "what is snel", "describe yourself"
+        ]
+        cmd_lower = unified_command.command.lower().strip()
+        if any(trigger in cmd_lower for trigger in about_triggers):
+            about_snel = (
+                "I'm SNEL — Stablecoin Navigation and Education Leader. "
+                "I help with stablecoin info, RWA insights, risk assessment, portfolio diversification, market data, and DeFi operations. "
+                "Ask me about swaps, bridges, or your portfolio."
+            )
+            return UnifiedResponse(
+                content={
+                    "message": about_snel,
+                    "type": "about"
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+
         greeting_responses = {
             "gm": "Good morning! How can I help you with crypto today?",
             "good morning": "Good morning! How can I help you with crypto today?",
@@ -798,8 +818,6 @@ If the user is asking about something that was recently discussed (like a protoc
             "sup": "Sup! How can I assist you with crypto today?",
             "yo": "Yo! How can I help you with crypto today?"
         }
-
-        cmd_lower = unified_command.command.lower().strip()
         response_text = greeting_responses.get(cmd_lower, "Hello! How can I help you with crypto today?")
 
         return UnifiedResponse(
