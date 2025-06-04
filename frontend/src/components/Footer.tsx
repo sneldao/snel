@@ -41,7 +41,7 @@ export const Footer = () => {
 
         <Tooltip label="Chat with SNEL on Telegram" placement="top">
           <ChakraLink
-            href="https://t.me/pointless_snel_bot"
+            href="https://t.me/stablesnelbot"
             isExternal
             color="blue.500"
             _hover={{ textDecoration: "none", color: "blue.600" }}

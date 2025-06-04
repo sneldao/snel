@@ -141,7 +141,7 @@ export default function WalletBridge() {
   // Return to the bot
   const returnToBot = () => {
     if (botName) {
-      window.location.href = `https://t.me/${botName}`;
+      window.location.href = `https://t.me/stablesnelbot`;
     }
   };
 
