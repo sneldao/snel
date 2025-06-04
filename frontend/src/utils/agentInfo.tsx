@@ -5,6 +5,8 @@ import {
   FaCalendarAlt,
   FaRobot,
   FaChartPie,
+  FaWallet,
+  FaSearch,
 } from "react-icons/fa";
 
 export type AgentType =
@@ -15,7 +17,9 @@ export type AgentType =
   | "bridge"
   | "transfer"
   | "agno"
-  | "portfolio";
+  | "portfolio"
+  | "balance"
+  | "protocol_research";
 
 export const getAgentInfo = (agentType?: AgentType) => {
   switch (agentType) {
@@ -61,6 +65,18 @@ export const getAgentInfo = (agentType?: AgentType) => {
         handle: "@portfolio",
         avatarSrc: "/icon.png",
       };
+    case "balance":
+      return {
+        name: "Balance Agent",
+        handle: "@balance",
+        avatarSrc: "/icon.png",
+      };
+    case "protocol_research":
+      return {
+        name: "Research Agent",
+        handle: "@research",
+        avatarSrc: "/icon.png",
+      };
     default:
       return {
         name: "SNEL",
@@ -85,6 +101,10 @@ export const getAgentIcon = (agentType?: AgentType) => {
     case "agno":
     case "portfolio":
       return <Icon as={FaChartPie} color="teal.500" />;
+    case "balance":
+      return <Icon as={FaWallet} color="blue.500" />;
+    case "protocol_research":
+      return <Icon as={FaSearch} color="purple.500" />;
     default:
       return <Icon as={FaRobot} color="gray.500" />;
   }

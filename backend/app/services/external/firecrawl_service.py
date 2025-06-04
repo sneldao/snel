@@ -6,6 +6,16 @@ import re
 import json
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote_plus
+from openai import AsyncOpenAI
+
+def strip_code_block(text: str) -> str:
+    """
+    Remove triple backtick code blocks (with or without 'json') from a string.
+    """
+    if not text:
+        return ""
+    # Remove ```json ... ``` or ``` ... ```
+    return re.sub(r"```(?:json)?\s*([\s\S]*?)\s*```", r"\1", text, flags=re.IGNORECASE).strip()
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -21,81 +31,71 @@ class FirecrawlAPIError(Exception):
     pass
 
 def _filter_verbose_content(content: str) -> str:
-    """Filter out verbose/irrelevant content from scraped data."""
+    """Filter out verbose/irrelevant content from scraped data while preserving useful information."""
     if not content:
         return ""
+
+    # For protocol research, we want to be less aggressive with filtering
+    # Just remove obvious noise but keep most content for AI analysis
 
     # Split into lines for processing
     lines = content.split('\n')
     filtered_lines = []
 
-    # Patterns to skip (common verbose sections)
+    # Only skip truly irrelevant patterns
     skip_patterns = [
-        'cookie', 'privacy', 'terms', 'subscribe', 'newsletter',
-        'advertisement', 'ads', 'tracking', 'analytics', 'widget',
-        'footer', 'header', 'navigation', 'menu', 'sidebar',
-        'social media', 'follow us', 'share', 'like', 'tweet',
+        'cookie policy', 'privacy policy', 'terms of service',
         'javascript', 'css', 'html', 'script', 'style',
-        'loading', 'please wait', 'error', '404', '500',
-        'topper/widget', 'session', 'storage', 'pending'
-    ]
-
-    # Keep patterns (relevant content)
-    keep_patterns = [
-        'apy', 'apr', 'yield', 'tvl', 'total value locked',
-        'protocol', 'defi', 'lending', 'borrowing', 'staking',
-        'liquidity', 'pool', 'farm', 'vault', 'strategy',
-        'audit', 'security', 'risk', 'collateral', 'interest'
+        'loading...', 'please wait', 'error 404', 'error 500',
+        'advertisement', 'ads by', 'sponsored'
     ]
 
     for line in lines:
-        line_lower = line.lower().strip()
+        line_stripped = line.strip()
+        line_lower = line_stripped.lower()
 
-        # Skip empty lines or very short lines
-        if len(line_lower) < 10:
+        # Skip empty lines
+        if len(line_stripped) < 3:
             continue
 
-        # Skip lines with verbose patterns
+        # Skip lines with noise patterns
         if any(pattern in line_lower for pattern in skip_patterns):
             continue
 
-        # Prioritize lines with relevant DeFi content
-        if any(pattern in line_lower for pattern in keep_patterns):
-            filtered_lines.append(line.strip())
-        # Also keep lines that look like descriptions (reasonable length)
-        elif 20 <= len(line.strip()) <= 200 and not line.strip().startswith('#'):
-            filtered_lines.append(line.strip())
+        # Keep most content - be much less aggressive
+        if len(line_stripped) >= 3:
+            filtered_lines.append(line_stripped)
 
-    # Join and limit total length
-    result = '\n'.join(filtered_lines[:10])  # Max 10 relevant lines
-    return result[:800] + "..." if len(result) > 800 else result
+    # Join and allow much more content for AI analysis
+    result = '\n'.join(filtered_lines[:50])  # Increased from 10 to 50 lines
+    return result[:3000] + "..." if len(result) > 3000 else result  # Increased from 800 to 3000 chars
 
 async def get_protocol_details(
     protocol_name: str,
-    max_content_length: int = 500,  # Reduced from 800 to 500
-    timeout: int = 8,  # Reduced from 15 to 8 seconds
+    max_content_length: int = 2000,  # Increased for better AI analysis
+    timeout: int = 15,  # Increased for better scraping
     debug: bool = DEBUG_MODE
 ) -> Dict[str, Any]:
     """
     Get detailed information about a DeFi protocol using Firecrawl
-    
+    Returns raw scraped content for AI analysis instead of parsed fields
+
     Args:
         protocol_name: Name of the protocol to research
         max_content_length: Maximum content length to return
         timeout: Request timeout in seconds
-        
+
     Returns:
-        Dictionary with protocol details
+        Dictionary with protocol details and raw content for AI analysis
     """
     if not FIRECRAWL_API_KEY:
         logger.error("Firecrawl API key not found in environment variables")
         return {
             "error": "Firecrawl API key not configured",
-            "tvl_analyzed": "N/A",
-            "security_audits": "Unknown",
-            "live_rates": "Not available",
             "scraping_success": False,
-            "protocols_scraped": 0
+            "protocol_name": protocol_name,
+            "raw_content": "",
+            "source_url": ""
         }
     
     # Prepare URL-safe protocol name
@@ -115,10 +115,10 @@ async def get_protocol_details(
     }
     
     try:
-        # Simplified payload to match working curl format
+        # Enhanced payload to get more comprehensive results
         payload = {
-            "query": f"{safe_name} defi protocol",
-            "limit": 2
+            "query": f"{safe_name} defi protocol documentation features",
+            "limit": 5  # Get more URLs to try
         }
             
         # Configure timeout properly for httpx
@@ -150,28 +150,97 @@ async def get_protocol_details(
             result_url = ""
 
             # Handle v1 API response format
-            if "data" in data and "results" in data["data"] and len(data["data"]["results"]) > 0:
+            if "data" in data and len(data["data"]) > 0:
                 # Process search results from v1 API
-                results = data["data"]["results"]
-                for result in results[:2]:  # Use only top 2 results for accuracy
-                    # Check if the result has markdown content (from scraping)
-                    if "markdown" in result:
-                        # Filter out verbose markdown content
-                        markdown_content = result["markdown"]
-                        # Remove common verbose sections
-                        filtered_content = _filter_verbose_content(markdown_content)
-                        content += filtered_content + "\n\n"
-                    elif "description" in result:
-                        # Use title and description if no markdown
+                results = data["data"]
+
+                # Prioritize URLs for better content
+                def prioritize_url(result):
+                    url = result.get("url", "").lower()
+                    # Prefer documentation and about pages for better content
+                    if "docs." in url or "/docs" in url or "/documentation" in url:
+                        return 0  # Highest priority for docs
+                    elif "about" in url or "/about" in url:
+                        return 1  # High priority for about pages
+                    elif url.startswith(f"https://{protocol_name}.org") or url.startswith(f"https://{protocol_name}.com"):
+                        return 2  # Medium priority for main domain
+                    elif "app." in url or "/app" in url:
+                        return 4  # Lower priority for app pages
+                    else:
+                        return 3  # Medium priority for other pages
+
+                # Sort results to get the best URLs first
+                sorted_results = sorted(results, key=prioritize_url)
+
+                # Try multiple URLs to get better content
+                content = ""
+                result_url = ""
+                for i, result in enumerate(sorted_results[:3]):  # Try up to 3 URLs
+                    current_url = result.get("url", "")
+                    if not current_url:
+                        continue
+
+                    if debug:
+                        logger.info(f"[FIRECRAWL DEBUG] Trying URL {i+1}/3: {current_url}")
+
+                    try:
+                        # Use Firecrawl scrape endpoint to get full content
+                        scrape_url = f"https://api.firecrawl.dev/v1/scrape"
+                        scrape_payload = {
+                            "url": current_url,
+                            "formats": ["markdown", "html"],
+                            "onlyMainContent": False,  # Get more content
+                            "includeTags": ["p", "h1", "h2", "h3", "h4", "h5", "h6", "div", "section", "article"],
+                            "excludeTags": ["nav", "footer", "header", "aside", "script", "style"],
+                            "waitFor": 2000  # Wait for dynamic content to load
+                        }
+
+                        async with httpx.AsyncClient(timeout=timeout_config) as scrape_client:
+                            scrape_response = await scrape_client.post(scrape_url, headers=headers, json=scrape_payload)
+
+                            if scrape_response.status_code == 200:
+                                scrape_data = scrape_response.json()
+                                if debug:
+                                    logger.info(f"[FIRECRAWL DEBUG] Scrape response status: {scrape_response.status_code}")
+
+                                if "data" in scrape_data and "markdown" in scrape_data["data"]:
+                                    markdown_content = scrape_data["data"]["markdown"]
+                                    # Filter out verbose markdown content
+                                    filtered_content = _filter_verbose_content(markdown_content)
+
+                                    if debug:
+                                        logger.info(f"[FIRECRAWL DEBUG] Scraped {len(filtered_content)} characters from {current_url}")
+
+                                    # If we got good content (more than 500 chars), use it
+                                    if len(filtered_content) > 500:
+                                        content = filtered_content
+                                        result_url = current_url
+                                        break
+                                    # Otherwise, keep the best content so far
+                                    elif len(filtered_content) > len(content):
+                                        content = filtered_content
+                                        result_url = current_url
+                                else:
+                                    if debug:
+                                        logger.info(f"[FIRECRAWL DEBUG] No markdown content in scrape response for {current_url}")
+                            else:
+                                if debug:
+                                    logger.info(f"[FIRECRAWL DEBUG] Scrape failed with status: {scrape_response.status_code} for {current_url}")
+                    except Exception as scrape_error:
+                        if debug:
+                            logger.info(f"[FIRECRAWL DEBUG] Scraping failed for {current_url}: {str(scrape_error)}")
+                        continue
+
+                # Fallback to search results if scraping failed
+                if not content:
+                    # Use the sorted results for better content
+                    for result in sorted_results[:3]:  # Use top 3 sorted results for accuracy
+                        # Use title and description from search results
                         title = result.get("title", "")
                         description = result.get("description", "")
                         # Only add if description is meaningful and not too long
                         if description and len(description) > 20 and len(description) < 500:
                             content += f"{title}\n{description}\n\n"
-
-                    # Save the URL of the first result
-                    if not result_url and "url" in result:
-                        result_url = result["url"]
 
                 # Remove trailing newlines
                 content = content.strip()
@@ -291,69 +360,343 @@ async def get_protocol_details(
             else:
                 live_rates_str = "No rates found"
             
-            # Extract key features or highlights
+            # Extract and clean key features from links and content
             features = []
-            feature_indicators = ["feature", "benefit", "provides", "offers", "allows", "enables"]
-            for indicator in feature_indicators:
-                if indicator in content.lower():
-                    sentences = content.split('. ')
-                    for sentence in sentences:
-                        if indicator in sentence.lower() and len(sentence) > 20 and len(sentence) < 150:
-                            features.append(sentence.strip())
-                            if len(features) >= 3:  # Limit to 3 features
-                                break
-                    if features:
+            key_services = []
+
+            # Extract services from markdown links
+            import re
+            link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+            links = re.findall(link_pattern, content)
+
+            seen_services = set()  # Track unique services
+            for link_text, link_url in links:
+                # Clean up the link text
+                clean_text = link_text.replace('\\\\', '').replace('\\n', ' ').strip()
+                if len(clean_text) > 2 and len(clean_text) < 100:
+                    # Create a more descriptive service name by analyzing the URL too
+                    service_name = clean_text
+
+                    # Enhance service name based on URL context
+                    if 'app.' in link_url or '/app' in link_url:
+                        service_name = f"{clean_text} (Trading App)"
+                    elif 'market' in link_url and 'market' not in clean_text.lower():
+                        service_name = f"{clean_text} Markets"
+                    elif 'governance' in link_url:
+                        service_name = f"{clean_text} (Governance)"
+                    elif 'docs' in link_url or 'developer' in link_url:
+                        service_name = f"{clean_text} (Documentation)"
+                    elif 'security' in link_url:
+                        service_name = f"{clean_text} (Security)"
+                    elif 'gho' in link_url.lower():
+                        service_name = f"{clean_text} (Stablecoin)"
+
+                    # Skip duplicates
+                    service_key = service_name.lower().replace(' ', '')
+                    if service_key in seen_services:
+                        continue
+                    seen_services.add(service_key)
+
+                    # Categorize the service
+                    if any(word in service_name.lower() for word in ['app', 'trading', 'platform']):
+                        key_services.append(f"🔗 {service_name}")
+                    elif any(word in service_name.lower() for word in ['stablecoin', 'token', 'coin', 'gho']):
+                        key_services.append(f"💰 {service_name}")
+                    elif any(word in service_name.lower() for word in ['governance', 'dao', 'vote']):
+                        key_services.append(f"🏛️ {service_name}")
+                    elif any(word in service_name.lower() for word in ['docs', 'developer', 'technical', 'documentation']):
+                        key_services.append(f"📚 {service_name}")
+                    elif any(word in service_name.lower() for word in ['security', 'audit', 'bug bounty']):
+                        key_services.append(f"🛡️ {service_name}")
+                    elif any(word in service_name.lower() for word in ['market', 'markets']):
+                        key_services.append(f"📊 {service_name}")
+                    else:
+                        key_services.append(f"ℹ️ {service_name}")
+
+            # Limit to most important services
+            features = key_services[:6]
+
+            # Create a clean, user-friendly summary
+            protocol_type = "DeFi Protocol"
+            content_lower = content.lower()
+
+            # Check protocol name for known types
+            if protocol_name.lower() in ["uniswap", "sushiswap", "curve", "balancer", "1inch"]:
+                protocol_type = "Decentralized Exchange"
+            elif protocol_name.lower() in ["aave", "compound", "maker", "makerdao"]:
+                protocol_type = "Lending Protocol"
+            elif protocol_name.lower() in ["lido", "rocket pool", "stakewise"]:
+                protocol_type = "Staking Protocol"
+            # Then check content
+            elif "lending" in content_lower or "borrow" in content_lower:
+                protocol_type = "Lending Protocol"
+            elif any(word in content_lower for word in ["dex", "exchange", "swap", "trade", "trading", "marketplace"]):
+                protocol_type = "Decentralized Exchange"
+            elif "staking" in content_lower:
+                protocol_type = "Staking Protocol"
+            elif "yield" in content_lower:
+                protocol_type = "Yield Protocol"
+
+            # Create a clean summary without markdown
+            clean_summary = f"{protocol_name.title()} is a {protocol_type.lower()}"
+
+            # If we have features, add them to summary
+            if features:
+                # Get the first service name without emoji
+                first_service = features[0].split(' ', 1)[1] if ' ' in features[0] else features[0]
+                # Remove parenthetical info for cleaner summary
+                first_service = first_service.split(' (')[0] if ' (' in first_service else first_service
+                clean_summary += f" providing {len(features)} services including {first_service}"
+            # If no features but we have content, extract key info
+            elif content and len(content) > 50:
+                # Extract the most informative sentence from content
+                sentences = content.split('. ')
+                best_sentence = ""
+                for sentence in sentences:
+                    if len(sentence) > 30 and len(sentence) < 150 and any(word in sentence.lower() for word in ['protocol', 'platform', 'exchange', 'defi', 'crypto', 'blockchain']):
+                        best_sentence = sentence.strip()
                         break
-                        
+                if best_sentence:
+                    clean_summary += f". {best_sentence}"
+
+            if security_audits != "Unknown":
+                clean_summary += f". {security_audits}"
+
+            # Return simplified result for AI analysis
             result = {
                 "protocol_name": protocol_name,
-                "url": result_url,
-                "tvl_analyzed": tvl,
-                "security_audits": security_audits,
-                "live_rates": live_rates_str,
-                "rates": live_rates[:5],  # Include top 5 rates
-                "content_preview": content[:200] + "..." if len(content) > 200 else content,
-                "full_content": content,
+                "source_url": result_url,
+                "raw_content": content,
                 "scraping_success": True,
-                "protocols_scraped": 1,
-                "features": features,
-                "source": "search" if "results" in data else "direct"
+                "content_length": len(content)
             }
-            
+
             if debug:
-                logger.info(f"[FIRECRAWL DEBUG] Processed Result:")
+                logger.info(f"[FIRECRAWL DEBUG] Simplified Result for AI Analysis:")
                 logger.info(json.dumps(result, indent=2, default=str))
-                
+
             return result
     
     except asyncio.TimeoutError:
         logger.error(f"Firecrawl API timeout after {timeout} seconds")
         return {
             "error": f"Firecrawl API timeout after {timeout} seconds",
-            "tvl_analyzed": "N/A",
-            "security_audits": "Unknown",
-            "live_rates": "Not available",
             "scraping_success": False,
-            "protocols_scraped": 0,
             "protocol_name": protocol_name,
-            "rates": [],
-            "features": [],
-            "content_preview": f"Unable to retrieve data for {protocol_name} due to timeout."
+            "raw_content": "",
+            "source_url": ""
         }
-    
+
     except Exception as e:
         logger.exception(f"Firecrawl API error: {str(e)}")
         return {
             "error": f"Firecrawl API error: {str(e)}",
-            "tvl_analyzed": "N/A",
-            "security_audits": "Unknown",
-            "live_rates": "Not available",
             "scraping_success": False,
-            "protocols_scraped": 0,
             "protocol_name": protocol_name,
-            "rates": [],
-            "features": [],
-            "content_preview": f"Unable to retrieve data for {protocol_name}."
+            "raw_content": "",
+            "source_url": ""
+        }
+
+async def analyze_protocol_with_ai(
+    protocol_name: str,
+    raw_content: str,
+    source_url: str,
+    openai_api_key: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Analyze scraped protocol content using OpenAI for intelligent summarization
+
+    Args:
+        protocol_name: Name of the protocol
+        raw_content: Raw scraped content from Firecrawl
+        source_url: Source URL of the content
+        openai_api_key: OpenAI API key for analysis
+
+    Returns:
+        Dictionary with AI-generated analysis and summary
+    """
+    if not openai_api_key:
+        logger.warning(f"No OpenAI API key provided for {protocol_name} analysis")
+        return {
+            "error": "OpenAI API key required for protocol analysis",
+            "protocol_name": protocol_name,
+            "ai_summary": "",
+            "key_features": [],
+            "analysis_success": False
+        }
+
+    if not raw_content or len(raw_content.strip()) < 50:
+        return {
+            "error": "Insufficient content for analysis",
+            "protocol_name": protocol_name,
+            "ai_summary": f"Limited information available about {protocol_name}. Please try a different search or check the protocol name.",
+            "key_features": [],
+            "analysis_success": False
+        }
+
+    try:
+        logger.info(f"Starting AI analysis for {protocol_name} with {len(raw_content)} characters of content")
+        client = AsyncOpenAI(api_key=openai_api_key)
+
+        # Create a comprehensive prompt for protocol analysis
+        prompt = f"""
+You are a DeFi protocol research expert. Analyze the following information about {protocol_name} and provide a comprehensive summary.
+
+SCRAPED CONTENT:
+{raw_content[:3000]}  # Limit content to avoid token limits
+
+SOURCE: {source_url}
+
+Please provide:
+1. A clear, concise summary (2-3 sentences) explaining what {protocol_name} is and what it does
+2. Key features and capabilities (list 3-5 main features)
+3. Protocol type (e.g., DEX, Lending, Staking, etc.)
+4. Any notable security information, audits, or risks mentioned
+5. TVL, rates, or other financial metrics if available
+
+Format your response as JSON with these fields:
+- "summary": string (2-3 sentences)
+- "protocol_type": string
+- "key_features": array of strings
+- "security_info": string
+- "financial_metrics": string
+- "analysis_quality": "high" | "medium" | "low" (based on content quality)
+
+Be factual and only include information that's clearly stated in the content. If information is unclear or missing, indicate that.
+"""
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",  # Use cost-effective model for analysis
+            messages=[
+                {"role": "system", "content": "You are a DeFi protocol research expert. Provide accurate, factual analysis based only on the provided content."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+            temperature=0.3  # Lower temperature for more factual responses
+        )
+
+        # Parse the AI response
+        ai_content = response.choices[0].message.content
+        logger.info(f"OpenAI analysis completed for {protocol_name}. Response length: {len(ai_content) if ai_content else 0}")
+
+        # Strip code block formatting before parsing
+        ai_content_clean = strip_code_block(ai_content)
+        # Try to parse as JSON, fallback to text if needed
+        try:
+            ai_analysis = json.loads(ai_content_clean)
+
+            return {
+                "protocol_name": protocol_name,
+                "source_url": source_url,
+                "ai_summary": ai_analysis.get("summary", ""),
+                "protocol_type": ai_analysis.get("protocol_type", "DeFi Protocol"),
+                "key_features": ai_analysis.get("key_features", []),
+                "security_info": ai_analysis.get("security_info", ""),
+                "financial_metrics": ai_analysis.get("financial_metrics", ""),
+                "analysis_quality": ai_analysis.get("analysis_quality", "medium"),
+                "raw_content": raw_content,
+                "analysis_success": True
+            }
+
+        except json.JSONDecodeError:
+            # Fallback to text-based response
+            return {
+                "protocol_name": protocol_name,
+                "source_url": source_url,
+                "ai_summary": ai_content,
+                "protocol_type": "DeFi Protocol",
+                "key_features": [],
+                "security_info": "",
+                "financial_metrics": "",
+                "analysis_quality": "medium",
+                "raw_content": raw_content,
+                "analysis_success": True
+            }
+
+    except Exception as e:
+        logger.error(f"OpenAI analysis error for {protocol_name}: {str(e)}")
+        return {
+            "error": f"AI analysis failed: {str(e)}",
+            "protocol_name": protocol_name,
+            "ai_summary": f"Unable to analyze {protocol_name} at this time. Raw content is available for manual review.",
+            "key_features": [],
+            "analysis_success": False,
+            "raw_content": raw_content
+        }
+
+async def answer_protocol_question(
+    protocol_name: str,
+    question: str,
+    raw_content: str,
+    openai_api_key: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Answer follow-up questions about a protocol using the previously scraped content
+
+    Args:
+        protocol_name: Name of the protocol
+        question: User's follow-up question
+        raw_content: Previously scraped content
+        openai_api_key: OpenAI API key
+
+    Returns:
+        Dictionary with the answer
+    """
+    if not openai_api_key:
+        return {
+            "error": "OpenAI API key required for answering questions",
+            "answer": "I need an OpenAI API key to answer questions about protocols.",
+            "success": False
+        }
+
+    if not raw_content or len(raw_content.strip()) < 50:
+        return {
+            "error": "No protocol content available",
+            "answer": f"I don't have enough information about {protocol_name} to answer that question. Please research the protocol first.",
+            "success": False
+        }
+
+    try:
+        client = AsyncOpenAI(api_key=openai_api_key)
+
+        prompt = f"""
+You are a DeFi protocol expert. Answer the user's question about {protocol_name} based ONLY on the provided content.
+
+PROTOCOL CONTENT:
+{raw_content[:4000]}
+
+USER QUESTION: {question}
+
+Please provide a clear, accurate answer based only on the information in the content above. If the information needed to answer the question is not in the content, say so clearly.
+
+Keep your answer concise but informative (2-4 sentences).
+"""
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": f"You are a helpful assistant answering questions about {protocol_name}. Only use the provided content to answer questions."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.3
+        )
+
+        answer = response.choices[0].message.content
+
+        return {
+            "protocol_name": protocol_name,
+            "question": question,
+            "answer": answer,
+            "success": True
+        }
+
+    except Exception as e:
+        logger.error(f"Error answering question about {protocol_name}: {str(e)}")
+        return {
+            "error": f"Failed to answer question: {str(e)}",
+            "answer": f"I encountered an error while trying to answer your question about {protocol_name}. Please try again.",
+            "success": False
         }
 
 async def get_protocol_list() -> List[Dict[str, Any]]:

@@ -47,6 +47,8 @@ import { formatErrorMessage } from "../utils/errorFormatting";
 import { formatLinks } from "../utils/linkFormatting";
 import { useCommandActions } from "../hooks/useCommandActions";
 import { getAgentInfo, type AgentType } from "../utils/agentInfo";
+import { BalanceResult } from "./BalanceResult";
+import { ProtocolResearchResult } from "./ProtocolResearchResult";
 // Removed LoadingSteps import - no longer needed
 
 // Removed unused helper functions - now handled by PortfolioSummary component
@@ -343,6 +345,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
       content?.type === "transfer_ready" &&
       agentType === "transfer") ||
     (agentType === "transfer" && transactionData);
+  const isBalanceResult =
+    typeof content === "object" &&
+    content?.type === "balance_result" &&
+    agentType === "balance";
+  const isProtocolResearch =
+    typeof content === "object" &&
+    content?.type === "protocol_research_result" &&
+    agentType === "protocol_research";
 
   // Debug logging for bridge and transfer transactions
   React.useEffect(() => {
@@ -862,6 +872,10 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 onCancel={handleCancel}
                 isLoading={isExecuting}
               />
+            ) : isBalanceResult ? (
+              <BalanceResult content={content} />
+            ) : isProtocolResearch ? (
+              <ProtocolResearchResult content={content} />
             ) : agentType === "agno" || agentType === "portfolio" ? (
               <VStack spacing={4} align="stretch" w="100%">
                 {/* Enhanced Portfolio Summary */}

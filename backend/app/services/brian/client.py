@@ -341,6 +341,113 @@ class BrianClient:
 
         return result
 
+    async def get_balance(
+        self,
+        wallet_address: str,
+        chain_id: int,
+        token: str = None
+    ) -> Dict[str, Any]:
+        """
+        Get wallet balance using Brian API
+
+        Args:
+            wallet_address: Wallet address to check balance for
+            chain_id: Chain ID to check balance on
+            token: Optional specific token to check (if None, checks all balances)
+
+        Returns:
+            Dictionary with balance information
+        """
+        try:
+            # Get chain name for the prompt
+            chain_name = self._get_chain_name(chain_id)
+
+            # Format the prompt for balance checking
+            if token:
+                prompt = f"What is my {token.upper()} balance?"
+            else:
+                prompt = f"What is my balance?"
+
+            # Validate wallet address
+            if not wallet_address or not wallet_address.startswith('0x'):
+                return {
+                    "error": "user_friendly",
+                    "message": "Invalid wallet address provided.",
+                    "technical_details": f"Invalid wallet address: {wallet_address}"
+                }
+
+            print(f"Calling Brian API for balance check with: {prompt}")
+            print(f"Chain: {chain_id} ({chain_name})")
+            print(f"Wallet address: {wallet_address}")
+
+            # Prepare request payload
+            payload = {
+                "prompt": prompt,
+                "chainId": str(chain_id),
+                "address": wallet_address
+            }
+
+            print(f"Request payload: {payload}")
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/agent/transaction",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=30.0
+                )
+
+                print(f"Brian API response status: {response.status_code}")
+                print(f"Brian API response: {response.text}")
+
+                if response.status_code == 200:
+                    data = response.json()
+
+                    # Check if Brian successfully processed the balance request
+                    if "result" in data and data["result"]:
+                        result = data["result"][0] if isinstance(data["result"], list) else data["result"]
+
+                        # Extract balance information from the response
+                        return {
+                            "success": True,
+                            "balance_data": result,
+                            "chain": chain_name,
+                            "address": wallet_address,
+                            "token": token or "All tokens"
+                        }
+                    else:
+                        # Brian API returned success but no balance data
+                        return {
+                            "error": "user_friendly",
+                            "message": f"Unable to retrieve balance for {wallet_address} on {chain_name}.",
+                            "technical_details": f"Brian API returned no balance data: {response.text}"
+                        }
+
+                elif response.status_code == 500:
+                    response_text = response.text
+                    print(f"Brian API 500 error for balance: {response_text}")
+
+                    return {
+                        "error": "user_friendly",
+                        "message": f"Balance checking is temporarily unavailable for {chain_name}. Please try again later.",
+                        "technical_details": f"Brian API returned 500: {response_text}"
+                    }
+
+                else:
+                    return {
+                        "error": "user_friendly",
+                        "message": f"Unable to check balance on {chain_name}. Please try again.",
+                        "technical_details": f"Brian API returned {response.status_code}: {response.text}"
+                    }
+
+        except Exception as e:
+            print(f"Balance check error: {str(e)}")
+            return {
+                "error": "user_friendly",
+                "message": "Balance checking service is currently unavailable. Please try again later.",
+                "technical_details": f"Exception: {str(e)}"
+            }
+
     def _get_chain_name(self, chain_id: int) -> str:
         """Map chain ID to a human-readable chain name."""
         return ChainRegistry.get_chain_name(chain_id)

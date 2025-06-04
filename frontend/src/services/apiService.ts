@@ -124,14 +124,18 @@ export class ApiService {
     }
 
     // For other commands, use the chat endpoint
+    const { openaiKey } = this.getApiKeys();
     const response = await fetch(`${this.apiUrl}/chat/process-command`, {
       method: "POST",
-      headers: this.getHeaders(),
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         command,
         wallet_address: walletAddress,
         chain_id: chainId || 1,
         user_name: userName,
+        openai_api_key: openaiKey, // Include OpenAI key in body instead of headers
       }),
     });
 

@@ -14,6 +14,7 @@ class CommandType(Enum):
     BALANCE = "balance"
     PORTFOLIO = "portfolio"
     PROTOCOL_RESEARCH = "protocol_research"
+    CONTEXTUAL_QUESTION = "contextual_question"
     GREETING = "greeting"
     CONFIRMATION = "confirmation"
     UNKNOWN = "unknown"
@@ -96,7 +97,7 @@ class ResponseContent(BaseModel):
 
 class UnifiedResponse(BaseModel):
     """Unified response model for all command types."""
-    content: Union[str, ResponseContent, Dict[str, Any]] = Field(description="Response content")
+    content: Union[str, Dict[str, Any], ResponseContent] = Field(description="Response content")
     agent_type: AgentType = Field(description="Agent type that processed the command")
     status: str = Field(default="success", description="Response status (success/error)")
     awaiting_confirmation: bool = Field(default=False, description="Whether confirmation is needed")

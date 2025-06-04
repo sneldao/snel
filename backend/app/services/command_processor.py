@@ -4,6 +4,7 @@ Clean, modular, DRY implementation without import chaos.
 """
 import logging
 from typing import Dict, Any, Optional, Union
+from openai import AsyncOpenAI
 
 from app.models.unified_models import (
     CommandType, UnifiedCommand, UnifiedResponse, AgentType,
@@ -11,6 +12,7 @@ from app.models.unified_models import (
 )
 from app.services.unified_command_parser import UnifiedCommandParser
 from app.config.settings import Settings
+from app.services.chat_history import chat_history_service
 from app.core.exceptions import (
     ValidationError, 
     BusinessLogicError, 
@@ -64,21 +66,93 @@ class CommandProcessor:
         """Validate a unified command."""
         return UnifiedCommandParser.validate_command(unified_command)
     
+    async def _classify_with_ai(self, unified_command: UnifiedCommand) -> CommandType:
+        """Use AI to classify ambiguous commands based on context."""
+        import os
+        openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            return CommandType.UNKNOWN
+
+        try:
+            # Get recent conversation context
+            context = chat_history_service.get_recent_context(
+                unified_command.wallet_address,
+                unified_command.user_name,
+                num_messages=5
+            )
+
+            client = AsyncOpenAI(api_key=openai_key)
+
+            prompt = f"""
+You are a DeFi assistant analyzing user commands. Based on the conversation context and the current command, classify the command type.
+
+RECENT CONVERSATION CONTEXT:
+{context}
+
+CURRENT COMMAND: "{unified_command.command}"
+
+Command types available:
+- CONTEXTUAL_QUESTION: Questions about previously discussed topics (like "what did you learn?", "tell me more", "what are the risks?")
+- PROTOCOL_RESEARCH: Research requests about DeFi protocols
+- TRANSFER: Token transfer requests
+- BRIDGE: Cross-chain bridge requests
+- SWAP: Token swap requests
+- BALANCE: Balance check requests
+- PORTFOLIO: Portfolio analysis requests
+- GREETING: Greetings and casual conversation
+- CONFIRMATION: Yes/no confirmations
+- UNKNOWN: Unclear or unrelated commands
+
+Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
+
+If the user is asking about something that was recently discussed (like a protocol that was just researched), classify it as CONTEXTUAL_QUESTION.
+"""
+
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a command classifier. Respond with only the command type name."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=20,
+                temperature=0.1
+            )
+
+            ai_classification = response.choices[0].message.content.strip().upper()
+
+            # Map AI response to CommandType enum
+            try:
+                return CommandType(ai_classification.lower())
+            except ValueError:
+                logger.warning(f"AI returned unknown command type: {ai_classification}")
+                return CommandType.UNKNOWN
+
+        except Exception as e:
+            logger.error(f"AI classification failed: {str(e)}")
+            return CommandType.UNKNOWN
+
     async def process_command(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process a command using the appropriate handler."""
         try:
+            # If command was classified as UNKNOWN, try AI classification
+            if unified_command.command_type == CommandType.UNKNOWN:
+                ai_classification = await self._classify_with_ai(unified_command)
+                if ai_classification != CommandType.UNKNOWN:
+                    unified_command.command_type = ai_classification
+                    logger.info(f"AI reclassified command '{unified_command.command}' as {ai_classification}")
+
             # Validate wallet connection for transaction commands
             if unified_command.command_type in [CommandType.TRANSFER, CommandType.BRIDGE, CommandType.SWAP]:
                 if not unified_command.wallet_address:
                     raise wallet_not_connected_error()
-            
+
             # Validate chain support
             if unified_command.chain_id and unified_command.chain_id not in self.settings.chains.supported_chains:
                 raise unsupported_chain_error(
-                    unified_command.chain_id, 
+                    unified_command.chain_id,
                     list(self.settings.chains.supported_chains.keys())
                 )
-            
+
             command_type = unified_command.command_type
             
             if command_type == CommandType.TRANSFER:
@@ -93,6 +167,8 @@ class CommandProcessor:
                 return await self._process_portfolio(unified_command)
             elif command_type == CommandType.PROTOCOL_RESEARCH:
                 return await self._process_protocol_research(unified_command)
+            elif command_type == CommandType.CONTEXTUAL_QUESTION:
+                return await self._process_contextual_question(unified_command)
             elif command_type == CommandType.GREETING:
                 return await self._process_greeting(unified_command)
             else:
@@ -457,15 +533,94 @@ class CommandProcessor:
             )
 
     async def _process_balance(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process balance check commands."""
-        return UnifiedResponse(
-            content={
-                "message": "Balance checking functionality coming soon!",
-                "type": "info"
-            },
-            agent_type=AgentType.BALANCE,
-            status="success"
-        )
+        """Process balance check commands using Brian API."""
+        try:
+            logger.info(f"Processing balance command: {unified_command.command}")
+
+            # Extract token if specified
+            details = unified_command.details
+            token = details.token_in.symbol if details and details.token_in else None
+
+            # Validate wallet connection
+            if not unified_command.wallet_address:
+                raise wallet_not_connected_error()
+
+            # Get chain name for display
+            chain_name = self.settings.chains.supported_chains.get(
+                unified_command.chain_id,
+                f"Chain {unified_command.chain_id}"
+            )
+
+            logger.info(f"Checking balance for {unified_command.wallet_address} on {chain_name}")
+            if token:
+                logger.info(f"Specific token requested: {token}")
+
+            # Call Brian API for balance check
+            result = await self.brian_client.get_balance(
+                wallet_address=unified_command.wallet_address,
+                chain_id=unified_command.chain_id,
+                token=token
+            )
+
+            if "error" in result:
+                # Return user-friendly error response
+                return UnifiedResponse(
+                    content={
+                        "message": result.get("message", "Unable to check balance"),
+                        "type": "balance_error",
+                        "chain": chain_name,
+                        "token": token or "All tokens",
+                        "suggestions": [
+                            "Try again in a moment",
+                            "Check if you're on a supported network",
+                            "Verify your wallet is connected"
+                        ]
+                    },
+                    agent_type=AgentType.BALANCE,
+                    status="error",
+                    error=result.get("message", "Balance check failed")
+                )
+
+            # Format successful balance response
+            balance_data = result.get("balance_data", {})
+
+            content = {
+                "message": f"Balance check complete for {chain_name}",
+                "type": "balance_result",
+                "chain": chain_name,
+                "address": unified_command.wallet_address,
+                "token": token or "All tokens",
+                "balance_data": balance_data,
+                "requires_transaction": False
+            }
+
+            return UnifiedResponse(
+                content=content,
+                agent_type=AgentType.BALANCE,
+                status="success",
+                metadata={
+                    "parsed_command": {
+                        "token": token,
+                        "chain": chain_name,
+                        "command_type": "balance"
+                    },
+                    "balance_details": {
+                        "chain_id": unified_command.chain_id,
+                        "wallet_address": unified_command.wallet_address,
+                        "token_filter": token
+                    }
+                }
+            )
+
+        except (ValidationError, BusinessLogicError, ExternalServiceError):
+            raise  # Re-raise known exceptions
+        except Exception as e:
+            logger.exception("Error processing balance command")
+            raise ExternalServiceError(
+                message="Failed to check balance",
+                service_name="Balance Service",
+                original_error=str(e)
+            )
 
     async def _process_portfolio(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process portfolio analysis commands."""
@@ -479,15 +634,157 @@ class CommandProcessor:
         )
 
     async def _process_protocol_research(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process protocol research commands."""
-        return UnifiedResponse(
-            content={
-                "message": "Protocol research functionality coming soon!",
-                "type": "info"
-            },
-            agent_type=AgentType.PROTOCOL_RESEARCH,
-            status="success"
-        )
+        """Process protocol research commands using Firecrawl and AI analysis."""
+        try:
+            from app.services.external.firecrawl_service import get_protocol_details, analyze_protocol_with_ai
+
+            logger.info(f"Processing protocol research command: {unified_command.command}")
+
+            # Extract protocol name from command
+            details = unified_command.details
+            protocol_name = None
+
+            # Try to extract protocol name from various sources
+            if details and details.token_in and details.token_in.symbol:
+                protocol_name = details.token_in.symbol
+            elif details and hasattr(details, 'protocol_name'):
+                protocol_name = details.protocol_name
+            else:
+                # Try to extract from the command text
+                command_lower = unified_command.command.lower()
+                # Look for common patterns like "research X", "tell me about X", "what is X"
+                import re
+                patterns = [
+                    r'research\s+(\w+)',
+                    r'tell me about\s+(\w+)',
+                    r'what is\s+(\w+)',
+                    r'about\s+(\w+)',
+                    r'info on\s+(\w+)',
+                    r'explain\s+(\w+)'
+                ]
+
+                for pattern in patterns:
+                    match = re.search(pattern, command_lower)
+                    if match:
+                        protocol_name = match.group(1)
+                        break
+
+            if not protocol_name:
+                return UnifiedResponse(
+                    content={
+                        "message": "Please specify a protocol to research. For example: 'research Uniswap' or 'tell me about Aave'",
+                        "type": "protocol_research_error",
+                        "suggestions": [
+                            "research Uniswap",
+                            "tell me about Aave",
+                            "what is Compound",
+                            "explain Curve protocol"
+                        ]
+                    },
+                    agent_type=AgentType.PROTOCOL_RESEARCH,
+                    status="error",
+                    error="No protocol specified"
+                )
+
+            logger.info(f"Researching protocol: {protocol_name}")
+
+            # First, scrape the protocol content using Firecrawl
+            scrape_result = await get_protocol_details(
+                protocol_name=protocol_name,
+                max_content_length=2000,  # Increased for better AI analysis
+                timeout=15,
+                debug=True
+            )
+
+            if not scrape_result.get("scraping_success", False):
+                # Return user-friendly error response
+                return UnifiedResponse(
+                    content={
+                        "message": f"Unable to find detailed information about {protocol_name}. The protocol might not exist or our research service is temporarily unavailable.",
+                        "type": "protocol_research_error",
+                        "protocol": protocol_name,
+                        "suggestions": [
+                            "Check the protocol name spelling",
+                            "Try researching a well-known protocol like Uniswap or Aave",
+                            "Try again in a moment"
+                        ]
+                    },
+                    agent_type=AgentType.PROTOCOL_RESEARCH,
+                    status="error",
+                    error=scrape_result.get("error", "Research failed")
+                )
+
+            # Now analyze the scraped content with AI
+            # Use user-provided key or fall back to environment variable
+            import os
+            openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
+            logger.info(f"Starting AI analysis for {protocol_name}. OpenAI key available: {bool(openai_key)}")
+            ai_result = await analyze_protocol_with_ai(
+                protocol_name=protocol_name,
+                raw_content=scrape_result.get("raw_content", ""),
+                source_url=scrape_result.get("source_url", ""),
+                openai_api_key=openai_key
+            )
+            logger.info(f"AI analysis completed for {protocol_name}. Success: {ai_result.get('analysis_success', False)}")
+
+            # Combine scraping and AI analysis results
+            result = {
+                **scrape_result,
+                **ai_result,
+                "type": "protocol_research_result"
+            }
+
+            # Format successful research response with AI analysis
+            content = {
+                "message": f"Research complete for {protocol_name}",
+                "type": "protocol_research_result",
+                "protocol_name": protocol_name,
+                "ai_summary": result.get("ai_summary", ""),
+                "protocol_type": result.get("protocol_type", "DeFi Protocol"),
+                "key_features": result.get("key_features", []),
+                "security_info": result.get("security_info", ""),
+                "financial_metrics": result.get("financial_metrics", ""),
+                "analysis_quality": result.get("analysis_quality", "medium"),
+                "source_url": result.get("source_url", ""),
+                "raw_content": result.get("raw_content", ""),
+                "analysis_success": result.get("analysis_success", False),
+                "content_length": result.get("content_length", 0),
+                "requires_transaction": False
+            }
+
+            return UnifiedResponse(
+                content=content,
+                agent_type=AgentType.PROTOCOL_RESEARCH,
+                status="success",
+                metadata={
+                    "parsed_command": {
+                        "protocol": protocol_name,
+                        "command_type": "protocol_research"
+                    },
+                    "research_details": {
+                        "protocols_scraped": result.get("protocols_scraped", 1),
+                        "scraping_success": result.get("scraping_success", False),
+                        "source": result.get("source", "firecrawl")
+                    }
+                }
+            )
+
+        except Exception as e:
+            logger.exception("Error processing protocol research command")
+            return UnifiedResponse(
+                content={
+                    "message": f"Protocol research service is temporarily unavailable. Please try again later.",
+                    "type": "protocol_research_error",
+                    "suggestions": [
+                        "Try again in a moment",
+                        "Check your internet connection",
+                        "Try researching a different protocol"
+                    ]
+                },
+                agent_type=AgentType.PROTOCOL_RESEARCH,
+                status="error",
+                error=str(e)
+            )
 
     async def _process_greeting(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process greeting commands."""
@@ -513,6 +810,98 @@ class CommandProcessor:
             agent_type=AgentType.DEFAULT,
             status="success"
         )
+
+    async def _process_contextual_question(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """Process contextual questions using AI and conversation history."""
+        try:
+            import os
+            openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                return UnifiedResponse(
+                    content={
+                        "message": "I need an OpenAI API key to answer contextual questions.",
+                        "type": "error"
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="error",
+                    error="No OpenAI API key"
+                )
+
+            # Get recent conversation context
+            context = chat_history_service.get_recent_context(
+                unified_command.wallet_address,
+                unified_command.user_name,
+                num_messages=10  # Get more context for better answers
+            )
+
+            if not context:
+                return UnifiedResponse(
+                    content={
+                        "message": "I don't have enough context to answer that question. Could you be more specific or ask about a particular protocol?",
+                        "type": "contextual_response",
+                        "suggestions": [
+                            "Try asking 'research Uniswap' first",
+                            "Ask about a specific protocol",
+                            "Be more specific about what you want to know"
+                        ]
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="success"
+                )
+
+            client = AsyncOpenAI(api_key=openai_key)
+
+            prompt = f"""
+You are SNEL, a helpful DeFi assistant. Answer the user's question based on the recent conversation context.
+
+RECENT CONVERSATION CONTEXT:
+{context}
+
+USER QUESTION: "{unified_command.command}"
+
+Instructions:
+- Answer based on the conversation context
+- If the user is asking about a protocol that was recently researched, provide insights from that research
+- Be conversational and helpful, not robotic
+- If you can't answer based on the context, say so and suggest what they could ask instead
+- Keep responses concise but informative (2-4 sentences)
+- Act like an intelligent agent, not a command processor
+
+Respond naturally as if you're having a conversation.
+"""
+
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are SNEL, a helpful and conversational DeFi assistant. Respond naturally based on conversation context."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.7  # Higher temperature for more natural responses
+            )
+
+            ai_response = response.choices[0].message.content
+
+            return UnifiedResponse(
+                content={
+                    "message": ai_response,
+                    "type": "contextual_response"
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+
+        except Exception as e:
+            logger.exception(f"Error processing contextual question: {unified_command.command}")
+            return UnifiedResponse(
+                content={
+                    "message": "I encountered an error while trying to answer your question. Could you try rephrasing it?",
+                    "type": "error"
+                },
+                agent_type=AgentType.DEFAULT,
+                status="error",
+                error=str(e)
+            )
 
     async def _process_unknown(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process unknown commands."""

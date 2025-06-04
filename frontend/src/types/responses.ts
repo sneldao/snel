@@ -41,7 +41,7 @@ export type Response = {
   awaitingConfirmation?: boolean;
   confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
-  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "transfer" | "agno";
+  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "transfer" | "agno" | "balance" | "protocol_research";
   metadata?: any;
   requires_selection?: boolean;
   all_quotes?: any[];

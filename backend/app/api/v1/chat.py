@@ -4,6 +4,7 @@ Clean, modular implementation without import chaos.
 """
 import logging
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from app.services.chat_history import chat_history_service
 from app.services.command_processor import CommandProcessor
@@ -14,6 +15,17 @@ from app.core.exceptions import SNELException
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
+
+class ProtocolQuestionRequest(BaseModel):
+    protocol_name: str
+    question: str
+    raw_content: str
+    openai_api_key: str = None
+
+class ProtocolQuestionResponse(BaseModel):
+    success: bool
+    answer: str = ""
+    error: str = ""
 
 @router.post("/process-command")
 async def process_command(
@@ -100,6 +112,33 @@ async def process_command(
             },
             status="error",
             error=str(e)
+        )
+
+@router.post("/ask-protocol-question")
+async def ask_protocol_question(request: ProtocolQuestionRequest) -> ProtocolQuestionResponse:
+    """Ask a follow-up question about a protocol using previously scraped content."""
+    try:
+        from app.services.external.firecrawl_service import answer_protocol_question
+
+        result = await answer_protocol_question(
+            protocol_name=request.protocol_name,
+            question=request.question,
+            raw_content=request.raw_content,
+            openai_api_key=request.openai_api_key
+        )
+
+        return ProtocolQuestionResponse(
+            success=result.get("success", False),
+            answer=result.get("answer", ""),
+            error=result.get("error", "")
+        )
+
+    except Exception as e:
+        logger.exception("Error processing protocol question")
+        return ProtocolQuestionResponse(
+            success=False,
+            answer="",
+            error=f"Failed to process question: {str(e)}"
         )
 
 @router.get("/agent-info")
