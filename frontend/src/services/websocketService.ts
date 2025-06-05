@@ -20,11 +20,23 @@ export class WebSocketService {
   private connectReject: ((reason?: any) => void) | null = null;
 
   constructor() {
-    // Get WebSocket URL from environment or default to localhost
+    // Get WebSocket URL using the same logic as ApiService
     const isProduction = process.env.NODE_ENV === 'production';
-    const host = isProduction ? window.location.host : 'localhost:8000';
-    const protocol = isProduction ? (window.location.protocol === 'https:' ? 'wss:' : 'ws:') : 'ws:';
-    this.baseUrl = `${protocol}//${host}/api/v1/ws`;
+
+    // Check if we have a specific API URL configured
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+    if (apiUrl) {
+      // Use the configured API URL and convert to WebSocket URL
+      const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+      this.baseUrl = `${wsUrl}/api/v1/ws`;
+    } else if (isProduction) {
+      // In production without API URL, use the Northflank backend URL
+      this.baseUrl = 'wss://p02--snel-web-app--wxd25gkpcp8m.code.run/api/v1/ws';
+    } else {
+      // Development fallback
+      this.baseUrl = 'ws://localhost:8000/api/v1/ws';
+    }
   }
 
   /**

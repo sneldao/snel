@@ -13,7 +13,9 @@ export class ApiService {
   constructor() {
     // Set the base URL based on environment
     this.baseUrl =
-      process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
+      process.env.NODE_ENV === "production"
+        ? "https://p02--snel-web-app--wxd25gkpcp8m.code.run"
+        : "http://localhost:8000";
 
     // API prefix is now /api/v1 to match backend
     this.apiUrl = `${this.baseUrl}/api/v1`;
