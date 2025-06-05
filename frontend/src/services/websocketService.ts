@@ -23,20 +23,17 @@ export class WebSocketService {
     // Get WebSocket URL using the same logic as ApiService
     const isProduction = process.env.NODE_ENV === 'production';
 
-    // Check if we have a specific API URL configured
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (apiUrl) {
-      // Use the configured API URL and convert to WebSocket URL
-      const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
-      this.baseUrl = `${wsUrl}/api/v1/ws`;
-    } else if (isProduction) {
-      // In production without API URL, use the Northflank backend URL
+    if (isProduction) {
+      // In production, always use the Northflank backend URL
       this.baseUrl = 'wss://p02--snel-web-app--wxd25gkpcp8m.code.run/api/v1/ws';
     } else {
-      // Development fallback
-      this.baseUrl = 'ws://localhost:8000/api/v1/ws';
+      // In development, check for API URL or use localhost
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+      this.baseUrl = `${wsUrl}/api/v1/ws`;
     }
+
+    console.log('WebSocket service initialized with baseUrl:', this.baseUrl);
   }
 
   /**
@@ -77,6 +74,8 @@ export class WebSocketService {
     if (chainId) {
       url += `?chain_id=${chainId}`;
     }
+
+    console.log('Attempting WebSocket connection to:', url);
 
     // Close existing connection if any
     this.disconnect();
