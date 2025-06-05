@@ -234,8 +234,14 @@ async def get_real_portfolio_data(wallet_address: str, chain_id: Optional[int] =
                 "error": portfolio_data['error']
             }
         
+        # Debug logging for data transformation
+        logger.info(f"Raw portfolio data keys: {list(portfolio_data.keys())}")
+        logger.info(f"Portfolio value: {portfolio_data.get('total_portfolio_value_usd', 0)}")
+        logger.info(f"Total tokens: {portfolio_data.get('total_tokens', 0)}")
+        logger.info(f"Active chains: {portfolio_data.get('chains_active', 0)}")
+
         # Format response consistently
-        return {
+        formatted_response = {
             "api_calls_made": portfolio_data.get("api_calls_made", 1),
             "portfolio_value": portfolio_data.get("total_portfolio_value_usd", 0),
             "active_chains": portfolio_data.get("chains_active", 0),
@@ -243,6 +249,9 @@ async def get_real_portfolio_data(wallet_address: str, chain_id: Optional[int] =
             "risk_level": f"{portfolio_data.get('risk_score', 0)}/5",
             "raw_data": portfolio_data  # Include full data for detailed analysis
         }
+
+        logger.info(f"Formatted response: portfolio_value={formatted_response['portfolio_value']}, token_count={formatted_response['token_count']}, active_chains={formatted_response['active_chains']}")
+        return formatted_response
     except Exception as e:
         logger.error(f"Error getting portfolio data: {str(e)}")
         return {

@@ -45,9 +45,17 @@ class Web3Helper:
         self.current_api_calls = 0
 
         # API keys for blockchain data providers
-        self.alchemy_api_key = os.getenv("ALCHEMY_API_KEY")
+        # Check both ALCHEMY_API_KEY and ALCHEMY_KEY for compatibility
+        self.alchemy_api_key = os.getenv("ALCHEMY_API_KEY") or os.getenv("ALCHEMY_KEY")
         self.moralis_api_key = os.getenv("MORALIS_API_KEY")
         self.covalent_api_key = os.getenv("COVALENT_API_KEY")
+
+        # Debug logging for API key availability
+        logger.info(f"Alchemy API key available: {bool(self.alchemy_api_key)}")
+        if self.alchemy_api_key:
+            logger.info(f"Using Alchemy API key: {self.alchemy_api_key[:10]}...")
+        else:
+            logger.warning("No Alchemy API key found. Token balance fetching will be disabled.")
 
         # Chain ID to network name mapping for APIs
         self.chain_names = {
@@ -69,6 +77,7 @@ class Web3Helper:
     async def get_token_balances_alchemy(self, wallet_address: str, chain_id: int) -> List[Dict]:
         """Get token balances using Alchemy API with timeout."""
         if not self.alchemy_api_key:
+            logger.warning(f"No Alchemy API key available for token balance fetch on chain {chain_id}")
             return []
 
         try:
@@ -77,9 +86,11 @@ class Web3Helper:
             if self.current_api_calls > self.max_api_calls:
                 logger.warning(f"API call limit reached ({self.max_api_calls}), skipping token balance fetch")
                 return []
-                
+
             network = self.chain_names.get(chain_id, "eth-mainnet")
             url = f"https://{network}.g.alchemy.com/v2/{self.alchemy_api_key}"
+
+            logger.info(f"Fetching token balances for {wallet_address} on {network} using Alchemy API")
 
             # Add timeout configuration
             timeout_config = httpx.Timeout(timeout=10.0, connect=5.0, read=10.0, write=5.0)
@@ -91,13 +102,19 @@ class Web3Helper:
                     "params": [wallet_address]
                 })
 
+                logger.info(f"Alchemy API response status: {response.status_code}")
+
                 if response.status_code == 200:
                     data = response.json()
-                    return data.get("result", {}).get("tokenBalances", [])
+                    token_balances = data.get("result", {}).get("tokenBalances", [])
+                    logger.info(f"Retrieved {len(token_balances)} token balances from Alchemy")
+                    return token_balances
+                else:
+                    logger.error(f"Alchemy API error: {response.status_code} - {response.text}")
 
         except Exception as e:
             logger.error(f"Error fetching token balances from Alchemy: {str(e)}")
-            
+
         return []
 
     async def get_token_metadata_alchemy(self, token_addresses: List[str], chain_id: int) -> Dict:
@@ -356,11 +373,25 @@ async def get_portfolio_summary(wallet_address: str, chain_id: Optional[int] = N
         token_diversity = 0
         estimated_token_value = 0
 
+        # Debug logging for token processing
+        logger.info(f"Processing token balances for {wallet_address}. Token balance chains: {list(portfolio_data.get('token_balances', {}).keys())}")
+
         for chain_name, token_data in portfolio_data.get("token_balances", {}).items():
             tokens = token_data.get("tokens", [])
+            logger.info(f"Chain {chain_name}: {len(tokens)} tokens, {len(token_data.get('metadata', {}))} metadata entries")
+
             non_zero_tokens = [t for t in tokens if int(t.get("tokenBalance", "0"), 16) > 0]
             total_tokens += len(non_zero_tokens)
             token_diversity += len(set(t.get("contractAddress") for t in non_zero_tokens))
+
+            # Log token details for debugging
+            for token in non_zero_tokens[:5]:  # Log first 5 tokens for debugging
+                balance_hex = token.get("tokenBalance", "0")
+                balance_int = int(balance_hex, 16)
+                contract_addr = token.get("contractAddress", "unknown")
+                metadata = token_data.get("metadata", {}).get(contract_addr, {})
+                symbol = metadata.get("symbol", "UNKNOWN")
+                logger.info(f"Token {symbol}: balance={balance_int / 10**18:.4f}, estimated_value=${min(balance_int / 10**18 * 5, 1000):.2f}")
 
             # Estimate token values (simplified - in production would use real price APIs)
             for token in non_zero_tokens:

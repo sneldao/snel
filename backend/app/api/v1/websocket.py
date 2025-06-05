@@ -284,6 +284,15 @@ async def perform_portfolio_analysis(
             "risks": identify_risks(service_results),
             "timestamp": datetime.utcnow().isoformat()
         }
+
+        # Debug logging for final response
+        if service_results["portfolio_data"]:
+            portfolio_data = service_results["portfolio_data"]
+            logger.info(f"Final WebSocket response - Portfolio value: {portfolio_data.get('portfolio_value', 0)}")
+            logger.info(f"Final WebSocket response - Token count: {portfolio_data.get('token_count', 0)}")
+            logger.info(f"Final WebSocket response - Active chains: {portfolio_data.get('active_chains', 0)}")
+        else:
+            logger.warning("No portfolio data in final WebSocket response")
         
         if progress_callback:
             await progress_callback("Analysis complete", 100, "Portfolio analysis finished")
