@@ -201,6 +201,17 @@ export default function MainApp() {
       } finally {
         setIsRetryingPortfolio(false);
       }
+    } else if (action.type === "stablecoin_suggestion") {
+      // Add SNEL message suggesting swap command
+      const timestamp = new Date().toISOString();
+      const suggestionResponse = {
+        content: action.message,
+        timestamp,
+        isCommand: false,
+        status: "success" as const,
+        agentType: "default" as const,
+      };
+      setResponses((prev) => [...prev, suggestionResponse]);
     }
   };
 

@@ -42,7 +42,9 @@ import {
   useDisclosure,
   UnorderedList,
   ListItem,
+  Collapse,
 } from "@chakra-ui/react";
+import { ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
 import {
   FaChartPie,
   FaExchangeAlt,
@@ -335,13 +337,50 @@ const TokenHoldingsTable = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
 
     console.log("Token extraction debug:", {
       portfolioData,
+      rawData: analysis?.raw_data,
     });
 
-    // For now, return empty array since PortfolioData interface doesn't include token details
-    // This will be populated when the backend provides token-level data
+    // Extract tokens from the raw_data which contains the actual token_balances
+    if (analysis?.raw_data?.token_balances) {
+      const tokenBalances = analysis.raw_data.token_balances;
+
+      // Iterate through each chain's token data
+      Object.entries(tokenBalances).forEach(
+        ([chainName, chainData]: [string, any]) => {
+          if (chainData?.tokens && chainData?.metadata) {
+            const chainTokens = chainData.tokens;
+            const metadata = chainData.metadata;
+
+            chainTokens.forEach((token: any) => {
+              const contractAddress = token.contractAddress;
+              const tokenMeta = metadata[contractAddress];
+
+              if (tokenMeta && token.tokenBalance) {
+                const balanceHex = token.tokenBalance;
+                const balanceInt = parseInt(balanceHex, 16);
+                const decimals = tokenMeta.decimals || 18;
+                const balance = balanceInt / Math.pow(10, decimals);
+
+                // Only show tokens with meaningful balances
+                if (balance > 0.001) {
+                  tokens.push({
+                    symbol: tokenMeta.symbol || "UNKNOWN",
+                    name: tokenMeta.name || "Unknown Token",
+                    balance: balance.toFixed(4),
+                    value: `$${(balance * 1).toFixed(2)}`, // Placeholder value
+                    change: "+0.00%", // Placeholder change
+                    chain: chainName,
+                    contractAddress,
+                  });
+                }
+              }
+            });
+          }
+        }
+      );
+    }
 
     console.log("Extracted tokens:", tokens);
-
     return tokens;
   };
 
@@ -371,9 +410,9 @@ const TokenHoldingsTable = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
             <Thead>
               <Tr>
                 <Th>Token</Th>
+                <Th>Chain</Th>
                 <Th isNumeric>Balance</Th>
-                <Th isNumeric>Value</Th>
-                <Th isNumeric>24h Change</Th>
+                <Th isNumeric>Est. Value</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -382,22 +421,22 @@ const TokenHoldingsTable = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
                   <Td>
                     <VStack align="start" spacing={0}>
                       <Text fontWeight="medium">{token.symbol}</Text>
-                      <Text fontSize="xs" color="gray.500">
+                      <Text fontSize="xs" color="gray.500" noOfLines={1}>
                         {token.name}
                       </Text>
                     </VStack>
                   </Td>
-                  <Td isNumeric>{token.balance}</Td>
-                  <Td isNumeric fontWeight="medium">
-                    {token.value}
+                  <Td>
+                    <Badge colorScheme="blue" variant="subtle" size="sm">
+                      {token.chain}
+                    </Badge>
                   </Td>
                   <Td isNumeric>
-                    <Text
-                      color={
-                        token.change.startsWith("+") ? "green.500" : "red.500"
-                      }
-                    >
-                      {token.change}
+                    <Text fontWeight="medium">{token.balance}</Text>
+                  </Td>
+                  <Td isNumeric>
+                    <Text fontWeight="medium" color="gray.600">
+                      {token.value}
                     </Text>
                   </Td>
                 </Tr>
@@ -422,6 +461,7 @@ const TokenHoldingsTable = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
 const DataInsightsCard = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
+  // Only show insights that are actually working and have meaningful data
   const insights = [
     {
       title: "Protocol Discovery",
@@ -430,21 +470,16 @@ const DataInsightsCard = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
       icon: FaSearch,
       color: "purple",
     },
-    {
-      title: "Yield Opportunities",
-      value: analysis?.exa_data?.yield_opportunities || 0,
-      subtitle: "Available strategies",
-      icon: FaPercentage,
-      color: "green",
-    },
-    {
-      title: "Security Analysis",
-      value: analysis?.firecrawl_data?.security_audits || "N/A",
-      subtitle: "Audit status",
-      icon: FaShieldAlt,
-      color: "blue",
-    },
-  ];
+  ].filter(
+    (insight) =>
+      // Only show if we have actual data (not 0 or default values)
+      insight.value && insight.value !== 0
+  );
+
+  // Don't render the card if there are no meaningful insights
+  if (insights.length === 0) {
+    return null;
+  }
 
   return (
     <>
@@ -472,7 +507,7 @@ const DataInsightsCard = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
           </Button>
         </HStack>
 
-        <SimpleGrid columns={3} spacing={4}>
+        <SimpleGrid columns={insights.length} spacing={4}>
           {insights.map((insight, idx) => (
             <VStack key={idx} p={4} bg="gray.50" borderRadius="lg" spacing={2}>
               <Circle size="10" bg={`${insight.color}.100`}>
@@ -507,7 +542,7 @@ const DataInsightsCard = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
                     <Box flex="1" textAlign="left">
                       <HStack>
                         <Icon as={FaSearch} color="purple.500" />
-                        <Text fontWeight="medium">Exa Protocol Discovery</Text>
+                        <Text fontWeight="medium">DeFi Protocol Discovery</Text>
                       </HStack>
                     </Box>
                     <AccordionIcon />
@@ -529,18 +564,35 @@ const DataInsightsCard = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
   );
 };
 
-// AI Analysis Summary Card
+// Portfolio Analysis Summary Card - Simple and concise
 const AIAnalysisSummaryCard = ({
   analysis,
 }: {
   analysis?: PortfolioAnalysis;
 }) => {
   const summary = analysis?.summary;
-  const interpretation = analysis?.fullAnalysis;
 
-  if (!summary && !interpretation) {
+  if (!summary) {
     return null;
   }
+
+  // Extract concise summary (first sentence or up to 150 characters)
+  const getConciseSummary = (fullSummary?: string) => {
+    if (!fullSummary) return "No analysis available";
+
+    // Remove service unavailability notes for concise view
+    const cleanSummary = fullSummary
+      .replace(/Note: The following services.*?incomplete\./g, "")
+      .trim();
+
+    // Get first sentence or first 150 characters
+    const firstSentence = cleanSummary.split(".")[0] + ".";
+    return firstSentence.length > 150
+      ? cleanSummary.substring(0, 150) + "..."
+      : firstSentence;
+  };
+
+  const conciseSummary = getConciseSummary(summary);
 
   return (
     <Box
@@ -553,29 +605,11 @@ const AIAnalysisSummaryCard = ({
       <HStack mb={4}>
         <Icon as={FaLightbulb} color="yellow.500" />
         <Text fontSize="lg" fontWeight="semibold">
-          AI Analysis Summary
+          Portfolio Analysis Summary
         </Text>
       </HStack>
 
-      <VStack spacing={4} align="stretch">
-        {summary && (
-          <Box>
-            <Text fontSize="md" fontWeight="medium" color="blue.600" mb={2}>
-              Summary
-            </Text>
-            {renderFormattedText(summary)}
-          </Box>
-        )}
-
-        {interpretation && (
-          <Box>
-            <Text fontSize="md" fontWeight="medium" color="green.600" mb={2}>
-              AI Interpretation
-            </Text>
-            {renderFormattedText(interpretation)}
-          </Box>
-        )}
-      </VStack>
+      <Box>{renderFormattedText(conciseSummary)}</Box>
     </Box>
   );
 };
@@ -595,19 +629,19 @@ export const EnhancedPortfolioSummary: React.FC<
 
   if (isLoading || response.status === "processing") {
     return (
-      <Box w="100%" bg="white" borderRadius="xl" p={6} boxShadow="sm">
-        <VStack spacing={4}>
+      <Box
+        w="100%"
+        bg="white"
+        borderRadius="xl"
+        p={6}
+        boxShadow="sm"
+        textAlign="center"
+      >
+        <VStack spacing={3}>
           <Spinner size="lg" color="blue.500" />
-          <Text fontSize="lg" fontWeight="semibold">
-            Analyzing portfolio...
+          <Text fontSize="lg" fontWeight="medium" color="gray.700">
+            Analyzing Portfolio...
           </Text>
-          <Progress
-            size="sm"
-            isIndeterminate
-            colorScheme="blue"
-            w="100%"
-            borderRadius="full"
-          />
         </VStack>
       </Box>
     );
@@ -619,74 +653,8 @@ export const EnhancedPortfolioSummary: React.FC<
         {/* Enhanced Portfolio Overview */}
         <PortfolioOverviewCard analysis={analysis} />
 
-        {/* AI Analysis Summary */}
+        {/* AI Analysis Summary - Concise by default */}
         <AIAnalysisSummaryCard analysis={analysis} />
-
-        {/* Service Status and Data Insights */}
-        <SimpleGrid columns={[1, 2]} spacing={6}>
-          <ServiceStatusCard analysis={analysis} />
-          <DataInsightsCard analysis={analysis} />
-        </SimpleGrid>
-
-        {/* Token Holdings Table */}
-        <TokenHoldingsTable analysis={analysis} />
-
-        {/* Action Recommendations */}
-        {analysis?.actions && analysis.actions.length > 0 && (
-          <Box
-            p={6}
-            bg="white"
-            borderRadius="xl"
-            borderWidth="1px"
-            borderColor="gray.200"
-          >
-            <HStack mb={4}>
-              <Icon as={FaExchangeAlt} color="blue.500" />
-              <Text fontSize="lg" fontWeight="semibold">
-                Recommended Actions
-              </Text>
-            </HStack>
-            <SimpleGrid columns={[1, 2]} spacing={4}>
-              {analysis.actions.slice(0, 4).map((action, idx) => (
-                <Box
-                  key={idx}
-                  p={4}
-                  bg="gray.50"
-                  borderRadius="lg"
-                  _hover={{ bg: "gray.100" }}
-                  transition="all 0.2s"
-                >
-                  <Text fontSize="sm" fontWeight="medium" mb={2}>
-                    {action.description}
-                  </Text>
-                  <Box position="relative">
-                    <Button
-                      size="sm"
-                      colorScheme="blue"
-                      isDisabled
-                      opacity={0.5}
-                      onClick={() => onActionClick && onActionClick(action)}
-                    >
-                      Execute
-                    </Button>
-                    <Badge
-                      position="absolute"
-                      top="-8px"
-                      right="-8px"
-                      colorScheme="orange"
-                      fontSize="xs"
-                      px={2}
-                      py={1}
-                      borderRadius="md"
-                    >
-                      Coming Soon
-                    </Badge>
-                  </Box>
-                </Box>
-              ))}
-            </SimpleGrid>
-          </Box>
-        )}
       </VStack>
     </Box>
   );

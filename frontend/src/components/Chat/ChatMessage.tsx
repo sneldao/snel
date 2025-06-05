@@ -3,6 +3,7 @@ import {
   Box,
   VStack,
   HStack,
+  Flex,
   Text,
   Button,
   Icon,
@@ -119,15 +120,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     <Box
       w="100%"
       bg={type === "user" ? "transparent" : bgColor}
-      p={4}
+      p={{ base: 3, md: 4 }}
       borderRadius="xl"
       borderWidth={type === "user" ? 0 : "1px"}
       borderColor={borderColor}
       alignSelf={type === "user" ? "flex-end" : "flex-start"}
-      maxW={type === "user" ? "70%" : "100%"}
+      maxW={{
+        base: type === "user" ? "85%" : "100%",
+        md: type === "user" ? "70%" : "95%",
+      }}
     >
       <VStack align="stretch" spacing={3}>
-        <HStack justify="space-between">
+        <Flex
+          direction={{ base: "column", sm: "row" }}
+          justify="space-between"
+          align={{ base: "flex-start", sm: "center" }}
+          gap={{ base: 1, sm: 0 }}
+        >
           <HStack>
             <Icon
               as={type === "user" ? FaUser : FaRobot}
@@ -138,11 +147,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <Text fontSize="xs" color="whiteAlpha.600">
             {timestamp.toLocaleTimeString()}
           </Text>
-        </HStack>
+        </Flex>
 
-        <Text>{content}</Text>
+        <Text fontSize={{ base: "sm", md: "md" }} mt={2}>
+          {content}
+        </Text>
         {renderProgressIndicator()}
-        {renderChainContext()}
+        <Box overflowX="auto" maxW="100%">
+          {renderChainContext()}
+        </Box>
 
         {(metadata?.reasoning?.length ||
           metadata?.suggestedActions?.length) && (
@@ -151,6 +164,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
             size="sm"
             onClick={() => setShowDetails(!showDetails)}
             rightIcon={showDetails ? <ChevronUpIcon /> : <ChevronDownIcon />}
+            fontSize={{ base: "xs", md: "sm" }}
+            px={{ base: 2, md: 3 }}
           >
             {showDetails ? "Hide Details" : "Show Details"}
           </Button>
@@ -165,15 +180,28 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 </Text>
                 <VStack align="stretch" spacing={1}>
                   {metadata.reasoning.map((reason, idx) => (
-                    <HStack key={idx} spacing={2}>
-                      <Icon as={FaInfoCircle} color="blue.400" boxSize={3} />
-                      <Text fontSize="sm">{reason}</Text>
-                    </HStack>
+                    <Flex key={idx} align="flex-start" gap={2}>
+                      <Icon
+                        as={FaInfoCircle}
+                        color="blue.400"
+                        boxSize={3}
+                        mt={1}
+                        flexShrink={0}
+                      />
+                      <Text
+                        fontSize={{ base: "xs", md: "sm" }}
+                        wordBreak="break-word"
+                      >
+                        {reason}
+                      </Text>
+                    </Flex>
                   ))}
                 </VStack>
               </Box>
             )}
-            {renderSuggestedActions()}
+            <Box overflowX="auto" maxW="100%">
+              {renderSuggestedActions()}
+            </Box>
           </VStack>
         </Collapse>
       </VStack>

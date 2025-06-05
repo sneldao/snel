@@ -55,8 +55,8 @@ export const getAgentInfo = (agentType?: AgentType) => {
       };
     case "agno":
       return {
-        name: "Agno",
-        handle: "@agno",
+        name: "Portfolio Analyst",
+        handle: "@portfolio",
         avatarSrc: "/icon.png",
       };
     case "portfolio":

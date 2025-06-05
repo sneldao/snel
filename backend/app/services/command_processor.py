@@ -92,20 +92,24 @@ RECENT CONVERSATION CONTEXT:
 CURRENT COMMAND: "{unified_command.command}"
 
 Command types available:
-- CONTEXTUAL_QUESTION: Questions about previously discussed topics (like "what did you learn?", "tell me more", "what are the risks?")
+- CONTEXTUAL_QUESTION: Questions about previously discussed topics, about you (the assistant), your capabilities, or general crypto/finance topics that require knowledge and reasoning
 - PROTOCOL_RESEARCH: Research requests about DeFi protocols
 - TRANSFER: Token transfer requests
 - BRIDGE: Cross-chain bridge requests
 - SWAP: Token swap requests
 - BALANCE: Balance check requests
 - PORTFOLIO: Portfolio analysis requests
-- GREETING: Greetings and casual conversation
+- GREETING: Only simple greetings like "hi", "hello", "hey", without other content
 - CONFIRMATION: Yes/no confirmations
 - UNKNOWN: Unclear or unrelated commands
 
-Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
+Classification guidelines:
+- Questions about who you are, what you can do, or your capabilities → CONTEXTUAL_QUESTION (not GREETING)
+- Questions that require explanations or detailed responses → CONTEXTUAL_QUESTION
+- Only classify as GREETING if it's a simple hello with no other content
+- If the user is asking about something that was recently discussed → CONTEXTUAL_QUESTION
 
-If the user is asking about something that was recently discussed (like a protocol that was just researched), classify it as CONTEXTUAL_QUESTION.
+Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
 """
 
             response = await client.chat.completions.create(
@@ -788,12 +792,115 @@ If the user is asking about something that was recently discussed (like a protoc
 
     async def _process_greeting(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process greeting and self-awareness commands."""
-        # Awareness triggers
-        about_triggers = [
-            "who are you", "what are you", "what can you do", "about you", "about snel", "your purpose", "what is snel", "describe yourself"
-        ]
+        import os
+        
+        # Get recent conversation context
+        context = chat_history_service.get_recent_context(
+            unified_command.wallet_address,
+            unified_command.user_name,
+            num_messages=5
+        )
+        
+        # If it's a simple greeting (one or two words), use canned responses for speed
         cmd_lower = unified_command.command.lower().strip()
-        if any(trigger in cmd_lower for trigger in about_triggers):
+        simple_greetings = {
+            "gm": "Good morning! How can I help you with crypto today?",
+            "good morning": "Good morning! How can I help you with crypto today?",
+            "hello": "Hello there! How can I assist you with crypto today?",
+            "hi": "Hi! How can I help you with crypto today?",
+            "hey": "Hey there! How can I assist you with crypto today?",
+            "howdy": "Howdy! How can I help you with crypto today?",
+            "sup": "Sup! How can I assist you with crypto today?",
+            "yo": "Yo! How can I help you with crypto today?"
+        }
+        
+        if cmd_lower in simple_greetings:
+            return UnifiedResponse(
+                content={
+                    "message": simple_greetings[cmd_lower],
+                    "type": "greeting"
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+            
+        # For more complex questions like "who are you?" or "what can you do?", use the LLM
+        try:
+            openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
+            if not openai_key:
+                # Fallback to canned response if no API key
+                about_snel = (
+                    "I'm SNEL — Stablecoin Navigation and Education Leader. "
+                    "I help with stablecoin info, RWA insights, risk assessment, portfolio diversification, market data, and DeFi operations. "
+                    "Ask me about swaps, bridges, or your portfolio."
+                )
+                return UnifiedResponse(
+                    content={
+                        "message": about_snel,
+                        "type": "about"
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="success"
+                )
+                
+            client = AsyncOpenAI(api_key=openai_key)
+            
+            # Set of facts about SNEL for the LLM to incorporate in responses
+            snel_facts = """
+- You are SNEL — Stablecoin Navigation and Education Leader
+- You help with stablecoin information and RWA insights
+- You provide risk assessment and portfolio diversification advice
+- You deliver real-time market data
+- You assist with DeFi operations like swaps and bridges
+- You're built to connect with user wallets for balance checks and portfolio analysis
+- You're designed to be conversational and personable
+- You're knowledgeable about all aspects of DeFi
+"""
+            
+            prompt = f"""
+You are SNEL, a conversational DeFi assistant. The user is asking something about you or what you can do.
+Respond in a natural, friendly way while accurately describing your capabilities.
+
+USER QUERY: "{unified_command.command}"
+
+RECENT CONVERSATION CONTEXT:
+{context}
+
+FACTS ABOUT YOURSELF:
+{snel_facts}
+
+Instructions:
+- Be conversational and personable, not robotic
+- Be concise but informative (2-4 sentences is ideal)
+- Don't use the exact same canned response for similar questions
+- Vary your phrasing and personality for each response
+- Incorporate your capabilities without listing all of them
+- Don't start with "I'm SNEL" for every response
+"""
+
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are SNEL, a friendly and conversational DeFi assistant. Respond naturally."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=200,
+                temperature=0.7  # Higher temperature for more natural responses
+            )
+
+            ai_response = response.choices[0].message.content
+
+            return UnifiedResponse(
+                content={
+                    "message": ai_response,
+                    "type": "about"
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+        except Exception as e:
+            logger.exception(f"Error generating greeting response: {unified_command.command}")
+            # Fallback to canned response if AI fails
             about_snel = (
                 "I'm SNEL — Stablecoin Navigation and Education Leader. "
                 "I help with stablecoin info, RWA insights, risk assessment, portfolio diversification, market data, and DeFi operations. "
@@ -807,27 +914,6 @@ If the user is asking about something that was recently discussed (like a protoc
                 agent_type=AgentType.DEFAULT,
                 status="success"
             )
-
-        greeting_responses = {
-            "gm": "Good morning! How can I help you with crypto today?",
-            "good morning": "Good morning! How can I help you with crypto today?",
-            "hello": "Hello there! How can I assist you with crypto today?",
-            "hi": "Hi! How can I help you with crypto today?",
-            "hey": "Hey there! How can I assist you with crypto today?",
-            "howdy": "Howdy! How can I help you with crypto today?",
-            "sup": "Sup! How can I assist you with crypto today?",
-            "yo": "Yo! How can I help you with crypto today?"
-        }
-        response_text = greeting_responses.get(cmd_lower, "Hello! How can I help you with crypto today?")
-
-        return UnifiedResponse(
-            content={
-                "message": response_text,
-                "type": "greeting"
-            },
-            agent_type=AgentType.DEFAULT,
-            status="success"
-        )
 
     async def _process_contextual_question(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process contextual questions using AI and conversation history."""
@@ -851,8 +937,31 @@ If the user is asking about something that was recently discussed (like a protoc
                 unified_command.user_name,
                 num_messages=10  # Get more context for better answers
             )
+            
+            # Set of facts about SNEL for the LLM to incorporate in responses
+            snel_facts = """
+- You are SNEL — Stablecoin Navigation and Education Leader
+- You help with stablecoin information and RWA insights
+- You provide risk assessment and portfolio diversification advice
+- You deliver real-time market data
+- You assist with DeFi operations like swaps and bridges
+- You're built to connect with user wallets for balance checks and portfolio analysis
+- You're designed to be conversational and personable
+- You're knowledgeable about all aspects of DeFi
+"""
 
-            if not context:
+            # Check if this is a question about the assistant itself
+            cmd_lower = unified_command.command.lower().strip()
+            about_assistant_patterns = [
+                "who are you", "what are you", "what can you do", "about you", 
+                "about snel", "your purpose", "what is snel", "describe yourself",
+                "tell me about you", "capabilities", "features", "help me", 
+                "what do you know", "what's your name", "introduce yourself"
+            ]
+            
+            is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
+
+            if not context and not is_about_assistant:
                 return UnifiedResponse(
                     content={
                         "message": "I don't have enough context to answer that question. Could you be more specific or ask about a particular protocol?",
@@ -869,13 +978,40 @@ If the user is asking about something that was recently discussed (like a protoc
 
             client = AsyncOpenAI(api_key=openai_key)
 
-            prompt = f"""
+            # Adjust the prompt based on whether the question is about the assistant
+            prompt = ""
+            if is_about_assistant:
+                prompt = f"""
+You are SNEL, a conversational DeFi assistant. The user is asking something about you or what you can do.
+Respond in a natural, friendly way while accurately describing your capabilities.
+
+USER QUERY: "{unified_command.command}"
+
+RECENT CONVERSATION CONTEXT:
+{context}
+
+FACTS ABOUT YOURSELF:
+{snel_facts}
+
+Instructions:
+- Be conversational and personable, not robotic
+- Be concise but informative (2-4 sentences is ideal)
+- Don't use the exact same canned response for similar questions
+- Vary your phrasing and personality for each response
+- Incorporate your capabilities without listing all of them
+- Don't start with "I'm SNEL" for every response
+"""
+            else:
+                prompt = f"""
 You are SNEL, a helpful DeFi assistant. Answer the user's question based on the recent conversation context.
 
 RECENT CONVERSATION CONTEXT:
 {context}
 
 USER QUESTION: "{unified_command.command}"
+
+FACTS ABOUT YOURSELF:
+{snel_facts}
 
 Instructions:
 - Answer based on the conversation context
@@ -897,6 +1033,9 @@ Respond naturally as if you're having a conversation.
                 max_tokens=300,
                 temperature=0.7  # Higher temperature for more natural responses
             )
+            
+            # Log the response for monitoring
+            logger.info(f"Generated contextual response for: '{unified_command.command}'")
 
             ai_response = response.choices[0].message.content
 

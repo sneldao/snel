@@ -112,7 +112,7 @@ const AssetCard = ({
   };
 }) => (
   <Box
-    p={4}
+    p={{ base: 3, md: 4 }}
     bg="gray.50"
     borderRadius="lg"
     borderWidth="1px"
@@ -125,6 +125,7 @@ const AssetCard = ({
     transition="all 0.3s"
     position="relative"
     overflow="hidden"
+    width="100%"
   >
     <Box
       position="absolute"
@@ -136,8 +137,13 @@ const AssetCard = ({
       opacity={asset.change ? 1 : 0}
     />
     <VStack align="stretch" spacing={2}>
-      <HStack justify="space-between">
-        <Text fontSize="sm" color="gray.600" fontWeight="medium">
+      <Flex justify="space-between" align="center" wrap="wrap" gap={1}>
+        <Text
+          fontSize={{ base: "xs", md: "sm" }}
+          color="gray.600"
+          fontWeight="medium"
+          noOfLines={1}
+        >
           {asset.name}
         </Text>
         {asset.change && (
@@ -147,21 +153,23 @@ const AssetCard = ({
             px={2}
             py={1}
             borderRadius="full"
+            fontSize={{ base: "2xs", md: "xs" }}
+            flexShrink={0}
           >
             {asset.change > 0 ? "+" : ""}
             {asset.change}%
           </Badge>
         )}
-      </HStack>
+      </Flex>
       <Text
-        fontSize="xl"
+        fontSize={{ base: "lg", md: "xl" }}
         fontWeight="bold"
         letterSpacing="tight"
         color="gray.800"
       >
         ${asset.value.toLocaleString()}
       </Text>
-      <Text fontSize="sm" color="gray.500">
+      <Text fontSize={{ base: "xs", md: "sm" }} color="gray.500">
         {asset.amount}
       </Text>
     </VStack>
@@ -447,54 +455,22 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
     return insights.slice(0, 4); // Limit to 4 insights
   };
 
-  // Show clean, succinct UI with modal for full analysis
-  // If we're loading, show the progress UI
-  if (
-    isLoading ||
-    response.status === "processing" ||
-    (allProgressSteps.length > 0 && currentProgress < 100)
-  ) {
+  // Concise loading state
+  if (isLoading || response.status === "processing") {
     return (
-      <Box w="100%" bg="white" borderRadius="xl" p={6} boxShadow="sm">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={3}>
-            <Spinner size="md" color="blue.500" />
-            <Text fontSize="lg" fontWeight="semibold" color="gray.700">
-              {currentStage || "Analyzing portfolio..."}
-            </Text>
-            <Badge colorScheme="blue">{currentProgress}%</Badge>
-          </HStack>
-
-          <Progress
-            value={currentProgress}
-            size="sm"
-            colorScheme="blue"
-            hasStripe
-            isAnimated
-            borderRadius="full"
-            mb={3}
-          />
-
-          {allProgressSteps.length > 0 && (
-            <Box
-              mt={2}
-              p={3}
-              bg="gray.50"
-              borderRadius="md"
-              maxH="200px"
-              overflowY="auto"
-            >
-              <TerminalProgress
-                steps={allProgressSteps.map((step: AnalysisProgress) => ({
-                  stage: step.stage,
-                  type: step.type || "progress",
-                  completion: step.completion,
-                  details: step.details,
-                }))}
-                isComplete={currentProgress >= 100}
-              />
-            </Box>
-          )}
+      <Box
+        w="100%"
+        bg="white"
+        borderRadius="xl"
+        p={6}
+        boxShadow="sm"
+        textAlign="center"
+      >
+        <VStack spacing={3}>
+          <Spinner size="lg" color="blue.500" />
+          <Text fontSize="lg" fontWeight="medium" color="gray.700">
+            Analyzing Portfolio...
+          </Text>
         </VStack>
       </Box>
     );
@@ -502,12 +478,18 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
 
   // Show the analysis UI when data is available
   return (
-    <Box w="100%" maxW="1200px" mx="auto" py={8}>
-      <VStack spacing={8} align="stretch">
+    <Box w="100%" maxW="1200px" mx="auto" py={{ base: 4, md: 8 }}>
+      <VStack spacing={{ base: 4, md: 8 }} align="stretch">
         <GradientBox>
-          <HStack mb={6} justify="space-between" align="start">
+          <Flex
+            mb={{ base: 3, md: 6 }}
+            justify="space-between"
+            align="start"
+            direction={{ base: "column", md: "row" }}
+            gap={{ base: 3, md: 0 }}
+          >
             <VStack align="start" spacing={2}>
-              <HStack spacing={3}>
+              <HStack spacing={{ base: 2, md: 3 }} flexWrap="wrap">
                 <Icon as={FaChartPie} boxSize={6} color="blue.500" />
                 <Text fontSize="xl" fontWeight="bold" color="gray.800">
                   Portfolio Overview
@@ -527,13 +509,16 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                 Last updated {new Date().toLocaleString()}
               </Text>
             </VStack>
-            <HStack spacing={6}>
+            <HStack spacing={{ base: 3, md: 6 }}>
               {/* View Full Analysis button removed - now handled by parent component */}
               <Box
-                textAlign="right"
-                borderLeft="1px"
+                textAlign={{ base: "left", md: "right" }}
+                borderLeft={{ base: "none", md: "1px" }}
+                borderTop={{ base: "1px", md: "none" }}
                 borderColor="gray.200"
-                pl={6}
+                pl={{ base: 0, md: 6 }}
+                pt={{ base: 3, md: 0 }}
+                w={{ base: "full", md: "auto" }}
               >
                 <Text color="gray.600" mb={1} fontSize="sm">
                   Total Portfolio Value
@@ -556,23 +541,27 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                     </Text>
                   )}
                 </Text>
-                <HStack justify="flex-end" color="green.500" mt={1}>
-                  <Text fontSize="sm">📊</Text>
-                  <Text fontSize="sm">
-                    Risk:{" "}
-                    {riskScore !== null
-                      ? `${riskScore.toFixed(1)}/5`
-                      : analysis?.services_status?.portfolio === false
-                      ? "Unavailable"
-                      : "N/A"}
-                  </Text>
-                </HStack>
+                {/* Only show risk if we have meaningful data */}
+                {(riskScore !== null && riskScore > 0) ||
+                (analysis?.portfolio_data?.risk_level &&
+                  analysis.portfolio_data.risk_level !== "N/A" &&
+                  analysis.portfolio_data.risk_level !== "Loading...") ? (
+                  <HStack justify="flex-end" color="green.500" mt={1}>
+                    <Text fontSize="sm">📊</Text>
+                    <Text fontSize="sm">
+                      Risk:{" "}
+                      {riskScore !== null && riskScore > 0
+                        ? `${riskScore.toFixed(1)}/5`
+                        : analysis?.portfolio_data?.risk_level}
+                    </Text>
+                  </HStack>
+                ) : null}
               </Box>
             </HStack>
-          </HStack>
+          </Flex>
 
           {/* Sectioned Data Display */}
-          <VStack spacing={4} align="stretch">
+          <VStack spacing={{ base: 3, md: 4 }} align="stretch">
             {/* Alchemy Blockchain Data Section */}
             <Box
               p={4}
@@ -607,7 +596,12 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                   Service Unavailable
                 </Box>
               )}
-              <HStack mb={3} justify="space-between">
+              <Flex
+                mb={3}
+                justify="space-between"
+                direction={{ base: "column", sm: "row" }}
+                gap={{ base: 1, sm: 0 }}
+              >
                 <HStack>
                   <Text
                     fontSize="sm"
@@ -638,8 +632,11 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                         "0"
                       } API calls`}
                 </Badge>
-              </HStack>
-              <SimpleGrid columns={[2, 4]} spacing={4}>
+              </Flex>
+              <SimpleGrid
+                columns={{ base: 2, md: 4 }}
+                spacing={{ base: 2, md: 4 }}
+              >
                 <Box>
                   <Text fontSize="xs" color="blue.600">
                     Portfolio Value
@@ -677,17 +674,23 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                       extractTokenCount(analysisContent || "")}
                   </Text>
                 </Box>
-                <Box>
-                  <Text fontSize="xs" color="blue.600">
-                    Risk Level
-                  </Text>
-                  <Text fontSize="lg" fontWeight="bold" color="blue.800">
-                    {analysis?.portfolio_data?.risk_level ||
-                      (riskScore !== null
-                        ? `${riskScore.toFixed(1)}/5`
-                        : "Loading...")}
-                  </Text>
-                </Box>
+                {/* Only show risk level if we have actual data (not Loading...) */}
+                {(analysis?.portfolio_data?.risk_level &&
+                  analysis.portfolio_data.risk_level !== "Loading..." &&
+                  analysis.portfolio_data.risk_level !== "N/A") ||
+                (riskScore !== null && riskScore > 0) ? (
+                  <Box>
+                    <Text fontSize="xs" color="blue.600">
+                      Risk Level
+                    </Text>
+                    <Text fontSize="lg" fontWeight="bold" color="blue.800">
+                      {analysis?.portfolio_data?.risk_level ||
+                        (riskScore !== null
+                          ? `${riskScore.toFixed(1)}/5`
+                          : "N/A")}
+                    </Text>
+                  </Box>
+                ) : null}
               </SimpleGrid>
             </Box>
 
@@ -725,8 +728,13 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                   Service Unavailable
                 </Box>
               )}
-              <HStack mb={3} justify="space-between">
-                <HStack>
+              <Flex
+                mb={3}
+                justify="space-between"
+                direction={{ base: "column", sm: "row" }}
+                gap={{ base: 1, sm: 0 }}
+              >
+                <HStack flexWrap="wrap">
                   <Text
                     fontSize="sm"
                     color={
@@ -756,39 +764,48 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                     ? "Neural Search"
                     : "Search Failed"}
                 </Badge>
-              </HStack>
-              <SimpleGrid columns={[2, 3]} spacing={4}>
+              </Flex>
+              <SimpleGrid
+                columns={{ base: 2, md: 3 }}
+                spacing={{ base: 2, md: 4 }}
+              >
                 <Box>
                   <Text fontSize="xs" color="purple.600">
                     Protocols Found
                   </Text>
                   <Text fontSize="lg" fontWeight="bold" color="purple.800">
-                    {analysis?.exa_data?.protocols_found ||
-                      extractProtocolCount(analysisContent || "")}
+                    {analysis?.exa_data?.protocols_found || 0}
                   </Text>
                 </Box>
-                <Box>
-                  <Text fontSize="xs" color="purple.600">
-                    Yield Opportunities
-                  </Text>
-                  <Text fontSize="lg" fontWeight="bold" color="purple.800">
-                    {analysis?.exa_data?.yield_opportunities ||
-                      extractYieldOpportunities(analysisContent || "")}
-                  </Text>
-                </Box>
-                <Box>
-                  <Text fontSize="xs" color="purple.600">
-                    Best APY Found
-                  </Text>
-                  <Text fontSize="lg" fontWeight="bold" color="purple.800">
-                    {analysis?.exa_data?.best_apy_found ||
-                      `${extractBestAPY(analysisContent || "")}%`}
-                  </Text>
-                </Box>
+                {/* Only show yield opportunities if they exist and are > 0 */}
+                {analysis?.exa_data?.yield_opportunities &&
+                  analysis.exa_data.yield_opportunities > 0 && (
+                    <Box>
+                      <Text fontSize="xs" color="purple.600">
+                        Yield Opportunities
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color="purple.800">
+                        {analysis.exa_data.yield_opportunities}
+                      </Text>
+                    </Box>
+                  )}
+                {/* Only show APY if it exists and is not 0.0% */}
+                {analysis?.exa_data?.best_apy_found &&
+                  analysis.exa_data.best_apy_found !== "0.0%" &&
+                  analysis.exa_data.best_apy_found !== "N/A" && (
+                    <Box>
+                      <Text fontSize="xs" color="purple.600">
+                        Best APY Found
+                      </Text>
+                      <Text fontSize="lg" fontWeight="bold" color="purple.800">
+                        {analysis.exa_data.best_apy_found}
+                      </Text>
+                    </Box>
+                  )}
               </SimpleGrid>
             </Box>
 
-            {/* Agno AI Analysis Section */}
+            {/* Portfolio AI Analysis Section */}
             <Box
               p={4}
               bg="linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)"
@@ -798,7 +815,7 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
             >
               <HStack mb={3}>
                 <Text fontSize="sm" color="green.700" fontWeight="bold">
-                  🧠 AGNO AI ANALYSIS
+                  🧠 AI PORTFOLIO ANALYSIS
                 </Text>
               </HStack>
               <Text color="green.800" fontSize="sm" lineHeight="1.6">
@@ -810,8 +827,8 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
           {/* Action Recommendations Section */}
           {analysis?.actions && analysis.actions.length > 0 && (
             <Box
-              mt={6}
-              p={4}
+              mt={{ base: 4, md: 6 }}
+              p={{ base: 3, md: 4 }}
               bg="linear-gradient(135deg, #FCFCFC 0%, #F9F9F9 100%)"
               borderRadius="lg"
               borderWidth="1px"
@@ -823,7 +840,10 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                   Recommended Actions
                 </Text>
               </HStack>
-              <SimpleGrid columns={[1, 2]} spacing={3}>
+              <SimpleGrid
+                columns={{ base: 1, md: 2 }}
+                spacing={{ base: 2, md: 3 }}
+              >
                 {analysis.actions.slice(0, 4).map((action, idx) => (
                   <Box
                     key={idx}
@@ -847,13 +867,19 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                     _hover={{ transform: "translateY(-2px)", boxShadow: "sm" }}
                     transition="all 0.2s"
                   >
-                    <Text fontSize="sm" fontWeight="medium" mb={2}>
+                    <Text
+                      fontSize={{ base: "xs", md: "sm" }}
+                      fontWeight="medium"
+                      mb={2}
+                    >
                       {action.description}
                     </Text>
                     <Button
                       size="sm"
                       colorScheme={
-                        action.type === "optimize"
+                        action.id === "diversify_into_stablecoins"
+                          ? "green"
+                          : action.type === "optimize"
                           ? "green"
                           : action.type === "rebalance"
                           ? "blue"
@@ -865,12 +891,26 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                           ? "orange"
                           : "gray"
                       }
+                      isDisabled={
+                        action.id !== "diversify_into_stablecoins" &&
+                        action.type !== "retry" &&
+                        action.type !== "connect"
+                      }
+                      opacity={
+                        action.id === "diversify_into_stablecoins" ||
+                        action.type === "retry" ||
+                        action.type === "connect"
+                          ? 1
+                          : 0.5
+                      }
                       onClick={() => onActionClick && onActionClick(action)}
                     >
                       {action.type === "retry"
                         ? "Retry Analysis"
                         : action.type === "connect"
                         ? "Connect Wallet"
+                        : action.id === "diversify_into_stablecoins"
+                        ? "Rebalance"
                         : action.type === "optimize"
                         ? "Optimize"
                         : action.type === "rebalance"
@@ -889,8 +929,8 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
 
           {/* Service Status Summary */}
           <Box
-            mt={6}
-            p={4}
+            mt={{ base: 4, md: 6 }}
+            p={{ base: 3, md: 4 }}
             bg={unavailableServices.length > 0 ? "red.50" : "gray.50"}
             borderRadius="lg"
             borderWidth="1px"
@@ -898,7 +938,12 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
               unavailableServices.length > 0 ? "red.200" : "gray.200"
             }
           >
-            <HStack mb={3} justify="space-between">
+            <Flex
+              mb={3}
+              justify="space-between"
+              direction={{ base: "column", sm: "row" }}
+              gap={{ base: 1, sm: 0 }}
+            >
               <HStack>
                 <Icon
                   as={FaInfoCircle}
@@ -922,8 +967,8 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
                   {unavailableServices.length > 1 ? "s" : ""} unavailable
                 </Badge>
               )}
-            </HStack>
-            <SimpleGrid columns={2} spacing={3}>
+            </Flex>
+            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
               <HStack>
                 <Box
                   w="8px"
@@ -992,12 +1037,13 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
 
           {analysisContent && (
             <Box
-              mt={6}
-              p={4}
+              mt={{ base: 4, md: 6 }}
+              p={{ base: 3, md: 4 }}
               bg="gray.50"
               borderRadius="lg"
               borderWidth="1px"
               borderColor="gray.200"
+              overflowX="auto"
             >
               <HStack mb={3}>
                 <Icon as={FaLightbulb} color="yellow.500" />
@@ -1010,18 +1056,23 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
               </HStack>
               <VStack align="stretch" spacing={2}>
                 {extractKeyInsights(analysisContent).map((insight, idx) => (
-                  <HStack key={idx} spacing={3}>
+                  <Flex key={idx} align="flex-start" gap={2}>
                     <Box
                       w="4px"
                       h="4px"
                       bg="blue.400"
                       borderRadius="full"
                       mt={2}
+                      flexShrink={0}
                     />
-                    <Text fontSize="sm" color="gray.600">
+                    <Text
+                      fontSize={{ base: "xs", md: "sm" }}
+                      color="gray.600"
+                      wordBreak="break-word"
+                    >
                       {cleanAnalysisText(insight)}
                     </Text>
-                  </HStack>
+                  </Flex>
                 ))}
               </VStack>
 
@@ -1064,7 +1115,71 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
     </Box>
   );
 
-  // Fallback if no content available
+  // Concise loading state
+  if (isLoading) {
+    return (
+      <Box
+        w="100%"
+        p={6}
+        bg="white"
+        borderRadius="lg"
+        borderWidth="1px"
+        borderColor="gray.200"
+        textAlign="center"
+      >
+        <VStack spacing={3}>
+          <Spinner size="lg" color="blue.500" />
+          <Text fontSize="lg" fontWeight="medium" color="gray.700">
+            Analyzing Portfolio...
+          </Text>
+        </VStack>
+      </Box>
+    );
+  }
+
+  // Error state
+  if (response.error) {
+    return (
+      <Box
+        w="100%"
+        p={6}
+        bg="white"
+        borderRadius="lg"
+        borderWidth="1px"
+        borderColor="red.200"
+        textAlign="center"
+      >
+        <VStack spacing={3}>
+          <Text color="red.500" fontSize="lg" fontWeight="medium">
+            Analysis Failed
+          </Text>
+          <Text color="gray.600" fontSize="sm">
+            {response.error}
+          </Text>
+          {onActionClick && (
+            <Button
+              size="sm"
+              colorScheme="red"
+              leftIcon={<Icon as={FaSync} />}
+              onClick={() =>
+                onActionClick &&
+                onActionClick({
+                  id: "retry_analysis",
+                  description: "Retry portfolio analysis",
+                  type: "retry",
+                  impact: {},
+                })
+              }
+            >
+              Retry Analysis
+            </Button>
+          )}
+        </VStack>
+      </Box>
+    );
+  }
+
+  // No data state
   return (
     <Box
       w="100%"
@@ -1073,55 +1188,24 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
       borderRadius="lg"
       borderWidth="1px"
       borderColor="gray.200"
-      boxShadow="sm"
+      textAlign="center"
     >
-      <VStack spacing={4} align="stretch">
-        <HStack>
-          <Icon as={FaChartPie} boxSize={5} color="blue.500" />
-          <Text fontSize="xl" fontWeight="medium" color="gray.800">
-            Portfolio Analysis
-          </Text>
-        </HStack>
-        {isLoading ? (
-          <VStack spacing={3}>
-            <Spinner size="md" color="blue.500" />
-            <Text color="gray.600">Analyzing your portfolio...</Text>
-            <Progress
-              size="sm"
-              isIndeterminate
-              colorScheme="blue"
-              width="100%"
-              borderRadius="full"
-            />
-          </VStack>
-        ) : response.error ? (
-          <VStack spacing={3} align="stretch">
-            <Text color="red.500">{response.error}</Text>
-            <Box p={3} bg="red.50" borderRadius="md">
-              <Text fontSize="sm" color="red.700">
-                Some services may be unavailable. Please try again later or
-                contact support if the issue persists.
-              </Text>
-            </Box>
-          </VStack>
-        ) : (
-          <Text color="gray.600">No analysis data available.</Text>
-        )}
+      <VStack spacing={3}>
+        <Icon as={FaChartPie} boxSize={8} color="gray.400" />
+        <Text color="gray.600">No portfolio data available</Text>
         {onActionClick && (
           <Button
-            mt={2}
             size="sm"
             colorScheme="blue"
-            leftIcon={<Icon as={FaSync} />}
+            leftIcon={<Icon as={FaChartPie} />}
             onClick={() =>
-              onActionClick
-                ? onActionClick({
-                    id: "start_analysis",
-                    description: "Start portfolio analysis",
-                    type: "retry",
-                    impact: {},
-                  })
-                : undefined
+              onActionClick &&
+              onActionClick({
+                id: "start_analysis",
+                description: "Start portfolio analysis",
+                type: "retry",
+                impact: {},
+              })
             }
           >
             Analyze Portfolio

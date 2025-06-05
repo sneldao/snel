@@ -14,7 +14,7 @@ export interface PortfolioMetric {
 export interface PortfolioAction {
   id: string;
   description: string;
-  type: "optimize" | "rebalance" | "exit" | "enter" | "retry" | "connect";
+  type: "optimize" | "rebalance" | "exit" | "enter" | "retry" | "connect" | "stablecoin_suggestion";
   impact: {
     risk?: number;
     yield?: number;
@@ -56,6 +56,38 @@ export interface PortfolioData {
   risk_level: string;
 }
 
+export interface TokenBalance {
+  contractAddress: string;
+  tokenBalance: string;
+}
+
+export interface TokenMetadata {
+  symbol: string;
+  name: string;
+  decimals: number;
+}
+
+export interface ChainTokenData {
+  tokens: TokenBalance[];
+  metadata: Record<string, TokenMetadata>;
+}
+
+export interface RawPortfolioData {
+  wallet_address: string;
+  total_portfolio_value_usd: number;
+  native_value_usd: number;
+  token_value_usd: number;
+  native_balances: Record<string, any>;
+  token_balances: Record<string, ChainTokenData>;
+  chain_distribution: Record<string, any>;
+  risk_score: number;
+  diversification_score: number;
+  total_tokens: number;
+  chains_active: number;
+  api_calls_made: number;
+  analysis_timestamp: string;
+}
+
 export interface PortfolioAnalysis {
   summary: string;
   fullAnalysis?: string;
@@ -70,6 +102,7 @@ export interface PortfolioAnalysis {
   exa_data?: ExaData;
   firecrawl_data?: FirecrawlData;
   portfolio_data?: PortfolioData;
+  raw_data?: RawPortfolioData;
   services_status?: {
     portfolio: boolean;
     exa: boolean;
@@ -447,6 +480,7 @@ export class PortfolioService {
       exa_data: analysis.exa_data,
       firecrawl_data: analysis.firecrawl_data,
       portfolio_data: analysis.portfolio_data,
+      raw_data: response.portfolio_data?.raw_data,
       services_status: services_status,
       tool_calls_summary: analysis.tool_calls_summary,
     };
@@ -470,12 +504,21 @@ export class PortfolioService {
       case "connect":
         // Return success for connect actions
         console.log("User requested wallet connection");
-        return { 
-          success: true, 
+        return {
+          success: true,
           message: "Please connect your wallet",
           actionType: action.type
         };
-        
+
+      case "stablecoin_suggestion":
+        // Return success for stablecoin suggestion actions
+        console.log("User requested stablecoin diversification suggestion");
+        return {
+          success: true,
+          message: "Stablecoin diversification suggestion provided",
+          actionType: action.type
+        };
+
       case "rebalance":
         // For rebalance actions, provide a clear message about real implementation
         return { 

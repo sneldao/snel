@@ -415,25 +415,31 @@ export const Chat: React.FC<ChatProps> = ({
       <Box
         w="100%"
         bg={suggestionsBgColor}
-        p={4}
+        p={{ base: 3, md: 4 }}
         borderRadius="xl"
         borderWidth="1px"
         borderColor={suggestionsBorderColor}
         mb={4}
+        overflowX="auto"
       >
         <Text fontSize="sm" fontWeight="medium" mb={3} color="gray.600">
           Try asking me something like:
         </Text>
-        <Wrap spacing={2}>
+        <Wrap spacing={{ base: 1, md: 2 }}>
           {suggestions.map((suggestion, index) => (
             <WrapItem key={index}>
               <Button
                 size="sm"
                 variant="outline"
                 colorScheme="blue"
-                fontSize="xs"
+                fontSize={{ base: "2xs", sm: "xs" }}
+                py={{ base: 1, md: 2 }}
+                px={{ base: 2, md: 3 }}
                 onClick={() => setInput(suggestion.text)}
                 _hover={{ bg: "blue.50" }}
+                whiteSpace="normal"
+                height="auto"
+                textAlign="left"
               >
                 {suggestion.text}
               </Button>
@@ -454,25 +460,27 @@ export const Chat: React.FC<ChatProps> = ({
             alignSelf="flex-end"
             bg="blue.500"
             color="white"
-            px={4}
-            py={2}
+            px={{ base: 3, md: 4 }}
+            py={{ base: 1.5, md: 2 }}
             borderRadius="2xl"
-            maxW="70%"
+            maxW={{ base: "85%", md: "70%" }}
+            wordBreak="break-word"
           >
-            <Text>{message.content}</Text>
+            <Text fontSize={{ base: "sm", md: "md" }}>{message.content}</Text>
           </Box>
         );
       case "system":
         return (
           <Box
             bg="whiteAlpha.100"
-            p={3}
+            p={{ base: 2, md: 3 }}
             borderRadius="lg"
             borderWidth="1px"
             borderColor="whiteAlpha.200"
             textAlign="center"
+            w="100%"
           >
-            <Text fontSize="sm" color="whiteAlpha.700">
+            <Text fontSize={{ base: "xs", md: "sm" }} color="whiteAlpha.700">
               {message.content}
             </Text>
           </Box>
@@ -492,48 +500,100 @@ export const Chat: React.FC<ChatProps> = ({
                   if (action.type === "retry") {
                     // Retry the analysis
                     handlePortfolioAnalysis("analyze my portfolio");
+                  } else if (action.type === "stablecoin_suggestion") {
+                    // Add SNEL message suggesting swap command
+                    const actionMessage: Message = {
+                      id: Date.now().toString(),
+                      content:
+                        (action as any).message ||
+                        "Consider diversifying into stablecoins for better portfolio stability.",
+                      type: "assistant",
+                      timestamp: new Date(),
+                      metadata: {
+                        agent: "snel",
+                      },
+                    };
+                    setMessages((prev) => [...prev, actionMessage]);
+                  } else if (action.id === "diversify_into_stablecoins") {
+                    // Legacy handler - trigger stablecoin diversification swap
+                    const swapCommand = "swap 0.1 eth for usdc";
+                    setInput(swapCommand);
+                    // Add a message to explain the action
+                    const actionMessage: Message = {
+                      id: Date.now().toString(),
+                      content: `Initiating stablecoin diversification. How much ETH would you like to swap to USDC?`,
+                      type: "assistant",
+                      timestamp: new Date(),
+                      metadata: {
+                        agent: "swap",
+                      },
+                    };
+                    setMessages((prev) => [...prev, actionMessage]);
                   }
                 }}
               />
             ) : (
               <Box
                 bg="whiteAlpha.50"
-                p={4}
+                p={{ base: 3, md: 4 }}
                 borderRadius="xl"
                 borderWidth="1px"
                 borderColor="whiteAlpha.200"
+                w="100%"
               >
-                <Text>{message.content}</Text>
+                <Text
+                  fontSize={{ base: "sm", md: "md" }}
+                  wordBreak="break-word"
+                >
+                  {message.content}
+                </Text>
               </Box>
             )}
           </VStack>
         );
       case "progress":
         return (
-          <Box maxW="100%" mb={2}>
+          <Box maxW="100%" mb={2} w="100%">
             <Box
               bg="whiteAlpha.50"
-              p={4}
+              p={{ base: 3, md: 4 }}
               borderRadius="lg"
               borderWidth="1px"
               borderColor="whiteAlpha.200"
             >
               <VStack spacing={3} align="stretch">
-                <HStack justify="space-between">
+                <Flex
+                  direction={{ base: "column", sm: "row" }}
+                  justify="space-between"
+                  align={{ base: "flex-start", sm: "center" }}
+                  gap={{ base: 2, sm: 0 }}
+                >
                   <VStack align="start" spacing={1}>
-                    <Text fontSize="sm" fontWeight="medium" color="white">
+                    <Text
+                      fontSize={{ base: "xs", md: "sm" }}
+                      fontWeight="medium"
+                      color="white"
+                    >
                       {message.content}
                     </Text>
                     {message.metadata?.reasoning?.[0] && (
-                      <Text fontSize="xs" color="whiteAlpha.600">
+                      <Text
+                        fontSize={{ base: "2xs", md: "xs" }}
+                        color="whiteAlpha.600"
+                      >
                         {message.metadata.reasoning[0]}
                       </Text>
                     )}
                   </VStack>
-                  <Text fontSize="xs" color="whiteAlpha.700" fontWeight="bold">
+                  <Text
+                    fontSize="xs"
+                    color="whiteAlpha.700"
+                    fontWeight="bold"
+                    flexShrink={0}
+                  >
                     {message.metadata?.progress || 0}%
                   </Text>
-                </HStack>
+                </Flex>
                 <Progress
                   value={message.metadata?.progress || 0}
                   size="md"
@@ -566,8 +626,8 @@ export const Chat: React.FC<ChatProps> = ({
   };
 
   return (
-    <VStack h="100vh" spacing={0}>
-      <Box flex={1} w="100%" overflowY="auto" p={4}>
+    <VStack h={{ base: "calc(100vh - 60px)", md: "100vh" }} spacing={0}>
+      <Box flex={1} w="100%" overflowY="auto" p={{ base: 2, md: 4 }}>
         <VStack spacing={6} align="stretch">
           {/* Show suggested commands when chat is empty and not in portfolio mode */}
           {messages.length === 0 && !portfolioMode && renderSuggestedCommands()}
@@ -577,6 +637,7 @@ export const Chat: React.FC<ChatProps> = ({
               key={msg.id}
               alignSelf={msg.type === "user" ? "flex-end" : "flex-start"}
               w={msg.type === "assistant" ? "100%" : "auto"}
+              maxW="100%"
             >
               {renderMessage(msg)}
             </Box>
@@ -584,8 +645,20 @@ export const Chat: React.FC<ChatProps> = ({
           <div ref={messagesEndRef} />
         </VStack>
       </Box>
-      <Box w="100%" p={4} borderTop="1px" borderColor="whiteAlpha.200">
-        <Flex>
+      <Box
+        w="100%"
+        p={{ base: 2, md: 4 }}
+        borderTop="1px"
+        borderColor="whiteAlpha.200"
+        position="sticky"
+        bottom={0}
+        bg="inherit"
+        zIndex={1}
+      >
+        <Flex
+          direction={{ base: "column", sm: "row" }}
+          gap={{ base: 2, sm: 0 }}
+        >
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -594,7 +667,8 @@ export const Chat: React.FC<ChatProps> = ({
                 ? "Ask me more about your portfolio..."
                 : "Ask about your portfolio..."
             }
-            mr={2}
+            mr={{ base: 0, sm: 2 }}
+            mb={{ base: 2, sm: 0 }}
             disabled={isAnalyzing}
             onKeyPress={(e) => e.key === "Enter" && handleSubmit()}
           />
@@ -602,6 +676,8 @@ export const Chat: React.FC<ChatProps> = ({
             onClick={handleSubmit}
             colorScheme="blue"
             isLoading={isAnalyzing}
+            flexShrink={0}
+            width={{ base: "full", sm: "auto" }}
           >
             Send
           </Button>

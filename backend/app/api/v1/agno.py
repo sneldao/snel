@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from app.services.agno_agent import PortfolioManagementAgent, get_portfolio_summary
+from app.services.portfolio import get_portfolio_summary
 from app.services.external.exa_service import discover_defi_protocols
 from app.api.v1.websocket import perform_portfolio_analysis, ConnectionManager
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 import logging
 import json
 import asyncio
@@ -14,6 +14,71 @@ router = APIRouter()
 # Create a connection manager for WebSockets
 ws_manager = ConnectionManager()
 logger = logging.getLogger(__name__)
+
+def analyze_stablecoin_allocation(raw_data: dict) -> dict:
+    """Analyze the stablecoin allocation in a portfolio."""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    stablecoin_symbols = {
+        'USDC', 'USDT', 'DAI', 'BUSD', 'FRAX', 'LUSD', 'TUSD', 'USDP', 'GUSD', 'SUSD',
+        'USDD', 'USTC', 'FDUSD', 'PYUSD', 'CRVUSD', 'MKUSD', 'USDE'
+    }
+
+    total_value = 0
+    stablecoin_value = 0
+    stablecoin_count = 0
+
+    logger.info(f"Analyzing stablecoin allocation. Raw data keys: {list(raw_data.keys())}")
+
+    # Analyze token balances
+    token_balances = raw_data.get('token_balances', {})
+    logger.info(f"Token balances chains: {list(token_balances.keys())}")
+
+    for chain_name, chain_data in token_balances.items():
+        if chain_data and 'tokens' in chain_data and 'metadata' in chain_data:
+            tokens = chain_data['tokens']
+            metadata = chain_data['metadata']
+            logger.info(f"Chain {chain_name}: {len(tokens)} tokens, {len(metadata)} metadata entries")
+
+            for token in tokens:
+                contract_address = token.get('contractAddress', '')
+                token_meta = metadata.get(contract_address, {})
+                symbol = token_meta.get('symbol', '').upper()
+
+                if token.get('tokenBalance'):
+                    balance_hex = token['tokenBalance']
+                    balance_int = int(balance_hex, 16)
+                    decimals = token_meta.get('decimals', 18)
+                    balance = balance_int / (10 ** decimals)
+
+                    # Estimate value (simplified - in production would use real prices)
+                    estimated_value = balance * 1.0 if symbol in stablecoin_symbols else balance * 5.0
+                    total_value += estimated_value
+
+                    logger.info(f"Token {symbol}: balance={balance:.4f}, estimated_value=${estimated_value:.2f}, is_stablecoin={symbol in stablecoin_symbols}")
+
+                    if symbol in stablecoin_symbols and balance > 0.1:
+                        stablecoin_value += estimated_value
+                        stablecoin_count += 1
+                        logger.info(f"Added stablecoin {symbol}: ${estimated_value:.2f}")
+
+    # Add native token values (typically not stablecoins)
+    native_value = raw_data.get('native_value_usd', 0)
+    total_value += native_value
+    logger.info(f"Native value: ${native_value:.2f}")
+
+    percentage = (stablecoin_value / total_value * 100) if total_value > 0 else 0
+
+    result = {
+        'percentage': percentage,
+        'value_usd': stablecoin_value,
+        'count': stablecoin_count,
+        'total_value': total_value
+    }
+
+    logger.info(f"Stablecoin allocation result: {result}")
+    return result
 
 class ModelConfig(BaseModel):
     id: str
@@ -34,6 +99,7 @@ class PortfolioAnalysisRequest(BaseModel):
     stream: Optional[bool] = None
     wallet_address: str = Field(description="User's wallet address")
     chain_id: Optional[int] = Field(default=None, description="Current chain ID")
+    force_refresh: bool = Field(default=False, description="Force refresh data instead of using cache")
 
 class PortfolioMetric(BaseModel):
     name: str
@@ -73,23 +139,19 @@ class PortfolioAnalysisResponse(BaseModel):
             "opportunities": []
         }
     )
-    services_status: Dict[str, bool] = Field(
+    services_status: Dict[str, Any] = Field(
         default_factory=lambda: {
             "portfolio": False,
-            "exa": False
+            "exa": False,
+            "firecrawl": None  # Set to None to indicate N/A for portfolio analysis
         }
     )
     portfolio_data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     type: str = "portfolio"
 
-try:
-    # Instantiate the agent once (will validate environment variables)
-    from app.services.agno_agent import PortfolioManagementAgent
-    portfolio_agent = PortfolioManagementAgent()
-except Exception as e:
-    logger.error(f"Failed to initialize portfolio agent: {str(e)}")
-    portfolio_agent = None
+# Portfolio analysis now uses direct API calls instead of Agno
+portfolio_agent = None
 
 def extract_exa_data_from_results(results: Dict) -> Dict[str, Any]:
     """Extract Exa search data from results dictionary."""
@@ -155,11 +217,11 @@ def extract_firecrawl_data_from_results(results: Dict) -> Dict[str, Any]:
 
     return firecrawl_data
 
-async def get_real_portfolio_data(wallet_address: str, chain_id: Optional[int] = None) -> Dict[str, Any]:
+async def get_real_portfolio_data(wallet_address: str, chain_id: Optional[int] = None, force_refresh: bool = False) -> Dict[str, Any]:
     """Get real portfolio data directly from blockchain."""
     try:
         # Call the actual portfolio service - no mocks
-        portfolio_data = await get_portfolio_summary(wallet_address, chain_id)
+        portfolio_data = await get_portfolio_summary(wallet_address, chain_id, force_refresh=force_refresh)
         
         if "error" in portfolio_data:
             logger.error(f"Error getting portfolio data: {portfolio_data['error']}")
@@ -280,6 +342,10 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
                 status_code=400,
                 detail="Wallet address is required for portfolio analysis"
             )
+        
+        # Log whether we're using forced refresh
+        if request.force_refresh:
+            logger.info(f"Forced refresh requested for wallet: {request.wallet_address}")
 
         # Create response dict for analysis results
         response_data = {
@@ -295,17 +361,18 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
             },
             "services_status": {
                 "portfolio": False,
-                "exa": False
+                "exa": False,
+                "firecrawl": None  # Set to None to indicate N/A for portfolio analysis
             },
             "type": "portfolio",
             "progress": "Starting analysis..."
         }
         
-        # Step 1: Get portfolio data first (most important)
+        # Get real portfolio data first (most important)
         logger.info(f"Starting fast analysis for wallet: {request.wallet_address}, chain: {request.chain_id}")
 
         response_data["progress"] = "Fetching portfolio data..."
-        portfolio_data = await get_real_portfolio_data(request.wallet_address, request.chain_id)
+        portfolio_data = await get_real_portfolio_data(request.wallet_address, request.chain_id, request.force_refresh)
 
         if "error" in portfolio_data:
             response_data["analysis"]["summary"] = f"Error retrieving portfolio data: {portfolio_data['error']}"
@@ -343,7 +410,8 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
         # Step 2: Get relevant DeFi protocols based on actual portfolio holdings (no Firecrawl)
         response_data["progress"] = "Finding relevant DeFi opportunities..."
 
-        # Note: Firecrawl removed from portfolio analysis as it's not suitable for this use case
+        # Note: Firecrawl is not applicable for portfolio analysis
+        response_data["services_status"]["firecrawl"] = None  # Indicate N/A, not a failure
 
         # Try Exa API for protocol discovery based on user's holdings
         try:
@@ -398,34 +466,59 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
             logger.error(f"Error getting Exa data: {e}")
             response_data["services_status"]["exa"] = False
 
-        # Add basic opportunities based on portfolio data (always available)
+        # Add enhanced stablecoin-focused opportunities based on portfolio data
         if response_data["services_status"]["portfolio"] and portfolio_data["portfolio_value"] > 0:
             if "raw_data" in portfolio_data:
                 raw_data = portfolio_data["raw_data"]
 
-                # Suggest stablecoin yield if they have significant token value
-                if raw_data.get('token_value_usd', 0) > 100:
+                # Analyze stablecoin allocation
+                stablecoin_allocation = analyze_stablecoin_allocation(raw_data)
+                total_value = portfolio_data["portfolio_value"]
+
+                # Generate stablecoin-focused recommendations
+                if stablecoin_allocation["percentage"] < 30 and total_value > 500:
                     response_data["analysis"]["opportunities"].append({
-                        "opportunity": "Consider stablecoin yield strategies",
-                        "potential": "3-8% APY typically available",
+                        "opportunity": f"Diversify into stablecoins (currently {stablecoin_allocation['percentage']:.1f}%)",
+                        "potential": "Reduce volatility risk with 3-8% APY on stablecoins",
+                        "timeframe": "Immediate"
+                    })
+
+                if stablecoin_allocation["percentage"] > 70:
+                    response_data["analysis"]["opportunities"].append({
+                        "opportunity": "Consider balanced exposure beyond stablecoins",
+                        "potential": "Potential for higher returns with managed risk",
+                        "timeframe": "Medium-term"
+                    })
+                elif stablecoin_allocation["percentage"] >= 30:
+                    response_data["analysis"]["opportunities"].append({
+                        "opportunity": "Optimize stablecoin yield strategies",
+                        "potential": "Maximize returns on stable assets (3-8% APY)",
                         "timeframe": "Current"
                     })
 
                 # Suggest diversification if low chain count
                 if raw_data.get('chains_active', 0) < 2:
                     response_data["analysis"]["opportunities"].append({
-                        "opportunity": "Multi-chain diversification",
-                        "potential": "Risk reduction",
+                        "opportunity": "Multi-chain diversification for risk reduction",
+                        "potential": "Spread risk across multiple networks",
                         "timeframe": "Medium-term"
                     })
 
-                # Add insights based on portfolio composition
+                # Add insights based on portfolio composition and stablecoin allocation
                 if portfolio_data["portfolio_value"] > 1000:
                     response_data["analysis"]["keyInsights"].append("Portfolio size suitable for DeFi strategies")
+                    if stablecoin_allocation["percentage"] >= 20:
+                        response_data["analysis"]["keyInsights"].append(f"Good stablecoin allocation ({stablecoin_allocation['percentage']:.1f}%) provides stability")
                     if raw_data.get('chains_active', 0) >= 2:
                         response_data["analysis"]["keyInsights"].append("Good multi-chain diversification")
                 else:
                     response_data["analysis"]["keyInsights"].append("Consider accumulating more assets before complex DeFi strategies")
+
+                # Add stablecoin-specific insights
+                if stablecoin_allocation["count"] > 0:
+                    response_data["analysis"]["keyInsights"].append(f"Holding {stablecoin_allocation['count']} stablecoin types")
+                else:
+                    response_data["analysis"]["keyInsights"].append("No stablecoins detected - consider adding for stability")
 
         if request.stream:
             return StreamingResponse(
@@ -439,7 +532,7 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
         # Create final summary combining all data
         unavailable_services = []
         for service, status in response_data["services_status"].items():
-            if not status:
+            if status is False:  # Only include services that are False, not None
                 unavailable_services.append(service)
 
         if unavailable_services:
@@ -455,8 +548,6 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
             api_calls += response_data.get("portfolio_data", {}).get("api_calls_made", 1)
         if response_data["services_status"]["exa"]:
             api_calls += 1  # One call to Exa API
-        if response_data["services_status"]["firecrawl"]:
-            api_calls += 1  # One call to Firecrawl API
             
         response_data["api_calls"] = api_calls
         
@@ -475,7 +566,7 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
         )
     except Exception as e:
         logger.exception("Error in portfolio analysis")
-        # Return an error response with service status information
+        # Create error response with service status information
         error_response = PortfolioAnalysisResponse(
             analysis={
                 "summary": f"Portfolio analysis failed: {str(e)}",
@@ -489,7 +580,8 @@ async def analyze_portfolio(request: PortfolioAnalysisRequest):
             },
             services_status={
                 "portfolio": False,
-                "exa": False
+                "exa": False,
+                "firecrawl": None  # Set to None to indicate N/A
             },
             error=str(e)
         )

@@ -128,7 +128,7 @@ async def _check_specific_service(service_name: str, container: ServiceContainer
         if service_name == "portfolio":
             # Check if we can access portfolio services
             try:
-                from app.services.agno_agent import Web3Helper
+                from app.services.portfolio.portfolio_service import Web3Helper
                 web3_helper = Web3Helper(supported_chains={
                     1: "Ethereum",
                     8453: "Base",
@@ -192,7 +192,7 @@ async def _check_all_services(container: ServiceContainer) -> Dict[str, bool]:
     
     # Portfolio service
     try:
-        from app.services.agno_agent import Web3Helper
+        from app.services.portfolio.portfolio_service import Web3Helper
         web3_helper = Web3Helper(supported_chains={
             1: "Ethereum",
             8453: "Base",

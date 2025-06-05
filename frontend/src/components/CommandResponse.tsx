@@ -42,6 +42,7 @@ import {
 } from "wagmi";
 import { TransactionService } from "../services/transactionService";
 import { EnhancedPortfolioSummary } from "./EnhancedPortfolioSummary";
+import { PortfolioSummary } from "./PortfolioSummary";
 import { Chat } from "./Chat";
 import { formatErrorMessage } from "../utils/errorFormatting";
 import { formatLinks } from "../utils/linkFormatting";
@@ -589,6 +590,23 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
 
   // Function to handle portfolio action clicks
   const handleActionClick = (action: any) => {
+    // Handle stablecoin diversification action
+    if (action.id === "diversify_into_stablecoins") {
+      // Close the deep dive modal
+      onPortfolioModalClose();
+
+      // Add SNEL message suggesting swap command
+      if (onActionClick) {
+        onActionClick({
+          type: "stablecoin_suggestion",
+          message:
+            "To diversify into stablecoins, you can write: **'swap 1 ETH to USDC'** (or any amount you prefer). This will help reduce your portfolio risk and provide stability.",
+        });
+      }
+      return;
+    }
+
+    // Handle other actions normally
     if (onActionClick) {
       onActionClick(action);
     }
@@ -904,43 +922,34 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                   isLoading={status === "processing"}
                 />
 
-                {/* Action Buttons */}
-                <HStack spacing={4} justify="center" mt={4}>
-                  <Button
-                    colorScheme="blue"
-                    size="md"
-                    onClick={onPortfolioModalOpen}
-                    leftIcon={<Icon as={FaChartPie} />}
-                  >
-                    Deep Dive Analysis
-                  </Button>
-                  <Box position="relative">
+                {/* Action Buttons - Only show when analysis is complete */}
+                {status === "success" && (
+                  <HStack spacing={4} justify="center" mt={4}>
+                    <Button
+                      colorScheme="blue"
+                      size="md"
+                      onClick={onPortfolioModalOpen}
+                      leftIcon={<Icon as={FaChartPie} />}
+                    >
+                      Deep Dive Analysis
+                    </Button>
                     <Button
                       colorScheme="teal"
                       size="md"
-                      isDisabled
-                      opacity={0.5}
-                      onClick={() =>
-                        handlePredefinedQuery("optimize my portfolio")
-                      }
+                      onClick={() => {
+                        // Trigger the same stablecoin suggestion as rebalance
+                        handleActionClick({
+                          type: "stablecoin_suggestion",
+                          message:
+                            "To optimize your portfolio, consider diversifying into stablecoins. You can write: **'swap 1 ETH to USDC'** (or any amount you prefer). This will help reduce risk and provide stability.",
+                        });
+                      }}
                       leftIcon={<Icon as={FaExchangeAlt} />}
                     >
                       Optimize Portfolio
                     </Button>
-                    <Badge
-                      position="absolute"
-                      top="-8px"
-                      right="-8px"
-                      colorScheme="orange"
-                      fontSize="xs"
-                      px={2}
-                      py={1}
-                      borderRadius="md"
-                    >
-                      Coming Soon
-                    </Badge>
-                  </Box>
-                </HStack>
+                  </HStack>
+                )}
               </VStack>
             ) : isDCASuccess ? (
               <Box mt={2} mb={2}>
@@ -1050,389 +1059,6 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               )}
 
             {status === "processing" &&
-              (agentType === "agno" || agentType === "portfolio") && (
-                <VStack spacing={4} align="stretch" w="100%" mt={4}>
-                  {/* Portfolio Analysis Loading State */}
-                  <Box
-                    p={6}
-                    bg="linear-gradient(135deg, #EBF8FF 0%, #E0F2FE 100%)"
-                    borderRadius="lg"
-                    borderWidth="1px"
-                    borderColor="blue.200"
-                    position="relative"
-                    overflow="hidden"
-                  >
-                    <Box
-                      position="absolute"
-                      top={0}
-                      left={0}
-                      right={0}
-                      height="4px"
-                      bg="blue.500"
-                    >
-                      <Box
-                        height="100%"
-                        width="30%"
-                        bg="blue.300"
-                        position="absolute"
-                        animation="pulse 1.5s infinite"
-                        sx={{
-                          "@keyframes pulse": {
-                            "0%": { left: "-30%", opacity: 0.6 },
-                            "100%": { left: "100%", opacity: 0.8 },
-                          },
-                        }}
-                      />
-                    </Box>
-
-                    <HStack mb={6} justify="space-between" align="start">
-                      <VStack align="start" spacing={2}>
-                        <HStack spacing={3}>
-                          <Icon as={FaChartPie} boxSize={6} color="blue.500" />
-                          <Text
-                            fontSize="xl"
-                            fontWeight="bold"
-                            color="gray.800"
-                          >
-                            Portfolio Analysis
-                          </Text>
-                          <Badge colorScheme="blue" variant="subtle">
-                            In Progress
-                          </Badge>
-                        </HStack>
-                        <Text color="gray.600" fontSize="sm">
-                          Analyzing on-chain data and DeFi protocols...
-                        </Text>
-                      </VStack>
-                    </HStack>
-
-                    <VStack spacing={4} align="stretch">
-                      {/* Blockchain Data Section - Loading State */}
-                      <Box
-                        p={4}
-                        bg="whiteAlpha.800"
-                        borderRadius="lg"
-                        borderWidth="1px"
-                        borderColor="blue.200"
-                      >
-                        <HStack mb={3} justify="space-between">
-                          <HStack>
-                            <Text
-                              fontSize="sm"
-                              color="blue.700"
-                              fontWeight="bold"
-                            >
-                              🔗 BLOCKCHAIN DATA
-                            </Text>
-                          </HStack>
-                          <Spinner size="sm" color="blue.500" />
-                        </HStack>
-                        <SimpleGrid columns={[2, 4]} spacing={4}>
-                          {[1, 2, 3, 4].map((i) => (
-                            <Box key={i}>
-                              <Text fontSize="xs" color="blue.600">
-                                {
-                                  [
-                                    "Portfolio Value",
-                                    "Active Chains",
-                                    "Token Count",
-                                    "Risk Level",
-                                  ][i - 1]
-                                }
-                              </Text>
-                              <Text fontSize="sm" color="gray.500">
-                                Loading...
-                              </Text>
-                            </Box>
-                          ))}
-                        </SimpleGrid>
-                      </Box>
-
-                      {/* Protocol Discovery Section - Loading State */}
-                      <Box
-                        p={4}
-                        bg="whiteAlpha.800"
-                        borderRadius="lg"
-                        borderWidth="1px"
-                        borderColor="purple.200"
-                      >
-                        <HStack mb={3} justify="space-between">
-                          <HStack>
-                            <Text
-                              fontSize="sm"
-                              color="purple.700"
-                              fontWeight="bold"
-                            >
-                              🔍 PROTOCOL DISCOVERY
-                            </Text>
-                          </HStack>
-                          <Spinner size="sm" color="purple.500" />
-                        </HStack>
-                        <Text fontSize="sm" color="gray.600">
-                          Searching for yield opportunities and DeFi
-                          protocols...
-                        </Text>
-                      </Box>
-
-                      {/* AI Analysis Section - Loading State */}
-                      <Box
-                        p={4}
-                        bg="whiteAlpha.800"
-                        borderRadius="lg"
-                        borderWidth="1px"
-                        borderColor="green.200"
-                      >
-                        <HStack mb={3}>
-                          <Text
-                            fontSize="sm"
-                            color="green.700"
-                            fontWeight="bold"
-                          >
-                            🧠 AI ANALYSIS
-                          </Text>
-                          <Spinner size="sm" color="green.500" ml={2} />
-                        </HStack>
-                        <Text color="green.800" fontSize="sm" lineHeight="1.6">
-                          Generating insights and recommendations based on your
-                          portfolio data...
-                        </Text>
-                      </Box>
-                    </VStack>
-                  </Box>
-
-                  {/* Progress Indicators with Real-time Updates */}
-                  <Box
-                    p={4}
-                    bg="gray.800"
-                    borderRadius="lg"
-                    borderWidth="1px"
-                    borderColor="gray.700"
-                    color="white"
-                  >
-                    <VStack spacing={4} align="stretch">
-                      <HStack justify="space-between">
-                        <HStack>
-                          <Icon as={FaChartPie} color="blue.400" />
-                          <Text fontSize="md" fontWeight="bold">
-                            Analyzing Your Portfolio
-                          </Text>
-                        </HStack>
-                        <Badge colorScheme="blue" variant="solid">
-                          In Progress
-                        </Badge>
-                      </HStack>
-
-                      <Text fontSize="sm" color="gray.300">
-                        Running comprehensive analysis with AI agents and
-                        real-time data. Results will appear in this chat when
-                        complete.
-                      </Text>
-
-                      {/* Progress Steps with Real-time Status */}
-                      <VStack
-                        spacing={3}
-                        align="stretch"
-                        bg="gray.900"
-                        p={3}
-                        borderRadius="md"
-                      >
-                        <HStack spacing={3}>
-                          <Text fontSize="md" color="blue.400">
-                            🔗
-                          </Text>
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text
-                              fontSize="sm"
-                              fontWeight="medium"
-                              color="blue.300"
-                            >
-                              Fetching blockchain data
-                            </Text>
-                            <Text fontSize="xs" color="gray.500">
-                              Querying Alchemy API for wallet:
-                              0x1e17B4FB12B29045b29475f74E536Db97Ddc5D40
-                            </Text>
-                            <Progress
-                              value={100}
-                              size="xs"
-                              colorScheme="blue"
-                              borderRadius="full"
-                              bg="whiteAlpha.200"
-                              hasStripe
-                              w="100%"
-                            />
-                          </VStack>
-                          <CheckCircleIcon color="green.400" boxSize={3} />
-                        </HStack>
-
-                        <HStack spacing={3}>
-                          <Text fontSize="md" color="green.400">
-                            💰
-                          </Text>
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text
-                              fontSize="sm"
-                              fontWeight="medium"
-                              color="green.300"
-                            >
-                              Analyzing token balances
-                            </Text>
-                            <Text fontSize="xs" color="gray.500">
-                              Processing token data from Base chain
-                            </Text>
-                            <Progress
-                              value={80}
-                              size="xs"
-                              colorScheme="green"
-                              borderRadius="full"
-                              bg="whiteAlpha.200"
-                              hasStripe
-                              isAnimated
-                              w="100%"
-                            />
-                          </VStack>
-                        </HStack>
-
-                        <HStack spacing={3}>
-                          <Text fontSize="md" color="purple.400">
-                            🔍
-                          </Text>
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text
-                              fontSize="sm"
-                              fontWeight="medium"
-                              color="purple.300"
-                            >
-                              Discovering DeFi protocols
-                            </Text>
-                            <Text fontSize="xs" color="gray.500">
-                              Executing Exa search for yield opportunities
-                            </Text>
-                            <Progress
-                              value={60}
-                              size="xs"
-                              colorScheme="purple"
-                              borderRadius="full"
-                              bg="whiteAlpha.200"
-                              hasStripe
-                              isAnimated
-                              w="100%"
-                            />
-                          </VStack>
-                        </HStack>
-
-                        <HStack spacing={3} opacity={0.6}>
-                          <Text fontSize="md" color="orange.400">
-                            🔥
-                          </Text>
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text
-                              fontSize="sm"
-                              fontWeight="medium"
-                              color="orange.300"
-                            >
-                              Scraping protocol details
-                            </Text>
-                            <Progress
-                              value={10}
-                              size="xs"
-                              colorScheme="orange"
-                              borderRadius="full"
-                              bg="whiteAlpha.200"
-                              hasStripe
-                              isAnimated
-                              w="100%"
-                            />
-                          </VStack>
-                        </HStack>
-
-                        <HStack spacing={3} opacity={0.4}>
-                          <Text fontSize="md" color="teal.400">
-                            🧠
-                          </Text>
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text
-                              fontSize="sm"
-                              fontWeight="medium"
-                              color="teal.300"
-                            >
-                              Running AI analysis
-                            </Text>
-                            <Progress
-                              value={0}
-                              size="xs"
-                              colorScheme="teal"
-                              borderRadius="full"
-                              bg="whiteAlpha.200"
-                              w="100%"
-                            />
-                          </VStack>
-                        </HStack>
-
-                        <HStack spacing={3} opacity={0.4}>
-                          <Text fontSize="md" color="yellow.400">
-                            💡
-                          </Text>
-                          <VStack align="start" spacing={1} flex={1}>
-                            <Text
-                              fontSize="sm"
-                              fontWeight="medium"
-                              color="yellow.300"
-                            >
-                              Generating recommendations
-                            </Text>
-                            <Progress
-                              value={0}
-                              size="xs"
-                              colorScheme="yellow"
-                              borderRadius="full"
-                              bg="whiteAlpha.200"
-                              w="100%"
-                            />
-                          </VStack>
-                        </HStack>
-                      </VStack>
-
-                      {/* Terminal-like Log Display */}
-                      <Box
-                        bg="black"
-                        p={2}
-                        borderRadius="md"
-                        fontSize="xs"
-                        fontFamily="monospace"
-                        maxH="100px"
-                        overflowY="auto"
-                        color="green.300"
-                      >
-                        <Text>
-                          INFO: Analyzing portfolio for wallet:
-                          0x1e17B4FB12B29045b29475f74E536Db97Ddc5D40, chain:
-                          8453
-                        </Text>
-                        <Text>
-                          INFO: Fetching fresh portfolio data from Alchemy API
-                        </Text>
-                        <Text>
-                          INFO: Made 42 blockchain API calls to retrieve token
-                          data
-                        </Text>
-                        <Text>
-                          INFO: Starting Exa search for: yield opportunities on
-                          Base chain
-                        </Text>
-                        <Text>
-                          INFO: Exa search successful, found 2 results
-                        </Text>
-                        <Text>
-                          INFO: Executing additional Exa search strategies...
-                        </Text>
-                      </Box>
-                    </VStack>
-                  </Box>
-                </VStack>
-              )}
-
-            {status === "processing" &&
               agentType !== "agno" &&
               agentType !== "portfolio" && (
                 <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
@@ -1473,15 +1099,15 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         </VStack>
       </HStack>
 
-      {/* Portfolio Analysis Modal - Embedded Chat Experience */}
+      {/* Portfolio Analysis Modal - Detailed Analysis with Actions */}
       <Modal
         isOpen={isPortfolioModalOpen}
         onClose={onPortfolioModalClose}
-        size="full"
+        size="6xl"
         motionPreset="slideInBottom"
       >
         <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent borderRadius="xl" overflow="hidden">
+        <ModalContent borderRadius="xl" overflow="hidden" maxH="90vh">
           <ModalHeader bg="blue.600" color="white">
             <HStack>
               <Icon as={FaChartPie} />
@@ -1489,8 +1115,19 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             </HStack>
           </ModalHeader>
           <ModalCloseButton color="white" />
-          <ModalBody p={0}>
-            <Chat portfolioMode={true} initialAnalysis={portfolioAnalysis} />
+          <ModalBody p={6} overflowY="auto">
+            <PortfolioSummary
+              response={{
+                analysis: portfolioAnalysis,
+                summary: portfolioAnalysis?.summary,
+                fullAnalysis: portfolioAnalysis?.fullAnalysis,
+                content: portfolioAnalysis?.summary,
+                status: "success",
+                metadata: metadata,
+              }}
+              onActionClick={handleActionClick}
+              isLoading={false}
+            />
           </ModalBody>
         </ModalContent>
       </Modal>
