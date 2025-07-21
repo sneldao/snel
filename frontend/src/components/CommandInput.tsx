@@ -8,22 +8,9 @@ import {
   Avatar,
   Text,
   useToast,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
-  PopoverArrow,
-  IconButton,
-  List,
-  ListItem,
-  ListIcon,
   Badge,
-  Link,
-  Tooltip,
 } from "@chakra-ui/react";
-import { InfoIcon, ChatIcon } from "@chakra-ui/icons";
 import { useAccount, useChainId } from "wagmi";
-import NextLink from "next/link";
 import { useUserProfile } from "../hooks/useUserProfile";
 
 type CommandInputProps = {
@@ -61,206 +48,222 @@ const EXAMPLE_COMMANDS = [
   "research Compound protocol",
 ];
 
-export const CommandInput = ({
-  onSubmit,
-  isLoading,
-  isDisabled,
-}: CommandInputProps) => {
-  const [command, setCommand] = React.useState("");
-  const toast = useToast();
-  const chainId = useChainId();
-  const { isConnected } = useAccount();
-  const { profile, getUserDisplayName } = useUserProfile();
+export const CommandInput = React.memo(
+  ({ onSubmit, isLoading, isDisabled }: CommandInputProps) => {
+    const [command, setCommand] = React.useState("");
+    const [showExamples, setShowExamples] = React.useState(false);
+    const toast = useToast();
+    const chainId = useChainId();
+    const { isConnected } = useAccount();
+    const { profile, getUserDisplayName } = useUserProfile();
 
-  const isChainSupported = chainId && chainId in SUPPORTED_CHAINS;
-  const currentChainName = chainId
-    ? SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
-    : undefined;
-
-  const handleSubmit = async () => {
-    if (!command.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a command",
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    const isPortfolioQuery = /portfolio|allocation|holdings|assets/i.test(
-      command.toLowerCase()
+    const isChainSupported = React.useMemo(
+      () => chainId && chainId in SUPPORTED_CHAINS,
+      [chainId]
     );
 
-    // Check if it's a portfolio analysis command
-    if (isPortfolioQuery) {
-      if (!isConnected) {
+    const currentChainName = React.useMemo(
+      () =>
+        chainId
+          ? SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
+          : undefined,
+      [chainId]
+    );
+
+    const handleSubmit = React.useCallback(async () => {
+      if (!command.trim()) {
         toast({
-          title: "Wallet not connected",
-          description: "Please connect your wallet to analyze your portfolio",
-          status: "warning",
-          duration: 5000,
-        });
-        return;
-      }
-    }
-    // Check if it's a swap command and validate chain
-    else if (command.toLowerCase().includes("swap")) {
-      if (!isConnected) {
-        toast({
-          title: "Wallet not connected",
-          description: "Please connect your wallet to execute swaps",
-          status: "warning",
-          duration: 5000,
+          title: "Error",
+          description: "Please enter a command",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
         });
         return;
       }
 
-      if (!isChainSupported) {
-        toast({
-          title: "Unsupported Network",
-          description: `Please switch to a supported network: ${Object.values(
-            SUPPORTED_CHAINS
-          ).join(", ")}`,
-          status: "warning",
-          duration: 5000,
-        });
-        return;
+      const isPortfolioQuery = /portfolio|allocation|holdings|assets/i.test(
+        command.toLowerCase()
+      );
+
+      // Check if it's a portfolio analysis command
+      if (isPortfolioQuery) {
+        if (!isConnected) {
+          toast({
+            title: "Wallet not connected",
+            description: "Please connect your wallet to analyze your portfolio",
+            status: "warning",
+            duration: 5000,
+          });
+          return;
+        }
       }
-    }
+      // Check if it's a swap command and validate chain
+      else if (command.toLowerCase().includes("swap")) {
+        if (!isConnected) {
+          toast({
+            title: "Wallet not connected",
+            description: "Please connect your wallet to execute swaps",
+            status: "warning",
+            duration: 5000,
+          });
+          return;
+        }
 
-    try {
-      await onSubmit(command);
-      setCommand("");
-    } catch (error) {
-      console.error("Error submitting command:", error);
-    }
-  };
+        if (!isChainSupported) {
+          toast({
+            title: "Unsupported Network",
+            description: `Please switch to a supported network: ${Object.values(
+              SUPPORTED_CHAINS
+            ).join(", ")}`,
+            status: "warning",
+            duration: 5000,
+          });
+          return;
+        }
+      }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
+      try {
+        await onSubmit(command);
+        setCommand("");
+      } catch (error) {
+        console.error("Error submitting command:", error);
+      }
+    }, [command, toast, isConnected, isChainSupported, onSubmit]);
 
-  const handleExampleClick = (example: string) => {
-    setCommand(example);
-  };
+    const handleKeyPress = React.useCallback(
+      (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          handleSubmit();
+        }
+      },
+      [handleSubmit]
+    );
 
-  return (
-    <Box
-      borderWidth="1px"
-      borderRadius="lg"
-      p={4}
-      bg="white"
-      opacity={isDisabled ? 0.6 : 1}
-    >
-      <VStack spacing={4} align="stretch">
-        <HStack>
-          <Text fontSize="lg" fontWeight="bold">
-            Ask something pointless on
-          </Text>
-          {chainId && (
-            <Badge
-              colorScheme={isChainSupported ? "green" : "red"}
-              variant="subtle"
-              fontSize="sm"
+    const handleExampleClick = React.useCallback((example: string) => {
+      setCommand(example);
+      setShowExamples(false);
+    }, []);
+
+    // Memoize the display name to prevent unnecessary re-renders
+    const displayName = React.useMemo(
+      () => getUserDisplayName(),
+      [getUserDisplayName]
+    );
+
+    return (
+      <Box
+        borderWidth="1px"
+        borderRadius="lg"
+        p={4}
+        bg="white"
+        opacity={isDisabled ? 0.6 : 1}
+      >
+        <VStack spacing={4} align="stretch">
+          <HStack>
+            <Text fontSize="lg" fontWeight="bold">
+              Ask something pointless on
+            </Text>
+            {chainId && (
+              <Badge
+                colorScheme={isChainSupported ? "green" : "red"}
+                variant="subtle"
+                fontSize="sm"
+              >
+                {isChainSupported ? currentChainName : "Unsupported Network"}
+              </Badge>
+            )}
+            {!isConnected && (
+              <Badge colorScheme="yellow" variant="subtle" fontSize="sm">
+                Wallet Not Connected
+              </Badge>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowExamples(!showExamples)}
             >
-              {isChainSupported ? currentChainName : "Unsupported Network"}
-            </Badge>
-          )}
-          {!isConnected && (
-            <Badge colorScheme="yellow" variant="subtle" fontSize="sm">
-              Wallet Not Connected
-            </Badge>
-          )}
-          <Popover placement="top">
-            <PopoverTrigger>
-              <IconButton
-                aria-label="Help"
-                icon={<InfoIcon />}
-                size="sm"
-                variant="ghost"
-              />
-            </PopoverTrigger>
-            <PopoverContent>
-              <PopoverArrow />
-              <PopoverBody>
-                <VStack align="start" spacing={2}>
-                  <Text fontWeight="bold">Example commands:</Text>
-                  <List spacing={2}>
-                    {EXAMPLE_COMMANDS.map((example, index) => (
-                      <ListItem
-                        key={index}
-                        cursor={isDisabled ? "not-allowed" : "pointer"}
-                        onClick={() =>
-                          !isDisabled && handleExampleClick(example)
-                        }
-                        _hover={{ color: isDisabled ? undefined : "blue.500" }}
-                      >
-                        <ListIcon as={ChatIcon} color="green.500" />
-                        {example}
-                      </ListItem>
-                    ))}
-                  </List>
-                </VStack>
-              </PopoverBody>
-            </PopoverContent>
-          </Popover>
-        </HStack>
+              {showExamples ? "Hide" : "Show"} Examples
+            </Button>
+          </HStack>
 
-        <HStack align="start" spacing={3}>
-          <Tooltip label={getUserDisplayName()} placement="top" hasArrow>
+          {showExamples && (
+            <Box p={4} bg="gray.50" borderRadius="md">
+              <Text fontWeight="bold" mb={2}>
+                Example commands:
+              </Text>
+              <VStack align="start" spacing={1}>
+                {EXAMPLE_COMMANDS.map((example, index) => (
+                  <Text
+                    key={`example-${index}`}
+                    fontSize="sm"
+                    cursor={isDisabled ? "not-allowed" : "pointer"}
+                    onClick={() => !isDisabled && handleExampleClick(example)}
+                    _hover={{
+                      color: isDisabled ? undefined : "blue.500",
+                      textDecoration: isDisabled ? undefined : "underline",
+                    }}
+                    color="gray.600"
+                  >
+                    • {example}
+                  </Text>
+                ))}
+              </VStack>
+            </Box>
+          )}
+
+          <HStack align="start" spacing={3}>
             <Avatar
               size="sm"
-              name={getUserDisplayName()}
+              name={displayName}
               src={profile?.avatar || undefined}
               bg="blue.500"
             />
-          </Tooltip>
-          <VStack align="stretch" flex={1} spacing={3}>
-            <Textarea
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={
-                isDisabled
-                  ? "Please set your OpenAI API key to start"
-                  : !isConnected
-                  ? "Please connect your wallet to start"
-                  : !isChainSupported
-                  ? "Please switch to a supported network"
-                  : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
-              }
-              isDisabled={isDisabled || !isConnected || !isChainSupported}
-              size="sm"
-              rows={1}
-              resize="none"
-              _focus={{
-                borderColor: "blue.500",
-                boxShadow: "0 0 0 1px var(--chakra-colors-blue-500)",
-              }}
-            />
-            <Button
-              onClick={handleSubmit}
-              isLoading={isLoading}
-              isDisabled={
-                isDisabled ||
-                !isConnected ||
-                !isChainSupported ||
-                !command.trim()
-              }
-              colorScheme="blue"
-              size="sm"
-              width="full"
-            >
-              Send
-            </Button>
-          </VStack>
-        </HStack>
-      </VStack>
-    </Box>
-  );
-};
+            <VStack align="stretch" flex={1} spacing={3}>
+              <Textarea
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder={
+                  isDisabled
+                    ? "Please set your OpenAI API key to start"
+                    : !isConnected
+                    ? "Please connect your wallet to start"
+                    : !isChainSupported
+                    ? "Please switch to a supported network"
+                    : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
+                }
+                isDisabled={isDisabled || !isConnected || !isChainSupported}
+                size="sm"
+                rows={1}
+                resize="none"
+                _focus={{
+                  borderColor: "blue.500",
+                  boxShadow: "0 0 0 1px var(--chakra-colors-blue-500)",
+                }}
+              />
+              <Button
+                onClick={handleSubmit}
+                isLoading={isLoading}
+                isDisabled={
+                  isDisabled ||
+                  !isConnected ||
+                  !isChainSupported ||
+                  !command.trim()
+                }
+                colorScheme="blue"
+                size="sm"
+                width="full"
+              >
+                Send
+              </Button>
+            </VStack>
+          </HStack>
+        </VStack>
+      </Box>
+    );
+  }
+);
+
+CommandInput.displayName = "CommandInput";

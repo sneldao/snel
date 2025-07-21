@@ -43,6 +43,10 @@ class CommandProcessor:
         """
         self.brian_client = brian_client
         self.settings = settings
+        
+        # Import protocol registry for Axelar support
+        from app.protocols.registry import protocol_registry
+        self.protocol_registry = protocol_registry
 
     @staticmethod
     def create_unified_command(
@@ -330,8 +334,70 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
             from_address=first_step.get("from")
         )
 
+    def _create_transaction_data_from_quote(self, quote: dict, chain_id: int) -> Optional[TransactionData]:
+        """Create transaction data from protocol quote."""
+        if not quote.get("success", False):
+            return None
+            
+        # Handle different quote formats
+        if "transaction" in quote:
+            # Single transaction format
+            tx = quote["transaction"]
+            return TransactionData(
+                to=tx.get("to", ""),
+                data=tx.get("data", "0x"),
+                value=str(tx.get("value", "0")),
+                gas_limit=str(tx.get("gas_limit", tx.get("gasLimit", ""))),
+                chain_id=chain_id,
+                from_address=tx.get("from")
+            )
+        elif "steps" in quote and quote["steps"]:
+            # Multi-step format
+            first_step = quote["steps"][0]
+            return TransactionData(
+                to=first_step.get("to", ""),
+                data=first_step.get("data", "0x"),
+                value=str(first_step.get("value", "0")),
+                gas_limit=str(first_step.get("gasLimit", first_step.get("gas_limit", ""))),
+                chain_id=chain_id,
+                from_address=first_step.get("from")
+            )
+        
+        return None
+
+    def _detect_cross_chain_intent(self, command: str, details) -> bool:
+        """Detect if the user intends a cross-chain operation."""
+        command_lower = command.lower()
+        
+        # Look for explicit cross-chain keywords
+        cross_chain_keywords = [
+            "bridge", "cross-chain", "cross chain", "to arbitrum", "to polygon",
+            "to ethereum", "to base", "to optimism", "from arbitrum", "from polygon",
+            "from ethereum", "from base", "from optimism"
+        ]
+        
+        for keyword in cross_chain_keywords:
+            if keyword in command_lower:
+                return True
+        
+        # Check if tokens suggest different chains (basic heuristic)
+        # This could be enhanced with a token-to-chain mapping
+        if details and details.token_in and details.token_out:
+            # For now, assume same-chain unless explicitly specified
+            # This could be enhanced with better token analysis
+            pass
+        
+        return False
+
+    def _infer_destination_chain(self, token_symbol: str, from_chain: int) -> int:
+        """Infer destination chain from token symbol or context."""
+        # For now, return the same chain
+        # This could be enhanced with token-to-chain mapping
+        # or by parsing the command for chain names
+        return from_chain
+
     async def _process_bridge(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process bridge commands using injected Brian client."""
+        """Process bridge commands using protocol registry with Axelar priority."""
         try:
             from app.config.chains import get_chain_id_by_name
 
@@ -370,23 +436,20 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
 
             logger.info(f"Attempting bridge: {amount_str} {details.token_in.symbol} from {from_chain_id} to {to_chain_id}")
 
-            # Call Brian API for bridge transaction
-            result = await self.brian_client.get_bridge_transaction(
-                token=details.token_in.symbol,
+            # Use protocol registry to get quote with Axelar priority for cross-chain
+            quote = await self.protocol_registry.get_quote(
+                from_token=details.token_in.symbol,
+                to_token=details.token_in.symbol,  # Same token for bridging
                 amount=amount_str,
-                from_chain_id=from_chain_id,
-                to_chain_id=to_chain_id,
-                wallet_address=unified_command.wallet_address
+                from_chain=from_chain_id,
+                to_chain=to_chain_id,
+                user_address=unified_command.wallet_address
             )
-
-            # Handle Brian API errors with user-friendly responses
-            if "error" in result:
-                error_message = result.get("message", "Bridge preparation failed")
-
-                # Return user-friendly error response instead of throwing exception
+            
+            if not quote or not quote.get("success", False):
                 return UnifiedResponse(
                     content={
-                        "message": error_message,
+                        "message": "Cross-chain routing unavailable",
                         "type": "bridge_error",
                         "from_chain": from_chain_name,
                         "to_chain": to_chain_name,
@@ -400,26 +463,59 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
                     },
                     agent_type=AgentType.BRIDGE,
                     status="error",
-                    error=error_message
+                    error="Cross-chain routing unavailable"
+                )
+            
+            # Create transaction data from quote
+            transaction_data = self._create_transaction_data_from_quote(quote, from_chain_id)
+            if not transaction_data:
+                return UnifiedResponse(
+                    content={
+                        "message": "Failed to create bridge transaction",
+                        "type": "bridge_error",
+                        "from_chain": from_chain_name,
+                        "to_chain": to_chain_name,
+                        "token": details.token_in.symbol,
+                        "amount": amount_str,
+                        "suggestions": [
+                            "Try again in a moment",
+                            "Check if the bridge amount is valid",
+                            "Verify token is supported on both chains"
+                        ]
+                    },
+                    agent_type=AgentType.BRIDGE,
+                    status="error",
+                    error="Failed to create bridge transaction"
                 )
 
-            # Format response content for successful bridge
-            content = {
-                "message": f"Ready to bridge {amount_str} {details.token_in.symbol} from {from_chain_name} to {to_chain_name}",
-                "amount": amount_str,
-                "token": details.token_in.symbol,
-                "from_chain": from_chain_name,
-                "to_chain": to_chain_name,
-                "estimated_time": "5-15 minutes",
-                "gas_cost_usd": result.get("gasCostUSD", ""),
-                "to_amount": result.get("toAmount", ""),
-                "protocol": result.get("protocol", {}).get("name", "Unknown"),
-                "type": "bridge_ready",
-                "requires_transaction": True
-            }
-
-            # Format transaction data
-            transaction_data = self._create_transaction_data(result, from_chain_id)
+            # Format response content based on protocol used
+            protocol_name = quote.get("protocol", "unknown")
+            if protocol_name == "axelar":
+                content = {
+                    "message": f"Ready to bridge {amount_str} {details.token_in.symbol} via Axelar Network",
+                    "amount": amount_str,
+                    "token": details.token_in.symbol,
+                    "from_chain": from_chain_name,
+                    "to_chain": to_chain_name,
+                    "protocol": protocol_name,
+                    "estimated_time": quote.get("estimated_time", "5-15 minutes"),
+                    "estimated_fee": quote.get("estimated_fee", ""),
+                    "type": "bridge_ready",
+                    "requires_transaction": True
+                }
+            else:
+                content = {
+                    "message": f"Ready to bridge {amount_str} {details.token_in.symbol} from {from_chain_name} to {to_chain_name}",
+                    "amount": amount_str,
+                    "token": details.token_in.symbol,
+                    "from_chain": from_chain_name,
+                    "to_chain": to_chain_name,
+                    "protocol": protocol_name,
+                    "estimated_time": "5-15 minutes",
+                    "gas_cost_usd": quote.get("gas_cost_usd", ""),
+                    "type": "bridge_ready",
+                    "requires_transaction": True
+                }
 
             return UnifiedResponse(
                 content=content,
@@ -440,8 +536,11 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
                         "token": details.token_in.symbol,
                         "from_chain": from_chain_name,
                         "to_chain": to_chain_name,
-                        "command_type": "bridge"
-                    }
+                        "command_type": "bridge",
+                        "protocol": protocol_name
+                    },
+                    "protocol_used": protocol_name,
+                    "quote_data": quote
                 }
             )
 
@@ -456,7 +555,7 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
             )
 
     async def _process_swap(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process swap commands using injected Brian client."""
+        """Process swap commands using protocol registry with Axelar priority."""
         try:
             logger.info(f"Processing swap command: {unified_command.command}")
 
@@ -477,34 +576,96 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
 
             logger.info(f"Attempting swap: {amount_str} {details.token_in.symbol} for {details.token_out.symbol}")
 
-            # Call Brian API for swap transaction
-            result = await self.brian_client.get_swap_transaction(
+            # Determine if this is cross-chain based on token symbols or explicit chain specification
+            # This is a simple heuristic - could be enhanced with better parsing
+            from_chain = unified_command.chain_id
+            to_chain = unified_command.chain_id  # Default to same chain
+            
+            # Enhanced cross-chain detection
+            is_cross_chain = self._detect_cross_chain_intent(unified_command.command, details)
+            if is_cross_chain:
+                # For cross-chain, we might need to infer the destination chain
+                # This could be enhanced with better parsing
+                to_chain = self._infer_destination_chain(details.token_out.symbol, from_chain)
+
+            logger.info(f"Cross-chain operation: {is_cross_chain}, from_chain: {from_chain}, to_chain: {to_chain}")
+
+            # Use protocol registry to get quote with Axelar priority
+            quote = await self.protocol_registry.get_quote(
                 from_token=details.token_in.symbol,
                 to_token=details.token_out.symbol,
                 amount=amount_str,
-                chain_id=unified_command.chain_id,
-                wallet_address=unified_command.wallet_address
+                from_chain=from_chain,
+                to_chain=to_chain,
+                user_address=unified_command.wallet_address
             )
-
-            if "error" in result:
-                raise ExternalServiceError(
-                    message=result.get("message", "Swap preparation failed"),
-                    service_name="Brian API"
+            
+            if not quote or not quote.get("success", False):
+                return UnifiedResponse(
+                    content={
+                        "message": "No valid quote available for this swap",
+                        "type": "swap_error",
+                        "suggestions": [
+                            "Try a different token pair",
+                            "Check if tokens are supported on this chain",
+                            "Try again in a moment"
+                        ]
+                    },
+                    agent_type=AgentType.SWAP,
+                    status="error",
+                    error="No valid quote available for this swap"
                 )
-
-            # Format response content
-            content = {
-                "message": f"Ready to swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol}",
-                "amount": amount_str,
-                "token_in": details.token_in.symbol,
-                "token_out": details.token_out.symbol,
-                "gas_cost_usd": result.get("gasCostUSD", ""),
-                "type": "swap_ready",
-                "requires_transaction": True
-            }
-
-            # Format transaction data
-            transaction_data = self._create_transaction_data(result, unified_command.chain_id)
+            
+            # Create transaction data from quote
+            transaction_data = self._create_transaction_data_from_quote(quote, from_chain)
+            if not transaction_data:
+                return UnifiedResponse(
+                    content={
+                        "message": "Failed to create transaction data",
+                        "type": "swap_error",
+                        "suggestions": [
+                            "Try again in a moment",
+                            "Check if the swap amount is valid",
+                            "Verify token addresses are correct"
+                        ]
+                    },
+                    agent_type=AgentType.SWAP,
+                    status="error",
+                    error="Failed to create transaction data"
+                )
+            
+            # Format response content based on protocol used
+            protocol_name = quote.get("protocol", "unknown")
+            if protocol_name == "axelar":
+                content = {
+                    "message": f"Ready to bridge {amount_str} {details.token_in.symbol} via Axelar Network",
+                    "amount": amount_str,
+                    "token_in": details.token_in.symbol,
+                    "token_out": details.token_out.symbol,
+                    "protocol": protocol_name,
+                    "estimated_time": quote.get("estimated_time", "5-15 minutes"),
+                    "estimated_fee": quote.get("estimated_fee", ""),
+                    "type": "cross_chain_ready",
+                    "requires_transaction": True
+                }
+            else:
+                # Add protocol attribution for trust and transparency
+                protocol_display = {
+                    "brian": "Brian AI",
+                    "0x": "0x Protocol",
+                    "uniswap": "Uniswap"
+                }.get(protocol_name, protocol_name.title())
+                
+                content = {
+                    "message": f"Ready to swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol} via {protocol_display}",
+                    "amount": amount_str,
+                    "token_in": details.token_in.symbol,
+                    "token_out": details.token_out.symbol,
+                    "protocol": protocol_name,
+                    "gas_cost_usd": quote.get("gas_cost_usd", ""),
+                    "type": "swap_ready",
+                    "requires_transaction": True
+                }
 
             return UnifiedResponse(
                 content=content,
@@ -517,12 +678,13 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
                         "amount": amount_str,
                         "token_in": details.token_in.symbol,
                         "token_out": details.token_out.symbol,
-                        "command_type": "swap"
+                        "command_type": "swap",
+                        "protocol": protocol_name
                     },
                     "transaction_ready": True,
-                    "description": result.get("description", f"Swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol}"),
-                    "solver": result.get("solver", ""),
-                    "protocol": result.get("protocol", {})
+                    "protocol_used": protocol_name,
+                    "is_cross_chain": is_cross_chain,
+                    "quote_data": quote
                 }
             )
 

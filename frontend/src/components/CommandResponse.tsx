@@ -18,12 +18,6 @@ import {
   UnorderedList,
   useToast,
   Progress,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
   useDisclosure,
   SimpleGrid,
 } from "@chakra-ui/react";
@@ -48,8 +42,15 @@ import { formatErrorMessage } from "../utils/errorFormatting";
 import { formatLinks } from "../utils/linkFormatting";
 import { useCommandActions } from "../hooks/useCommandActions";
 import { getAgentInfo, type AgentType } from "../utils/agentInfo";
+import { CrossChainResult } from "./CrossChain/CrossChainResult";
 import { BalanceResult } from "./BalanceResult";
 import { ProtocolResearchResult } from "./ProtocolResearchResult";
+import { TransactionHandler } from "./Transaction/TransactionHandler";
+import { MultiStepTransactionDisplay } from "./Transaction/MultiStepTransactionDisplay";
+import { PortfolioModal } from "./Portfolio/PortfolioModal";
+import { PortfolioEnablePrompt } from "./Portfolio/PortfolioEnablePrompt";
+import { StatusBadge } from "./UI/StatusBadge";
+import { LoadingState } from "./UI/LoadingState";
 // Removed LoadingSteps import - no longer needed
 
 // Removed unused helper functions - now handled by PortfolioSummary component
@@ -354,6 +355,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     typeof content === "object" &&
     content?.type === "protocol_research_result" &&
     agentType === "protocol_research";
+
+  const isCrossChainSuccess =
+    typeof content === "object" && 
+    content?.type === "cross_chain_success" &&
+    content?.axelar_powered === true;
+
+  const isPortfolioDisabled =
+    typeof content === "object" && content?.type === "portfolio_disabled";
 
   // Debug logging for bridge and transfer transactions
   React.useEffect(() => {
@@ -696,161 +705,51 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 isLoading={isExecuting}
               />
             ) : isMultiStepTransaction ? (
-              <Box>
-                <Text color={textColor} mb={3}>
-                  {typeof content === "object" && content.message
-                    ? content.message
-                    : "Executing multi-step transaction..."}
-                </Text>
-                {multiStepState && (
-                  <TransactionProgress
-                    steps={multiStepState.steps}
-                    currentStep={multiStepState.currentStep}
-                    totalSteps={multiStepState.totalSteps}
-                    chainId={chainId}
-                    isComplete={multiStepState.isComplete}
-                    error={multiStepState.error}
-                  />
-                )}
-              </Box>
+              <MultiStepTransactionDisplay
+                content={content}
+                multiStepState={multiStepState}
+                chainId={chainId}
+                textColor={textColor}
+              />
             ) : isSwapTransaction ? (
-              <UnifiedConfirmation
+              <TransactionHandler
                 agentType="swap"
-                content={{
-                  message:
-                    content.message || "Ready to execute swap transaction",
-                  type: "swap_transaction",
-                  details:
-                    typeof content === "object" ? content.details || {} : {},
-                }}
-                transaction={transactionData}
+                content={content}
+                transactionData={transactionData}
                 metadata={metadata}
+                isExecuting={isExecuting}
                 onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
-                isLoading={isExecuting}
               />
             ) : isBrianTransaction ? (
-              <UnifiedConfirmation
-                agentType="transfer"
-                content={{
-                  message:
-                    typeof content === "object" && content.message
-                      ? content.message
-                      : "Ready to execute transaction",
-                  type: "transaction",
-                  details:
-                    typeof content === "object" ? content.details || {} : {},
-                }}
-                transaction={transactionData}
+              <TransactionHandler
+                agentType="brian"
+                content={content}
+                transactionData={transactionData}
                 metadata={metadata}
+                isExecuting={isExecuting}
                 onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
-                isLoading={isExecuting}
               />
             ) : isBridgeTransaction ? (
-              <UnifiedConfirmation
+              <TransactionHandler
                 agentType="bridge"
-                content={{
-                  message:
-                    typeof content === "object" && content.message
-                      ? content.message
-                      : "Ready to execute bridge transaction",
-                  type: "bridge_transaction",
-                  details: {
-                    token:
-                      typeof content === "object" ? content.token : undefined,
-                    amount:
-                      typeof content === "object" ? content.amount : undefined,
-                    source_chain:
-                      typeof content === "object"
-                        ? content.from_chain
-                        : undefined,
-                    destination_chain:
-                      typeof content === "object"
-                        ? content.to_chain
-                        : undefined,
-                    protocol:
-                      typeof content === "object"
-                        ? content.protocol
-                        : undefined,
-                    ...(typeof content === "object"
-                      ? content.details || {}
-                      : {}),
-                  },
-                }}
-                transaction={transactionData}
-                metadata={{
-                  ...metadata,
-                  token_symbol:
-                    typeof content === "object" ? content.token : undefined,
-                  amount:
-                    typeof content === "object" ? content.amount : undefined,
-                  from_chain_name:
-                    typeof content === "object"
-                      ? content.from_chain
-                      : undefined,
-                  to_chain_name:
-                    typeof content === "object" ? content.to_chain : undefined,
-                  protocol:
-                    typeof content === "object" ? content.protocol : undefined,
-                  estimated_time:
-                    typeof content === "object"
-                      ? content.estimated_time
-                      : undefined,
-                }}
+                content={content}
+                transactionData={transactionData}
+                metadata={metadata}
+                isExecuting={isExecuting}
                 onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
-                isLoading={isExecuting}
               />
             ) : isTransferTransaction ? (
-              <UnifiedConfirmation
+              <TransactionHandler
                 agentType="transfer"
-                content={{
-                  message:
-                    typeof content === "object" && content.message
-                      ? content.message
-                      : "Ready to execute transfer transaction",
-                  type: "transfer_transaction",
-                  details:
-                    typeof content === "object" && content.details
-                      ? {
-                          token: content.details.token,
-                          amount: content.details.amount,
-                          destination: content.details.destination,
-                          resolved_address: content.details.resolved_address,
-                          chain: content.details.chain,
-                          ...content.details,
-                        }
-                      : {},
-                }}
-                transaction={transactionData}
-                metadata={{
-                  ...metadata,
-                  token_symbol:
-                    typeof content === "object" && content.details
-                      ? content.details.token
-                      : undefined,
-                  amount:
-                    typeof content === "object" && content.details
-                      ? content.details.amount
-                      : undefined,
-                  recipient:
-                    typeof content === "object" && content.details
-                      ? content.details.resolved_address ||
-                        content.details.destination
-                      : undefined,
-                  chain_name:
-                    typeof content === "object" && content.details
-                      ? content.details.chain
-                      : undefined,
-                  estimated_gas:
-                    typeof content === "object" && content.details
-                      ? content.details.estimated_gas
-                      : undefined,
-                }}
+                content={content}
+                transactionData={transactionData}
+                metadata={metadata}
+                isExecuting={isExecuting}
                 onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
-                isLoading={isExecuting}
               />
             ) : content.type === "brian_confirmation" ? (
               <UnifiedConfirmation
@@ -894,6 +793,29 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               <BalanceResult content={content} />
             ) : isProtocolResearch ? (
               <ProtocolResearchResult content={content} />
+            ) : isPortfolioDisabled ? (
+              <PortfolioEnablePrompt
+                suggestion={typeof content === "object" ? content.suggestion : {
+                  title: "Enable Portfolio Analysis",
+                  description: "Get detailed insights about your holdings",
+                  features: ["Holdings analysis", "Risk assessment", "Optimization tips"],
+                  warning: "Analysis takes 10-30 seconds"
+                }}
+                onEnable={() => {
+                  // This will be handled by MainApp
+                  if (onActionClick) {
+                    onActionClick({
+                      type: "enable_portfolio",
+                      message: "Portfolio analysis enabled"
+                    });
+                  }
+                }}
+              />
+            ) : isCrossChainSuccess ? (
+              <CrossChainResult 
+                content={typeof content === "object" ? content : { type: "cross_chain_success" }}
+                metadata={metadata}
+              />
             ) : agentType === "agno" || agentType === "portfolio" ? (
               <VStack spacing={4} align="stretch" w="100%">
                 {/* Enhanced Portfolio Summary */}
@@ -1061,9 +983,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             {status === "processing" &&
               agentType !== "agno" &&
               agentType !== "portfolio" && (
-                <Badge colorScheme="blue" alignSelf="flex-start" mt={2}>
-                  Processing
-                </Badge>
+                <StatusBadge status="processing" animated={true} />
               )}
 
             {status === "error" && (
@@ -1091,46 +1011,20 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               !isSwapConfirmation &&
               !isDCAConfirmation &&
               !isDCASuccess && (
-                <Badge colorScheme="green" alignSelf="flex-start" mt={2}>
-                  Success
-                </Badge>
+                <StatusBadge status="success" />
               )}
           </Box>
         </VStack>
       </HStack>
 
       {/* Portfolio Analysis Modal - Detailed Analysis with Actions */}
-      <Modal
+      <PortfolioModal
         isOpen={isPortfolioModalOpen}
         onClose={onPortfolioModalClose}
-        size="6xl"
-        motionPreset="slideInBottom"
-      >
-        <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent borderRadius="xl" overflow="hidden" maxH="90vh">
-          <ModalHeader bg="blue.600" color="white">
-            <HStack>
-              <Icon as={FaChartPie} />
-              <Text>Portfolio Deep Dive Analysis</Text>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton color="white" />
-          <ModalBody p={6} overflowY="auto">
-            <PortfolioSummary
-              response={{
-                analysis: portfolioAnalysis,
-                summary: portfolioAnalysis?.summary,
-                fullAnalysis: portfolioAnalysis?.fullAnalysis,
-                content: portfolioAnalysis?.summary,
-                status: "success",
-                metadata: metadata,
-              }}
-              onActionClick={handleActionClick}
-              isLoading={false}
-            />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+        portfolioAnalysis={portfolioAnalysis}
+        metadata={metadata}
+        onActionClick={handleActionClick}
+      />
     </Box>
   );
 };

@@ -86,6 +86,7 @@ class BrianAdapter:
         amount: Decimal,
         chain_id: int,
         wallet_address: str,
+        to_chain_id: int = None,
     ) -> Dict[str, Any]:
         """Get swap quote from Brian API."""
         if not self.is_supported(chain_id):

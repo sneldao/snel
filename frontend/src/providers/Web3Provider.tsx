@@ -23,16 +23,25 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 
-// Define RPC URLs
-const ALCHEMY_SUPPORTED_CHAINS = {
-  [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
-  [base.id]: `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
-  [optimism.id]: `https://opt-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
-  [arbitrum.id]: `https://arb-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
-  [polygon.id]: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
-} as const;
+// Define RPC URLs - only use Alchemy if API key is provided
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY;
+const ALCHEMY_SUPPORTED_CHAINS = ALCHEMY_KEY
+  ? ({
+      [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+      [base.id]: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+      [optimism.id]: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+      [arbitrum.id]: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+      [polygon.id]: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    } as const)
+  : {};
 
 const PUBLIC_RPC_URLS = {
+  // Fallback public RPCs for chains not covered by Alchemy or when Alchemy key is missing
+  [mainnet.id]: ALCHEMY_KEY ? undefined : "https://eth.llamarpc.com",
+  [base.id]: ALCHEMY_KEY ? undefined : "https://mainnet.base.org",
+  [optimism.id]: ALCHEMY_KEY ? undefined : "https://mainnet.optimism.io",
+  [arbitrum.id]: ALCHEMY_KEY ? undefined : "https://arb1.arbitrum.io/rpc",
+  [polygon.id]: ALCHEMY_KEY ? undefined : "https://polygon-rpc.com",
   [avalanche.id]:
     process.env.NEXT_PUBLIC_AVALANCHE_RPC_URL ||
     "https://api.avax.network/ext/bc/C/rpc",
@@ -77,34 +86,38 @@ const ALL_SUPPORTED_CHAINS = [
   blast,
 ] as const satisfies readonly [Chain, ...Chain[]];
 
+// Create transports object, filtering out undefined URLs
+const createTransports = () => {
+  const transports: Record<number, any> = {};
+
+  // Add Alchemy transports if available
+  Object.entries(ALCHEMY_SUPPORTED_CHAINS).forEach(([chainId, url]) => {
+    if (url) {
+      transports[Number(chainId)] = http(url, {
+        retryCount: 0,
+        retryDelay: 0,
+      });
+    }
+  });
+
+  // Add public RPC transports, filtering out undefined
+  Object.entries(PUBLIC_RPC_URLS).forEach(([chainId, url]) => {
+    if (url && !transports[Number(chainId)]) {
+      transports[Number(chainId)] = http(url, {
+        retryCount: 0,
+        retryDelay: 0,
+      });
+    }
+  });
+
+  return transports;
+};
+
 const config = createConfig(
   getDefaultConfig({
     // Your dApp's chains
     chains: ALL_SUPPORTED_CHAINS,
-    transports: {
-      ...Object.entries(ALCHEMY_SUPPORTED_CHAINS).reduce(
-        (acc, [chainId, url]) => ({
-          ...acc,
-          [chainId]: http(url, {
-            // Disable retries to prevent retrying cancelled transactions
-            retryCount: 0,
-            retryDelay: 0,
-          }),
-        }),
-        {}
-      ),
-      ...Object.entries(PUBLIC_RPC_URLS).reduce(
-        (acc, [chainId, url]) => ({
-          ...acc,
-          [chainId]: http(url, {
-            // Disable retries to prevent retrying cancelled transactions
-            retryCount: 0,
-            retryDelay: 0,
-          }),
-        }),
-        {}
-      ),
-    },
+    transports: createTransports(),
 
     // Required API Keys
     walletConnectProjectId:

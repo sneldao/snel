@@ -19,6 +19,7 @@ import {
   Button,
   Icon,
   SimpleGrid,
+  Switch,
 } from "@chakra-ui/react";
 import {
   FaExchangeAlt,
@@ -47,6 +48,7 @@ import { SUPPORTED_CHAINS } from "../constants/chains";
 import { ApiService } from "../services/apiService";
 import { TransactionService } from "../services/transactionService";
 import { PortfolioService } from "../services/portfolioService";
+import { AdvancedSettings, AdvancedSettingsValues } from "./AdvancedSettings";
 
 interface ResponseContent {
   type?: string;
@@ -70,7 +72,8 @@ interface ResponseType {
     | "brian"
     | "bridge"
     | "transfer"
-    | "agno";
+    | "agno"
+    | "settings";
   requires_selection?: boolean;
   all_quotes?: any[];
   type?: string;
@@ -88,7 +91,7 @@ export default function MainApp() {
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
-  // Initialize services
+  // Initialize services with stable references
   const apiService = React.useMemo(() => new ApiService(), []);
   const portfolioService = React.useMemo(
     () => new PortfolioService(apiService),
@@ -119,6 +122,22 @@ export default function MainApp() {
   >(null);
   const [isRetryingPortfolio, setIsRetryingPortfolio] =
     useState<boolean>(false);
+  const [advancedSettings, setAdvancedSettings] =
+    useState<AdvancedSettingsValues>({
+      protocol: "auto",
+      slippageTolerance: 1.0,
+      enableMEVProtection: true,
+      preferredRoute: "balanced",
+      manualChainSelection: false,
+    });
+  const [axelarUnavailable, setAxelarUnavailable] = useState<boolean>(false);
+  const [portfolioSettings, setPortfolioSettings] = useState(() => ({
+    enabled:
+      typeof window !== "undefined"
+        ? localStorage.getItem("snel_portfolio_enabled") === "true"
+        : false,
+    cacheEnabled: true,
+  }));
 
   // Initialize or update welcome message based on wallet state
   useEffect(() => {
@@ -185,6 +204,23 @@ export default function MainApp() {
     }
   }, [walletClient, address]);
 
+  // Check Axelar availability on component mount
+  useEffect(() => {
+    const checkAxelar = async () => {
+      try {
+        const available = await apiService.checkAxelarAvailability();
+        setAxelarUnavailable(!available);
+      } catch (error) {
+        console.warn("Could not check Axelar availability:", error);
+        setAxelarUnavailable(true);
+      }
+    };
+
+    if (isConnected) {
+      checkAxelar();
+    }
+  }, [isConnected, apiService]);
+
   const scrollToBottom = () => {
     responsesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -212,6 +248,36 @@ export default function MainApp() {
         agentType: "default" as const,
       };
       setResponses((prev) => [...prev, suggestionResponse]);
+    } else if (action.type === "enable_portfolio") {
+      // Enable portfolio analysis
+      setPortfolioSettings((prev) => ({ ...prev, enabled: true }));
+      localStorage.setItem("snel_portfolio_enabled", "true");
+
+      // Add confirmation message
+      const timestamp = new Date().toISOString();
+      const confirmationResponse = {
+        content:
+          "✅ Portfolio analysis enabled! You can now get detailed insights about your holdings. Analysis will be cached for 5 minutes to improve performance.",
+        timestamp,
+        isCommand: false,
+        status: "success" as const,
+        agentType: "settings" as const,
+      };
+      setResponses((prev) => [...prev, confirmationResponse]);
+
+      // Auto-trigger portfolio analysis if the last command was a portfolio command
+      const lastUserMessage = responses.filter((r) => r.isCommand).pop();
+      if (
+        lastUserMessage &&
+        typeof lastUserMessage.content === "string" &&
+        /portfolio|allocation|holdings|assets|analyze/i.test(
+          lastUserMessage.content
+        )
+      ) {
+        setTimeout(() => {
+          handleCommand(lastUserMessage.content as string, true);
+        }, 1000);
+      }
     }
   };
 
@@ -281,7 +347,10 @@ export default function MainApp() {
             command,
             address, // Use actual connected wallet address
             chainId, // Use actual connected chain ID
-            userProfile?.name
+            userProfile?.name,
+            undefined, // onProgress handled separately for portfolio
+            walletClient, // Pass signer for potential Axelar operations
+            portfolioSettings // Pass portfolio settings
           );
 
           // Replace processing response with final result
@@ -327,7 +396,10 @@ export default function MainApp() {
           command,
           address,
           chainId,
-          userProfile?.name
+          userProfile?.name,
+          undefined, // onProgress
+          walletClient, // Pass signer for potential Axelar operations
+          portfolioSettings // Pass portfolio settings
         );
 
         // Debug logging for bridge and transfer commands
@@ -575,6 +647,45 @@ export default function MainApp() {
                     onSubmit={handleCommand}
                     isLoading={isLoading}
                   />
+                  <AdvancedSettings
+                    axelarUnavailable={axelarUnavailable}
+                    onSettingsChange={setAdvancedSettings}
+                  />
+                  {/* Portfolio Settings - Simple Toggle */}
+                  <Box
+                    p={3}
+                    bg="gray.50"
+                    borderRadius="md"
+                    border="1px solid"
+                    borderColor="gray.200"
+                  >
+                    <HStack justify="space-between">
+                      <VStack align="flex-start" spacing={0}>
+                        <Text fontSize="sm" fontWeight="medium">
+                          Portfolio Analysis
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {portfolioSettings.enabled
+                            ? "Enabled - Analysis cached for 5min"
+                            : "Disabled for faster performance"}
+                        </Text>
+                      </VStack>
+                      <Switch
+                        isChecked={portfolioSettings.enabled}
+                        onChange={(e) => {
+                          setPortfolioSettings((prev) => ({
+                            ...prev,
+                            enabled: e.target.checked,
+                          }));
+                          localStorage.setItem(
+                            "snel_portfolio_enabled",
+                            e.target.checked.toString()
+                          );
+                        }}
+                        colorScheme="blue"
+                      />
+                    </HStack>
+                  </Box>
                 </VStack>
               </VStack>
             )}

@@ -16,7 +16,25 @@ const nextConfig = {
       os: false,
       url: false,
       zlib: false,
+      // Add fallbacks for Axelar SDK dependencies
+      "sodium-native": false,
+      "require-addon": false,
+      "node-gyp-build": false,
+      bindings: false,
+      child_process: false,
+      worker_threads: false,
+      perf_hooks: false,
+      async_hooks: false,
     };
+
+    // Ignore specific modules that cause issues with Axelar SDK
+    config.externals = config.externals || [];
+    config.externals.push({
+      "sodium-native": "sodium-native",
+      "require-addon": "require-addon",
+      "node-gyp-build": "node-gyp-build",
+    });
+
     return config;
   },
   // For monorepo structure, we use rewrites instead of env variables

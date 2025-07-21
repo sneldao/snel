@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import {
   fetchUserProfile,
@@ -46,9 +46,9 @@ export function useUserProfile() {
    * Get the user's display name
    * @returns Formatted display name (ENS, profile name, or shortened address)
    */
-  const getUserDisplayName = (): string => {
+  const getUserDisplayName = useCallback((): string => {
     return getDisplayName(address, profile);
-  };
+  }, [address, profile]);
 
   return {
     profile,

@@ -43,3 +43,30 @@ export const BLOCK_EXPLORERS = {
   5000: "https://explorer.mantle.xyz/tx/",
   81457: "https://blastscan.io/tx/",
 } as const;
+
+// Consolidated chain data for various use cases
+export const CHAIN_CONFIG = {
+  // Layer 1
+  1: { name: "Ethereum", explorer: "https://etherscan.io/tx/", axelarName: "Ethereum" },
+  56: { name: "BNB Chain", explorer: "https://bscscan.com/tx/", axelarName: "binance" },
+  100: { name: "Gnosis", explorer: "https://gnosisscan.io/tx/", axelarName: null },
+
+  // Layer 2 & Rollups
+  8453: { name: "Base", explorer: "https://basescan.org/tx/", axelarName: "base" },
+  10: { name: "Optimism", explorer: "https://optimistic.etherscan.io/tx/", axelarName: "optimism" },
+  42161: { name: "Arbitrum", explorer: "https://arbiscan.io/tx/", axelarName: "Arbitrum" },
+  137: { name: "Polygon", explorer: "https://polygonscan.com/tx/", axelarName: "Polygon" },
+  59144: { name: "Linea", explorer: "https://lineascan.build/tx/", axelarName: "linea" },
+  534352: { name: "Scroll", explorer: "https://scrollscan.com/tx/", axelarName: null },
+  324: { name: "zkSync Era", explorer: "https://explorer.zksync.io/tx/", axelarName: null },
+  34443: { name: "Mode", explorer: "https://explorer.mode.network/tx/", axelarName: null },
+  167004: { name: "Taiko", explorer: "https://explorer.test.taiko.xyz/tx/", axelarName: null },
+
+  // Other Networks
+  43114: { name: "Avalanche", explorer: "https://snowtrace.io/tx/", axelarName: "Avalanche" },
+  5000: { name: "Mantle", explorer: "https://explorer.mantle.xyz/tx/", axelarName: null },
+  81457: { name: "Blast", explorer: "https://blastscan.io/tx/", axelarName: null },
+} as const;
+
+export type SupportedChainId = keyof typeof SUPPORTED_CHAINS;
+export type ChainConfig = typeof CHAIN_CONFIG[SupportedChainId];

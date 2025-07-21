@@ -4,6 +4,9 @@ import {
   AnalysisProgress,
 } from "./portfolioService";
 import { websocketService } from "./websocketService";
+import { intentRouter, UserIntent } from "./intentRouter";
+import { axelarService } from "./axelarService";
+import { PortfolioGatekeeper, PortfolioSettings } from "./portfolioGatekeeper";
 
 export class ApiService {
   private apiUrl: string;
@@ -55,8 +58,20 @@ export class ApiService {
     walletAddress?: string,
     chainId?: number,
     userName?: string,
-    onProgress?: (progress: AnalysisProgress) => void
+    onProgress?: (progress: AnalysisProgress) => void,
+    signer?: any, // ethers.Signer for Axelar transactions
+    portfolioSettings?: PortfolioSettings
   ) {
+    // Portfolio gatekeeper check
+    const gatekeeperResult = PortfolioGatekeeper.shouldRunPortfolioAnalysis(
+      command, 
+      portfolioSettings
+    );
+
+    if (!gatekeeperResult.shouldRun && gatekeeperResult.action === 'show_enable_prompt') {
+      return PortfolioGatekeeper.createDisabledResponse();
+    }
+
     // Check if this is a portfolio analysis command
     if (
       /portfolio|allocation|holdings|assets|analyze/i.test(
@@ -73,6 +88,14 @@ export class ApiService {
           status: "error",
         };
       }
+
+      // Check cache first
+      if (portfolioSettings?.cacheEnabled) {
+        const cached = PortfolioGatekeeper.getCachedData(walletAddress);
+        if (cached) {
+          return PortfolioGatekeeper.createCachedResponse(cached);
+        }
+      }
       
       try {
         // Use WebSocket for real-time updates
@@ -82,6 +105,11 @@ export class ApiService {
           chainId,
           onProgress
         );
+
+        // Cache the result
+        if (portfolioSettings?.cacheEnabled) {
+          PortfolioGatekeeper.setCachedData(walletAddress, analysis);
+        }
 
         return {
           content: {
@@ -113,16 +141,58 @@ export class ApiService {
       }
     }
 
-    // Let swap commands go through the chat endpoint for consistent handling
-    // The chat endpoint will detect and route swap commands properly
+    // Check for cross-chain intent BEFORE sending to backend
+    const intent = intentRouter.parseIntent(command, chainId);
+    
+    // If cross-chain operation and Axelar supports the chains, handle directly
+    if (intent.isCrossChain && signer && this.shouldUseAxelar(intent)) {
+      try {
+        onProgress?.({
+          stage: 'cross_chain_routing',
+          completion: 10,
+          details: 'Detecting cross-chain operation...',
+          type: 'progress'
+        });
 
-    // Check if this is a bridge command
-    const bridgeMatch = command.match(
-      /bridge\s+[\d\.]+\s+\S+\s+(?:from\s+\S+\s+)?to\s+\S+/i
-    );
-    if (bridgeMatch) {
-      // For now, let it go through the chat endpoint which will recognize it
-      // In the future, we could add a dedicated processBridgeCommand method
+        const result = await intentRouter.executeIntent(
+          intent, 
+          signer,
+          (message, step, total) => {
+            onProgress?.({
+              stage: 'cross_chain_execution',
+              completion: 30 + ((step || 0) / (total || 3)) * 60,
+              details: message,
+              type: 'progress'
+            });
+          }
+        );
+
+        if (result.success) {
+          return {
+            content: {
+              type: 'cross_chain_success',
+              transaction: { hash: result.txHash },
+              steps: result.steps,
+              message: `Cross-chain operation initiated successfully!`,
+              axelar_powered: true
+            },
+            agentType: 'bridge',
+            status: 'success',
+            metadata: {
+              intent,
+              estimatedTime: result.steps?.[2]?.description || '5-10 minutes'
+            }
+          };
+        } else if (result.requiresConfirmation) {
+          // Fall back to backend for complex operations requiring confirmation
+          console.log('Cross-chain operation requires backend confirmation, falling back...');
+        } else {
+          throw new Error(result.error || 'Cross-chain operation failed');
+        }
+      } catch (error) {
+        console.warn('Axelar execution failed, falling back to backend:', error);
+        // Continue to backend fallback below
+      }
     }
 
     // For other commands, use the chat endpoint
@@ -359,6 +429,36 @@ export class ApiService {
       return response.ok;
     } catch (error) {
       console.error(`Service ${service} availability check failed:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if Axelar should be used for the given intent
+   */
+  private shouldUseAxelar(intent: UserIntent): boolean {
+    // Only use Axelar for cross-chain operations with supported chains
+    if (!intent.isCrossChain || !intent.fromChain || !intent.toChain) {
+      return false;
+    }
+
+    // Check if both chains are supported by Axelar
+    const fromSupported = axelarService.isChainSupported(intent.fromChain);
+    const toSupported = axelarService.isChainSupported(intent.toChain);
+    
+    return fromSupported && toSupported;
+  }
+
+  /**
+   * Check Axelar service availability
+   */
+  async checkAxelarAvailability(): Promise<boolean> {
+    try {
+      // Test with supported chains to see if Axelar is responsive
+      const supportedChains = axelarService.getSupportedChains();
+      return supportedChains.length > 0;
+    } catch (error) {
+      console.error('Axelar availability check failed:', error);
       return false;
     }
   }
