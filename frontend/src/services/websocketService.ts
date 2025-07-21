@@ -33,7 +33,10 @@ export class WebSocketService {
       this.baseUrl = `${wsUrl}/api/v1/ws`;
     }
 
-    console.log('WebSocket service initialized with baseUrl:', this.baseUrl);
+    // Only log in development to reduce console noise in production
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('WebSocket service initialized with baseUrl:', this.baseUrl);
+    }
   }
 
   /**
@@ -75,7 +78,9 @@ export class WebSocketService {
       url += `?chain_id=${chainId}`;
     }
 
-    console.log('Attempting WebSocket connection to:', url);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Attempting WebSocket connection to:', url);
+    }
 
     // Close existing connection if any
     this.disconnect();
@@ -108,7 +113,9 @@ export class WebSocketService {
     if (!this.socket) return;
 
     this.socket.onopen = () => {
-      console.log('WebSocket connection established');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('WebSocket connection established');
+      }
       this.retryCount = 0;
       
       if (this.callbacks.onOpen) {
@@ -123,7 +130,9 @@ export class WebSocketService {
       try {
         this.socket?.send(JSON.stringify({ type: 'ping' }));
       } catch (e) {
-        console.warn('Failed to send initial ping');
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Failed to send initial ping');
+        }
       }
     };
 

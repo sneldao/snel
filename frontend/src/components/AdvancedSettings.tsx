@@ -63,7 +63,7 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({
   forceOpen = false,
   axelarUnavailable = false,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(forceOpen); // Default to closed for cleaner UI
+  const [isExpanded, setIsExpanded] = useState(false); // Always default to closed in production
   const [settings, setSettings] = useState<AdvancedSettingsValues>({
     protocol: "auto",
     slippageTolerance: 1.0,

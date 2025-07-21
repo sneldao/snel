@@ -7,6 +7,7 @@ import { websocketService } from "./websocketService";
 import { intentRouter, UserIntent } from "./intentRouter";
 import { axelarService } from "./axelarService";
 import { PortfolioGatekeeper, PortfolioSettings } from "./portfolioGatekeeper";
+import { logger } from "../utils/logger";
 
 export class ApiService {
   private apiUrl: string;
@@ -120,7 +121,7 @@ export class ApiService {
           status: "success",
         };
       } catch (error) {
-        console.error("Portfolio analysis failed:", error);
+        logger.error("Portfolio analysis failed:", error);
         
         // Make sure WebSocket is disconnected
         websocketService.disconnect();
@@ -185,12 +186,12 @@ export class ApiService {
           };
         } else if (result.requiresConfirmation) {
           // Fall back to backend for complex operations requiring confirmation
-          console.log('Cross-chain operation requires backend confirmation, falling back...');
+          logger.debug('Cross-chain operation requires backend confirmation, falling back...');
         } else {
           throw new Error(result.error || 'Cross-chain operation failed');
         }
       } catch (error) {
-        console.warn('Axelar execution failed, falling back to backend:', error);
+        logger.warn('Axelar execution failed, falling back to backend:', error);
         // Continue to backend fallback below
       }
     }
@@ -367,15 +368,14 @@ export class ApiService {
     try {
       return await this.portfolioService.executeAction(action);
     } catch (error) {
-      console.error("Failed to execute portfolio action:", error);
+      logger.error("Failed to execute portfolio action:", error);
       throw error;
     }
   }
 
   // Add these methods to support the PortfolioService
   async post(endpoint: string, data: any) {
-    console.log("Sending request to:", `${this.apiUrl}${endpoint}`);
-    console.log("Request payload:", JSON.stringify(data, null, 2));
+    logger.api("POST", `${this.apiUrl}${endpoint}`, data);
 
     try {
       const response = await fetch(`${this.apiUrl}${endpoint}`, {
@@ -386,7 +386,7 @@ export class ApiService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("API Error Response:", errorText);
+        logger.error("API Error Response:", errorText);
         
         // Try to parse error as JSON
         try {
@@ -402,12 +402,12 @@ export class ApiService {
       }
 
       const responseData = await response.json();
-      console.log("Response status:", response.status);
-      console.log("Response data:", responseData);
+      logger.debug("Response status:", response.status);
+      logger.debug("Response data:", responseData);
 
       return responseData;
     } catch (error) {
-      console.error("API request failed:", {
+      logger.error("API request failed:", {
         endpoint,
         error,
         requestData: data,
@@ -428,7 +428,7 @@ export class ApiService {
       
       return response.ok;
     } catch (error) {
-      console.error(`Service ${service} availability check failed:`, error);
+      logger.error(`Service ${service} availability check failed:`, error);
       return false;
     }
   }
@@ -454,11 +454,35 @@ export class ApiService {
    */
   async checkAxelarAvailability(): Promise<boolean> {
     try {
-      // Test with supported chains to see if Axelar is responsive
+      if (!axelarService.isReady()) {
+        return false;
+      }
+
+      // Test the service with a real availability check
       const supportedChains = axelarService.getSupportedChains();
-      return supportedChains.length > 0;
+      if (supportedChains.length < 2) {
+        return false;
+      }
+
+      // Check if at least two major chains are active
+      const majorChains = ['Ethereum', 'Polygon', 'Avalanche', 'Arbitrum'];
+      const availableChains = supportedChains.filter(chain => majorChains.includes(chain));
+      
+      if (availableChains.length < 2) {
+        return false;
+      }
+
+      // Test chain activity
+      try {
+        const [fromChain, toChain] = availableChains.slice(0, 2);
+        return await axelarService.areChainsActive([fromChain, toChain]);
+      } catch (activityError) {
+        logger.warn('Axelar chain activity check failed:', activityError);
+        // If activity check fails, assume service is available if we have supported chains
+        return true;
+      }
     } catch (error) {
-      console.error('Axelar availability check failed:', error);
+      logger.error('Error checking Axelar availability:', error);
       return false;
     }
   }

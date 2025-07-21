@@ -1,262 +1,384 @@
-import { 
-  AxelarAssetTransfer, 
-  AxelarQueryAPI, 
-  AxelarGMPRecoveryAPI,
-  CHAINS,
-  Environment 
+import {
+  AxelarAssetTransfer,
+  AxelarQueryAPI,
+  Environment,
+  EvmChain,
+  SendTokenParams
 } from "@axelar-network/axelarjs-sdk";
 import { ethers } from "ethers";
+import { ChainUtils } from "../utils/chainUtils";
+import { logger } from "../utils/logger";
 
-export interface AxelarTransferOptions {
-  fromChain: string;
-  toChain: string;
-  fromToken: string;
-  toToken: string;
-  amount: string;
-  recipientAddress: string;
-  userAddress: string;
+export interface TransferQuote {
+  fee: string;
+  estimatedTime: string;
+  route: string[];
 }
 
-export interface AxelarTransferResult {
-  success: boolean;
-  depositAddress?: string;
-  txHash?: string;
-  error?: string;
-  estimatedTime?: string;
-  fees?: string;
+export interface AxelarConfig {
+  environment: Environment;
+  rpcUrl?: string;
 }
 
-export class AxelarService {
-  private assetTransfer: AxelarAssetTransfer;
-  private queryAPI: AxelarQueryAPI;
-  private recoveryAPI: AxelarGMPRecoveryAPI;
+class AxelarService {
+  private assetTransfer: AxelarAssetTransfer | null = null;
+  private queryAPI: AxelarQueryAPI | null = null;
   private environment: Environment;
+  private isInitialized: boolean = false;
 
-  constructor() {
-    // Use testnet for development, mainnet for production
-    this.environment = process.env.NODE_ENV === 'production' ? Environment.MAINNET : Environment.TESTNET;
+  constructor(config: AxelarConfig = { environment: Environment.MAINNET }) {
+    this.environment = config.environment;
     
-    this.assetTransfer = new AxelarAssetTransfer({ environment: this.environment });
-    this.queryAPI = new AxelarQueryAPI({ environment: this.environment });
-    this.recoveryAPI = new AxelarGMPRecoveryAPI({ environment: this.environment });
-  }
-
-  /**
-   * Get quote for cross-chain transfer
-   */
-  async getTransferQuote(options: AxelarTransferOptions): Promise<{
-    fee: string;
-    estimatedTime: string;
-    depositAddress?: string;
-  }> {
     try {
-      // Get transfer fee
-      const fee = await this.queryAPI.getTransferFee(
-        options.fromChain,
-        options.toChain,
-        options.fromToken,
-        parseFloat(options.amount)
-      );
+      // Initialize AxelarAssetTransfer with proper config
+      this.assetTransfer = new AxelarAssetTransfer({
+        environment: this.environment,
+        auth: "metamask" // Use metamask for browser environment
+      });
 
-      // Get deposit address for token transfer
-      const depositAddress = await this.assetTransfer.getDepositAddress(
-        options.fromChain,
-        options.toChain,
-        options.recipientAddress,
-        options.fromToken,
-        { 
-          shouldUnwrapIntoNative: options.toToken === "ETH" || options.toToken === "MATIC" 
-        }
-      );
+      // Initialize AxelarQueryAPI
+      this.queryAPI = new AxelarQueryAPI({
+        environment: this.environment,
+        axelarRpcUrl: config.rpcUrl
+      });
 
-      return {
-        fee: fee.toString(),
-        estimatedTime: this.getEstimatedTime(options.fromChain, options.toChain),
-        depositAddress
-      };
+      this.isInitialized = true;
+      logger.service('axelar', `Service initialized successfully for ${this.environment}`);
     } catch (error) {
-      console.error("Axelar quote error:", error);
-      throw new Error(`Failed to get transfer quote: ${error}`);
-    }
-  }
-
-  /**
-   * Execute cross-chain token transfer
-   */
-  async executeTransfer(
-    options: AxelarTransferOptions,
-    signer: ethers.Signer
-  ): Promise<AxelarTransferResult> {
-    try {
-      // Get deposit address
-      const depositAddress = await this.assetTransfer.getDepositAddress(
-        options.fromChain,
-        options.toChain,
-        options.recipientAddress,
-        options.fromToken,
-        { 
-          shouldUnwrapIntoNative: options.toToken === "ETH" || options.toToken === "MATIC" 
-        }
-      );
-
-      // For native tokens (ETH), send directly to deposit address
-      if (options.fromToken === "ETH" || this.isNativeToken(options.fromToken, options.fromChain)) {
-        const tx = await signer.sendTransaction({
-          to: depositAddress,
-          value: ethers.utils.parseEther(options.amount)
-        });
-
-        return {
-          success: true,
-          depositAddress,
-          txHash: tx.hash,
-          estimatedTime: this.getEstimatedTime(options.fromChain, options.toChain)
-        };
-      } 
-      // For ERC20 tokens, transfer to deposit address
-      else {
-        const tokenContract = new ethers.Contract(
-          this.getTokenAddress(options.fromToken, options.fromChain),
-          [
-            "function transfer(address to, uint256 amount) returns (bool)",
-            "function decimals() view returns (uint8)"
-          ],
-          signer
-        );
-
-        const decimals = await tokenContract.decimals();
-        const amount = ethers.utils.parseUnits(options.amount, decimals);
-
-        const tx = await tokenContract.transfer(depositAddress, amount);
-
-        return {
-          success: true,
-          depositAddress,
-          txHash: tx.hash,
-          estimatedTime: this.getEstimatedTime(options.fromChain, options.toChain)
-        };
-      }
-    } catch (error) {
-      console.error("Axelar transfer error:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
-  /**
-   * Track transaction status
-   */
-  async trackTransfer(txHash: string, fromChain: string): Promise<{
-    status: string;
-    link?: string;
-    error?: string;
-  }> {
-    try {
-      const status = await this.recoveryAPI.queryTransactionStatus(txHash);
+      logger.warn(`Failed to initialize Axelar service for ${this.environment}:`, error);
       
-      return {
-        status: status.status || "pending",
-        link: this.getAxelarscanLink(txHash)
-      };
-    } catch (error) {
-      console.error("Axelar tracking error:", error);
-      return {
-        status: "unknown",
-        error: error instanceof Error ? error.message : String(error)
-      };
+      // Fallback to testnet if mainnet fails
+      if (this.environment === Environment.MAINNET) {
+        try {
+          this.environment = Environment.TESTNET;
+          this.assetTransfer = new AxelarAssetTransfer({
+            environment: this.environment,
+            auth: "metamask"
+          });
+          this.queryAPI = new AxelarQueryAPI({
+            environment: this.environment
+          });
+          this.isInitialized = true;
+          logger.service('axelar', 'Service initialized with testnet fallback');
+        } catch (fallbackError) {
+          logger.error("Failed to initialize Axelar service with testnet fallback:", fallbackError);
+          this.isInitialized = false;
+        }
+      } else {
+        this.isInitialized = false;
+      }
     }
   }
 
   /**
-   * Check if Axelar supports the chain
+   * Check if the service is properly initialized
    */
-  isChainSupported(chainName: string): boolean {
+  isReady(): boolean {
+    return this.isInitialized && this.assetTransfer !== null && this.queryAPI !== null;
+  }
+
+  /**
+   * Get the current environment
+   */
+  getEnvironment(): Environment {
+    return this.environment;
+  }
+
+  /**
+   * Convert chain name to Axelar format using ChainUtils
+   */
+  getAxelarChainName(chainNameOrId: string | number): string | null {
     try {
-      const chains = (CHAINS as any)[this.environment];
-      if (!chains) return false;
-      const supportedChains = Object.values(chains);
-      return supportedChains.includes(chainName as any);
+      let chainName: string;
+      
+      if (typeof chainNameOrId === 'number') {
+        const config = ChainUtils.getChainConfig(chainNameOrId);
+        chainName = config?.name || '';
+      } else {
+        chainName = chainNameOrId;
+      }
+
+      // Normalize the chain name and get Axelar mapping
+      const normalizedName = ChainUtils.normalizeChainName(chainName);
+      
+      // Map common chain names to Axelar chain names
+      const axelarMapping: { [key: string]: string } = {
+        'Ethereum': 'ethereum',
+        'Polygon': 'polygon',
+        'Avalanche': 'avalanche',
+        'Arbitrum': 'arbitrum',
+        'optimism': 'optimism',
+        'binance': 'binance',
+        'base': 'base'
+      };
+
+      return axelarMapping[normalizedName] || null;
     } catch (error) {
-      console.warn('Error checking Axelar chain support:', error);
+      logger.error('Error getting Axelar chain name:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check if a chain is supported by Axelar
+   */
+  isChainSupported(chainIdentifier: string | number): boolean {
+    if (!this.isReady()) {
+      return false;
+    }
+
+    try {
+      const axelarName = this.getAxelarChainName(chainIdentifier);
+      return axelarName !== null;
+    } catch (error) {
+      logger.error('Error checking chain support:', error);
       return false;
     }
   }
 
   /**
-   * Get supported chains
+   * Get list of supported chains
    */
   getSupportedChains(): string[] {
+    if (!this.isReady()) {
+      return [];
+    }
+
     try {
-      const chains = (CHAINS as any)[this.environment];
-      if (!chains) return [];
-      return Object.values(chains);
+      const supportedChainIds = ChainUtils.getSupportedChainIds();
+      return supportedChainIds
+        .map(chainId => {
+          const config = ChainUtils.getChainConfig(chainId);
+          return config?.name;
+        })
+        .filter((name) => name !== undefined && this.getAxelarChainName(name) !== null) as string[];
     } catch (error) {
-      console.warn('Error getting Axelar supported chains:', error);
+      logger.error('Error getting supported chains:', error);
       return [];
     }
   }
 
   /**
-   * Map chain ID to Axelar chain name
+   * Get transfer quote for cross-chain transaction
    */
-  getAxelarChainName(chainId: number): string | null {
-    const chainMap: { [key: number]: string } = {
-      1: "Ethereum",
-      56: "binance",
-      137: "Polygon", 
-      43114: "Avalanche",
-      42161: "Arbitrum",
-      10: "optimism",
-      8453: "base",
-      59144: "linea"
-    };
-    
-    return chainMap[chainId] || null;
-  }
-
-  // Private helper methods
-  private getEstimatedTime(fromChain: string, toChain: string): string {
-    // Rough estimates based on Axelar documentation
-    if (fromChain === "Ethereum" || toChain === "Ethereum") {
-      return "15-20 minutes";
+  async getTransferQuote(
+    fromChain: string,
+    toChain: string,
+    asset: string,
+    amount: string
+  ): Promise<TransferQuote | null> {
+    if (!this.isReady() || !this.queryAPI) {
+      throw new Error('Axelar service not initialized');
     }
-    return "5-10 minutes";
-  }
 
-  private isNativeToken(token: string, chain: string): boolean {
-    const nativeTokens: { [key: string]: string } = {
-      "Ethereum": "ETH",
-      "Polygon": "MATIC",
-      "Avalanche": "AVAX",
-      "binance": "BNB"
-    };
-    
-    return nativeTokens[chain] === token;
-  }
+    try {
+      const fromAxelarChain = this.getAxelarChainName(fromChain);
+      const toAxelarChain = this.getAxelarChainName(toChain);
 
-  private getTokenAddress(token: string, chain: string): string {
-    // This would be populated with actual token addresses
-    // For now, return common USDC addresses as example
-    const tokenAddresses: { [key: string]: { [key: string]: string } } = {
-      "USDC": {
-        "Ethereum": "0xA0b86a33E6441b8C8A008c85c9c8B99c5b5a3c3b",
-        "Polygon": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
-        "Avalanche": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"
+      if (!fromAxelarChain || !toAxelarChain) {
+        throw new Error(`Unsupported chain: ${fromChain} -> ${toChain}`);
       }
-    };
-    
-    return tokenAddresses[token]?.[chain] || "";
+
+      // Convert amount to number for the API
+      const amountNumber = parseFloat(amount);
+      if (isNaN(amountNumber)) {
+        throw new Error('Invalid amount');
+      }
+
+      // Use the correct API method based on SDK structure
+      const feeResponse = await Promise.race([
+        this.queryAPI.getTransferFee(
+          fromAxelarChain,
+          toAxelarChain,
+          asset,
+          amountNumber
+        ),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout')), 10000)
+        )
+      ]) as any;
+
+      if (!feeResponse) {
+        throw new Error('Failed to get transfer fee');
+      }
+
+      return {
+        fee: feeResponse.fee?.amount || '0',
+        estimatedTime: '10-20 minutes', // Default estimate
+        route: [fromChain, toChain]
+      };
+    } catch (error) {
+      logger.error('Error getting transfer quote:', error);
+      throw error;
+    }
   }
 
-  private getAxelarscanLink(txHash: string): string {
-    const baseUrl = this.environment === Environment.MAINNET 
-      ? "https://axelarscan.io" 
-      : "https://testnet.axelarscan.io";
-    return `${baseUrl}/tx/${txHash}`;
+  /**
+   * Get deposit address for cross-chain transfer
+   */
+  async getDepositAddress(
+    fromChain: string,
+    toChain: string,
+    toAddress: string,
+    asset: string
+  ): Promise<string> {
+    if (!this.isReady() || !this.assetTransfer) {
+      throw new Error('Axelar service not initialized');
+    }
+
+    try {
+      const fromAxelarChain = this.getAxelarChainName(fromChain);
+      const toAxelarChain = this.getAxelarChainName(toChain);
+
+      if (!fromAxelarChain || !toAxelarChain) {
+        throw new Error(`Unsupported chain: ${fromChain} -> ${toChain}`);
+      }
+
+      // Use the correct method signature based on SDK
+      const depositAddress = await this.assetTransfer.getDepositAddress({
+        fromChain: fromAxelarChain,
+        toChain: toAxelarChain,
+        destinationAddress: toAddress,
+        asset: asset
+      });
+
+      return depositAddress;
+    } catch (error) {
+      logger.error('Error getting deposit address:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Execute cross-chain transfer
+   */
+  async executeTransfer(
+    fromChain: string,
+    toChain: string,
+    toAddress: string,
+    asset: string,
+    amount: string,
+    provider?: ethers.providers.Web3Provider
+  ): Promise<string> {
+    if (!this.isReady() || !this.assetTransfer) {
+      throw new Error('Axelar service not initialized');
+    }
+
+    if (!provider) {
+      throw new Error('Web3 provider required for transfer execution');
+    }
+
+    try {
+      const fromAxelarChain = this.getAxelarChainName(fromChain);
+      const toAxelarChain = this.getAxelarChainName(toChain);
+
+      if (!fromAxelarChain || !toAxelarChain) {
+        throw new Error(`Unsupported chain: ${fromChain} -> ${toChain}`);
+      }
+
+      const signer = provider.getSigner();
+
+      // Prepare the send token parameters according to the SDK interface
+      const sendTokenParams: SendTokenParams = {
+        fromChain: fromAxelarChain,
+        toChain: toAxelarChain,
+        destinationAddress: toAddress,
+        asset: {
+          symbol: asset
+        },
+        amountInAtomicUnits: amount,
+        options: {
+          evmOptions: {
+            signer: signer,
+            provider: provider
+          }
+        }
+      };
+
+      // Execute the transfer using the asset transfer service
+      const txResponse = await this.assetTransfer.sendToken(sendTokenParams);
+
+      // Extract transaction hash from the response
+      if ('hash' in txResponse) {
+        return txResponse.hash;
+      } else if ('transactionHash' in txResponse) {
+        return (txResponse as any).transactionHash;
+      } else {
+        throw new Error('Unable to extract transaction hash from response');
+      }
+    } catch (error) {
+      logger.error('Error executing transfer:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get gas fee estimate for cross-chain transaction
+   */
+  async getGasFeeEstimate(
+    fromChain: string,
+    toChain: string,
+    gasLimit: string = "100000"
+  ): Promise<string> {
+    if (!this.isReady() || !this.queryAPI) {
+      throw new Error('Axelar service not initialized');
+    }
+
+    try {
+      const fromAxelarChain = this.getAxelarChainName(fromChain);
+      const toAxelarChain = this.getAxelarChainName(toChain);
+
+      if (!fromAxelarChain || !toAxelarChain) {
+        throw new Error(`Unsupported chain: ${fromChain} -> ${toChain}`);
+      }
+
+      // Use the estimateGasFee method
+      const gasFee = await this.queryAPI.estimateGasFee(
+        fromAxelarChain as EvmChain,
+        toAxelarChain as EvmChain,
+        gasLimit
+      );
+
+      return typeof gasFee === 'string' ? gasFee : gasFee.baseFee;
+    } catch (error) {
+      logger.error('Error getting gas fee estimate:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if chains are active
+   */
+  async areChainsActive(chains: string[]): Promise<boolean> {
+    if (!this.isReady() || !this.queryAPI) {
+      return false;
+    }
+
+    try {
+      const axelarChains = chains
+        .map(chain => this.getAxelarChainName(chain))
+        .filter((name): name is string => name !== null);
+
+      if (axelarChains.length !== chains.length) {
+        return false; // Some chains are not supported
+      }
+
+      // Check if all chains are active
+      const activeChecks = await Promise.all(
+        axelarChains.map(chain => this.queryAPI!.isChainActive(chain))
+      );
+
+      return activeChecks.every(isActive => isActive);
+    } catch (error) {
+      logger.error('Error checking chain activity:', error);
+      return false;
+    }
   }
 }
 
 // Export singleton instance
-export const axelarService = new AxelarService();
+export const axelarService = new AxelarService({
+  environment: process.env.NODE_ENV === 'production' ? Environment.MAINNET : Environment.TESTNET
+});
+
+export default AxelarService;

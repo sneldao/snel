@@ -122,54 +122,56 @@ export class IntentRouter {
       const recipientAddress = intent.recipient || userAddress;
 
       // Get quote first
-      const quote = await axelarService.getTransferQuote({
-        fromChain: intent.fromChain,
-        toChain: intent.toChain,
-        fromToken: intent.fromToken,
-        toToken: intent.toToken || intent.fromToken,
-        amount: intent.amount,
-        recipientAddress,
-        userAddress
-      });
+      const quote = await axelarService.getTransferQuote(
+        intent.fromChain,
+        intent.toChain,
+        intent.fromToken,
+        intent.amount
+      );
+
+      if (!quote) {
+        return { success: false, error: 'Failed to get transfer quote' };
+      }
 
       onProgress?.(`Cross-chain fee: ${quote.fee}. Executing transfer...`, 2, 3);
 
-      // Execute the transfer
-      const result = await axelarService.executeTransfer({
-        fromChain: intent.fromChain,
-        toChain: intent.toChain,
-        fromToken: intent.fromToken,
-        toToken: intent.toToken || intent.fromToken,
-        amount: intent.amount,
-        recipientAddress,
-        userAddress
-      }, signer);
-
-      if (result.success) {
-        onProgress?.('Transfer initiated! Tracking status...', 3, 3);
-        
-        return {
-          success: true,
-          txHash: result.txHash,
-          steps: [
-            {
-              description: 'Cross-chain transfer initiated',
-              status: 'completed',
-              txHash: result.txHash
-            },
-            {
-              description: `Bridging from ${intent.fromChain} to ${intent.toChain}`,
-              status: 'in_progress'
-            },
-            {
-              description: `Estimated completion: ${result.estimatedTime}`,
-              status: 'pending'
-            }
-          ]
-        };
-      } else {
-        return { success: false, error: result.error };
+      // Get provider from signer
+      const provider = signer.provider as ethers.providers.Web3Provider;
+      if (!provider) {
+        return { success: false, error: 'Web3 provider not available' };
       }
+
+      // Execute the transfer
+      const txHash = await axelarService.executeTransfer(
+        intent.fromChain,
+        intent.toChain,
+        recipientAddress,
+        intent.fromToken,
+        intent.amount,
+        provider
+      );
+
+      onProgress?.('Transfer initiated! Tracking status...', 3, 3);
+      
+      return {
+        success: true,
+        txHash: txHash,
+        steps: [
+          {
+            description: 'Cross-chain transfer initiated',
+            status: 'completed',
+            txHash: txHash
+          },
+          {
+            description: `Bridging from ${intent.fromChain} to ${intent.toChain}`,
+            status: 'in_progress'
+          },
+          {
+            description: `Estimated completion: ${quote.estimatedTime}`,
+            status: 'pending'
+          }
+        ]
+      };
     } catch (error) {
       return { 
         success: false, 
