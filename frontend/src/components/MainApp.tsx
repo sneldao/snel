@@ -49,6 +49,11 @@ import { ApiService } from "../services/apiService";
 import { TransactionService } from "../services/transactionService";
 import { PortfolioService } from "../services/portfolioService";
 import { AdvancedSettings, AdvancedSettingsValues } from "./AdvancedSettings";
+import {
+  withAsyncRecursionGuard,
+  recursionGuard,
+} from "../utils/recursionGuard";
+import { setupGlobalWalletErrorHandler } from "../utils/walletErrorHandler";
 
 interface ResponseContent {
   type?: string;
@@ -138,6 +143,11 @@ export default function MainApp() {
         : false,
     cacheEnabled: true,
   }));
+
+  // Setup global error handlers on mount
+  useEffect(() => {
+    setupGlobalWalletErrorHandler();
+  }, []);
 
   // Initialize or update welcome message based on wallet state
   useEffect(() => {
@@ -281,174 +291,174 @@ export default function MainApp() {
     }
   };
 
-  const handleCommand = async (
-    command: string | undefined,
-    isRetry: boolean = false
-  ) => {
-    if (!command) return;
+  const handleCommand = withAsyncRecursionGuard(
+    async (command: string | undefined, isRetry: boolean = false) => {
+      if (!command) return;
 
-    // Check if wallet is connected
-    if (!isConnected) {
-      toast({
-        title: "Wallet Not Connected",
-        description: "Please connect your wallet to use Snel.",
-        status: "warning",
-        duration: 5000,
-        isClosable: true,
-      });
-      return;
-    }
+      // Check if wallet is connected
+      if (!isConnected) {
+        toast({
+          title: "Wallet Not Connected",
+          description: "Please connect your wallet to use Snel.",
+          status: "warning",
+          duration: 5000,
+          isClosable: true,
+        });
+        return;
+      }
 
-    // Check if chain is supported
-    if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
-      toast({
-        title: "Wrong Network",
-        description: "Please connect to a supported network.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-      return;
-    }
+      // Check if chain is supported
+      if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
+        toast({
+          title: "Wrong Network",
+          description: "Please connect to a supported network.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+        return;
+      }
 
-    setIsLoading(true);
-    try {
-      // Add command to responses immediately to show user input
-      const timestamp = new Date().toISOString();
-      const commandResponse = {
-        content: command,
-        timestamp,
-        isCommand: true,
-        status: "success" as const,
-      };
-      setResponses((prev) => [...prev, commandResponse]);
-
-      // Check if this is a portfolio analysis command
-      const isPortfolioCommand =
-        /portfolio|allocation|holdings|assets|analyze/i.test(
-          command.toLowerCase()
-        );
-
-      if (isPortfolioCommand) {
-        // Add processing state immediately for portfolio commands
-        const processingResponse = {
-          content: { type: "portfolio_progress" },
-          timestamp: new Date().toISOString(),
-          isCommand: false,
-          status: "processing" as const,
-          agentType: "agno" as const,
-          metadata: { progress: 0, stage: "Starting analysis..." },
+      setIsLoading(true);
+      try {
+        // Add command to responses immediately to show user input
+        const timestamp = new Date().toISOString();
+        const commandResponse = {
+          content: command,
+          timestamp,
+          isCommand: true,
+          status: "success" as const,
         };
-        setResponses((prev) => [...prev, processingResponse]);
+        setResponses((prev) => [...prev, commandResponse]);
 
-        // Process portfolio command with progressive updates
-        try {
+        // Check if this is a portfolio analysis command
+        const isPortfolioCommand =
+          /portfolio|allocation|holdings|assets|analyze/i.test(
+            command.toLowerCase()
+          );
+
+        if (isPortfolioCommand) {
+          // Add processing state immediately for portfolio commands
+          const processingResponse = {
+            content: { type: "portfolio_progress" },
+            timestamp: new Date().toISOString(),
+            isCommand: false,
+            status: "processing" as const,
+            agentType: "agno" as const,
+            metadata: { progress: 0, stage: "Starting analysis..." },
+          };
+          setResponses((prev) => [...prev, processingResponse]);
+
+          // Process portfolio command with progressive updates
+          try {
+            const response = await apiService.processCommand(
+              command,
+              address, // Use actual connected wallet address
+              chainId, // Use actual connected chain ID
+              userProfile?.name,
+              undefined, // onProgress handled separately for portfolio
+              walletClient, // Pass signer for potential Axelar operations
+              portfolioSettings // Pass portfolio settings
+            );
+
+            // Replace processing response with final result
+            setResponses((prev) =>
+              prev.map((r) =>
+                r.status === "processing" && r.agentType === "agno"
+                  ? {
+                      ...response,
+                      agentType: response.agent_type || response.agentType, // Map agent_type to agentType
+                      timestamp: new Date().toISOString(),
+                      isCommand: false,
+                      status: "success" as const,
+                    }
+                  : r
+              )
+            );
+          } catch (error) {
+            console.error("Portfolio analysis failed:", error);
+            // Replace processing with error
+            setResponses((prev) =>
+              prev.map((r) =>
+                r.status === "processing" && r.agentType === "agno"
+                  ? {
+                      content: {
+                        error:
+                          error instanceof Error
+                            ? error.message
+                            : "Analysis failed",
+                        type: "error",
+                      },
+                      timestamp: new Date().toISOString(),
+                      isCommand: false,
+                      status: "error" as const,
+                      agentType: "agno" as const,
+                    }
+                  : r
+              )
+            );
+          }
+        } else {
+          // Regular command processing for non-portfolio commands
           const response = await apiService.processCommand(
             command,
-            address, // Use actual connected wallet address
-            chainId, // Use actual connected chain ID
+            address,
+            chainId,
             userProfile?.name,
-            undefined, // onProgress handled separately for portfolio
+            undefined, // onProgress
             walletClient, // Pass signer for potential Axelar operations
             portfolioSettings // Pass portfolio settings
           );
 
-          // Replace processing response with final result
-          setResponses((prev) =>
-            prev.map((r) =>
-              r.status === "processing" && r.agentType === "agno"
-                ? {
-                    ...response,
-                    agentType: response.agent_type || response.agentType, // Map agent_type to agentType
-                    timestamp: new Date().toISOString(),
-                    isCommand: false,
-                    status: "success" as const,
-                  }
-                : r
-            )
-          );
-        } catch (error) {
-          console.error("Portfolio analysis failed:", error);
-          // Replace processing with error
-          setResponses((prev) =>
-            prev.map((r) =>
-              r.status === "processing" && r.agentType === "agno"
-                ? {
-                    content: {
-                      error:
-                        error instanceof Error
-                          ? error.message
-                          : "Analysis failed",
-                      type: "error",
-                    },
-                    timestamp: new Date().toISOString(),
-                    isCommand: false,
-                    status: "error" as const,
-                    agentType: "agno" as const,
-                  }
-                : r
-            )
-          );
-        }
-      } else {
-        // Regular command processing for non-portfolio commands
-        const response = await apiService.processCommand(
-          command,
-          address,
-          chainId,
-          userProfile?.name,
-          undefined, // onProgress
-          walletClient, // Pass signer for potential Axelar operations
-          portfolioSettings // Pass portfolio settings
-        );
+          // Debug logging for bridge and transfer commands
+          if (command.toLowerCase().includes("bridge")) {
+            console.log("Bridge command API response:", response);
+            console.log("Response agentType:", response.agentType);
+            console.log("Response transaction:", response.transaction);
+          }
 
-        // Debug logging for bridge and transfer commands
-        if (command.toLowerCase().includes("bridge")) {
-          console.log("Bridge command API response:", response);
-          console.log("Response agentType:", response.agentType);
-          console.log("Response transaction:", response.transaction);
-        }
+          if (command.toLowerCase().includes("transfer")) {
+            console.log("Transfer command API response:", response);
+            console.log("Response agent_type:", response.agent_type);
+            console.log("Response agentType:", response.agentType);
+            console.log("Response transaction:", response.transaction);
+            console.log("Response content:", response.content);
+            console.log(
+              "Response awaiting_confirmation:",
+              response.awaiting_confirmation
+            );
+            console.log(
+              "Mapped agentType will be:",
+              response.agent_type || response.agentType
+            );
+          }
 
-        if (command.toLowerCase().includes("transfer")) {
-          console.log("Transfer command API response:", response);
-          console.log("Response agent_type:", response.agent_type);
-          console.log("Response agentType:", response.agentType);
-          console.log("Response transaction:", response.transaction);
-          console.log("Response content:", response.content);
-          console.log(
-            "Response awaiting_confirmation:",
-            response.awaiting_confirmation
-          );
-          console.log(
-            "Mapped agentType will be:",
-            response.agent_type || response.agentType
-          );
+          // Regular handling for non-portfolio commands
+          setResponses((prev) => [
+            ...prev,
+            {
+              ...response,
+              agentType: response.agent_type || response.agentType, // Map agent_type to agentType
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success",
+            },
+          ]);
         }
-
-        // Regular handling for non-portfolio commands
-        setResponses((prev) => [
-          ...prev,
-          {
-            ...response,
-            agentType: response.agent_type || response.agentType, // Map agent_type to agentType
-            timestamp: new Date().toISOString(),
-            isCommand: false,
-            status: "success",
-          },
-        ]);
+      } catch (error) {
+        console.error("Error processing command:", error);
+        toast({
+          title: "Error",
+          description: "Failed to process command. Please try again.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
       }
-    } catch (error) {
-      console.error("Error processing command:", error);
-      toast({
-        title: "Error",
-        description: "Failed to process command. Please try again.",
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-    setIsLoading(false);
-  };
+      setIsLoading(false);
+    },
+    "handleCommand"
+  );
 
   // Reset any portfolio processing state when the component unmounts
   useEffect(() => {

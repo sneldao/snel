@@ -1,9 +1,10 @@
 import { useToast } from "@chakra-ui/react";
+import { withRecursionGuard } from "../utils/recursionGuard";
 
 export const useCommandActions = () => {
   const toast = useToast();
 
-  const handleConfirm = () => {
+  const handleConfirm = withRecursionGuard(() => {
     // Find the closest command input (improved approach that doesn't simulate key events)
     const messageForm = document.querySelector("form");
     const inputElement = messageForm?.querySelector(
@@ -34,9 +35,9 @@ export const useCommandActions = () => {
         JSON.stringify({ confirmed: true, timestamp: Date.now() })
       );
     }
-  };
+  }, "handleConfirm");
 
-  const handleCancel = () => {
+  const handleCancel = withRecursionGuard(() => {
     // Find the closest command input (improved approach that doesn't simulate key events)
     const messageForm = document.querySelector("form");
     const inputElement = messageForm?.querySelector(
@@ -67,7 +68,7 @@ export const useCommandActions = () => {
         JSON.stringify({ confirmed: false, timestamp: Date.now() })
       );
     }
-  };
+  }, "handleCancel");
 
   const handleQuoteSelect = (
     content: any,

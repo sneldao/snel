@@ -16,6 +16,7 @@ import {
   VStack,
   useToast,
 } from "@chakra-ui/react";
+import { withAsyncRecursionGuard } from "../utils/recursionGuard";
 
 export default function WalletBridge() {
   const [isLoading, setIsLoading] = useState(true);
@@ -65,7 +66,7 @@ export default function WalletBridge() {
   }, [source, uid]);
 
   // Function to complete the connection
-  const completeConnection = async () => {
+  const completeConnection = withAsyncRecursionGuard(async () => {
     if (!address || !uid || !callback) {
       setConnectionError("Missing required information to complete connection");
       return;
@@ -136,7 +137,7 @@ export default function WalletBridge() {
         isClosable: true,
       });
     }
-  };
+  }, "completeConnection");
 
   // Return to the bot
   const returnToBot = () => {

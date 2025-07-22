@@ -1,6 +1,52 @@
 import { TransactionData } from "../types/responses";
 import { BLOCK_EXPLORERS } from "../constants/chains";
 import { type WalletClient, type PublicClient } from "viem";
+import { withAsyncRecursionGuard, recursionGuard } from "../utils/recursionGuard";
+import { safeWalletOperation } from "../utils/walletErrorHandler";
+
+/**
+ * Converts a decimal ETH value to wei (BigInt)
+ * Handles both string and number inputs
+ * @param value - ETH value as string or number (e.g., "0.001", 0.001)
+ * @returns BigInt value in wei
+ */
+function parseEthToWei(value: string | number | undefined): bigint {
+  if (!value || value === "0" || value === 0) {
+    return BigInt(0);
+  }
+
+  const valueStr = String(value);
+  
+  // If it's already an integer string (no decimal point), convert directly
+  if (!valueStr.includes('.')) {
+    try {
+      return BigInt(valueStr);
+    } catch (error) {
+      console.warn(`Failed to parse integer value "${valueStr}", defaulting to 0:`, error);
+      return BigInt(0);
+    }
+  }
+
+  try {
+    // Handle decimal values by converting to wei
+    const ethValue = parseFloat(valueStr);
+    if (isNaN(ethValue)) {
+      console.warn(`Invalid ETH value "${valueStr}", defaulting to 0`);
+      return BigInt(0);
+    }
+
+    // Convert ETH to wei (1 ETH = 10^18 wei)
+    // Use string manipulation to avoid floating point precision issues
+    const [integerPart, decimalPart = ''] = valueStr.split('.');
+    const paddedDecimal = decimalPart.padEnd(18, '0').slice(0, 18);
+    const weiString = (integerPart || '0') + paddedDecimal;
+    
+    return BigInt(weiString);
+  } catch (error) {
+    console.warn(`Failed to parse ETH value "${valueStr}", defaulting to 0:`, error);
+    return BigInt(0);
+  }
+}
 
 export class TransactionService {
   constructor(
@@ -17,6 +63,8 @@ export class TransactionService {
   }
 
   async executeTransaction(txData: TransactionData) {
+    return safeWalletOperation(async () => {
+      return withAsyncRecursionGuard(async () => {
     if (!this.walletClient) {
       throw new Error("Wallet not connected");
     }
@@ -55,7 +103,7 @@ export class TransactionService {
         chain: null,
         to: txData.to as `0x${string}`,
         data: txData.data as `0x${string}`,
-        value: BigInt(txData.value || "0"),
+        value: parseEthToWei(txData.value),
         chainId: txData.chainId || this.chainId,
         gas: BigInt(gas),
       };
@@ -145,6 +193,8 @@ export class TransactionService {
 
       throw this.formatTransactionError(error);
     }
+      }, `executeTransaction_${this.chainId}`)();
+    }, `executeTransaction_${this.chainId}`);
   }
 
   private isUserRejection(error: Error): boolean {
@@ -179,6 +229,11 @@ export class TransactionService {
     // Check for user rejection
     if (this.isUserRejection(error)) {
       return new Error("Transaction cancelled");
+    }
+
+    // Check for BigInt conversion errors (the root cause of the recursion)
+    if (error.message.includes("Cannot convert") && error.message.includes("to a BigInt")) {
+      return new Error("Invalid transaction amount format. Please check the transaction value.");
     }
 
     // Check for common errors
