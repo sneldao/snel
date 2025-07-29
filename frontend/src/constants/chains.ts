@@ -1,3 +1,34 @@
+/**
+ * Canonical chain IDs used throughout the frontend.
+ * Exposed as an enum to allow type–safe imports, e.g.:
+ *   import { ChainId } from \"@/constants/chains\";
+ *   const polygonTokens = getTokensByChain(ChainId.POLYGON);
+ *
+ * IMPORTANT: The numeric values MUST stay in-sync with SUPPORTED_CHAINS below.
+ */
+export enum ChainId {
+  // Layer 1
+  ETHEREUM = 1,
+  BSC = 56,
+  GNOSIS = 100,
+
+  // Layer 2 & Rollups
+  BASE = 8453,
+  OPTIMISM = 10,
+  ARBITRUM = 42161,
+  POLYGON = 137,
+  LINEA = 59144,
+  SCROLL = 534352,
+  ZKSYNC_ERA = 324,
+  MODE = 34443,
+  TAIKO = 167004,
+
+  // Other Networks
+  AVALANCHE = 43114,
+  MANTLE = 5000,
+  BLAST = 81457,
+}
+
 export const SUPPORTED_CHAINS = {
   // Layer 1
   1: "Ethereum",

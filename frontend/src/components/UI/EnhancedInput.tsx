@@ -17,6 +17,7 @@ import {
   Button,
   Tooltip,
   Spinner,
+  IconButton,
   useColorModeValue,
   InputProps as ChakraInputProps,
   FormControlProps,
@@ -840,6 +841,17 @@ const PercentageInput = forwardRef<HTMLInputElement, EnhancedInputProps>((props,
     </InputGroup>
   );
 });
+
+// ------------------------------------------------------------------
+// Attach display names to forwardRef components for better debugging
+// ------------------------------------------------------------------
+
+TokenAmountInput.displayName   = 'TokenAmountInput';
+AddressInput.displayName       = 'AddressInput';
+SearchInput.displayName        = 'SearchInput';
+PasswordInput.displayName      = 'PasswordInput';
+CurrencyInput.displayName      = 'CurrencyInput';
+PercentageInput.displayName    = 'PercentageInput';
 
 // ========== Main Component ==========
 

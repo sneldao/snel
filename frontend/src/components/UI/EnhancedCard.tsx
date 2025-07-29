@@ -15,6 +15,7 @@ import {
   Skeleton,
   SkeletonText,
   SkeletonCircle,
+  Icon,           /* Added */
   useColorModeValue,
   useTheme,
   useDisclosure,
@@ -44,6 +45,7 @@ import {
   FaExchangeAlt,
   FaArrowUp,
   FaArrowDown,
+  FaArrowRight,    /* Added */
   FaGripVertical,
   FaEthereum,
   FaBitcoin,
@@ -897,8 +899,13 @@ export const EnhancedCard: React.FC<EnhancedCardProps> = ({
   const bgColor = useColorModeValue('white', 'gray.800');
   const textColor = useColorModeValue('gray.800', 'white');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const headerBg = headerBgColor || useColorModeValue('gray.50', 'gray.900');
-  const footerBg = footerBgColor || useColorModeValue('gray.50', 'gray.900');
+  // Pre-compute default background colors to avoid conditional Hook calls
+  const defaultHeaderBg = useColorModeValue('gray.50', 'gray.900');
+  const defaultFooterBg = useColorModeValue('gray.50', 'gray.900');
+  const headerBg = headerBgColor || defaultHeaderBg;
+  const footerBg = footerBgColor || defaultFooterBg;
+  // Pre-computed color for flat variant to avoid hook in nested fn
+  const flatBgColor = useColorModeValue('gray.100', 'gray.700');
   
   // Effects
   
@@ -950,7 +957,7 @@ export const EnhancedCard: React.FC<EnhancedCardProps> = ({
     
     switch (variant) {
       case 'flat':
-        return useColorModeValue('gray.100', 'gray.700');
+        return flatBgColor;
       case 'glass':
         return 'rgba(255, 255, 255, 0.1)';
       case 'gradient':

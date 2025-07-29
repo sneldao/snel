@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Button,
@@ -27,6 +27,8 @@ import {
   DrawerOverlay,
   DrawerContent,
   DrawerCloseButton,
+  DrawerFooter,
+  Spacer,
   Tabs,
   TabList,
   TabPanels,
@@ -74,8 +76,8 @@ import {
   Tr,
   Th,
   Td,
-} from '@chakra-ui/react';
-import { motion, AnimatePresence, useAnimation } from 'framer-motion';
+} from "@chakra-ui/react";
+import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import {
   FaArrowRight,
   FaArrowLeft,
@@ -109,10 +111,10 @@ import {
   FaCheckCircle,
   FaGasPump,
   FaQuestion,
-} from 'react-icons/fa';
-import { ChainUtils } from '../../utils/chainUtils';
-import { axelarServiceV2 } from '../../services/enhanced/axelarServiceV2';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
+} from "react-icons/fa";
+import { ChainUtils } from "../../utils/chainUtils";
+import { axelarServiceV2 } from "../../services/enhanced/axelarServiceV2";
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 
 // ======== TypeScript Interfaces ========
 
@@ -124,11 +126,17 @@ export interface OnboardingStep {
   icon: React.ElementType;
   completionCriteria?: () => boolean;
   requiredInteraction?: boolean;
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced';
-  category: 'intro' | 'crosschain' | 'axelar' | 'defi' | 'portfolio' | 'commands';
+  experienceLevel: "beginner" | "intermediate" | "advanced";
+  category:
+    | "intro"
+    | "crosschain"
+    | "axelar"
+    | "defi"
+    | "portfolio"
+    | "commands";
   estimatedTime: number; // in seconds
   reward?: {
-    type: 'achievement' | 'feature' | 'tip';
+    type: "achievement" | "feature" | "tip";
     title: string;
     description: string;
     icon: React.ElementType;
@@ -141,12 +149,12 @@ export interface OnboardingPath {
   description: string;
   icon: React.ElementType;
   stepIds: string[];
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced';
+  experienceLevel: "beginner" | "intermediate" | "advanced";
   estimatedTime: number; // in minutes
 }
 
 export interface OnboardingPreferences {
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced';
+  experienceLevel: "beginner" | "intermediate" | "advanced";
   interests: string[];
   completedSteps: string[];
   currentPath?: string;
@@ -175,29 +183,190 @@ export interface InteractiveOnboardingProps {
   showFloatingButton?: boolean;
 }
 
+// ======== Helper Components ========
+
+const CrossChainDemoContent: React.FC<{
+  onStepComplete: (stepId: string) => void;
+}> = ({ onStepComplete }) => {
+  const [sourceChain, setSourceChain] = useState("ethereum");
+  const [destChain, setDestChain] = useState("arbitrum");
+  const [asset, setAsset] = useState("USDC");
+  const [amount, setAmount] = useState("100");
+  const [showDemo, setShowDemo] = useState(false);
+
+  const startDemo = () => {
+    setShowDemo(true);
+    setTimeout(() => {
+      if (onStepComplete) {
+        onStepComplete("cross-chain-demo");
+      }
+    }, 5000);
+  };
+
+  return (
+    <VStack spacing={6} align="stretch">
+      <Text>
+        This interactive demo shows you how cross-chain transfers work using
+        Axelar Network. Configure your transfer parameters below and start the
+        demo to see the process in action.
+      </Text>
+
+      {!showDemo ? (
+        <Box p={6} borderWidth="1px" borderRadius="lg" bg="white">
+          <VStack spacing={5} align="stretch">
+            <FormControl>
+              <FormLabel>Source Chain</FormLabel>
+              <Select
+                value={sourceChain}
+                onChange={(e) => setSourceChain(e.target.value)}
+              >
+                <option value="ethereum">Ethereum</option>
+                <option value="polygon">Polygon</option>
+                <option value="avalanche">Avalanche</option>
+                <option value="base">Base</option>
+              </Select>
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>Destination Chain</FormLabel>
+              <Select
+                value={destChain}
+                onChange={(e) => setDestChain(e.target.value)}
+              >
+                <option value="arbitrum">Arbitrum</option>
+                <option value="optimism">Optimism</option>
+                <option value="base">Base</option>
+                <option value="polygon">Polygon</option>
+              </Select>
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>Asset</FormLabel>
+              <Select value={asset} onChange={(e) => setAsset(e.target.value)}>
+                <option value="USDC">USDC</option>
+                <option value="USDT">USDT</option>
+                <option value="ETH">ETH</option>
+                <option value="WETH">WETH</option>
+              </Select>
+            </FormControl>
+
+            <FormControl>
+              <FormLabel>Amount</FormLabel>
+              <Input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </FormControl>
+
+            <Button
+              colorScheme="blue"
+              size="lg"
+              rightIcon={<Icon as={FaPlay} />}
+              onClick={startDemo}
+            >
+              Start Demo
+            </Button>
+          </VStack>
+        </Box>
+      ) : (
+        <Box>
+          <Alert status="info" mb={4}>
+            <AlertIcon />
+            <AlertTitle>Demo Mode</AlertTitle>
+            <AlertDescription>
+              This is a simulated demo. No actual transaction is being executed.
+            </AlertDescription>
+          </Alert>
+
+          <Box p={6} borderWidth="1px" borderRadius="lg" bg="white">
+            <VStack spacing={4} align="stretch">
+              <Heading size="md">Cross-Chain Transfer Demo</Heading>
+              <Text>
+                Transferring {amount} {asset} from {sourceChain} to {destChain}
+              </Text>
+
+              <Box py={4}>
+                <Progress size="sm" isIndeterminate colorScheme="blue" />
+              </Box>
+
+              <VStack align="stretch" spacing={3}>
+                <HStack>
+                  <Icon as={FaCheckCircle} color="green.500" />
+                  <Text>Transaction initiated on {sourceChain}</Text>
+                </HStack>
+                <HStack>
+                  <Spinner size="sm" color="blue.500" />
+                  <Text>Confirming on source chain...</Text>
+                </HStack>
+                <HStack opacity={0.5}>
+                  <Icon as={FaRegClock} color="gray.500" />
+                  <Text>Axelar Network processing</Text>
+                </HStack>
+                <HStack opacity={0.5}>
+                  <Icon as={FaRegClock} color="gray.500" />
+                  <Text>Finalizing on {destChain}</Text>
+                </HStack>
+              </VStack>
+
+              <Divider my={2} />
+
+              <HStack justify="space-between">
+                <Text fontSize="sm">Estimated completion time:</Text>
+                <Text fontSize="sm" fontWeight="bold">
+                  5-10 minutes
+                </Text>
+              </HStack>
+            </VStack>
+          </Box>
+        </Box>
+      )}
+
+      <Box p={4} bg="blue.50" borderRadius="md">
+        <Heading size="sm" mb={2}>
+          What&apos;s happening behind the scenes?
+        </Heading>
+        <OrderedList spacing={2} pl={4}>
+          <ListItem>
+            Your assets are locked in a smart contract on the source chain
+          </ListItem>
+          <ListItem>
+            Axelar validators confirm the transaction on the source chain
+          </ListItem>
+          <ListItem>Axelar network prepares the cross-chain message</ListItem>
+          <ListItem>The message is delivered to the destination chain</ListItem>
+          <ListItem>
+            Equivalent assets are minted or released on the destination chain
+          </ListItem>
+        </OrderedList>
+      </Box>
+    </VStack>
+  );
+};
+
 // ======== Animation Variants ========
 
 const fadeIn = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.5 } }
+  visible: { opacity: 1, transition: { duration: 0.5 } },
 };
 
 const slideUp = {
   hidden: { y: 20, opacity: 0 },
-  visible: { y: 0, opacity: 1, transition: { duration: 0.5 } }
+  visible: { y: 0, opacity: 1, transition: { duration: 0.5 } },
 };
 
 const slideRight = {
   hidden: { x: -20, opacity: 0 },
-  visible: { x: 0, opacity: 1, transition: { duration: 0.4 } }
+  visible: { x: 0, opacity: 1, transition: { duration: 0.4 } },
 };
 
 const pulse = {
   initial: { scale: 1 },
-  animate: { 
+  animate: {
     scale: [1, 1.05, 1],
-    transition: { duration: 1.5, repeat: Infinity }
-  }
+    transition: { duration: 1.5, repeat: Infinity },
+  },
 };
 
 const staggerChildren = {
@@ -205,9 +374,9 @@ const staggerChildren = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1
-    }
-  }
+      staggerChildren: 0.1,
+    },
+  },
 };
 
 // ======== Helper Components ========
@@ -219,31 +388,44 @@ const MotionHeading = motion(Heading);
 const MotionButton = motion(Button);
 const MotionIcon = motion(Icon);
 
-const StepProgressBar: React.FC<{ 
-  currentStepIndex: number; 
+const StepProgressBar: React.FC<{
+  currentStepIndex: number;
   totalSteps: number;
   completedSteps: number;
 }> = ({ currentStepIndex, totalSteps, completedSteps }) => {
   const progress = (completedSteps / totalSteps) * 100;
-  
+
   return (
     <Box w="100%" mb={4}>
       <Flex justify="space-between" mb={2}>
-        <Text fontSize="sm" fontWeight="medium">Progress</Text>
+        <Text fontSize="sm" fontWeight="medium">
+          Progress
+        </Text>
         <HStack spacing={2}>
-          <Badge colorScheme="green">{completedSteps}/{totalSteps} completed</Badge>
-          <Text fontSize="sm" fontWeight="bold">{Math.round(progress)}%</Text>
+          <Badge colorScheme="green">
+            {completedSteps}/{totalSteps} completed
+          </Badge>
+          <Text fontSize="sm" fontWeight="bold">
+            {Math.round(progress)}%
+          </Text>
         </HStack>
       </Flex>
-      <Box position="relative" h="8px" w="100%" bg="gray.100" borderRadius="full" overflow="hidden">
+      <Box
+        position="relative"
+        h="8px"
+        w="100%"
+        bg="gray.100"
+        borderRadius="full"
+        overflow="hidden"
+      >
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5 }}
           style={{
-            height: '100%',
-            background: 'var(--chakra-colors-blue-500)',
-            borderRadius: 'var(--chakra-radii-full)'
+            height: "100%",
+            background: "var(--chakra-colors-blue-500)",
+            borderRadius: "var(--chakra-radii-full)",
           }}
         />
         <Box
@@ -263,21 +445,21 @@ const StepProgressBar: React.FC<{
   );
 };
 
-const AchievementBadge: React.FC<{ 
+const AchievementBadge: React.FC<{
   achievement: OnboardingAchievement;
   isUnlocked: boolean;
   onClick?: () => void;
 }> = ({ achievement, isUnlocked, onClick }) => {
   const bgColor = useColorModeValue(
-    isUnlocked ? 'yellow.100' : 'gray.100',
-    isUnlocked ? 'yellow.900' : 'gray.700'
+    isUnlocked ? "yellow.100" : "gray.100",
+    isUnlocked ? "yellow.900" : "gray.700"
   );
-  
+
   const iconColor = useColorModeValue(
-    isUnlocked ? 'yellow.500' : 'gray.400',
-    isUnlocked ? 'yellow.300' : 'gray.500'
+    isUnlocked ? "yellow.500" : "gray.400",
+    isUnlocked ? "yellow.300" : "gray.500"
   );
-  
+
   return (
     <MotionBox
       p={3}
@@ -291,24 +473,22 @@ const AchievementBadge: React.FC<{
       overflow="hidden"
     >
       {isUnlocked && (
-        <Badge 
-          position="absolute" 
-          top={2} 
-          right={2} 
+        <Badge
+          position="absolute"
+          top={2}
+          right={2}
           colorScheme="green"
           fontSize="xs"
         >
           Unlocked
         </Badge>
       )}
-      
+
       <VStack spacing={2} align="center">
-        <Icon 
-          as={achievement.icon} 
-          boxSize={8} 
-          color={iconColor} 
-        />
-        <Text fontWeight="medium" textAlign="center">{achievement.title}</Text>
+        <Icon as={achievement.icon} boxSize={8} color={iconColor} />
+        <Text fontWeight="medium" textAlign="center">
+          {achievement.title}
+        </Text>
         {isUnlocked && achievement.unlockedAt && (
           <Text fontSize="xs" color="gray.500">
             Unlocked on {new Date(achievement.unlockedAt).toLocaleDateString()}
@@ -327,9 +507,9 @@ const InteractiveDemoCard: React.FC<{
   isCompleted: boolean;
   onComplete?: () => void;
 }> = ({ title, description, icon, children, isCompleted, onComplete }) => {
-  const bgColor = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
-  
+  const bgColor = useColorModeValue("white", "gray.800");
+  const borderColor = useColorModeValue("gray.200", "gray.700");
+
   return (
     <Box
       p={5}
@@ -354,11 +534,13 @@ const InteractiveDemoCard: React.FC<{
         >
           <HStack spacing={1}>
             <Icon as={FaCheck} boxSize={3} />
-            <Text fontSize="xs" fontWeight="bold">Completed</Text>
+            <Text fontSize="xs" fontWeight="bold">
+              Completed
+            </Text>
           </HStack>
         </Box>
       )}
-      
+
       <VStack spacing={4} align="stretch">
         <HStack spacing={3}>
           <Icon as={icon} boxSize={6} color="blue.500" />
@@ -367,13 +549,13 @@ const InteractiveDemoCard: React.FC<{
             <Text color="gray.500">{description}</Text>
           </VStack>
         </HStack>
-        
+
         <Box>{children}</Box>
-        
+
         {onComplete && !isCompleted && (
-          <Button 
-            rightIcon={<Icon as={FaCheck} />} 
-            colorScheme="blue" 
+          <Button
+            rightIcon={<Icon as={FaCheck} />}
+            colorScheme="blue"
             onClick={onComplete}
             alignSelf="flex-end"
           >
@@ -400,7 +582,7 @@ const ConceptCard: React.FC<{
       borderColor="gray.200"
       bg="white"
       boxShadow="sm"
-      whileHover={{ y: -5, boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}
+      whileHover={{ y: -5, boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}
       transition={{ duration: 0.3 }}
     >
       <VStack spacing={4} align="start">
@@ -408,27 +590,27 @@ const ConceptCard: React.FC<{
           <Icon as={icon} boxSize={6} color="blue.500" />
           <Heading size="md">{title}</Heading>
         </HStack>
-        
+
         {imageUrl && (
-          <Image 
-            src={imageUrl} 
-            alt={title} 
-            borderRadius="md" 
-            w="100%" 
-            maxH="150px" 
-            objectFit="cover" 
+          <Image
+            src={imageUrl}
+            alt={title}
+            borderRadius="md"
+            w="100%"
+            maxH="150px"
+            objectFit="cover"
           />
         )}
-        
+
         <Text>{description}</Text>
-        
+
         {learnMoreUrl && (
-          <Button 
-            as="a" 
-            href={learnMoreUrl} 
-            target="_blank" 
-            variant="link" 
-            colorScheme="blue" 
+          <Button
+            as="a"
+            href={learnMoreUrl}
+            target="_blank"
+            variant="link"
+            colorScheme="blue"
             rightIcon={<Icon as={FaArrowRight} />}
           >
             Learn more
@@ -445,12 +627,12 @@ const ConceptCard: React.FC<{
 const onboardingSteps: OnboardingStep[] = [
   // Introduction Steps
   {
-    id: 'welcome',
-    title: 'Welcome to SNEL',
-    description: 'Your AI-powered cross-chain DeFi assistant',
+    id: "welcome",
+    title: "Welcome to SNEL",
+    description: "Your AI-powered cross-chain DeFi assistant",
     icon: FaRocket,
-    experienceLevel: 'beginner',
-    category: 'intro',
+    experienceLevel: "beginner",
+    category: "intro",
     estimatedTime: 60,
     content: (
       <VStack spacing={6} align="stretch">
@@ -461,12 +643,15 @@ const onboardingSteps: OnboardingStep[] = [
           textAlign="center"
           py={8}
         >
-          <Heading size="xl" mb={4}>Welcome to SNEL</Heading>
+          <Heading size="xl" mb={4}>
+            Welcome to SNEL
+          </Heading>
           <Text fontSize="lg" color="gray.600" maxW="600px" mx="auto">
-            Your AI-powered assistant for seamless DeFi operations across 16+ blockchain networks.
+            Your AI-powered assistant for seamless DeFi operations across 16+
+            blockchain networks.
           </Text>
         </MotionBox>
-        
+
         <MotionBox variants={slideUp} initial="hidden" animate="visible">
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={5}>
             <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
@@ -474,128 +659,177 @@ const onboardingSteps: OnboardingStep[] = [
                 <Icon as={FaLightbulb} color="yellow.500" boxSize={8} />
                 <Heading size="md">Smart & Natural</Heading>
                 <Text>
-                  Use natural language commands like "swap 1 ETH for USDC on Base" instead of navigating complex interfaces.
+                  Use natural language commands like &quot;swap 1 ETH for USDC
+                  on Base&quot; instead of navigating complex interfaces.
                 </Text>
               </VStack>
             </Box>
-            
+
             <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
               <VStack spacing={3} align="start">
                 <Icon as={FaLink} color="purple.500" boxSize={8} />
                 <Heading size="md">Cross-Chain Capable</Heading>
                 <Text>
-                  Seamlessly bridge assets between 16+ networks with Axelar's secure cross-chain infrastructure.
+                  Seamlessly bridge assets between 16+ networks with
+                  Axelar&apos;s secure cross-chain infrastructure.
                 </Text>
               </VStack>
             </Box>
-            
+
             <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
               <VStack spacing={3} align="start">
                 <Icon as={FaWallet} color="green.500" boxSize={8} />
                 <Heading size="md">Portfolio Management</Heading>
                 <Text>
-                  Track and analyze your assets across multiple chains in one unified interface.
+                  Track and analyze your assets across multiple chains in one
+                  unified interface.
                 </Text>
               </VStack>
             </Box>
-            
+
             <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
               <VStack spacing={3} align="start">
                 <Icon as={FaShieldAlt} color="blue.500" boxSize={8} />
                 <Heading size="md">Secure & Non-custodial</Heading>
                 <Text>
-                  SNEL never holds your assets. All transactions are executed directly from your connected wallet.
+                  SNEL never holds your assets. All transactions are executed
+                  directly from your connected wallet.
                 </Text>
               </VStack>
             </Box>
           </SimpleGrid>
         </MotionBox>
       </VStack>
-    )
+    ),
   },
   {
-    id: 'experience-level',
-    title: 'Set Your Experience Level',
-    description: 'Customize your onboarding experience',
+    id: "experience-level",
+    title: "Set Your Experience Level",
+    description: "Customize your onboarding experience",
     icon: FaUserGraduate,
-    experienceLevel: 'beginner',
-    category: 'intro',
+    experienceLevel: "beginner",
+    category: "intro",
     estimatedTime: 30,
     content: ({ onPreferenceChange, preferences }: any) => (
       <VStack spacing={8} align="stretch" py={4}>
-        <Heading size="md">What's your experience level with DeFi?</Heading>
-        
-        <RadioGroup 
-          onChange={(val) => onPreferenceChange('experienceLevel', val)} 
+        <Heading size="md">
+          What&apos;s your experience level with DeFi?
+        </Heading>
+
+        <RadioGroup
+          onChange={(val) => onPreferenceChange("experienceLevel", val)}
           value={preferences.experienceLevel}
         >
           <VStack spacing={4} align="stretch">
-            <Box 
-              p={4} 
-              borderWidth="1px" 
-              borderRadius="md" 
-              borderColor={preferences.experienceLevel === 'beginner' ? 'blue.500' : 'gray.200'}
-              bg={preferences.experienceLevel === 'beginner' ? 'blue.50' : 'white'}
+            <Box
+              p={4}
+              borderWidth="1px"
+              borderRadius="md"
+              borderColor={
+                preferences.experienceLevel === "beginner"
+                  ? "blue.500"
+                  : "gray.200"
+              }
+              bg={
+                preferences.experienceLevel === "beginner" ? "blue.50" : "white"
+              }
             >
               <Radio value="beginner" colorScheme="blue">
                 <VStack align="start" spacing={1}>
                   <Heading size="sm">Beginner</Heading>
-                  <Text fontSize="sm">I'm new to DeFi and cross-chain operations</Text>
+                  <Text fontSize="sm">
+                    I&apos;m new to DeFi and cross-chain operations
+                  </Text>
                 </VStack>
               </Radio>
             </Box>
-            
-            <Box 
-              p={4} 
-              borderWidth="1px" 
-              borderRadius="md" 
-              borderColor={preferences.experienceLevel === 'intermediate' ? 'blue.500' : 'gray.200'}
-              bg={preferences.experienceLevel === 'intermediate' ? 'blue.50' : 'white'}
+
+            <Box
+              p={4}
+              borderWidth="1px"
+              borderRadius="md"
+              borderColor={
+                preferences.experienceLevel === "intermediate"
+                  ? "blue.500"
+                  : "gray.200"
+              }
+              bg={
+                preferences.experienceLevel === "intermediate"
+                  ? "blue.50"
+                  : "white"
+              }
             >
               <Radio value="intermediate" colorScheme="blue">
                 <VStack align="start" spacing={1}>
                   <Heading size="sm">Intermediate</Heading>
-                  <Text fontSize="sm">I've used DeFi protocols but am new to cross-chain operations</Text>
+                  <Text fontSize="sm">
+                    I&apos;ve used DeFi protocols but am new to cross-chain
+                    operations
+                  </Text>
                 </VStack>
               </Radio>
             </Box>
-            
-            <Box 
-              p={4} 
-              borderWidth="1px" 
-              borderRadius="md" 
-              borderColor={preferences.experienceLevel === 'advanced' ? 'blue.500' : 'gray.200'}
-              bg={preferences.experienceLevel === 'advanced' ? 'blue.50' : 'white'}
+
+            <Box
+              p={4}
+              borderWidth="1px"
+              borderRadius="md"
+              borderColor={
+                preferences.experienceLevel === "advanced"
+                  ? "blue.500"
+                  : "gray.200"
+              }
+              bg={
+                preferences.experienceLevel === "advanced" ? "blue.50" : "white"
+              }
             >
               <Radio value="advanced" colorScheme="blue">
                 <VStack align="start" spacing={1}>
                   <Heading size="sm">Advanced</Heading>
-                  <Text fontSize="sm">I'm experienced with DeFi and cross-chain operations</Text>
+                  <Text fontSize="sm">
+                    I&apos;m experienced with DeFi and cross-chain operations
+                  </Text>
                 </VStack>
               </Radio>
             </Box>
           </VStack>
         </RadioGroup>
-        
+
         <Box>
-          <Heading size="md" mb={4}>What are you most interested in?</Heading>
+          <Heading size="md" mb={4}>
+            What are you most interested in?
+          </Heading>
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
             {[
-              { id: 'swaps', label: 'Token Swaps', icon: FaExchangeAlt },
-              { id: 'bridges', label: 'Cross-Chain Bridges', icon: FaLink },
-              { id: 'portfolio', label: 'Portfolio Management', icon: FaChartPie },
-              { id: 'yields', label: 'Yield Opportunities', icon: FaCoins },
-              { id: 'security', label: 'Security Best Practices', icon: FaShieldAlt },
-              { id: 'automation', label: 'Automated Strategies', icon: FaRocket }
-            ].map(interest => (
+              { id: "swaps", label: "Token Swaps", icon: FaExchangeAlt },
+              { id: "bridges", label: "Cross-Chain Bridges", icon: FaLink },
+              {
+                id: "portfolio",
+                label: "Portfolio Management",
+                icon: FaChartPie,
+              },
+              { id: "yields", label: "Yield Opportunities", icon: FaCoins },
+              {
+                id: "security",
+                label: "Security Best Practices",
+                icon: FaShieldAlt,
+              },
+              {
+                id: "automation",
+                label: "Automated Strategies",
+                icon: FaRocket,
+              },
+            ].map((interest) => (
               <Checkbox
                 key={interest.id}
                 isChecked={preferences.interests?.includes(interest.id)}
                 onChange={(e) => {
                   const newInterests = e.target.checked
                     ? [...(preferences.interests || []), interest.id]
-                    : (preferences.interests || []).filter(i => i !== interest.id);
-                  onPreferenceChange('interests', newInterests);
+                    : (preferences.interests || []).filter(
+                        (i) => i !== interest.id
+                      );
+                  onPreferenceChange("interests", newInterests);
                 }}
                 colorScheme="blue"
               >
@@ -609,55 +843,56 @@ const onboardingSteps: OnboardingStep[] = [
         </Box>
       </VStack>
     ),
-    requiredInteraction: true
+    requiredInteraction: true,
   },
   {
-    id: 'natural-language',
-    title: 'Natural Language Commands',
-    description: 'Learn how to interact with SNEL using simple text commands',
+    id: "natural-language",
+    title: "Natural Language Commands",
+    description: "Learn how to interact with SNEL using simple text commands",
     icon: FaRegLightbulb,
-    experienceLevel: 'beginner',
-    category: 'commands',
+    experienceLevel: "beginner",
+    category: "commands",
     estimatedTime: 120,
     content: (
       <VStack spacing={6} align="stretch">
         <Text>
-          SNEL understands natural language commands, making complex DeFi operations as simple as typing a sentence.
-          Here are some examples of commands you can use:
+          SNEL understands natural language commands, making complex DeFi
+          operations as simple as typing a sentence. Here are some examples of
+          commands you can use:
         </Text>
-        
+
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
           {[
             {
               command: "swap 1 ETH for USDC on Base",
               description: "Exchange ETH for USDC on the Base network",
-              category: "Swaps"
+              category: "Swaps",
             },
             {
               command: "bridge 100 USDC from Ethereum to Arbitrum",
               description: "Transfer USDC from Ethereum to Arbitrum",
-              category: "Cross-Chain"
+              category: "Cross-Chain",
             },
             {
               command: "show my portfolio",
               description: "Display your portfolio across all chains",
-              category: "Portfolio"
+              category: "Portfolio",
             },
             {
-              command: "what's the best yield for USDC?",
+              command: "what&apos;s the best yield for USDC?",
               description: "Find the highest yield opportunities for USDC",
-              category: "Yields"
+              category: "Yields",
             },
             {
               command: "swap 0.5 ETH for WBTC on Optimism",
               description: "Exchange ETH for WBTC on Optimism",
-              category: "Swaps"
+              category: "Swaps",
             },
             {
               command: "bridge 50 USDT from Polygon to Avalanche",
               description: "Transfer USDT from Polygon to Avalanche",
-              category: "Cross-Chain"
-            }
+              category: "Cross-Chain",
+            },
           ].map((example, index) => (
             <MotionBox
               key={index}
@@ -669,17 +904,21 @@ const onboardingSteps: OnboardingStep[] = [
               initial="hidden"
               animate="visible"
               custom={index}
-              whileHover={{ y: -2, boxShadow: 'md' }}
+              whileHover={{ y: -2, boxShadow: "md" }}
             >
-              <Badge colorScheme="purple" mb={2}>{example.category}</Badge>
+              <Badge colorScheme="purple" mb={2}>
+                {example.category}
+              </Badge>
               <Text fontWeight="bold" fontFamily="mono" mb={2}>
-                "{example.command}"
+                &quot;{example.command}&quot;
               </Text>
-              <Text fontSize="sm" color="gray.600">{example.description}</Text>
+              <Text fontSize="sm" color="gray.600">
+                {example.description}
+              </Text>
             </MotionBox>
           ))}
         </SimpleGrid>
-        
+
         <InteractiveDemoCard
           title="Try It Yourself"
           description="Practice writing natural language commands"
@@ -688,9 +927,11 @@ const onboardingSteps: OnboardingStep[] = [
           onComplete={() => {}}
         >
           <Box borderWidth="1px" borderRadius="md" p={4} bg="gray.50" mb={4}>
-            <Text mb={2} fontWeight="medium">Write a command to:</Text>
+            <Text mb={2} fontWeight="medium">
+              Write a command to:
+            </Text>
             <Text color="blue.600">Swap 0.1 ETH for DAI on Arbitrum</Text>
-            
+
             <Input
               placeholder="Type your command here..."
               mt={4}
@@ -699,54 +940,62 @@ const onboardingSteps: OnboardingStep[] = [
                 const input = e.target.value.toLowerCase();
                 const expected = "swap 0.1 eth for dai on arbitrum";
                 // Simple fuzzy matching
-                if (input.includes("swap") && 
-                    input.includes("0.1") && 
-                    input.includes("eth") && 
-                    input.includes("dai") && 
-                    input.includes("arbitrum")) {
+                if (
+                  input.includes("swap") &&
+                  input.includes("0.1") &&
+                  input.includes("eth") &&
+                  input.includes("dai") &&
+                  input.includes("arbitrum")
+                ) {
                   // Success logic would go here
                 }
               }}
             />
           </Box>
         </InteractiveDemoCard>
-        
+
         <Box p={4} bg="blue.50" borderRadius="md">
           <HStack spacing={3}>
             <Icon as={FaInfoCircle} color="blue.500" boxSize={5} />
             <Text fontWeight="medium">Pro Tip</Text>
           </HStack>
           <Text mt={2}>
-            You can also ask SNEL questions like "What is the price of ETH?" or "Explain impermanent loss" to get information without executing transactions.
+            You can also ask SNEL questions like &quot;What is the price of
+            ETH?&quot; or &quot;Explain impermanent loss&quot; to get
+            information without executing transactions.
           </Text>
         </Box>
       </VStack>
     ),
     reward: {
-      type: 'achievement',
-      title: 'Command Master',
-      description: 'Learned how to use natural language commands',
-      icon: FaRegLightbulb
-    }
+      type: "achievement",
+      title: "Command Master",
+      description: "Learned how to use natural language commands",
+      icon: FaRegLightbulb,
+    },
   },
-  
+
   // Cross-chain Concepts
   {
-    id: 'cross-chain-intro',
-    title: 'Cross-Chain 101',
-    description: 'Understanding the basics of cross-chain operations',
+    id: "cross-chain-intro",
+    title: "Cross-Chain 101",
+    description: "Understanding the basics of cross-chain operations",
     icon: FaLink,
-    experienceLevel: 'beginner',
-    category: 'crosschain',
+    experienceLevel: "beginner",
+    category: "crosschain",
     estimatedTime: 180,
     content: (
       <VStack spacing={6} align="stretch">
         <MotionBox variants={fadeIn} initial="hidden" animate="visible">
-          <Heading size="md" mb={4}>What are Cross-Chain Operations?</Heading>
+          <Heading size="md" mb={4}>
+            What are Cross-Chain Operations?
+          </Heading>
           <Text mb={4}>
-            Cross-chain operations allow you to move assets and data between different blockchain networks that would otherwise be isolated from each other.
+            Cross-chain operations allow you to move assets and data between
+            different blockchain networks that would otherwise be isolated from
+            each other.
           </Text>
-          
+
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={8}>
             <ConceptCard
               title="Blockchain Isolation"
@@ -765,122 +1014,149 @@ const onboardingSteps: OnboardingStep[] = [
             />
           </SimpleGrid>
         </MotionBox>
-        
+
         <Divider my={4} />
-        
+
         <MotionBox variants={slideUp} initial="hidden" animate="visible">
-          <Heading size="md" mb={4}>Why Use Cross-Chain Operations?</Heading>
-          
+          <Heading size="md" mb={4}>
+            Why Use Cross-Chain Operations?
+          </Heading>
+
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={8}>
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
-              <Heading size="sm" mb={3}>Access to Different Ecosystems</Heading>
+              <Heading size="sm" mb={3}>
+                Access to Different Ecosystems
+              </Heading>
               <Text>
-                Each blockchain has unique DeFi protocols, NFT marketplaces, and applications. Cross-chain operations let you access all of them without selling your assets.
+                Each blockchain has unique DeFi protocols, NFT marketplaces, and
+                applications. Cross-chain operations let you access all of them
+                without selling your assets.
               </Text>
             </Box>
-            
+
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
-              <Heading size="sm" mb={3}>Lower Fees</Heading>
+              <Heading size="sm" mb={3}>
+                Lower Fees
+              </Heading>
               <Text>
-                Move from high-fee networks like Ethereum to lower-fee alternatives like Polygon or Arbitrum for cheaper transactions.
+                Move from high-fee networks like Ethereum to lower-fee
+                alternatives like Polygon or Arbitrum for cheaper transactions.
               </Text>
             </Box>
-            
+
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
-              <Heading size="sm" mb={3}>Better Yields</Heading>
+              <Heading size="sm" mb={3}>
+                Better Yields
+              </Heading>
               <Text>
-                Find the best yield opportunities across all chains instead of being limited to a single ecosystem.
+                Find the best yield opportunities across all chains instead of
+                being limited to a single ecosystem.
               </Text>
             </Box>
-            
+
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
-              <Heading size="sm" mb={3}>Risk Diversification</Heading>
+              <Heading size="sm" mb={3}>
+                Risk Diversification
+              </Heading>
               <Text>
-                Spread your assets across multiple chains to reduce exposure to chain-specific risks.
+                Spread your assets across multiple chains to reduce exposure to
+                chain-specific risks.
               </Text>
             </Box>
           </SimpleGrid>
         </MotionBox>
-        
+
         <Divider my={4} />
-        
-        <MotionBox variants={slideUp} initial="hidden" animate="visible" delay={0.2}>
-          <Heading size="md" mb={4}>How Cross-Chain Operations Work</Heading>
-          
-          <Box 
-            p={5} 
-            borderWidth="1px" 
-            borderRadius="lg" 
-            bg="white"
-            mb={6}
-          >
+
+        <MotionBox
+          variants={slideUp}
+          initial="hidden"
+          animate="visible"
+          delay={0.2}
+        >
+          <Heading size="md" mb={4}>
+            How Cross-Chain Operations Work
+          </Heading>
+
+          <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" mb={6}>
             <VStack spacing={4} align="stretch">
               <HStack spacing={4}>
-                <Box 
-                  w="50px" 
-                  h="50px" 
-                  borderRadius="full" 
-                  bg="blue.100" 
-                  display="flex" 
-                  alignItems="center" 
+                <Box
+                  w="50px"
+                  h="50px"
+                  borderRadius="full"
+                  bg="blue.100"
+                  display="flex"
+                  alignItems="center"
                   justifyContent="center"
                 >
                   <Text fontWeight="bold">1</Text>
                 </Box>
                 <VStack align="start" spacing={1}>
                   <Heading size="sm">Lock or Burn</Heading>
-                  <Text>Assets are locked in a smart contract on the source chain or burned (destroyed).</Text>
+                  <Text>
+                    Assets are locked in a smart contract on the source chain or
+                    burned (destroyed).
+                  </Text>
                 </VStack>
               </HStack>
-              
+
               <Icon as={FaArrowDown} alignSelf="center" color="gray.400" />
-              
+
               <HStack spacing={4}>
-                <Box 
-                  w="50px" 
-                  h="50px" 
-                  borderRadius="full" 
-                  bg="purple.100" 
-                  display="flex" 
-                  alignItems="center" 
+                <Box
+                  w="50px"
+                  h="50px"
+                  borderRadius="full"
+                  bg="purple.100"
+                  display="flex"
+                  alignItems="center"
                   justifyContent="center"
                 >
                   <Text fontWeight="bold">2</Text>
                 </Box>
                 <VStack align="start" spacing={1}>
                   <Heading size="sm">Verification</Heading>
-                  <Text>The bridge protocol verifies the transaction on the source chain.</Text>
+                  <Text>
+                    The bridge protocol verifies the transaction on the source
+                    chain.
+                  </Text>
                 </VStack>
               </HStack>
-              
+
               <Icon as={FaArrowDown} alignSelf="center" color="gray.400" />
-              
+
               <HStack spacing={4}>
-                <Box 
-                  w="50px" 
-                  h="50px" 
-                  borderRadius="full" 
-                  bg="green.100" 
-                  display="flex" 
-                  alignItems="center" 
+                <Box
+                  w="50px"
+                  h="50px"
+                  borderRadius="full"
+                  bg="green.100"
+                  display="flex"
+                  alignItems="center"
                   justifyContent="center"
                 >
                   <Text fontWeight="bold">3</Text>
                 </Box>
                 <VStack align="start" spacing={1}>
                   <Heading size="sm">Mint or Release</Heading>
-                  <Text>Equivalent assets are minted or released from a smart contract on the destination chain.</Text>
+                  <Text>
+                    Equivalent assets are minted or released from a smart
+                    contract on the destination chain.
+                  </Text>
                 </VStack>
               </HStack>
             </VStack>
           </Box>
-          
+
           <Alert status="info" borderRadius="md">
             <AlertIcon />
             <Box>
               <AlertTitle>Important to Know</AlertTitle>
               <AlertDescription>
-                Cross-chain operations typically take longer than regular transactions (5-20 minutes) because they require confirmations on both chains and processing by the bridge protocol.
+                Cross-chain operations typically take longer than regular
+                transactions (5-20 minutes) because they require confirmations
+                on both chains and processing by the bridge protocol.
               </AlertDescription>
             </Box>
           </Alert>
@@ -888,19 +1164,19 @@ const onboardingSteps: OnboardingStep[] = [
       </VStack>
     ),
     reward: {
-      type: 'achievement',
-      title: 'Chain Explorer',
-      description: 'Learned the basics of cross-chain operations',
-      icon: FaLink
-    }
+      type: "achievement",
+      title: "Chain Explorer",
+      description: "Learned the basics of cross-chain operations",
+      icon: FaLink,
+    },
   },
   {
-    id: 'axelar-benefits',
-    title: 'Axelar Network Benefits',
-    description: 'Why SNEL uses Axelar for secure cross-chain operations',
+    id: "axelar-benefits",
+    title: "Axelar Network Benefits",
+    description: "Why SNEL uses Axelar for secure cross-chain operations",
     icon: FaShieldAlt,
-    experienceLevel: 'beginner',
-    category: 'axelar',
+    experienceLevel: "beginner",
+    category: "axelar",
     estimatedTime: 180,
     content: (
       <VStack spacing={8} align="stretch">
@@ -909,59 +1185,93 @@ const onboardingSteps: OnboardingStep[] = [
             <Icon as={FaShieldAlt} boxSize={8} color="blue.500" />
             <Heading size="lg">Axelar Network</Heading>
           </HStack>
-          
+
           <Text mb={6}>
-            SNEL uses Axelar Network as its primary cross-chain infrastructure provider. Axelar is a secure and decentralized cross-chain communication network that enables seamless asset transfers and message passing between blockchains.
+            SNEL uses Axelar Network as its primary cross-chain infrastructure
+            provider. Axelar is a secure and decentralized cross-chain
+            communication network that enables seamless asset transfers and
+            message passing between blockchains.
           </Text>
-          
+
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-            <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+            <Box
+              p={5}
+              borderWidth="1px"
+              borderRadius="lg"
+              bg="white"
+              boxShadow="sm"
+            >
               <VStack spacing={3} align="start">
                 <Icon as={FaShieldAlt} color="blue.500" boxSize={6} />
                 <Heading size="md">Proof-of-Stake Security</Heading>
                 <Text>
-                  Axelar is secured by a decentralized network of validators using Proof-of-Stake consensus, providing robust security for cross-chain operations.
+                  Axelar is secured by a decentralized network of validators
+                  using Proof-of-Stake consensus, providing robust security for
+                  cross-chain operations.
                 </Text>
               </VStack>
             </Box>
-            
-            <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+
+            <Box
+              p={5}
+              borderWidth="1px"
+              borderRadius="lg"
+              bg="white"
+              boxShadow="sm"
+            >
               <VStack spacing={3} align="start">
                 <Icon as={FaGlobe} color="blue.500" boxSize={6} />
                 <Heading size="md">Wide Chain Support</Heading>
                 <Text>
-                  Supports 16+ major blockchain networks including Ethereum, Polygon, Avalanche, Arbitrum, Optimism, Base, and more.
+                  Supports 16+ major blockchain networks including Ethereum,
+                  Polygon, Avalanche, Arbitrum, Optimism, Base, and more.
                 </Text>
               </VStack>
             </Box>
-            
-            <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+
+            <Box
+              p={5}
+              borderWidth="1px"
+              borderRadius="lg"
+              bg="white"
+              boxShadow="sm"
+            >
               <VStack spacing={3} align="start">
                 <Icon as={FaExchangeAlt} color="blue.500" boxSize={6} />
                 <Heading size="md">General Message Passing</Heading>
                 <Text>
-                  Enables not just token transfers but also cross-chain smart contract calls and message passing for advanced use cases.
+                  Enables not just token transfers but also cross-chain smart
+                  contract calls and message passing for advanced use cases.
                 </Text>
               </VStack>
             </Box>
-            
-            <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+
+            <Box
+              p={5}
+              borderWidth="1px"
+              borderRadius="lg"
+              bg="white"
+              boxShadow="sm"
+            >
               <VStack spacing={3} align="start">
                 <Icon as={FaRegCheckCircle} color="blue.500" boxSize={6} />
                 <Heading size="md">Transaction Recovery</Heading>
                 <Text>
-                  Built-in mechanisms to recover failed transactions, ensuring your assets don't get stuck during cross-chain transfers.
+                  Built-in mechanisms to recover failed transactions, ensuring
+                  your assets don&apos;t get stuck during cross-chain transfers.
                 </Text>
               </VStack>
             </Box>
           </SimpleGrid>
         </MotionBox>
-        
+
         <Divider my={4} />
-        
+
         <MotionBox variants={slideUp} initial="hidden" animate="visible">
-          <Heading size="md" mb={4}>How Axelar Compares to Other Bridges</Heading>
-          
+          <Heading size="md" mb={4}>
+            How Axelar Compares to Other Bridges
+          </Heading>
+
           <Box overflowX="auto">
             <Table variant="simple" mb={6}>
               <Thead>
@@ -1001,54 +1311,65 @@ const onboardingSteps: OnboardingStep[] = [
             </Table>
           </Box>
         </MotionBox>
-        
+
         <Divider my={4} />
-        
-        <MotionBox variants={slideUp} initial="hidden" animate="visible" delay={0.2}>
-          <Heading size="md" mb={4}>How SNEL Leverages Axelar</Heading>
-          
+
+        <MotionBox
+          variants={slideUp}
+          initial="hidden"
+          animate="visible"
+          delay={0.2}
+        >
+          <Heading size="md" mb={4}>
+            How SNEL Leverages Axelar
+          </Heading>
+
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={6}>
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
               <VStack align="start" spacing={3}>
                 <Icon as={FaExchangeAlt} color="blue.500" boxSize={5} />
                 <Heading size="sm">Seamless Cross-Chain Swaps</Heading>
                 <Text fontSize="sm">
-                  SNEL combines Axelar's cross-chain capabilities with DEX aggregators to enable one-command cross-chain swaps.
+                  SNEL combines Axelar&apos;s cross-chain capabilities with DEX
+                  aggregators to enable one-command cross-chain swaps.
                 </Text>
               </VStack>
             </Box>
-            
+
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
               <VStack align="start" spacing={3}>
                 <Icon as={FaChartPie} color="blue.500" boxSize={5} />
                 <Heading size="sm">Portfolio Rebalancing</Heading>
                 <Text fontSize="sm">
-                  Automatically rebalance your portfolio across chains based on your investment strategy.
+                  Automatically rebalance your portfolio across chains based on
+                  your investment strategy.
                 </Text>
               </VStack>
             </Box>
-            
+
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
               <VStack align="start" spacing={3}>
                 <Icon as={FaRegClock} color="blue.500" boxSize={5} />
                 <Heading size="sm">Real-time Transaction Tracking</Heading>
                 <Text fontSize="sm">
-                  Monitor the status of your cross-chain transactions with detailed progress updates.
+                  Monitor the status of your cross-chain transactions with
+                  detailed progress updates.
                 </Text>
               </VStack>
             </Box>
-            
+
             <Box p={4} borderWidth="1px" borderRadius="md" bg="white">
               <VStack align="start" spacing={3}>
                 <Icon as={FaCoins} color="blue.500" boxSize={5} />
                 <Heading size="sm">Cross-Chain Yield Strategies</Heading>
                 <Text fontSize="sm">
-                  Find and execute yield strategies across multiple chains from a single interface.
+                  Find and execute yield strategies across multiple chains from
+                  a single interface.
                 </Text>
               </VStack>
             </Box>
           </SimpleGrid>
-          
+
           <InteractiveDemoCard
             title="Explore Supported Chains"
             description="See which chains are supported by Axelar and SNEL"
@@ -1058,16 +1379,16 @@ const onboardingSteps: OnboardingStep[] = [
           >
             <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
               {[
-                { name: 'Ethereum', id: 1, icon: '🔷' },
-                { name: 'Polygon', id: 137, icon: '🟣' },
-                { name: 'Arbitrum', id: 42161, icon: '🔵' },
-                { name: 'Optimism', id: 10, icon: '🔴' },
-                { name: 'Avalanche', id: 43114, icon: '🔺' },
-                { name: 'Base', id: 8453, icon: '🔷' },
-                { name: 'Binance', id: 56, icon: '🟡' },
-                { name: 'Linea', id: 59144, icon: '⚪' }
-              ].map(chain => (
-                <Box 
+                { name: "Ethereum", id: 1, icon: "🔷" },
+                { name: "Polygon", id: 137, icon: "🟣" },
+                { name: "Arbitrum", id: 42161, icon: "🔵" },
+                { name: "Optimism", id: 10, icon: "🔴" },
+                { name: "Avalanche", id: 43114, icon: "🔺" },
+                { name: "Base", id: 8453, icon: "🔷" },
+                { name: "Binance", id: 56, icon: "🟡" },
+                { name: "Linea", id: 59144, icon: "⚪" },
+              ].map((chain) => (
+                <Box
                   key={chain.id}
                   p={3}
                   borderWidth="1px"
@@ -1075,9 +1396,13 @@ const onboardingSteps: OnboardingStep[] = [
                   bg="white"
                   textAlign="center"
                 >
-                  <Text fontSize="2xl" mb={1}>{chain.icon}</Text>
+                  <Text fontSize="2xl" mb={1}>
+                    {chain.icon}
+                  </Text>
                   <Text fontWeight="medium">{chain.name}</Text>
-                  <Text fontSize="xs" color="gray.500">Chain ID: {chain.id}</Text>
+                  <Text fontSize="xs" color="gray.500">
+                    Chain ID: {chain.id}
+                  </Text>
                 </Box>
               ))}
             </SimpleGrid>
@@ -1086,239 +1411,92 @@ const onboardingSteps: OnboardingStep[] = [
       </VStack>
     ),
     reward: {
-      type: 'achievement',
-      title: 'Axelar Expert',
-      description: 'Learned about Axelar Network and its benefits',
-      icon: FaShieldAlt
-    }
+      type: "achievement",
+      title: "Axelar Expert",
+      description: "Learned about Axelar Network and its benefits",
+      icon: FaShieldAlt,
+    },
   },
-  
+
   // Interactive demos
   {
-    id: 'cross-chain-demo',
-    title: 'Cross-Chain Transfer Demo',
-    description: 'See how cross-chain transfers work in practice',
+    id: "cross-chain-demo",
+    title: "Cross-Chain Transfer Demo",
+    description: "See how cross-chain transfers work in practice",
     icon: FaExchangeAlt,
-    experienceLevel: 'intermediate',
-    category: 'crosschain',
+    experienceLevel: "intermediate",
+    category: "crosschain",
     estimatedTime: 300,
-    content: ({ onStepComplete }: any) => {
-      const [sourceChain, setSourceChain] = useState('ethereum');
-      const [destChain, setDestChain] = useState('arbitrum');
-      const [asset, setAsset] = useState('USDC');
-      const [amount, setAmount] = useState('100');
-      const [showDemo, setShowDemo] = useState(false);
-      const [demoTxHash, setDemoTxHash] = useState('0x123...abc');
-      
-      const startDemo = () => {
-        setShowDemo(true);
-        // In a real implementation, this would trigger the demo
-        setTimeout(() => {
-          if (onStepComplete) {
-            onStepComplete('cross-chain-demo');
-          }
-        }, 5000);
-      };
-      
-      return (
-        <VStack spacing={6} align="stretch">
-          <Text>
-            This interactive demo shows you how cross-chain transfers work using Axelar Network.
-            Configure your transfer parameters below and start the demo to see the process in action.
-          </Text>
-          
-          {!showDemo ? (
-            <Box p={6} borderWidth="1px" borderRadius="lg" bg="white">
-              <VStack spacing={5} align="stretch">
-                <FormControl>
-                  <FormLabel>Source Chain</FormLabel>
-                  <Select 
-                    value={sourceChain} 
-                    onChange={(e) => setSourceChain(e.target.value)}
-                  >
-                    <option value="ethereum">Ethereum</option>
-                    <option value="polygon">Polygon</option>
-                    <option value="avalanche">Avalanche</option>
-                    <option value="base">Base</option>
-                  </Select>
-                </FormControl>
-                
-                <FormControl>
-                  <FormLabel>Destination Chain</FormLabel>
-                  <Select 
-                    value={destChain} 
-                    onChange={(e) => setDestChain(e.target.value)}
-                  >
-                    <option value="arbitrum">Arbitrum</option>
-                    <option value="optimism">Optimism</option>
-                    <option value="base">Base</option>
-                    <option value="polygon">Polygon</option>
-                  </Select>
-                </FormControl>
-                
-                <FormControl>
-                  <FormLabel>Asset</FormLabel>
-                  <Select 
-                    value={asset} 
-                    onChange={(e) => setAsset(e.target.value)}
-                  >
-                    <option value="USDC">USDC</option>
-                    <option value="USDT">USDT</option>
-                    <option value="ETH">ETH</option>
-                    <option value="WETH">WETH</option>
-                  </Select>
-                </FormControl>
-                
-                <FormControl>
-                  <FormLabel>Amount</FormLabel>
-                  <Input 
-                    type="number" 
-                    value={amount} 
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </FormControl>
-                
-                <Button 
-                  colorScheme="blue" 
-                  size="lg" 
-                  rightIcon={<Icon as={FaPlay} />}
-                  onClick={startDemo}
-                >
-                  Start Demo
-                </Button>
-              </VStack>
-            </Box>
-          ) : (
-            <Box>
-              <Alert status="info" mb={4}>
-                <AlertIcon />
-                <AlertTitle>Demo Mode</AlertTitle>
-                <AlertDescription>
-                  This is a simulated demo. No actual transaction is being executed.
-                </AlertDescription>
-              </Alert>
-              
-              {/* This would be replaced with the actual CrosschainTransactionTracker component */}
-              <Box 
-                p={6} 
-                borderWidth="1px" 
-                borderRadius="lg" 
-                bg="white"
-              >
-                <VStack spacing={4} align="stretch">
-                  <Heading size="md">Cross-Chain Transfer Demo</Heading>
-                  <Text>
-                    Transferring {amount} {asset} from {sourceChain} to {destChain}
-                  </Text>
-                  
-                  <Box py={4}>
-                    <Progress size="sm" isIndeterminate colorScheme="blue" />
-                  </Box>
-                  
-                  <VStack align="stretch" spacing={3}>
-                    <HStack>
-                      <Icon as={FaCheckCircle} color="green.500" />
-                      <Text>Transaction initiated on {sourceChain}</Text>
-                    </HStack>
-                    <HStack>
-                      <Spinner size="sm" color="blue.500" />
-                      <Text>Confirming on source chain...</Text>
-                    </HStack>
-                    <HStack opacity={0.5}>
-                      <Icon as={FaRegClock} color="gray.500" />
-                      <Text>Axelar Network processing</Text>
-                    </HStack>
-                    <HStack opacity={0.5}>
-                      <Icon as={FaRegClock} color="gray.500" />
-                      <Text>Finalizing on {destChain}</Text>
-                    </HStack>
-                  </VStack>
-                  
-                  <Divider my={2} />
-                  
-                  <HStack justify="space-between">
-                    <Text fontSize="sm">Estimated completion time:</Text>
-                    <Text fontSize="sm" fontWeight="bold">5-10 minutes</Text>
-                  </HStack>
-                </VStack>
-              </Box>
-            </Box>
-          )}
-          
-          <Box p={4} bg="blue.50" borderRadius="md">
-            <Heading size="sm" mb={2}>What's happening behind the scenes?</Heading>
-            <OrderedList spacing={2} pl={4}>
-              <ListItem>Your assets are locked in a smart contract on the source chain</ListItem>
-              <ListItem>Axelar validators confirm the transaction on the source chain</ListItem>
-              <ListItem>Axelar network prepares the cross-chain message</ListItem>
-              <ListItem>The message is delivered to the destination chain</ListItem>
-              <ListItem>Equivalent assets are minted or released on the destination chain</ListItem>
-            </OrderedList>
-          </Box>
-        </VStack>
-      );
-    },
-    requiredInteraction: true
+    content: ({ onStepComplete }: any) => (
+      <CrossChainDemoContent onStepComplete={onStepComplete} />
+    ),
+    requiredInteraction: true,
   },
-  
+
   // Portfolio Management
   {
-    id: 'portfolio-management',
-    title: 'Cross-Chain Portfolio Management',
-    description: 'Learn how to track and optimize your assets across chains',
+    id: "portfolio-management",
+    title: "Cross-Chain Portfolio Management",
+    description: "Learn how to track and optimize your assets across chains",
     icon: FaChartPie,
-    experienceLevel: 'intermediate',
-    category: 'portfolio',
+    experienceLevel: "intermediate",
+    category: "portfolio",
     estimatedTime: 240,
     content: (
       <VStack spacing={6} align="stretch">
         <Text>
-          One of SNEL's most powerful features is its ability to track and manage your portfolio across multiple blockchains.
-          This gives you a unified view of all your assets and helps you make informed decisions about cross-chain strategies.
+          One of SNEL&apos;s most powerful features is its ability to track and
+          manage your portfolio across multiple blockchains. This gives you a
+          unified view of all your assets and helps you make informed decisions
+          about cross-chain strategies.
         </Text>
-        
+
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={4}>
           <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
             <VStack spacing={3} align="start">
               <Icon as={FaChartPie} color="blue.500" boxSize={6} />
               <Heading size="md">Unified Portfolio View</Heading>
               <Text>
-                See all your assets across multiple chains in one place, with USD values and allocation percentages.
+                See all your assets across multiple chains in one place, with
+                USD values and allocation percentages.
               </Text>
             </VStack>
           </Box>
-          
+
           <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
             <VStack spacing={3} align="start">
               <Icon as={FaExchangeAlt} color="blue.500" boxSize={6} />
               <Heading size="md">Cross-Chain Rebalancing</Heading>
               <Text>
-                Easily move assets between chains to maintain your desired portfolio allocation.
+                Easily move assets between chains to maintain your desired
+                portfolio allocation.
               </Text>
             </VStack>
           </Box>
-          
+
           <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
             <VStack spacing={3} align="start">
               <Icon as={FaCoins} color="blue.500" boxSize={6} />
               <Heading size="md">Yield Opportunities</Heading>
               <Text>
-                Discover the best yield opportunities for your assets across all supported chains.
+                Discover the best yield opportunities for your assets across all
+                supported chains.
               </Text>
             </VStack>
           </Box>
-          
+
           <Box p={5} borderWidth="1px" borderRadius="lg" bg="white">
             <VStack spacing={3} align="start">
               <Icon as={FaRegLightbulb} color="blue.500" boxSize={6} />
               <Heading size="md">AI-Powered Insights</Heading>
               <Text>
-                Get personalized recommendations for optimizing your portfolio based on your goals.
+                Get personalized recommendations for optimizing your portfolio
+                based on your goals.
               </Text>
             </VStack>
           </Box>
         </SimpleGrid>
-        
+
         <InteractiveDemoCard
           title="Portfolio Commands"
           description="Learn how to use SNEL's portfolio features"
@@ -1330,20 +1508,20 @@ const onboardingSteps: OnboardingStep[] = [
             {[
               {
                 command: "show my portfolio",
-                description: "Display your portfolio across all chains"
+                description: "Display your portfolio across all chains",
               },
               {
                 command: "analyze my portfolio",
-                description: "Get detailed analysis and recommendations"
+                description: "Get detailed analysis and recommendations",
               },
               {
                 command: "show my assets on Arbitrum",
-                description: "View assets on a specific chain"
+                description: "View assets on a specific chain",
               },
               {
                 command: "find yield opportunities for USDC",
-                description: "Discover yield strategies for a specific token"
-              }
+                description: "Discover yield strategies for a specific token",
+              },
             ].map((example, index) => (
               <Box
                 key={index}
@@ -1353,162 +1531,226 @@ const onboardingSteps: OnboardingStep[] = [
                 bg="gray.50"
               >
                 <Text fontWeight="bold" fontFamily="mono" mb={1}>
-                  "{example.command}"
+                  &quot;{example.command}&quot;
                 </Text>
                 <Text fontSize="sm">{example.description}</Text>
               </Box>
             ))}
           </SimpleGrid>
         </InteractiveDemoCard>
-        
-        <Box 
-          p={5} 
-          borderWidth="1px" 
-          borderRadius="lg" 
+
+        <Box
+          p={5}
+          borderWidth="1px"
+          borderRadius="lg"
           bg="white"
           boxShadow="sm"
         >
-          <Heading size="md" mb={4}>Cross-Chain Portfolio Optimization</Heading>
-          
+          <Heading size="md" mb={4}>
+            Cross-Chain Portfolio Optimization
+          </Heading>
+
           <Text mb={4}>
             SNEL helps you optimize your portfolio across chains by considering:
           </Text>
-          
+
           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
             <HStack align="start" spacing={3}>
               <Icon as={FaCoins} color="green.500" mt={1} />
               <Text>Yield differences between chains</Text>
             </HStack>
-            
+
             <HStack align="start" spacing={3}>
               <Icon as={FaGasPump} color="orange.500" mt={1} />
               <Text>Gas costs for transactions</Text>
             </HStack>
-            
+
             <HStack align="start" spacing={3}>
               <Icon as={FaRegClock} color="blue.500" mt={1} />
               <Text>Bridge transfer times</Text>
             </HStack>
-            
+
             <HStack align="start" spacing={3}>
               <Icon as={FaShieldAlt} color="purple.500" mt={1} />
               <Text>Security considerations</Text>
             </HStack>
           </SimpleGrid>
-          
+
           <Divider my={4} />
-          
-          <Text fontWeight="medium" mb={2}>Example optimization scenario:</Text>
+
+          <Text fontWeight="medium" mb={2}>
+            Example optimization scenario:
+          </Text>
           <Text fontSize="sm">
-            If you have USDC on Ethereum earning 2% APY, but Arbitrum offers 5% APY for the same asset,
-            SNEL can help you bridge your USDC to Arbitrum if the yield difference outweighs the bridge fees.
+            If you have USDC on Ethereum earning 2% APY, but Arbitrum offers 5%
+            APY for the same asset, SNEL can help you bridge your USDC to
+            Arbitrum if the yield difference outweighs the bridge fees.
           </Text>
         </Box>
       </VStack>
     ),
     reward: {
-      type: 'achievement',
-      title: 'Portfolio Manager',
-      description: 'Learned how to manage a cross-chain portfolio',
-      icon: FaChartPie
-    }
+      type: "achievement",
+      title: "Portfolio Manager",
+      description: "Learned how to manage a cross-chain portfolio",
+      icon: FaChartPie,
+    },
   },
-  
+
   // Advanced topics
   {
-    id: 'advanced-cross-chain',
-    title: 'Advanced Cross-Chain Strategies',
-    description: 'Learn sophisticated cross-chain techniques',
+    id: "advanced-cross-chain",
+    title: "Advanced Cross-Chain Strategies",
+    description: "Learn sophisticated cross-chain techniques",
     icon: FaRocket,
-    experienceLevel: 'advanced',
-    category: 'crosschain',
+    experienceLevel: "advanced",
+    category: "crosschain",
     estimatedTime: 300,
     content: (
       <VStack spacing={6} align="stretch">
         <Text>
-          For experienced users, SNEL enables advanced cross-chain strategies that can help you maximize returns,
-          minimize costs, and optimize your DeFi operations across the entire blockchain ecosystem.
+          For experienced users, SNEL enables advanced cross-chain strategies
+          that can help you maximize returns, minimize costs, and optimize your
+          DeFi operations across the entire blockchain ecosystem.
         </Text>
-        
+
         <SimpleGrid columns={{ base: 1, md: 1 }} spacing={6} mb={4}>
-          <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+          <Box
+            p={5}
+            borderWidth="1px"
+            borderRadius="lg"
+            bg="white"
+            boxShadow="sm"
+          >
             <VStack spacing={3} align="start">
               <HStack>
                 <Icon as={FaRocket} color="purple.500" boxSize={6} />
                 <Heading size="md">Cross-Chain Yield Farming</Heading>
               </HStack>
               <Text>
-                Automatically move assets to the chain with the highest yield for a particular token,
-                and rebalance when yield opportunities change.
+                Automatically move assets to the chain with the highest yield
+                for a particular token, and rebalance when yield opportunities
+                change.
               </Text>
               <Box p={4} bg="gray.50" borderRadius="md" w="100%">
-                <Text fontWeight="medium" mb={2}>Example Strategy:</Text>
+                <Text fontWeight="medium" mb={2}>
+                  Example Strategy:
+                </Text>
                 <OrderedList spacing={2} pl={4}>
-                  <ListItem>Monitor USDC yield across Ethereum, Arbitrum, Optimism, and Polygon</ListItem>
-                  <ListItem>When a significantly better yield appears (accounting for bridge fees), move assets</ListItem>
-                  <ListItem>Set up automated monitoring to alert when yields change</ListItem>
-                  <ListItem>Consider gas costs and bridge fees in yield calculations</ListItem>
+                  <ListItem>
+                    Monitor USDC yield across Ethereum, Arbitrum, Optimism, and
+                    Polygon
+                  </ListItem>
+                  <ListItem>
+                    When a significantly better yield appears (accounting for
+                    bridge fees), move assets
+                  </ListItem>
+                  <ListItem>
+                    Set up automated monitoring to alert when yields change
+                  </ListItem>
+                  <ListItem>
+                    Consider gas costs and bridge fees in yield calculations
+                  </ListItem>
                 </OrderedList>
               </Box>
             </VStack>
           </Box>
-          
-          <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+
+          <Box
+            p={5}
+            borderWidth="1px"
+            borderRadius="lg"
+            bg="white"
+            boxShadow="sm"
+          >
             <VStack spacing={3} align="start">
               <HStack>
                 <Icon as={FaExchangeAlt} color="blue.500" boxSize={6} />
                 <Heading size="md">Cross-Chain Arbitrage</Heading>
               </HStack>
               <Text>
-                Take advantage of price differences for the same asset across different chains,
-                accounting for bridge fees and transfer times.
+                Take advantage of price differences for the same asset across
+                different chains, accounting for bridge fees and transfer times.
               </Text>
               <Box p={4} bg="gray.50" borderRadius="md" w="100%">
-                <Text fontWeight="medium" mb={2}>Example Strategy:</Text>
+                <Text fontWeight="medium" mb={2}>
+                  Example Strategy:
+                </Text>
                 <OrderedList spacing={2} pl={4}>
-                  <ListItem>Monitor ETH/USDC price on Ethereum, Arbitrum, and Optimism</ListItem>
-                  <ListItem>When price difference exceeds bridge costs + buffer, execute arbitrage</ListItem>
-                  <ListItem>Buy on the lower-priced chain, bridge, and sell on the higher-priced chain</ListItem>
-                  <ListItem>Consider slippage, execution risk, and bridge time in calculations</ListItem>
+                  <ListItem>
+                    Monitor ETH/USDC price on Ethereum, Arbitrum, and Optimism
+                  </ListItem>
+                  <ListItem>
+                    When price difference exceeds bridge costs + buffer, execute
+                    arbitrage
+                  </ListItem>
+                  <ListItem>
+                    Buy on the lower-priced chain, bridge, and sell on the
+                    higher-priced chain
+                  </ListItem>
+                  <ListItem>
+                    Consider slippage, execution risk, and bridge time in
+                    calculations
+                  </ListItem>
                 </OrderedList>
               </Box>
             </VStack>
           </Box>
-          
-          <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
+
+          <Box
+            p={5}
+            borderWidth="1px"
+            borderRadius="lg"
+            bg="white"
+            boxShadow="sm"
+          >
             <VStack spacing={3} align="start">
               <HStack>
                 <Icon as={FaShieldAlt} color="green.500" boxSize={6} />
                 <Heading size="md">Cross-Chain Risk Hedging</Heading>
               </HStack>
               <Text>
-                Spread assets across multiple chains to reduce exposure to chain-specific risks,
-                such as bridge exploits, chain outages, or governance issues.
+                Spread assets across multiple chains to reduce exposure to
+                chain-specific risks, such as bridge exploits, chain outages, or
+                governance issues.
               </Text>
               <Box p={4} bg="gray.50" borderRadius="md" w="100%">
-                <Text fontWeight="medium" mb={2}>Example Strategy:</Text>
+                <Text fontWeight="medium" mb={2}>
+                  Example Strategy:
+                </Text>
                 <OrderedList spacing={2} pl={4}>
-                  <ListItem>Distribute stablecoins across 3-5 different chains</ListItem>
-                  <ListItem>Use different bridge protocols for transfers to diversify bridge risk</ListItem>
-                  <ListItem>Monitor TVL and security status of bridges and protocols</ListItem>
-                  <ListItem>Maintain liquidity on at least two major chains for quick access</ListItem>
+                  <ListItem>
+                    Distribute stablecoins across 3-5 different chains
+                  </ListItem>
+                  <ListItem>
+                    Use different bridge protocols for transfers to diversify
+                    bridge risk
+                  </ListItem>
+                  <ListItem>
+                    Monitor TVL and security status of bridges and protocols
+                  </ListItem>
+                  <ListItem>
+                    Maintain liquidity on at least two major chains for quick
+                    access
+                  </ListItem>
                 </OrderedList>
               </Box>
             </VStack>
           </Box>
         </SimpleGrid>
-        
+
         <Alert status="warning" borderRadius="md">
           <AlertIcon />
           <Box>
             <AlertTitle>Advanced Strategies Involve Risk</AlertTitle>
             <AlertDescription>
-              These strategies involve multiple transactions, bridge operations, and timing considerations.
-              Always start with small amounts and understand the risks involved.
+              These strategies involve multiple transactions, bridge operations,
+              and timing considerations. Always start with small amounts and
+              understand the risks involved.
             </AlertDescription>
           </Box>
         </Alert>
-        
+
         <InteractiveDemoCard
           title="Cross-Chain Strategy Builder"
           description="Design your own cross-chain strategy"
@@ -1525,7 +1767,7 @@ const onboardingSteps: OnboardingStep[] = [
                 <option value="hedging">Risk Hedging</option>
               </Select>
             </FormControl>
-            
+
             <FormControl>
               <FormLabel>Primary Asset</FormLabel>
               <Select defaultValue="usdc">
@@ -1535,7 +1777,7 @@ const onboardingSteps: OnboardingStep[] = [
                 <option value="dai">DAI</option>
               </Select>
             </FormControl>
-            
+
             <FormControl>
               <FormLabel>Chains to Include</FormLabel>
               <SimpleGrid columns={2} spacing={2}>
@@ -1547,7 +1789,7 @@ const onboardingSteps: OnboardingStep[] = [
                 <Checkbox>Base</Checkbox>
               </SimpleGrid>
             </FormControl>
-            
+
             <FormControl>
               <FormLabel>Risk Tolerance</FormLabel>
               <Slider defaultValue={50} min={0} max={100}>
@@ -1561,28 +1803,28 @@ const onboardingSteps: OnboardingStep[] = [
                 <Text fontSize="xs">Aggressive</Text>
               </Flex>
             </FormControl>
-            
+
             <Button colorScheme="blue">Generate Strategy</Button>
           </VStack>
         </InteractiveDemoCard>
       </VStack>
     ),
     reward: {
-      type: 'achievement',
-      title: 'Cross-Chain Strategist',
-      description: 'Mastered advanced cross-chain strategies',
-      icon: FaRocket
-    }
+      type: "achievement",
+      title: "Cross-Chain Strategist",
+      description: "Mastered advanced cross-chain strategies",
+      icon: FaRocket,
+    },
   },
-  
+
   // Final step
   {
-    id: 'completion',
-    title: 'Onboarding Complete',
-    description: 'You're ready to use SNEL',
+    id: "completion",
+    title: "Onboarding Complete",
+    description: "You're ready to use SNEL",
     icon: FaRegCheckCircle,
-    experienceLevel: 'beginner',
-    category: 'intro',
+    experienceLevel: "beginner",
+    category: "intro",
     estimatedTime: 60,
     content: ({ preferences, achievements }: any) => (
       <VStack spacing={8} align="stretch">
@@ -1594,16 +1836,26 @@ const onboardingSteps: OnboardingStep[] = [
           py={6}
         >
           <Icon as={FaTrophy} boxSize={16} color="yellow.400" mb={4} />
-          <Heading size="xl" mb={2}>Congratulations!</Heading>
+          <Heading size="xl" mb={2}>
+            Congratulations!
+          </Heading>
           <Text fontSize="lg" color="gray.600">
-            You've completed the SNEL onboarding experience.
-            You're now ready to use SNEL for seamless cross-chain DeFi operations.
+            You&apos;ve completed the SNEL onboarding experience. You&apos;re
+            now ready to use SNEL for seamless cross-chain DeFi operations.
           </Text>
         </MotionBox>
-        
+
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
-          <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
-            <Heading size="md" mb={4}>Your Achievements</Heading>
+          <Box
+            p={5}
+            borderWidth="1px"
+            borderRadius="lg"
+            bg="white"
+            boxShadow="sm"
+          >
+            <Heading size="md" mb={4}>
+              Your Achievements
+            </Heading>
             <SimpleGrid columns={2} spacing={4}>
               {achievements?.map((achievement: any) => (
                 <AchievementBadge
@@ -1614,31 +1866,48 @@ const onboardingSteps: OnboardingStep[] = [
               ))}
             </SimpleGrid>
           </Box>
-          
-          <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
-            <Heading size="md" mb={4}>Your Profile</Heading>
+
+          <Box
+            p={5}
+            borderWidth="1px"
+            borderRadius="lg"
+            bg="white"
+            boxShadow="sm"
+          >
+            <Heading size="md" mb={4}>
+              Your Profile
+            </Heading>
             <VStack align="start" spacing={3}>
               <HStack>
                 <Text fontWeight="bold">Experience Level:</Text>
-                <Badge colorScheme={
-                  preferences?.experienceLevel === 'beginner' ? 'green' :
-                  preferences?.experienceLevel === 'intermediate' ? 'blue' : 'purple'
-                }>
-                  {preferences?.experienceLevel || 'Beginner'}
+                <Badge
+                  colorScheme={
+                    preferences?.experienceLevel === "beginner"
+                      ? "green"
+                      : preferences?.experienceLevel === "intermediate"
+                      ? "blue"
+                      : "purple"
+                  }
+                >
+                  {preferences?.experienceLevel || "Beginner"}
                 </Badge>
               </HStack>
-              
+
               <Box>
-                <Text fontWeight="bold" mb={1}>Interests:</Text>
+                <Text fontWeight="bold" mb={1}>
+                  Interests:
+                </Text>
                 <Wrap>
                   {preferences?.interests?.map((interest: string) => (
                     <WrapItem key={interest}>
-                      <Tag colorScheme="blue" size="sm">{interest}</Tag>
+                      <Tag colorScheme="blue" size="sm">
+                        {interest}
+                      </Tag>
                     </WrapItem>
                   ))}
                 </Wrap>
               </Box>
-              
+
               <HStack>
                 <Text fontWeight="bold">Steps Completed:</Text>
                 <Text>{preferences?.completedSteps?.length || 0}</Text>
@@ -1646,32 +1915,42 @@ const onboardingSteps: OnboardingStep[] = [
             </VStack>
           </Box>
         </SimpleGrid>
-        
-        <Box p={5} borderWidth="1px" borderRadius="lg" bg="white" boxShadow="sm">
-          <Heading size="md" mb={4}>What's Next?</Heading>
+
+        <Box
+          p={5}
+          borderWidth="1px"
+          borderRadius="lg"
+          bg="white"
+          boxShadow="sm"
+        >
+          <Heading size="md" mb={4}>
+            What&apos;s Next?
+          </Heading>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={5}>
             <VStack align="start" spacing={3}>
               <Icon as={FaExchangeAlt} color="blue.500" boxSize={6} />
               <Heading size="sm">Try Your First Swap</Heading>
               <Text fontSize="sm">
-                Start with a simple token swap to get familiar with SNEL's interface.
+                Start with a simple token swap to get familiar with SNEL&apos;s
+                interface.
               </Text>
               <Button size="sm" colorScheme="blue" variant="outline">
                 Try Now
               </Button>
             </VStack>
-            
+
             <VStack align="start" spacing={3}>
               <Icon as={FaLink} color="purple.500" boxSize={6} />
               <Heading size="sm">Bridge Some Assets</Heading>
               <Text fontSize="sm">
-                Experience the power of cross-chain operations by bridging assets between networks.
+                Experience the power of cross-chain operations by bridging
+                assets between networks.
               </Text>
               <Button size="sm" colorScheme="purple" variant="outline">
                 Try Now
               </Button>
             </VStack>
-            
+
             <VStack align="start" spacing={3}>
               <Icon as={FaChartPie} color="green.500" boxSize={6} />
               <Heading size="sm">View Your Portfolio</Heading>
@@ -1684,160 +1963,195 @@ const onboardingSteps: OnboardingStep[] = [
             </VStack>
           </SimpleGrid>
         </Box>
-        
+
         <Alert status="info" borderRadius="md">
           <AlertIcon />
           <Box>
             <AlertTitle>Help is Always Available</AlertTitle>
             <AlertDescription>
-              You can revisit this onboarding experience anytime from the settings menu.
-              If you have questions, just ask SNEL directly in the chat interface.
+              You can revisit this onboarding experience anytime from the
+              settings menu. If you have questions, just ask SNEL directly in
+              the chat interface.
             </AlertDescription>
           </Box>
         </Alert>
       </VStack>
-    )
-  }
+    ),
+  },
 ];
 
 // Define onboarding paths
 const onboardingPaths: OnboardingPath[] = [
   {
-    id: 'beginner',
-    title: 'Beginner Path',
-    description: 'Perfect for those new to DeFi and cross-chain operations',
+    id: "beginner",
+    title: "Beginner Path",
+    description: "Perfect for those new to DeFi and cross-chain operations",
     icon: FaRegLightbulb,
-    stepIds: ['welcome', 'experience-level', 'natural-language', 'cross-chain-intro', 'axelar-benefits', 'completion'],
-    experienceLevel: 'beginner',
-    estimatedTime: 15
+    stepIds: [
+      "welcome",
+      "experience-level",
+      "natural-language",
+      "cross-chain-intro",
+      "axelar-benefits",
+      "completion",
+    ],
+    experienceLevel: "beginner",
+    estimatedTime: 15,
   },
   {
-    id: 'intermediate',
-    title: 'Intermediate Path',
-    description: 'For users familiar with DeFi but new to cross-chain',
+    id: "intermediate",
+    title: "Intermediate Path",
+    description: "For users familiar with DeFi but new to cross-chain",
     icon: FaLink,
-    stepIds: ['welcome', 'experience-level', 'cross-chain-intro', 'axelar-benefits', 'cross-chain-demo', 'portfolio-management', 'completion'],
-    experienceLevel: 'intermediate',
-    estimatedTime: 25
+    stepIds: [
+      "welcome",
+      "experience-level",
+      "cross-chain-intro",
+      "axelar-benefits",
+      "cross-chain-demo",
+      "portfolio-management",
+      "completion",
+    ],
+    experienceLevel: "intermediate",
+    estimatedTime: 25,
   },
   {
-    id: 'advanced',
-    title: 'Advanced Path',
-    description: 'For experienced DeFi users looking to master cross-chain strategies',
+    id: "advanced",
+    title: "Advanced Path",
+    description:
+      "For experienced DeFi users looking to master cross-chain strategies",
     icon: FaRocket,
-    stepIds: ['welcome', 'experience-level', 'axelar-benefits', 'cross-chain-demo', 'portfolio-management', 'advanced-cross-chain', 'completion'],
-    experienceLevel: 'advanced',
-    estimatedTime: 30
+    stepIds: [
+      "welcome",
+      "experience-level",
+      "axelar-benefits",
+      "cross-chain-demo",
+      "portfolio-management",
+      "advanced-cross-chain",
+      "completion",
+    ],
+    experienceLevel: "advanced",
+    estimatedTime: 30,
   },
   {
-    id: 'axelar-focus',
-    title: 'Axelar Deep Dive',
-    description: 'Focus on understanding Axelar and cross-chain operations',
+    id: "axelar-focus",
+    title: "Axelar Deep Dive",
+    description: "Focus on understanding Axelar and cross-chain operations",
     icon: FaShieldAlt,
-    stepIds: ['welcome', 'experience-level', 'cross-chain-intro', 'axelar-benefits', 'cross-chain-demo', 'advanced-cross-chain', 'completion'],
-    experienceLevel: 'intermediate',
-    estimatedTime: 25
-  }
+    stepIds: [
+      "welcome",
+      "experience-level",
+      "cross-chain-intro",
+      "axelar-benefits",
+      "cross-chain-demo",
+      "advanced-cross-chain",
+      "completion",
+    ],
+    experienceLevel: "intermediate",
+    estimatedTime: 25,
+  },
 ];
 
 // Define achievements
 const onboardingAchievements: OnboardingAchievement[] = [
   {
-    id: 'first-steps',
-    title: 'First Steps',
-    description: 'Completed your first onboarding step',
+    id: "first-steps",
+    title: "First Steps",
+    description: "Completed your first onboarding step",
     icon: FaRegCheckCircle,
-    criteria: (prefs) => prefs.completedSteps.length >= 1
+    criteria: (prefs) => prefs.completedSteps.length >= 1,
   },
   {
-    id: 'halfway-there',
-    title: 'Halfway There',
-    description: 'Completed half of your onboarding path',
+    id: "halfway-there",
+    title: "Halfway There",
+    description: "Completed half of your onboarding path",
     icon: FaRegClock,
     criteria: (prefs) => {
-      const path = onboardingPaths.find(p => p.id === prefs.currentPath);
-      return path ? prefs.completedSteps.length >= Math.floor(path.stepIds.length / 2) : false;
-    }
+      const path = onboardingPaths.find((p) => p.id === prefs.currentPath);
+      return path
+        ? prefs.completedSteps.length >= Math.floor(path.stepIds.length / 2)
+        : false;
+    },
   },
   {
-    id: 'cross-chain-explorer',
-    title: 'Cross-Chain Explorer',
-    description: 'Learned about cross-chain operations',
+    id: "cross-chain-explorer",
+    title: "Cross-Chain Explorer",
+    description: "Learned about cross-chain operations",
     icon: FaLink,
-    criteria: (prefs) => prefs.completedSteps.includes('cross-chain-intro')
+    criteria: (prefs) => prefs.completedSteps.includes("cross-chain-intro"),
   },
   {
-    id: 'axelar-expert',
-    title: 'Axelar Expert',
-    description: 'Mastered Axelar Network concepts',
+    id: "axelar-expert",
+    title: "Axelar Expert",
+    description: "Mastered Axelar Network concepts",
     icon: FaShieldAlt,
-    criteria: (prefs) => prefs.completedSteps.includes('axelar-benefits')
+    criteria: (prefs) => prefs.completedSteps.includes("axelar-benefits"),
   },
   {
-    id: 'command-master',
-    title: 'Command Master',
-    description: 'Learned how to use natural language commands',
+    id: "command-master",
+    title: "Command Master",
+    description: "Learned how to use natural language commands",
     icon: FaRegLightbulb,
-    criteria: (prefs) => prefs.completedSteps.includes('natural-language')
+    criteria: (prefs) => prefs.completedSteps.includes("natural-language"),
   },
   {
-    id: 'portfolio-pro',
-    title: 'Portfolio Pro',
-    description: 'Mastered cross-chain portfolio management',
+    id: "portfolio-pro",
+    title: "Portfolio Pro",
+    description: "Mastered cross-chain portfolio management",
     icon: FaChartPie,
-    criteria: (prefs) => prefs.completedSteps.includes('portfolio-management')
+    criteria: (prefs) => prefs.completedSteps.includes("portfolio-management"),
   },
   {
-    id: 'advanced-strategist',
-    title: 'Advanced Strategist',
-    description: 'Learned advanced cross-chain strategies',
+    id: "advanced-strategist",
+    title: "Advanced Strategist",
+    description: "Learned advanced cross-chain strategies",
     icon: FaRocket,
-    criteria: (prefs) => prefs.completedSteps.includes('advanced-cross-chain')
+    criteria: (prefs) => prefs.completedSteps.includes("advanced-cross-chain"),
   },
   {
-    id: 'completion',
-    title: 'Onboarding Complete',
-    description: 'Completed the entire onboarding process',
+    id: "completion",
+    title: "Onboarding Complete",
+    description: "Completed the entire onboarding process",
     icon: FaTrophy,
-    criteria: (prefs) => prefs.completedSteps.includes('completion')
-  }
+    criteria: (prefs) => prefs.completedSteps.includes("completion"),
+  },
 ];
 
 // Default preferences
 const defaultPreferences: OnboardingPreferences = {
-  experienceLevel: 'beginner',
+  experienceLevel: "beginner",
   interests: [],
   completedSteps: [],
   achievements: [],
-  currentPath: 'beginner'
+  currentPath: "beginner",
 };
 
 // FloatingHelpButton Component
 const FloatingHelpButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-  const bgColor = useColorModeValue('blue.500', 'blue.300');
+  const bgColor = useColorModeValue("blue.500", "blue.300");
   const controls = useAnimation();
-  
+
   useEffect(() => {
     // Animate the button to draw attention
     const animate = async () => {
       await controls.start({
         scale: [1, 1.1, 1],
-        transition: { duration: 1.5 }
+        transition: { duration: 1.5 },
       });
       setTimeout(animate, 5000);
     };
-    
+
     animate();
   }, [controls]);
-  
+
   return (
     <motion.div
       animate={controls}
       style={{
-        position: 'fixed',
-        bottom: '20px',
-        right: '20px',
-        zIndex: 100
+        position: "fixed",
+        bottom: "20px",
+        right: "20px",
+        zIndex: 100,
       }}
     >
       <Tooltip label="Open SNEL Onboarding" placement="left">
@@ -1861,95 +2175,402 @@ export const InteractiveOnboarding: React.FC<InteractiveOnboardingProps> = ({
   isOpen = false,
   onClose,
   initialStep,
-  initialPath = 'beginner',
+  initialPath = "beginner",
   onComplete,
   onStepComplete,
-  showFloatingButton = true
+  showFloatingButton = true,
 }) => {
   // State
   const [isDrawerOpen, setIsDrawerOpen] = useState(isOpen);
   const [currentPathId, setCurrentPathId] = useState(initialPath);
-  const [currentStepId, setCurrentStepId] = useState(initialStep || '');
+  const [currentStepId, setCurrentStepId] = useState(initialStep || "");
   const [preferences, setPreferences] = useLocalStorage<OnboardingPreferences>(
-    'snel-onboarding-preferences',
+    "snel-onboarding-preferences",
     defaultPreferences
   );
-  const [unlockedAchievements, setUnlockedAchievements] = useState<OnboardingAchievement[]>([]);
+  const [unlockedAchievements, setUnlockedAchievements] = useState<
+    OnboardingAchievement[]
+  >([]);
   const [showAchievementModal, setShowAchievementModal] = useState(false);
-  const [newAchievement, setNewAchievement] = useState<OnboardingAchievement | null>(null);
-  
+  const [newAchievement, setNewAchievement] =
+    useState<OnboardingAchievement | null>(null);
+
   const toast = useToast();
   const controls = useAnimation();
-  
+
   // Derived state
-  const currentPath = onboardingPaths.find(path => path.id === currentPathId) || onboardingPaths[0];
+  const currentPath =
+    onboardingPaths.find((path) => path.id === currentPathId) ||
+    onboardingPaths[0];
   const stepIds = currentPath.stepIds;
   const currentStepIndex = currentStepId ? stepIds.indexOf(currentStepId) : 0;
-  const currentStep = onboardingSteps.find(step => step.id === (currentStepId || stepIds[0]));
-  
+  const currentStep = onboardingSteps.find(
+    (step) => step.id === (currentStepId || stepIds[0])
+  );
+
   // Effects
-  
+
   // Initialize
   useEffect(() => {
     if (isOpen) {
       setIsDrawerOpen(true);
-      
+
       // If no current step is set, use the first step of the path
       if (!currentStepId && stepIds.length > 0) {
         setCurrentStepId(stepIds[0]);
       }
-      
+
       // Update preferences with current path
       if (currentPathId !== preferences.currentPath) {
         setPreferences({
           ...preferences,
-          currentPath: currentPathId
+          currentPath: currentPathId,
         });
       }
     }
-  }, [isOpen, currentPathId, currentStepId, stepIds, preferences, setPreferences]);
-  
+  }, [
+    isOpen,
+    currentPathId,
+    currentStepId,
+    stepIds,
+    preferences,
+    setPreferences,
+  ]);
+
   // Check for achievements
   useEffect(() => {
     // Find achievements that are newly unlocked
-    const newlyUnlocked = onboardingAchievements.filter(achievement => {
+    const newlyUnlocked = onboardingAchievements.filter((achievement) => {
       // Check if achievement is already unlocked
-      const isAlreadyUnlocked = preferences.achievements.includes(achievement.id);
-      
+      const isAlreadyUnlocked = preferences.achievements.includes(
+        achievement.id
+      );
+
       // Check if achievement criteria is now met
       const isCriteriaMet = achievement.criteria(preferences);
-      
+
       return !isAlreadyUnlocked && isCriteriaMet;
     });
-    
+
     if (newlyUnlocked.length > 0) {
       // Update preferences with new achievements
       const updatedAchievements = [
         ...preferences.achievements,
-        ...newlyUnlocked.map(a => a.id)
+        ...newlyUnlocked.map((a) => a.id),
       ];
-      
+
       setPreferences({
         ...preferences,
-        achievements: updatedAchievements
+        achievements: updatedAchievements,
       });
-      
+
       // Show achievement modal for the first new achievement
       setNewAchievement({
         ...newlyUnlocked[0],
-        unlockedAt: new Date().toISOString()
+        unlockedAt: new Date().toISOString(),
       });
       setShowAchievementModal(true);
-      
+
       // Update unlocked achievements list
-      setUnlockedAchievements(prev => [
+      setUnlockedAchievements((prev) => [
         ...prev,
-        ...newlyUnlocked.map(a => ({
+        ...newlyUnlocked.map((a) => ({
           ...a,
-          unlockedAt: new Date().toISOString()
-        }))
+          unlockedAt: new Date().toISOString(),
+        })),
       ]);
     }
   }, [preferences, setPreferences]);
-  
-  // Loa
+
+  // Load unlocked achievements on mount
+  useEffect(() => {
+    const loadUnlockedAchievements = () => {
+      const unlocked = onboardingAchievements
+        .filter((achievement) =>
+          preferences.achievements.includes(achievement.id)
+        )
+        .map((a) => ({
+          ...a,
+          unlocked: true,
+          unlockedAt: new Date().toISOString(), // In a real app, you'd store the actual unlock date
+        }));
+
+      setUnlockedAchievements(unlocked);
+    };
+
+    loadUnlockedAchievements();
+  }, [preferences]);
+
+  // Handlers
+  const handleOpenDrawer = () => {
+    setIsDrawerOpen(true);
+  };
+
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false);
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  const handleStepComplete = (stepId: string) => {
+    // Update completed steps
+    const updatedSteps = [...preferences.completedSteps];
+    if (!updatedSteps.includes(stepId)) {
+      updatedSteps.push(stepId);
+    }
+
+    setPreferences({
+      ...preferences,
+      completedSteps: updatedSteps,
+    });
+
+    // Call external handler
+    if (onStepComplete) {
+      onStepComplete(stepId);
+    }
+
+    // Move to next step
+    const nextStepIndex = currentStepIndex + 1;
+    if (nextStepIndex < stepIds.length) {
+      setCurrentStepId(stepIds[nextStepIndex]);
+    } else {
+      // Path completed
+      if (onComplete) {
+        onComplete();
+      }
+      handleCloseDrawer();
+    }
+  };
+
+  const handlePathChange = (pathId: string) => {
+    setCurrentPathId(pathId);
+    setCurrentStepId(""); // Reset step
+
+    setPreferences({
+      ...preferences,
+      currentPath: pathId,
+    });
+  };
+
+  const handleExperienceLevelChange = (level: ExperienceLevel) => {
+    setPreferences({
+      ...preferences,
+      experienceLevel: level,
+    });
+
+    // Auto-select appropriate path based on experience level
+    const suggestedPath = onboardingPaths.find(
+      (path) => path.experienceLevel === level
+    );
+    if (suggestedPath) {
+      handlePathChange(suggestedPath.id);
+    }
+  };
+
+  const handleInterestToggle = (interest: string) => {
+    const updatedInterests = preferences.interests.includes(interest)
+      ? preferences.interests.filter((i) => i !== interest)
+      : [...preferences.interests, interest];
+
+    setPreferences({
+      ...preferences,
+      interests: updatedInterests,
+    });
+  };
+
+  const handleAchievementModalClose = () => {
+    setShowAchievementModal(false);
+    setNewAchievement(null);
+  };
+
+  const progressPercentage =
+    currentStepIndex > 0 ? (currentStepIndex / stepIds.length) * 100 : 0;
+
+  // Pre-compute color values to avoid conditional hook calls
+  const stepDescriptionColor = useColorModeValue("gray.600", "gray.400");
+
+  return (
+    <>
+      {/* Floating Help Button */}
+      {showFloatingButton && !isDrawerOpen && (
+        <FloatingHelpButton onClick={handleOpenDrawer} />
+      )}
+
+      {/* Main Onboarding Drawer */}
+      <Drawer
+        isOpen={isDrawerOpen}
+        placement="right"
+        onClose={handleCloseDrawer}
+        size="xl"
+      >
+        <DrawerOverlay bg="blackAlpha.300" backdropFilter="blur(10px)" />
+        <DrawerContent
+          bg={useColorModeValue("white", "gray.800")}
+          borderLeft="1px solid"
+          borderColor={useColorModeValue("gray.200", "gray.700")}
+        >
+          <DrawerCloseButton />
+          <DrawerHeader
+            bg={useColorModeValue("gray.50", "gray.900")}
+            borderBottom="1px solid"
+            borderColor={useColorModeValue("gray.200", "gray.700")}
+          >
+            <VStack align="start" spacing={1}>
+              <Text fontSize="xl" fontWeight="bold">
+                SNEL Onboarding
+              </Text>
+              <Text
+                fontSize="sm"
+                color={useColorModeValue("gray.600", "gray.400")}
+              >
+                {currentPath.title} • {currentPath.estimatedTime} min
+              </Text>
+            </VStack>
+          </DrawerHeader>
+
+          <DrawerBody p={0}>
+            {/* Progress Bar */}
+            <Box p={6} pb={4}>
+              <Flex align="center" justify="space-between" mb={2}>
+                <Text fontSize="sm" fontWeight="medium">
+                  Step {currentStepIndex + 1} of {stepIds.length}
+                </Text>
+                <Text
+                  fontSize="sm"
+                  color={useColorModeValue("gray.600", "gray.400")}
+                >
+                  {Math.round(progressPercentage)}% Complete
+                </Text>
+              </Flex>
+              <Progress
+                value={progressPercentage}
+                colorScheme="blue"
+                size="sm"
+                borderRadius="full"
+              />
+            </Box>
+
+            {/* Current Step Content */}
+            {currentStep && (
+              <Box p={6} pt={0}>
+                <AnimatePresence mode="wait">
+                  <MotionBox
+                    key={currentStepId}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <VStack spacing={6} align="stretch">
+                      <Box>
+                        <Text fontSize="lg" fontWeight="bold" mb={2}>
+                          {currentStep.title}
+                        </Text>
+                        <Text color={stepDescriptionColor}>
+                          {currentStep.description}
+                        </Text>
+                      </Box>
+
+                      {currentStep.content && (
+                        <Box>
+                          {currentStep.content({
+                            preferences,
+                            onExperienceLevelChange:
+                              handleExperienceLevelChange,
+                            onInterestToggle: handleInterestToggle,
+                            onPathChange: handlePathChange,
+                            onStepComplete: handleStepComplete,
+                            currentPath,
+                            availablePaths: onboardingPaths,
+                          })}
+                        </Box>
+                      )}
+                    </VStack>
+                  </MotionBox>
+                </AnimatePresence>
+              </Box>
+            )}
+          </DrawerBody>
+
+          <DrawerFooter
+            bg={useColorModeValue("gray.50", "gray.900")}
+            borderTop="1px solid"
+            borderColor={useColorModeValue("gray.200", "gray.700")}
+          >
+            <HStack spacing={4} w="full">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const prevStepIndex = currentStepIndex - 1;
+                  if (prevStepIndex >= 0) {
+                    setCurrentStepId(stepIds[prevStepIndex]);
+                  }
+                }}
+                isDisabled={currentStepIndex === 0}
+                leftIcon={<Icon as={FiChevronLeft} />}
+              >
+                Previous
+              </Button>
+
+              <Spacer />
+
+              <Button
+                colorScheme="blue"
+                onClick={() => handleStepComplete(currentStepId)}
+                rightIcon={
+                  currentStepIndex === stepIds.length - 1 ? (
+                    <Icon as={FiCheck} />
+                  ) : (
+                    <Icon as={FiChevronRight} />
+                  )
+                }
+              >
+                {currentStepIndex === stepIds.length - 1 ? "Complete" : "Next"}
+              </Button>
+            </HStack>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Achievement Modal */}
+      <Modal
+        isOpen={showAchievementModal}
+        onClose={handleAchievementModalClose}
+        isCentered
+      >
+        <ModalOverlay bg="blackAlpha.300" backdropFilter="blur(10px)" />
+        <ModalContent>
+          <ModalHeader textAlign="center">
+            <VStack spacing={2}>
+              <Icon as={newAchievement?.icon} boxSize={12} color="yellow.400" />
+              <Text>Achievement Unlocked!</Text>
+            </VStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody textAlign="center">
+            <VStack spacing={4}>
+              <Text fontSize="lg" fontWeight="bold">
+                {newAchievement?.title}
+              </Text>
+              <Text color={useColorModeValue("gray.600", "gray.400")}>
+                {newAchievement?.description}
+              </Text>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              colorScheme="blue"
+              onClick={handleAchievementModalClose}
+              w="full"
+            >
+              Continue
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </>
+  );
+};
+
+export default InteractiveOnboarding;

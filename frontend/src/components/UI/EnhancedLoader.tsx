@@ -14,6 +14,7 @@ import {
   Skeleton,
   SkeletonText,
   SkeletonCircle,
+  Icon, /* added */
   useColorModeValue,
   useTheme,
   keyframes,
@@ -298,7 +299,9 @@ const SpinnerLoader: React.FC<{
   speed,
   thickness = 4
 }) => {
-  const spinnerColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default color to avoid conditional hook calls
+  const defaultSpinnerColor = useColorModeValue('blue.500', 'blue.300');
+  const spinnerColor = color || defaultSpinnerColor;
   
   const getSpinnerSize = () => {
     switch (size) {
@@ -339,7 +342,9 @@ const PulseLoader: React.FC<{
   color,
   speed
 }) => {
-  const pulseColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default color to avoid conditional hook calls
+  const defaultPulseColor = useColorModeValue('blue.500', 'blue.300');
+  const pulseColor = color || defaultPulseColor;
   
   const getSize = () => {
     switch (size) {
@@ -383,7 +388,9 @@ const DotsLoader: React.FC<{
   color,
   speed
 }) => {
-  const dotsColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default color to avoid conditional hook calls
+  const defaultDotsColor = useColorModeValue('blue.500', 'blue.300');
+  const dotsColor = color || defaultDotsColor;
   
   const getDotSize = () => {
     switch (size) {
@@ -437,7 +444,9 @@ const BarsLoader: React.FC<{
   color,
   speed
 }) => {
-  const barsColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default color to avoid conditional hook calls
+  const defaultBarsColor = useColorModeValue('blue.500', 'blue.300');
+  const barsColor = color || defaultBarsColor;
   
   const getBarSize = () => {
     switch (size) {
@@ -490,7 +499,9 @@ const WavesLoader: React.FC<{
   color,
   speed
 }) => {
-  const wavesColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default color to avoid conditional hook calls
+  const defaultWavesColor = useColorModeValue('blue.500', 'blue.300');
+  const wavesColor = color || defaultWavesColor;
   
   const getWaveSize = () => {
     switch (size) {
@@ -591,7 +602,11 @@ const CircularLoader: React.FC<{
   showValue = true,
   speed
 }) => {
-  const circleColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default colors to avoid conditional hook calls
+  const defaultCircleColor = useColorModeValue('blue.500', 'blue.300');
+  const trackColor = useColorModeValue('gray.100', 'gray.700');
+  
+  const circleColor = color || defaultCircleColor;
   
   const getCircleSize = () => {
     switch (size) {
@@ -611,8 +626,6 @@ const CircularLoader: React.FC<{
       default: return 1;
     }
   };
-  
-  const trackColor = useColorModeValue('gray.100', 'gray.700');
   
   return (
     <CircularProgress
@@ -651,7 +664,9 @@ const ProgressLoader: React.FC<{
   hasStripe = false,
   speed
 }) => {
-  const progressColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute default color to avoid conditional hook calls
+  const defaultProgressColor = useColorModeValue('blue.500', 'blue.300');
+  const progressColor = color || defaultProgressColor;
   
   const getProgressHeight = () => {
     switch (size) {
@@ -704,8 +719,12 @@ const ShimmerLoader: React.FC<{
   secondaryColor,
   speed
 }) => {
-  const bgColor = primaryColor || useColorModeValue('gray.100', 'gray.700');
-  const shimmerColor = secondaryColor || useColorModeValue('gray.300', 'gray.600');
+  // Pre-compute default colors to avoid conditional hook calls
+  const defaultBgColor = useColorModeValue('gray.100', 'gray.700');
+  const defaultShimmerColor = useColorModeValue('gray.300', 'gray.600');
+  
+  const bgColor = primaryColor || defaultBgColor;
+  const shimmerColor = secondaryColor || defaultShimmerColor;
   
   const getShimmerSize = () => {
     switch (size) {
@@ -751,6 +770,23 @@ const ChainIconLoader: React.FC<{
   size,
   speed
 }) => {
+  // Pre-compute all chain colors at component level to avoid conditional hook calls
+  const chainColors: Record<ChainType, string> = {
+    ethereum : useColorModeValue('blue.500',   'blue.300'),
+    bitcoin  : useColorModeValue('orange.500', 'orange.300'),
+    binance  : useColorModeValue('yellow.500', 'yellow.300'),
+    polygon  : useColorModeValue('purple.500', 'purple.300'),
+    arbitrum : useColorModeValue('blue.700',   'blue.500'),
+    optimism : useColorModeValue('red.500',    'red.300'),
+    avalanche: useColorModeValue('red.600',    'red.400'),
+    solana   : useColorModeValue('purple.600', 'purple.400'),
+    cosmos   : useColorModeValue('teal.500',   'teal.300'),
+    generic  : useColorModeValue('gray.500',   'gray.300'),
+  };
+  
+  // Pre-compute background color
+  const bgColor = useColorModeValue('gray.100', 'gray.700');
+  
   const getIconSize = () => {
     switch (size) {
       case 'xs': return { box: '24px', icon: '14px' };
@@ -777,21 +813,6 @@ const ChainIconLoader: React.FC<{
     }
   };
   
-  const getChainColor = () => {
-    switch (chainType) {
-      case 'ethereum': return useColorModeValue('blue.500', 'blue.300');
-      case 'bitcoin': return useColorModeValue('orange.500', 'orange.300');
-      case 'binance': return useColorModeValue('yellow.500', 'yellow.300');
-      case 'polygon': return useColorModeValue('purple.500', 'purple.300');
-      case 'arbitrum': return useColorModeValue('blue.700', 'blue.500');
-      case 'optimism': return useColorModeValue('red.500', 'red.300');
-      case 'avalanche': return useColorModeValue('red.600', 'red.400');
-      case 'solana': return useColorModeValue('purple.600', 'purple.400');
-      case 'cosmos': return useColorModeValue('teal.500', 'teal.300');
-      default: return useColorModeValue('gray.500', 'gray.300');
-    }
-  };
-  
   const getSpeedMultiplier = () => {
     switch (speed) {
       case 'slow': return 1.5;
@@ -802,7 +823,7 @@ const ChainIconLoader: React.FC<{
   
   const { box, icon } = getIconSize();
   const ChainIcon = getChainIcon();
-  const chainColor = getChainColor();
+  const chainColor = chainColors[chainType] || chainColors.generic;
   const spinDuration = `${3 * getSpeedMultiplier()}s`;
   
   return (
@@ -810,7 +831,7 @@ const ChainIconLoader: React.FC<{
       width={box}
       height={box}
       borderRadius="full"
-      bg={useColorModeValue('gray.100', 'gray.700')}
+      bg={bgColor}
       display="flex"
       alignItems="center"
       justifyContent="center"
@@ -841,10 +862,15 @@ const TransactionProgressLoader: React.FC<{
   color,
   speed
 }) => {
-  const progressColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute all colors at component level to avoid conditional hook calls
+  const defaultProgressColor = useColorModeValue('blue.500', 'blue.300');
   const completedColor = useColorModeValue('green.500', 'green.300');
   const errorColor = useColorModeValue('red.500', 'red.300');
   const pendingColor = useColorModeValue('gray.300', 'gray.600');
+  
+  const progressColor = color || defaultProgressColor;
+  // Background color for step icons (pre-computed once per render)
+  const stepBg = useColorModeValue('white', 'gray.800');
   
   const getStepSize = () => {
     switch (size) {
@@ -877,6 +903,7 @@ const TransactionProgressLoader: React.FC<{
   };
   
   const getStepIcon = (step: TransactionStep) => {
+
     if (step.icon) return step.icon;
     
     switch (step.status) {
@@ -933,7 +960,7 @@ const TransactionProgressLoader: React.FC<{
               width={icon}
               height={icon}
               borderRadius="full"
-              bg={useColorModeValue('white', 'gray.800')}
+              bg={stepBg}
               border="2px solid"
               borderColor={getStepColor(step.status)}
               display="flex"
@@ -1000,6 +1027,7 @@ const PortfolioShimmerLoader: React.FC<{
   size,
   speed
 }) => {
+  // Pre-compute colors at component level
   const bgColor = useColorModeValue('gray.100', 'gray.700');
   const shimmerColor = useColorModeValue('gray.300', 'gray.600');
   
@@ -1116,8 +1144,12 @@ const PageLoadingOverlay: React.FC<{
   speed,
   blockInteraction = true
 }) => {
-  const bgColor = overlayColor || useColorModeValue('white', 'gray.800');
-  const loaderColor = color || useColorModeValue('blue.500', 'blue.300');
+  // Pre-compute colors at component level
+  const defaultBgColor = useColorModeValue('white', 'gray.800');
+  const defaultLoaderColor = useColorModeValue('blue.500', 'blue.300');
+  
+  const bgColor = overlayColor || defaultBgColor;
+  const loaderColor = color || defaultLoaderColor;
   
   return (
     <Portal>
@@ -1407,6 +1439,14 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
   
   // Refs
   const loadingTimeRef = useRef<number | null>(null);
+  
+  // Pre-compute all colors at component level to avoid conditional hook calls
+  const defaultColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultSecondaryColor = useColorModeValue('gray.300', 'gray.600');
+  const defaultBgColor = useColorModeValue('white', 'gray.800');
+  const successColor = useColorModeValue('green.500', 'green.300');
+  const errorColor = useColorModeValue('red.500', 'red.300');
+  const warningColor = useColorModeValue('yellow.500', 'yellow.300');
   
   // Effects
   
