@@ -337,7 +337,7 @@ const AnimatedCounter: React.FC<{ value: number; duration?: number; formatter?: 
     requestAnimationFrame(updateValue);
     
     return () => {
-      prevValue.current = displayValue;
+      prevValue.current = value;
     };
   }, [value, duration]);
   

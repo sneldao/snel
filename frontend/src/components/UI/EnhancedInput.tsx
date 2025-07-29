@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, forwardRef } from 'react';
+import Image from 'next/image';
 import {
   Input,
   InputGroup,
@@ -337,11 +338,15 @@ const TokenAmountInput = forwardRef<HTMLInputElement, EnhancedInputProps>((props
                 bg={tokenBgColor}
                 px={2}
                 py={1}
-                borderRadius="md"
-              >
+                borderRadius="md">
                 {token.icon && (
-                  <Box mr={1} boxSize={size === 'sm' ? '14px' : size === 'lg' ? '24px' : '18px'}>
-                    <img src={token.icon} alt={token.symbol} style={{ width: '100%', height: '100%' }} />
+                  <Box mr={1} boxSize={size === 'sm' ? '14px' : size === 'lg' ? '24px' : '18px'} position="relative">
+                    <Image 
+                      src={token.icon} 
+                      alt={token.symbol} 
+                      layout="fill"
+                      objectFit="contain"
+                    />
                   </Box>
                 )}
                 <Text fontWeight="medium">{token.symbol}</Text>
@@ -980,7 +985,7 @@ export const EnhancedInput = forwardRef<HTMLInputElement, EnhancedInputProps>((p
     if (value !== undefined && value !== localValue) {
       setLocalValue(value);
     }
-  }, [value]);
+  }, [value, localValue]);
   
   // Sync validation state
   useEffect(() => {
@@ -994,7 +999,7 @@ export const EnhancedInput = forwardRef<HTMLInputElement, EnhancedInputProps>((p
     if (localValue && validationRules.length > 0) {
       validateValue(localValue);
     }
-  }, []);
+  }, [localValue, validationRules, validateValue]);
   
   // Handlers
   
@@ -1053,7 +1058,7 @@ export const EnhancedInput = forwardRef<HTMLInputElement, EnhancedInputProps>((p
   };
   
   // Validation
-  const validateValue = async (valueToValidate: any): Promise<ValidationResult> => {
+  const validateValue = React.useCallback(async (valueToValidate: any): Promise<ValidationResult> => {
     // Skip validation if no rules or empty value (unless required)
     if (validationRules.length === 0 && !asyncValidator && !isRequired) {
       setLocalValidationState('none');
@@ -1118,7 +1123,7 @@ export const EnhancedInput = forwardRef<HTMLInputElement, EnhancedInputProps>((p
     const result = { isValid: true };
     if (onValidationChange) onValidationChange(result);
     return result;
-  };
+  }, [validationRules, asyncValidator, isRequired, onValidationChange]);
   
   // Determine if label should float (if there's a value or the input is focused)
   const shouldFloatLabel = Boolean(localValue) || isFocused;

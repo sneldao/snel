@@ -916,6 +916,7 @@ export const CrosschainTransactionTracker: React.FC<
     destinationAddress,
     asset,
     amount,
+    updateStepsFromStatus,
   ]);
 
   // Update steps based on transaction status
@@ -1045,6 +1046,7 @@ export const CrosschainTransactionTracker: React.FC<
       onComplete,
       onRecoveryNeeded,
       txHash,
+      generateRecoveryOptions,
     ]
   );
 

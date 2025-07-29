@@ -418,7 +418,8 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
   };
 
   // Handle command change with debounce
-  const debouncedAnalyzeCommand = useCallback(
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedAnalyzeCommand = React.useCallback(
     debounce((command: string) => {
       if (!command.trim()) {
         setSuggestions([]);
@@ -1007,7 +1008,7 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
       setCommandValue(transcript);
       debouncedAnalyzeCommand(transcript);
     }
-  }, [transcript, isVoiceListening]);
+  }, [transcript, isVoiceListening, debouncedAnalyzeCommand]);
 
   // Generate magic suggestion on mount and when wallet state changes
   useEffect(() => {

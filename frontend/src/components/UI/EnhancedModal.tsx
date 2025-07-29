@@ -6,6 +6,7 @@ import React, {
   createContext,
   useContext,
 } from "react";
+import Image from 'next/image';
 import {
   Modal,
   ModalOverlay,
@@ -755,11 +756,11 @@ const WalletConnectionContent: React.FC<{
           <Flex align="center">
             <Box mr={4} fontSize="2xl">
               {typeof wallet.icon === "string" ? (
-                <img
+                <Image
                   src={wallet.icon as string}
                   alt={wallet.name}
-                  width="40px"
-                  height="40px"
+                  width={40}
+                  height={40}
                 />
               ) : (
                 wallet.icon || <FaWallet />
