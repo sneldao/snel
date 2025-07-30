@@ -5,8 +5,9 @@ import React, {
   useCallback,
   createContext,
   useContext,
+  forwardRef,
 } from "react";
-import Image from 'next/image';
+import Image from "next/image";
 import {
   Modal,
   ModalOverlay,
@@ -53,7 +54,6 @@ import {
   SlideFade,
   Fade,
   chakra,
-  forwardRef,
   StylesProvider,
   useMultiStyleConfig,
   useStyles,
@@ -1361,7 +1361,8 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
     const combinedRef = useCallback(
       (node: HTMLDivElement) => {
         // Set modal ref
-        modalRef.current = node;
+        (modalRef as React.MutableRefObject<HTMLDivElement | null>).current =
+          node;
 
         // Forward ref
         if (typeof ref === "function") {
@@ -1400,7 +1401,7 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
           ? handler.keys.join("+")
           : handler.keys || "";
 
-        const shortcutAction = shortcuts[combo];
+        const shortcutAction = shortcuts[combo as keyof typeof shortcuts];
 
         if (shortcutAction && isOpen) {
           e.preventDefault();
@@ -1673,7 +1674,7 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
       if (sections.length > 0) {
         return (
           <VStack spacing={4} align="stretch">
-            {sections.map((section) => (
+            {sections.map((section: any) => (
               <CollapsibleSection key={section.id} section={section} />
             ))}
           </VStack>
@@ -1773,7 +1774,7 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
 
                       {headerActions && (
                         <HStack spacing={2}>
-                          {headerActions.map((action, index) => (
+                          {headerActions.map((action: any, index: number) => (
                             <Tooltip
                               key={index}
                               label={action.tooltip || action.label}
@@ -1812,32 +1813,34 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
                         {additionalActions && (
                           <Box flex="1">
                             <HStack spacing={2}>
-                              {additionalActions.map((action, index) => (
-                                <Tooltip
-                                  key={index}
-                                  label={action.tooltip || action.label}
-                                >
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    leftIcon={
-                                      action.icon ? (
-                                        <>{action.icon}</>
-                                      ) : undefined
-                                    }
-                                    onClick={action.onClick}
-                                    isDisabled={action.isDisabled}
-                                    isLoading={action.isLoading}
+                              {additionalActions.map(
+                                (action: any, index: number) => (
+                                  <Tooltip
+                                    key={index}
+                                    label={action.tooltip || action.label}
                                   >
-                                    {action.label}
-                                    {action.shortcut && (
-                                      <Kbd ml={2} fontSize="xs">
-                                        {action.shortcut}
-                                      </Kbd>
-                                    )}
-                                  </Button>
-                                </Tooltip>
-                              ))}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      leftIcon={
+                                        action.icon ? (
+                                          <>{action.icon}</>
+                                        ) : undefined
+                                      }
+                                      onClick={action.onClick}
+                                      isDisabled={action.isDisabled}
+                                      isLoading={action.isLoading}
+                                    >
+                                      {action.label}
+                                      {action.shortcut && (
+                                        <Kbd ml={2} fontSize="xs">
+                                          {action.shortcut}
+                                        </Kbd>
+                                      )}
+                                    </Button>
+                                  </Tooltip>
+                                )
+                              )}
                             </HStack>
                           </Box>
                         )}
@@ -2020,7 +2023,7 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
 
                       {headerActions && (
                         <HStack spacing={2}>
-                          {headerActions.map((action, index) => (
+                          {headerActions.map((action: any, index: number) => (
                             <Tooltip
                               key={index}
                               label={action.tooltip || action.label}
@@ -2059,32 +2062,34 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
                         {additionalActions && (
                           <Box flex="1">
                             <HStack spacing={2}>
-                              {additionalActions.map((action, index) => (
-                                <Tooltip
-                                  key={index}
-                                  label={action.tooltip || action.label}
-                                >
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    leftIcon={
-                                      action.icon ? (
-                                        <>{action.icon}</>
-                                      ) : undefined
-                                    }
-                                    onClick={action.onClick}
-                                    isDisabled={action.isDisabled}
-                                    isLoading={action.isLoading}
+                              {additionalActions.map(
+                                (action: any, index: number) => (
+                                  <Tooltip
+                                    key={index}
+                                    label={action.tooltip || action.label}
                                   >
-                                    {action.label}
-                                    {action.shortcut && (
-                                      <Kbd ml={2} fontSize="xs">
-                                        {action.shortcut}
-                                      </Kbd>
-                                    )}
-                                  </Button>
-                                </Tooltip>
-                              ))}
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      leftIcon={
+                                        action.icon ? (
+                                          <>{action.icon}</>
+                                        ) : undefined
+                                      }
+                                      onClick={action.onClick}
+                                      isDisabled={action.isDisabled}
+                                      isLoading={action.isLoading}
+                                    >
+                                      {action.label}
+                                      {action.shortcut && (
+                                        <Kbd ml={2} fontSize="xs">
+                                          {action.shortcut}
+                                        </Kbd>
+                                      )}
+                                    </Button>
+                                  </Tooltip>
+                                )
+                              )}
                             </HStack>
                           </Box>
                         )}
@@ -2328,25 +2333,27 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
 
                           {headerActions && (
                             <HStack spacing={2}>
-                              {headerActions.map((action, index) => (
-                                <Tooltip
-                                  key={index}
-                                  label={action.tooltip || action.label}
-                                >
-                                  <IconButton
-                                    aria-label={action.label}
-                                    icon={
-                                      action.icon ? (
-                                        <>{action.icon}</>
-                                      ) : undefined
-                                    }
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={action.onClick}
-                                    isDisabled={action.isDisabled}
-                                  />
-                                </Tooltip>
-                              ))}
+                              {headerActions.map(
+                                (action: any, index: number) => (
+                                  <Tooltip
+                                    key={index}
+                                    label={action.tooltip || action.label}
+                                  >
+                                    <IconButton
+                                      aria-label={action.label}
+                                      icon={
+                                        action.icon ? (
+                                          <>{action.icon}</>
+                                        ) : undefined
+                                      }
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={action.onClick}
+                                      isDisabled={action.isDisabled}
+                                    />
+                                  </Tooltip>
+                                )
+                              )}
                             </HStack>
                           )}
                         </Flex>
@@ -2371,32 +2378,34 @@ export const EnhancedModal = forwardRef<HTMLDivElement, EnhancedModalProps>(
                             {additionalActions && (
                               <Box flex="1">
                                 <HStack spacing={2}>
-                                  {additionalActions.map((action, index) => (
-                                    <Tooltip
-                                      key={index}
-                                      label={action.tooltip || action.label}
-                                    >
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        leftIcon={
-                                          action.icon ? (
-                                            <>{action.icon}</>
-                                          ) : undefined
-                                        }
-                                        onClick={action.onClick}
-                                        isDisabled={action.isDisabled}
-                                        isLoading={action.isLoading}
+                                  {additionalActions.map(
+                                    (action: any, index: number) => (
+                                      <Tooltip
+                                        key={index}
+                                        label={action.tooltip || action.label}
                                       >
-                                        {action.label}
-                                        {action.shortcut && (
-                                          <Kbd ml={2} fontSize="xs">
-                                            {action.shortcut}
-                                          </Kbd>
-                                        )}
-                                      </Button>
-                                    </Tooltip>
-                                  ))}
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          leftIcon={
+                                            action.icon ? (
+                                              <>{action.icon}</>
+                                            ) : undefined
+                                          }
+                                          onClick={action.onClick}
+                                          isDisabled={action.isDisabled}
+                                          isLoading={action.isLoading}
+                                        >
+                                          {action.label}
+                                          {action.shortcut && (
+                                            <Kbd ml={2} fontSize="xs">
+                                              {action.shortcut}
+                                            </Kbd>
+                                          )}
+                                        </Button>
+                                      </Tooltip>
+                                    )
+                                  )}
                                 </HStack>
                               </Box>
                             )}

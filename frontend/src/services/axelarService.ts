@@ -258,7 +258,7 @@ class AxelarService {
     toAddress: string,
     asset: string,
     amount: string,
-    provider?: ethers.providers.Web3Provider
+    provider?: ethers.BrowserProvider
   ): Promise<string> {
     if (!this.isReady() || !this.assetTransfer) {
       throw new Error('Axelar service not initialized');
@@ -276,7 +276,7 @@ class AxelarService {
         throw new Error(`Unsupported chain: ${fromChain} -> ${toChain}`);
       }
 
-      const signer = provider.getSigner();
+      const signer = await provider.getSigner();
 
       // Prepare the send token parameters according to the SDK interface
       const sendTokenParams: SendTokenParams = {
@@ -289,8 +289,8 @@ class AxelarService {
         amountInAtomicUnits: amount,
         options: {
           evmOptions: {
-            signer: signer,
-            provider: provider
+            signer: signer as any,
+            provider: provider as any
           }
         }
       };

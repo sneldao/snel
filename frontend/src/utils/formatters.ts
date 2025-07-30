@@ -44,7 +44,7 @@ export function formatAddress(
  * @returns Formatted token amount string
  */
 export function formatTokenAmount(
-  amount: string | number | ethers.BigNumber,
+  amount: string | number | bigint,
   decimals: number = 18,
   displayDecimals: number = 6,
   symbol?: string
@@ -61,16 +61,16 @@ export function formatTokenAmount(
       // Handle scientific notation or large numbers in string form
       if (amount.includes('e') || amount.length > 15) {
         // Use ethers to parse large numbers safely
-        const bn = ethers.utils.parseUnits(amount, 0);
-        value = parseFloat(ethers.utils.formatUnits(bn, decimals));
+        const bn = ethers.parseUnits(amount, 0);
+        value = parseFloat(ethers.formatUnits(bn, decimals));
       } else {
         value = parseFloat(amount);
       }
     } else if (typeof amount === 'number') {
       value = amount;
     } else {
-      // Handle BigNumber
-      value = parseFloat(ethers.utils.formatUnits(amount, decimals));
+      // Handle bigint
+      value = parseFloat(ethers.formatUnits(amount, decimals));
     }
     
     // Determine appropriate decimal places based on value

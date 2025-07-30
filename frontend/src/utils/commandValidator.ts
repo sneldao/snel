@@ -244,7 +244,7 @@ function validateBridgeCommand(parsed: ParsedCommand): ValidationResult {
     return {
       isValid: false,
       message: "Please specify the destination chain.",
-      suggestion: `For example: 'bridge ${parsed.sourceAmount || 100} ${parsed.sourceToken} from ${SUPPORTED_CHAINS[parsed.sourceChain] || 'Ethereum'} to Polygon'`,
+      suggestion: `For example: 'bridge ${parsed.sourceAmount || 100} ${parsed.sourceToken} from ${SUPPORTED_CHAINS[parsed.sourceChain as keyof typeof SUPPORTED_CHAINS] || 'Ethereum'} to Polygon'`,
       errorType: 'missing_parameter',
       errorField: 'targetChain'
     };
@@ -277,7 +277,7 @@ function validateBridgeCommand(parsed: ParsedCommand): ValidationResult {
     return {
       isValid: false,
       message: "Source and destination chains can't be the same.",
-      suggestion: `Try bridging from ${SUPPORTED_CHAINS[parsed.sourceChain]} to a different chain.`,
+      suggestion: `Try bridging from ${SUPPORTED_CHAINS[parsed.sourceChain as keyof typeof SUPPORTED_CHAINS]} to a different chain.`,
       errorType: 'invalid_chain',
       errorField: 'targetChain'
     };

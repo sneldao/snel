@@ -33,6 +33,13 @@ import {
   DrawerOverlay,
   DrawerContent,
   DrawerCloseButton,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
   Tabs,
   TabList,
   TabPanels,
@@ -85,11 +92,11 @@ import SpeechRecognition, {
 } from "react-speech-recognition";
 
 // Import our enhanced components
-import EnhancedInput from "./ui/EnhancedInput";
-import EnhancedButton from "./ui/EnhancedButton";
-import EnhancedCard from "./ui/EnhancedCard";
-import EnhancedLoader from "./ui/EnhancedLoader";
-import EnhancedModal from "./ui/EnhancedModal";
+import EnhancedInput from "./UI/EnhancedInput";
+import EnhancedButton from "./UI/EnhancedButton";
+import EnhancedCard from "./UI/EnhancedCard";
+import EnhancedLoader from "./UI/EnhancedLoader";
+import EnhancedModal, { EnhancedModalProps } from "./UI/EnhancedModal";
 
 // Import token and chain data
 import { SUPPORTED_CHAINS } from "../constants/chains";
@@ -151,7 +158,7 @@ const pulseVariants = {
     transition: {
       duration: 1.5,
       repeat: Infinity,
-      repeatType: "loop",
+      repeatType: "loop" as const,
     },
   },
 };
@@ -1467,8 +1474,7 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
                     handleSubmit();
                   }, 500);
                 }}
-                animate={true}
-                pulseEffect={true}
+                pulseAnimation={true}
               >
                 Try: {magicSuggestion}
               </EnhancedButton>
@@ -1494,7 +1500,7 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
                 <EnhancedButton
                   variant="outline"
                   size="sm"
-                  leftIcon={action.icon}
+                  leftIcon={action.icon as React.ReactElement}
                   colorScheme={action.color}
                   onClick={() => {
                     setCommandValue(action.command);
@@ -1598,202 +1604,236 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
       </Drawer>
 
       {/* Command builder modal */}
-      <EnhancedModal
+      <Modal
         isOpen={isCommandBuilderOpen}
         onClose={closeCommandBuilder}
-        title="Visual Command Builder"
-        variant="centered"
-        animation="scale"
         size="lg"
-        primaryAction={{
-          label: "Build Command",
-          onClick: buildCommand,
-          icon: <FaCheck />,
-        }}
-        secondaryAction={{
-          label: "Cancel",
-          onClick: closeCommandBuilder,
-          icon: <FaTimes />,
-        }}
-        headerIcon={<FaRegKeyboard />}
+        isCentered
       >
-        <VStack spacing={6} align="stretch">
-          <Box>
-            <Text mb={4}>Build your command step by step:</Text>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            <HStack>
+              <FaRegKeyboard />
+              <Text>Visual Command Builder</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={6} align="stretch">
+              <Box>
+                <Text mb={4}>Build your command step by step:</Text>
 
-            <VStack spacing={4} align="stretch">
-              {commandBuilderSteps.map((step, index) => (
-                <Box key={index}>
-                  <Text fontSize="sm" fontWeight="medium" mb={2}>
-                    {index === 0
-                      ? "Action:"
-                      : step.type === "amount"
-                      ? "Amount:"
-                      : step.type === "token"
-                      ? index === 2
-                        ? "Token:"
-                        : "Target Token:"
-                      : step.type === "address"
-                      ? "Recipient:"
-                      : step.type === "chain"
-                      ? "Destination Chain:"
-                      : "Value:"}
-                  </Text>
+                <VStack spacing={4} align="stretch">
+                  {commandBuilderSteps.map((step, index) => (
+                    <Box key={index}>
+                      <Text fontSize="sm" fontWeight="medium" mb={2}>
+                        {index === 0
+                          ? "Action:"
+                          : step.type === "amount"
+                          ? "Amount:"
+                          : step.type === "token"
+                          ? index === 2
+                            ? "Token:"
+                            : "Target Token:"
+                          : step.type === "address"
+                          ? "Recipient:"
+                          : step.type === "chain"
+                          ? "Destination Chain:"
+                          : "Value:"}
+                      </Text>
 
-                  {step.type === "action" && (
-                    <SimpleGrid columns={3} spacing={3}>
-                      {["swap", "send", "bridge", "check", "analyze"].map(
-                        (action) => (
-                          <EnhancedButton
-                            key={action}
-                            variant={
-                              step.value === action ? "solid" : "outline"
-                            }
-                            colorScheme={
-                              step.value === action ? "blue" : "gray"
-                            }
-                            size="md"
-                            onClick={() => updateCommandBuilder(index, action)}
-                          >
-                            {action.charAt(0).toUpperCase() + action.slice(1)}
-                          </EnhancedButton>
-                        )
+                      {step.type === "action" && (
+                        <SimpleGrid columns={3} spacing={3}>
+                          {["swap", "send", "bridge", "check", "analyze"].map(
+                            (action) => (
+                              <EnhancedButton
+                                key={action}
+                                variant={
+                                  step.value === action ? "primary" : "outline"
+                                }
+                                colorScheme={
+                                  step.value === action ? "blue" : "gray"
+                                }
+                                size="md"
+                                onClick={() =>
+                                  updateCommandBuilder(index, action)
+                                }
+                              >
+                                {action.charAt(0).toUpperCase() +
+                                  action.slice(1)}
+                              </EnhancedButton>
+                            )
+                          )}
+                        </SimpleGrid>
                       )}
-                    </SimpleGrid>
-                  )}
 
-                  {step.type === "amount" && (
-                    <HStack spacing={3}>
-                      {["0.1", "1", "10", "100"].map((amount) => (
-                        <EnhancedButton
-                          key={amount}
-                          variant={step.value === amount ? "solid" : "outline"}
-                          colorScheme={step.value === amount ? "blue" : "gray"}
-                          size="md"
-                          onClick={() => updateCommandBuilder(index, amount)}
-                        >
-                          {amount}
-                        </EnhancedButton>
-                      ))}
-                      <EnhancedInput
-                        name="custom-amount"
-                        placeholder="Custom amount"
-                        size="md"
-                        inputType="number"
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter") {
-                            const target = e.target as HTMLInputElement;
-                            updateCommandBuilder(index, target.value);
-                          }
-                        }}
-                      />
-                    </HStack>
-                  )}
+                      {step.type === "amount" && (
+                        <HStack spacing={3}>
+                          {["0.1", "1", "10", "100"].map((amount) => (
+                            <EnhancedButton
+                              key={amount}
+                              variant={
+                                step.value === amount ? "primary" : "outline"
+                              }
+                              colorScheme={
+                                step.value === amount ? "blue" : "gray"
+                              }
+                              size="md"
+                              onClick={() =>
+                                updateCommandBuilder(index, amount)
+                              }
+                            >
+                              {amount}
+                            </EnhancedButton>
+                          ))}
+                          <EnhancedInput
+                            name="custom-amount"
+                            placeholder="Custom amount"
+                            size="md"
+                            inputType="number"
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") {
+                                const target = e.target as HTMLInputElement;
+                                updateCommandBuilder(index, target.value);
+                              }
+                            }}
+                          />
+                        </HStack>
+                      )}
 
-                  {step.type === "token" && (
-                    <SimpleGrid columns={4} spacing={3}>
-                      {[
-                        "ETH",
-                        "USDC",
-                        "WETH",
-                        "WBTC",
-                        "DAI",
-                        "MATIC",
-                        "LINK",
-                        "UNI",
-                      ].map((token) => (
-                        <EnhancedButton
-                          key={token}
-                          variant={step.value === token ? "solid" : "outline"}
-                          colorScheme={step.value === token ? "blue" : "gray"}
-                          size="md"
-                          onClick={() => updateCommandBuilder(index, token)}
-                        >
-                          {token}
-                        </EnhancedButton>
-                      ))}
-                    </SimpleGrid>
-                  )}
+                      {step.type === "token" && (
+                        <SimpleGrid columns={4} spacing={3}>
+                          {[
+                            "ETH",
+                            "USDC",
+                            "WETH",
+                            "WBTC",
+                            "DAI",
+                            "MATIC",
+                            "LINK",
+                            "UNI",
+                          ].map((token) => (
+                            <EnhancedButton
+                              key={token}
+                              variant={
+                                step.value === token ? "primary" : "outline"
+                              }
+                              colorScheme={
+                                step.value === token ? "blue" : "gray"
+                              }
+                              size="md"
+                              onClick={() => updateCommandBuilder(index, token)}
+                            >
+                              {token}
+                            </EnhancedButton>
+                          ))}
+                        </SimpleGrid>
+                      )}
 
-                  {step.type === "address" && (
-                    <VStack spacing={3} align="stretch">
-                      {["vitalik.eth", "snel.eth"].map((address) => (
-                        <EnhancedButton
-                          key={address}
-                          variant={step.value === address ? "solid" : "outline"}
-                          colorScheme={step.value === address ? "blue" : "gray"}
-                          size="md"
-                          onClick={() => updateCommandBuilder(index, address)}
-                          leftIcon={<FaWallet />}
-                        >
-                          {address}
-                        </EnhancedButton>
-                      ))}
-                      <EnhancedInput
-                        name="custom-address"
-                        placeholder="Custom address or ENS"
-                        size="md"
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter") {
-                            const target = e.target as HTMLInputElement;
-                            updateCommandBuilder(index, target.value);
-                          }
-                        }}
-                      />
-                    </VStack>
-                  )}
+                      {step.type === "address" && (
+                        <VStack spacing={3} align="stretch">
+                          {["vitalik.eth", "snel.eth"].map((address) => (
+                            <EnhancedButton
+                              key={address}
+                              variant={
+                                step.value === address ? "primary" : "outline"
+                              }
+                              colorScheme={
+                                step.value === address ? "blue" : "gray"
+                              }
+                              size="md"
+                              onClick={() =>
+                                updateCommandBuilder(index, address)
+                              }
+                              leftIcon={<FaWallet />}
+                            >
+                              {address}
+                            </EnhancedButton>
+                          ))}
+                          <EnhancedInput
+                            name="custom-address"
+                            placeholder="Custom address or ENS"
+                            size="md"
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") {
+                                const target = e.target as HTMLInputElement;
+                                updateCommandBuilder(index, target.value);
+                              }
+                            }}
+                          />
+                        </VStack>
+                      )}
 
-                  {step.type === "chain" && (
-                    <SimpleGrid columns={2} spacing={3}>
-                      {Object.values(SUPPORTED_CHAINS).map((chain) => (
-                        <EnhancedButton
-                          key={chain}
-                          variant={step.value === chain ? "solid" : "outline"}
-                          colorScheme={step.value === chain ? "blue" : "gray"}
-                          size="md"
-                          onClick={() => updateCommandBuilder(index, chain)}
-                          leftIcon={<FaLink />}
-                        >
-                          {chain}
-                        </EnhancedButton>
-                      ))}
-                    </SimpleGrid>
-                  )}
-                </Box>
-              ))}
+                      {step.type === "chain" && (
+                        <SimpleGrid columns={2} spacing={3}>
+                          {Object.values(SUPPORTED_CHAINS).map((chain) => (
+                            <EnhancedButton
+                              key={chain}
+                              variant={
+                                step.value === chain ? "primary" : "outline"
+                              }
+                              colorScheme={
+                                step.value === chain ? "blue" : "gray"
+                              }
+                              size="md"
+                              onClick={() => updateCommandBuilder(index, chain)}
+                              leftIcon={<FaLink />}
+                            >
+                              {chain}
+                            </EnhancedButton>
+                          ))}
+                        </SimpleGrid>
+                      )}
+                    </Box>
+                  ))}
+                </VStack>
+              </Box>
+
+              <Box
+                p={4}
+                borderWidth="1px"
+                borderRadius="md"
+                bg={commandBuilderBgColor}
+              >
+                <Text fontWeight="medium" mb={2}>
+                  Preview:
+                </Text>
+                <Text fontSize="lg">
+                  {commandBuilderSteps
+                    .map((step) => step.value)
+                    .filter(Boolean)
+                    .join(" ")}
+                  {commandBuilderSteps[0].value === "swap" &&
+                    commandBuilderSteps.length > 2 &&
+                    commandBuilderSteps[2].value &&
+                    " for"}
+                  {commandBuilderSteps[0].value === "send" &&
+                    commandBuilderSteps.length > 2 &&
+                    commandBuilderSteps[2].value &&
+                    " to"}
+                  {commandBuilderSteps[0].value === "bridge" &&
+                    commandBuilderSteps.length > 2 &&
+                    commandBuilderSteps[2].value &&
+                    " to"}
+                </Text>
+              </Box>
             </VStack>
-          </Box>
-
-          <Box
-            p={4}
-            borderWidth="1px"
-            borderRadius="md"
-            bg={commandBuilderBgColor}
-          >
-            <Text fontWeight="medium" mb={2}>
-              Preview:
-            </Text>
-            <Text fontSize="lg">
-              {commandBuilderSteps
-                .map((step) => step.value)
-                .filter(Boolean)
-                .join(" ")}
-              {commandBuilderSteps[0].value === "swap" &&
-                commandBuilderSteps.length > 2 &&
-                commandBuilderSteps[2].value &&
-                " for"}
-              {commandBuilderSteps[0].value === "send" &&
-                commandBuilderSteps.length > 2 &&
-                commandBuilderSteps[2].value &&
-                " to"}
-              {commandBuilderSteps[0].value === "bridge" &&
-                commandBuilderSteps.length > 2 &&
-                commandBuilderSteps[2].value &&
-                " to"}
-            </Text>
-          </Box>
-        </VStack>
-      </EnhancedModal>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={closeCommandBuilder}>
+              Cancel
+            </Button>
+            <Button
+              colorScheme="blue"
+              onClick={buildCommand}
+              leftIcon={<FaCheck />}
+            >
+              Build Command
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

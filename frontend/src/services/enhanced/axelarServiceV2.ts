@@ -5,11 +5,11 @@ import {
   Environment,
   EvmChain,
   SendTokenParams,
-  GasEstimateResponse,
-  AxelarRecoveryAPIParams,
+
+
   GMPStatus,
   GMPStatusResponse,
-  TransactionStatus
+
 } from "@axelar-network/axelarjs-sdk";
 import { ethers } from "ethers";
 import { ChainUtils } from "../../utils/chainUtils";
@@ -66,7 +66,7 @@ export interface TransactionDetailsV2 {
   destinationAddress: string;
   asset: string;
   amount: string;
-  status: TransactionStatus;
+  status: string;
   timestamp: number;
   estimatedCompletionTime?: number;
   message?: string;
@@ -132,83 +132,86 @@ class QuoteManager {
     this.queryAPI = queryAPI;
     this.environment = environment;
     this.cacheTimeout = cacheTimeout;
+
+    // Initialize memoized functions
+    this.getTransferQuote = memoize(
+      async (
+        fromChain: string,
+        toChain: string,
+        asset: string,
+        amount: string
+      ): Promise<TransferQuoteV2> => {
+        try {
+          const amountNumber = parseFloat(amount);
+          if (isNaN(amountNumber)) {
+            throw new Error('Invalid amount');
+          }
+
+          const feeResponse = await retry(
+            () => this.queryAPI.getTransferFee(fromChain, toChain, asset, amountNumber),
+            { maxRetries: 3, delay: 1000 }
+          );
+
+          // Get gas estimate for the transaction
+          const gasEstimate = await retry(
+            () => this.queryAPI.estimateGasFee(
+              fromChain as EvmChain,
+              toChain as EvmChain,
+              '100000' // Default gas limit
+            ),
+            { maxRetries: 3, delay: 1000 }
+          );
+
+          // Calculate estimated time based on historical data and chain congestion
+          const estimatedTime = this.calculateEstimatedTime(fromChain, toChain);
+
+          // Get token price for USD conversion if available
+          let tokenPrice = '0';
+          try {
+            // This would be replaced with actual price API call
+            tokenPrice = await this.getTokenPrice(asset);
+          } catch (error) {
+            logger.warn('Failed to get token price:', error);
+          }
+
+          // Calculate fee breakdown
+          const networkFee = typeof gasEstimate === 'string' ? gasEstimate : gasEstimate.baseFee;
+          const bridgeFee = feeResponse?.fee?.amount || '0';
+          const totalFee = (parseFloat(networkFee) + parseFloat(bridgeFee)).toString();
+          const estimatedUsdValue = parseFloat(tokenPrice) * parseFloat(totalFee);
+
+          // Get alternative route options if available
+          const routeOptions = await this.getRouteOptions(fromChain, toChain, asset, amount);
+
+          return {
+            fee: totalFee,
+            estimatedTime,
+            route: [fromChain, toChain],
+            estimatedGas: networkFee,
+            feeBreakdown: {
+              networkFee,
+              bridgeFee,
+              totalFee,
+              estimatedUsd: estimatedUsdValue.toFixed(2)
+            },
+            routeOptions,
+            tokenPrice,
+            estimatedUsdValue: (parseFloat(tokenPrice) * parseFloat(amount)).toFixed(2),
+            estimatedConfirmations: this.getEstimatedConfirmations(fromChain, toChain)
+          };
+        } catch (error) {
+          logger.error('Error getting transfer quote:', error);
+          throw new AxelarServiceError('Failed to get transfer quote', { cause: error as Error });
+        }
+      },
+      { ttl: this.cacheTimeout }
+    );
   }
 
   /**
    * Get transfer quote with caching
    */
-  getTransferQuote = memoize(
-    async (
-      fromChain: string,
-      toChain: string,
-      asset: string,
-      amount: string
-    ): Promise<TransferQuoteV2> => {
-      try {
-        const amountNumber = parseFloat(amount);
-        if (isNaN(amountNumber)) {
-          throw new Error('Invalid amount');
-        }
-
-        const feeResponse = await retry(
-          () => this.queryAPI.getTransferFee(fromChain, toChain, asset, amountNumber),
-          { maxRetries: 3, delay: 1000 }
-        );
-
-        // Get gas estimate for the transaction
-        const gasEstimate = await retry(
-          () => this.queryAPI.estimateGasFee(
-            fromChain as EvmChain,
-            toChain as EvmChain,
-            '100000' // Default gas limit
-          ),
-          { maxRetries: 3, delay: 1000 }
-        );
-
-        // Calculate estimated time based on historical data and chain congestion
-        const estimatedTime = this.calculateEstimatedTime(fromChain, toChain);
-
-        // Get token price for USD conversion if available
-        let tokenPrice = '0';
-        try {
-          // This would be replaced with actual price API call
-          tokenPrice = await this.getTokenPrice(asset);
-        } catch (error) {
-          logger.warn('Failed to get token price:', error);
-        }
-
-        // Calculate fee breakdown
-        const networkFee = typeof gasEstimate === 'string' ? gasEstimate : gasEstimate.baseFee;
-        const bridgeFee = feeResponse?.fee?.amount || '0';
-        const totalFee = (parseFloat(networkFee) + parseFloat(bridgeFee)).toString();
-        const estimatedUsdValue = parseFloat(tokenPrice) * parseFloat(totalFee);
-
-        // Get alternative route options if available
-        const routeOptions = await this.getRouteOptions(fromChain, toChain, asset, amount);
-
-        return {
-          fee: totalFee,
-          estimatedTime,
-          route: [fromChain, toChain],
-          estimatedGas: networkFee,
-          feeBreakdown: {
-            networkFee,
-            bridgeFee,
-            totalFee,
-            estimatedUsd: estimatedUsdValue.toFixed(2)
-          },
-          routeOptions,
-          tokenPrice,
-          estimatedUsdValue: (parseFloat(tokenPrice) * parseFloat(amount)).toFixed(2),
-          estimatedConfirmations: this.getEstimatedConfirmations(fromChain, toChain)
-        };
-      } catch (error) {
-        logger.error('Error getting transfer quote:', error);
-        throw new AxelarServiceError('Failed to get transfer quote', { cause: error });
-      }
-    },
-    { ttl: this.cacheTimeout }
-  );
+  getTransferQuote!: any;
 
   /**
    * Calculate estimated time based on source and destination chains
@@ -350,10 +353,10 @@ class TransactionManager {
     toAddress: string,
     asset: string,
     amount: string,
-    provider: ethers.providers.Web3Provider
+    provider: ethers.BrowserProvider
   ): Promise<string> {
     try {
-      const signer = provider.getSigner();
+      const signer = await provider.getSigner();
 
       // Prepare the send token parameters
       const sendTokenParams: SendTokenParams = {
@@ -366,8 +369,8 @@ class TransactionManager {
         amountInAtomicUnits: amount,
         options: {
           evmOptions: {
-            signer,
-            provider
+            signer: signer as any,
+            provider: provider as any
           }
         }
       };
@@ -410,7 +413,7 @@ class TransactionManager {
       return txHash;
     } catch (error) {
       logger.error('Error executing transfer:', error);
-      throw new AxelarServiceError('Failed to execute transfer', { cause: error });
+      throw new AxelarServiceError('Failed to execute transfer', { cause: error as Error });
     }
   }
 
@@ -438,13 +441,13 @@ class TransactionManager {
           this.transactions.set(txHash, {
             ...txDetails,
             status: status.status,
-            message: status.message
+            message: (status as any).message || 'No message available'
           });
 
           // Check if transaction is completed or failed
           if (['executed', 'error', 'completed'].includes(status.status)) {
             completed = true;
-            logger.info(`Transaction ${txHash} completed with status: ${status.status}`);
+            logger.log(`Transaction ${txHash} completed with status: ${status.status}`);
             
             // If error occurred and recovery API is available, attempt recovery
             if (status.status === 'error' && this.recoveryAPI) {
@@ -492,16 +495,16 @@ class TransactionManager {
         throw new Error('Source and destination chains are required for status check');
       }
 
-      // Query transaction status from Axelar API
+      // Query transaction status from Axelar GMP Recovery API
       const status = await retry(
-        () => this.queryAPI.queryTransactionStatus(txHash, fromChain, toChain),
+        () => this.recoveryAPI!.queryTransactionStatus(txHash),
         { maxRetries: 3, delay: 1000 }
       );
 
       return status;
     } catch (error) {
       logger.error('Error getting transaction status:', error);
-      throw new AxelarServiceError('Failed to get transaction status', { cause: error });
+      throw new AxelarServiceError('Failed to get transaction status', { cause: error as Error });
     }
   }
 
@@ -521,18 +524,11 @@ class TransactionManager {
         return false;
       }
 
-      // Get recovery parameters
-      const recoveryParams: AxelarRecoveryAPIParams = {
-        txHash,
-        sourceChain: txDetails.sourceChain,
-        destinationChain: txDetails.destinationChain
-      };
-
-      // Attempt recovery
-      const recoveryResult = await this.recoveryAPI.recoverGMPTransaction(recoveryParams);
+      // Attempt recovery using manual relay
+      const recoveryResult = await this.recoveryAPI!.manualRelayToDestChain(txHash);
 
       if (recoveryResult.success) {
-        logger.info(`Successfully initiated recovery for transaction ${txHash}`);
+        logger.log(`Successfully initiated recovery for transaction ${txHash}`);
         
         // Update transaction status
         this.transactions.set(txHash, {
@@ -542,7 +538,7 @@ class TransactionManager {
         });
 
         // Monitor the recovery process
-        this.monitorRecovery(txHash, recoveryResult.recoveryTransactionHash);
+        this.monitorRecovery(txHash, recoveryResult.confirmTx?.transactionHash || txHash);
         return true;
       } else {
         logger.warn(`Recovery failed for transaction ${txHash}: ${recoveryResult.error}`);
@@ -571,12 +567,12 @@ class TransactionManager {
 
       while (!completed && attempts < maxAttempts) {
         try {
-          // Check recovery status
-          const status = await this.recoveryAPI?.getRecoveryStatus(recoveryTxHash);
+          // Check recovery status using the original transaction hash
+          const status = await this.recoveryAPI?.queryTransactionStatus(txHash);
           
           if (status?.status === 'completed') {
             completed = true;
-            logger.info(`Recovery completed for transaction ${txHash}`);
+            logger.log(`Recovery completed for transaction ${txHash}`);
             
             // Update transaction status
             this.transactions.set(txHash, {
@@ -592,7 +588,7 @@ class TransactionManager {
             this.transactions.set(txHash, {
               ...txDetails,
               status: 'failed',
-              message: status?.error || 'Transaction recovery failed'
+              message: (status?.error as any)?.message || status?.error?.toString() || 'Transaction recovery failed'
             });
           }
         } catch (error) {
@@ -660,10 +656,10 @@ class TransactionManager {
    */
   async executeBatchTransfer(
     params: BatchTransferParams,
-    provider: ethers.providers.Web3Provider
+    provider: ethers.BrowserProvider
   ): Promise<string[]> {
     try {
-      const signer = provider.getSigner();
+      const signer = await provider.getSigner();
       const txHashes: string[] = [];
 
       // Execute transfers in sequence
@@ -683,7 +679,7 @@ class TransactionManager {
       return txHashes;
     } catch (error) {
       logger.error('Error executing batch transfer:', error);
-      throw new AxelarServiceError('Failed to execute batch transfer', { cause: error });
+      throw new AxelarServiceError('Failed to execute batch transfer', { cause: error as Error });
     }
   }
 }
@@ -700,62 +696,65 @@ class PortfolioManager {
     this.queryAPI = queryAPI;
     this.environment = environment;
     this.cacheTimeout = cacheTimeout;
+
+    // Initialize memoized functions
+    this.getPortfolioBalances = memoize(
+      async (params: PortfolioBalanceParams): Promise<CrossChainPortfolio> => {
+        try {
+          const { chains, address, includeNativeTokens = true, includeTokens = true } = params;
+
+          // Process each chain in parallel
+          const chainBalances = await Promise.all(
+            chains.map(async (chain) => {
+              try {
+                // This would use Axelar API or other chain-specific APIs to get balances
+                // For now, we'll use a placeholder implementation
+                const assets = await this.getChainBalances(chain, address, includeNativeTokens, includeTokens);
+
+                // Calculate total USD value for this chain
+                const totalUsdValue = assets.reduce((sum, asset) => {
+                  return sum + (parseFloat(asset.usdValue || '0'));
+                }, 0);
+
+                return {
+                  chain,
+                  assets,
+                  totalUsdValue: totalUsdValue.toFixed(2)
+                };
+              } catch (error) {
+                logger.warn(`Error fetching balances for chain ${chain}:`, error);
+                return {
+                  chain,
+                  assets: [],
+                  totalUsdValue: '0'
+                };
+              }
+            })
+          );
+
+          // Calculate total USD value across all chains
+          const totalUsdValue = chainBalances.reduce((sum, chain) => {
+            return sum + parseFloat(chain.totalUsdValue || '0');
+          }, 0);
+
+          return {
+            balances: chainBalances,
+            totalUsdValue: totalUsdValue.toFixed(2),
+            lastUpdated: Date.now()
+          };
+        } catch (error) {
+          logger.error('Error getting portfolio balances:', error);
+          throw new AxelarServiceError('Failed to get portfolio balances', { cause: error as Error });
+        }
+      },
+      { ttl: this.cacheTimeout }
+    );
   }
 
   /**
    * Get cross-chain portfolio balances with caching
    */
-  getPortfolioBalances = memoize(
-    async (params: PortfolioBalanceParams): Promise<CrossChainPortfolio> => {
-      try {
-        const { chains, address, includeNativeTokens = true, includeTokens = true } = params;
-        
-        // Process each chain in parallel
-        const chainBalances = await Promise.all(
-          chains.map(async (chain) => {
-            try {
-              // This would use Axelar API or other chain-specific APIs to get balances
-              // For now, we'll use a placeholder implementation
-              const assets = await this.getChainBalances(chain, address, includeNativeTokens, includeTokens);
-              
-              // Calculate total USD value for this chain
-              const totalUsdValue = assets.reduce((sum, asset) => {
-                return sum + (parseFloat(asset.usdValue || '0'));
-              }, 0);
-              
-              return {
-                chain,
-                assets,
-                totalUsdValue: totalUsdValue.toFixed(2)
-              };
-            } catch (error) {
-              logger.warn(`Error fetching balances for chain ${chain}:`, error);
-              return {
-                chain,
-                assets: [],
-                totalUsdValue: '0'
-              };
-            }
-          })
-        );
-        
-        // Calculate total USD value across all chains
-        const totalUsdValue = chainBalances.reduce((sum, chain) => {
-          return sum + parseFloat(chain.totalUsdValue || '0');
-        }, 0);
-        
-        return {
-          balances: chainBalances,
-          totalUsdValue: totalUsdValue.toFixed(2),
-          lastUpdated: Date.now()
-        };
-      } catch (error) {
-        logger.error('Error getting portfolio balances:', error);
-        throw new AxelarServiceError('Failed to get portfolio balances', { cause: error });
-      }
-    },
-    { ttl: this.cacheTimeout }
-  );
+  getPortfolioBalances!: any;
 
   /**
    * Get balances for a specific chain (placeholder implementation)
@@ -1237,7 +1236,7 @@ export class AxelarServiceV2 {
           const config = ChainUtils.getChainConfig(chainId);
           return config?.name;
         })
-        .filter((name): name is string => name !== undefined && this.getAxelarChainName(name) !== null);
+        .filter((name) => name !== undefined && this.getAxelarChainName(name) !== null) as string[];
     } catch (error) {
       logger.error('Error getting supported chains:', error);
       return [];
@@ -1356,7 +1355,7 @@ export class AxelarServiceV2 {
     toAddress: string,
     asset: string,
     amount: string,
-    provider: ethers.providers.Web3Provider
+    provider: ethers.BrowserProvider
   ): Promise<string> {
     if (!this.isReady() || !this.transactionManager) {
       throw new AxelarServiceError('Axelar service not initialized');
@@ -1467,7 +1466,7 @@ export class AxelarServiceV2 {
     fromChain: string,
     toChain: string,
     gasLimit: string = "100000"
-  ): Promise<string | GasEstimateResponse> {
+  ): Promise<string | any> {
     if (!this.isReady() || !this.queryAPI) {
       throw new AxelarServiceError('Axelar service not initialized');
     }
@@ -1565,7 +1564,7 @@ export class AxelarServiceV2 {
    */
   async executeBatchTransfer(
     params: BatchTransferParams,
-    provider: ethers.providers.Web3Provider
+    provider: ethers.BrowserProvider
   ): Promise<string[]> {
     if (!this.isReady() || !this.transactionManager) {
       throw new AxelarServiceError('Axelar service not initialized');

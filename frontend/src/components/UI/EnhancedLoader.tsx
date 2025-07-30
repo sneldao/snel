@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   Box,
   Flex,
@@ -14,10 +14,9 @@ import {
   Skeleton,
   SkeletonText,
   SkeletonCircle,
-  Icon, /* added */
+  Icon /* added */,
   useColorModeValue,
   useTheme,
-  keyframes,
   Portal,
   IconButton,
   Button,
@@ -28,8 +27,15 @@ import {
   ThemingProps,
   SystemProps,
   ResponsiveValue,
-} from '@chakra-ui/react';
-import { motion, AnimatePresence, useAnimation, Variants, MotionProps } from 'framer-motion';
+} from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
+import {
+  motion,
+  AnimatePresence,
+  useAnimation,
+  Variants,
+  MotionProps,
+} from "framer-motion";
 import {
   FaEthereum,
   FaBitcoin,
@@ -47,50 +53,45 @@ import {
   FaCoins,
   FaLock,
   FaUnlock,
-} from 'react-icons/fa';
-import { transparentize, darken, lighten } from '@chakra-ui/theme-tools';
+} from "react-icons/fa";
+import { transparentize, darken, lighten } from "@chakra-ui/theme-tools";
 
 // ========== Types & Interfaces ==========
 
-export type LoaderVariant = 
-  | 'spinner'
-  | 'pulse'
-  | 'dots'
-  | 'bars'
-  | 'waves'
-  | 'skeleton'
-  | 'circular'
-  | 'progress'
-  | 'shimmer';
+export type LoaderVariant =
+  | "spinner"
+  | "pulse"
+  | "dots"
+  | "bars"
+  | "waves"
+  | "skeleton"
+  | "circular"
+  | "progress"
+  | "shimmer";
 
-export type LoaderSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+export type LoaderSize = "xs" | "sm" | "md" | "lg" | "xl";
 
-export type LoaderState = 
-  | 'loading'
-  | 'success'
-  | 'error'
-  | 'warning'
-  | 'idle';
+export type LoaderState = "loading" | "success" | "error" | "warning" | "idle";
 
-export type LoaderSpeed = 'slow' | 'normal' | 'fast';
+export type LoaderSpeed = "slow" | "normal" | "fast";
 
-export type ChainType = 
-  | 'ethereum'
-  | 'bitcoin'
-  | 'binance'
-  | 'polygon'
-  | 'arbitrum'
-  | 'optimism'
-  | 'avalanche'
-  | 'solana'
-  | 'cosmos'
-  | 'generic';
+export type ChainType =
+  | "ethereum"
+  | "bitcoin"
+  | "binance"
+  | "polygon"
+  | "arbitrum"
+  | "optimism"
+  | "avalanche"
+  | "solana"
+  | "cosmos"
+  | "generic";
 
 export interface TransactionStep {
   id: string | number;
   label: string;
   description?: string;
-  status: 'pending' | 'active' | 'completed' | 'error';
+  status: "pending" | "active" | "completed" | "error";
   icon?: React.ReactNode;
   percentage?: number;
 }
@@ -109,12 +110,12 @@ export interface EnhancedLoaderProps {
   size?: LoaderSize;
   state?: LoaderState;
   speed?: LoaderSpeed;
-  
+
   // Content props
   message?: string;
   description?: string;
   showMessage?: boolean;
-  
+
   // Visual props
   color?: string;
   secondaryColor?: string;
@@ -123,49 +124,49 @@ export interface EnhancedLoaderProps {
   value?: number;
   min?: number;
   max?: number;
-  
+
   // Chain specific props
   chainType?: ChainType;
   showChainIcon?: boolean;
-  
+
   // Transaction loader props
   steps?: TransactionStep[];
   currentStep?: number;
-  
+
   // Overlay props
   isOverlay?: boolean;
   overlayColor?: string;
   overlayOpacity?: number;
   blockInteraction?: boolean;
-  
+
   // Portfolio loader props
   portfolioItemCount?: number;
-  
+
   // Button loader props
   buttonText?: string;
   buttonVariant?: string;
   buttonSize?: string;
   isDisabled?: boolean;
-  
+
   // Progressive loading props
   stageCount?: number;
   stageDelay?: number;
-  
+
   // Animation props
   animate?: boolean;
   animationDuration?: number;
-  
+
   // Retry mechanism props
   retry?: RetryConfig;
-  
+
   // Accessibility props
   ariaLabel?: string;
-  ariaLive?: 'polite' | 'assertive' | 'off';
-  
+  ariaLive?: "polite" | "assertive" | "off";
+
   // Misc props
   onComplete?: () => void;
   className?: string;
-  
+
   // Additional props
   [key: string]: any;
 }
@@ -223,48 +224,48 @@ const barVariants: Variants = {
 
 const progressStepVariants: Variants = {
   pending: { opacity: 0.5, scale: 0.95 },
-  active: { 
-    opacity: 1, 
+  active: {
+    opacity: 1,
     scale: 1,
-    transition: { duration: 0.3 }
+    transition: { duration: 0.3 },
   },
-  completed: { 
-    opacity: 1, 
+  completed: {
+    opacity: 1,
     scale: 1,
-    transition: { duration: 0.3 }
+    transition: { duration: 0.3 },
   },
-  error: { 
-    opacity: 1, 
+  error: {
+    opacity: 1,
     scale: 1,
-    transition: { duration: 0.3 }
+    transition: { duration: 0.3 },
   },
 };
 
 const progressLineVariants: Variants = {
   pending: { width: 0 },
-  active: { 
-    width: '50%',
-    transition: { duration: 0.5 }
+  active: {
+    width: "50%",
+    transition: { duration: 0.5 },
   },
-  completed: { 
-    width: '100%',
-    transition: { duration: 0.5 }
+  completed: {
+    width: "100%",
+    transition: { duration: 0.5 },
   },
-  error: { 
-    width: '100%',
-    transition: { duration: 0.5 }
+  error: {
+    width: "100%",
+    transition: { duration: 0.5 },
   },
 };
 
 const overlayVariants: Variants = {
   hidden: { opacity: 0 },
-  visible: { 
+  visible: {
     opacity: 1,
-    transition: { duration: 0.3 }
+    transition: { duration: 0.3 },
   },
-  exit: { 
+  exit: {
     opacity: 0,
-    transition: { duration: 0.2 }
+    transition: { duration: 0.2 },
   },
 };
 
@@ -272,10 +273,10 @@ const staggeredContentVariants: Variants = {
   hidden: { opacity: 0 },
   visible: (custom) => ({
     opacity: 1,
-    transition: { 
+    transition: {
       delay: custom * 0.1,
-      duration: 0.3
-    }
+      duration: 0.3,
+    },
   }),
 };
 
@@ -288,44 +289,48 @@ const MotionProgress = motion(Progress);
 const MotionCircularProgress = motion(CircularProgress);
 
 // Basic Spinner Loader
-const SpinnerLoader: React.FC<{ 
-  size: LoaderSize; 
+const SpinnerLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   speed: LoaderSpeed;
   thickness?: number;
-}> = ({ 
-  size, 
-  color,
-  speed,
-  thickness = 4
-}) => {
+}> = ({ size, color, speed, thickness = 4 }) => {
   // Pre-compute default color to avoid conditional hook calls
-  const defaultSpinnerColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultSpinnerColor = useColorModeValue("blue.500", "blue.300");
   const spinnerColor = color || defaultSpinnerColor;
-  
+
   const getSpinnerSize = () => {
     switch (size) {
-      case 'xs': return 'sm';
-      case 'sm': return 'md';
-      case 'md': return 'md';
-      case 'lg': return 'lg';
-      case 'xl': return 'xl';
-      default: return 'md';
+      case "xs":
+        return "sm";
+      case "sm":
+        return "md";
+      case "md":
+        return "md";
+      case "lg":
+        return "lg";
+      case "xl":
+        return "xl";
+      default:
+        return "md";
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   return (
-    <Spinner 
-      size={getSpinnerSize()} 
-      color={spinnerColor} 
+    <Spinner
+      size={getSpinnerSize()}
+      color={spinnerColor}
       thickness={`${thickness}px`}
       speed={`${0.8 * getSpeedMultiplier()}s`}
     />
@@ -333,40 +338,45 @@ const SpinnerLoader: React.FC<{
 };
 
 // Pulse Loader
-const PulseLoader: React.FC<{ 
-  size: LoaderSize; 
+const PulseLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
-  color,
-  speed
-}) => {
+}> = ({ size, color, speed }) => {
   // Pre-compute default color to avoid conditional hook calls
-  const defaultPulseColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultPulseColor = useColorModeValue("blue.500", "blue.300");
   const pulseColor = color || defaultPulseColor;
-  
+
   const getSize = () => {
     switch (size) {
-      case 'xs': return '16px';
-      case 'sm': return '24px';
-      case 'md': return '40px';
-      case 'lg': return '60px';
-      case 'xl': return '80px';
-      default: return '40px';
+      case "xs":
+        return "16px";
+      case "sm":
+        return "24px";
+      case "md":
+        return "40px";
+      case "lg":
+        return "60px";
+      case "xl":
+        return "80px";
+      default:
+        return "40px";
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   const pulseDuration = `${1.2 * getSpeedMultiplier()}s`;
-  
+
   return (
     <Box
       width={getSize()}
@@ -379,38 +389,43 @@ const PulseLoader: React.FC<{
 };
 
 // Dots Loader
-const DotsLoader: React.FC<{ 
-  size: LoaderSize; 
+const DotsLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
-  color,
-  speed
-}) => {
+}> = ({ size, color, speed }) => {
   // Pre-compute default color to avoid conditional hook calls
-  const defaultDotsColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultDotsColor = useColorModeValue("blue.500", "blue.300");
   const dotsColor = color || defaultDotsColor;
-  
+
   const getDotSize = () => {
     switch (size) {
-      case 'xs': return '6px';
-      case 'sm': return '8px';
-      case 'md': return '10px';
-      case 'lg': return '12px';
-      case 'xl': return '16px';
-      default: return '10px';
+      case "xs":
+        return "6px";
+      case "sm":
+        return "8px";
+      case "md":
+        return "10px";
+      case "lg":
+        return "12px";
+      case "xl":
+        return "16px";
+      default:
+        return "10px";
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.3;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.3;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   return (
     <MotionFlex
       variants={bouncingDotsVariants}
@@ -435,40 +450,45 @@ const DotsLoader: React.FC<{
 };
 
 // Bars Loader
-const BarsLoader: React.FC<{ 
-  size: LoaderSize; 
+const BarsLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
-  color,
-  speed
-}) => {
+}> = ({ size, color, speed }) => {
   // Pre-compute default color to avoid conditional hook calls
-  const defaultBarsColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultBarsColor = useColorModeValue("blue.500", "blue.300");
   const barsColor = color || defaultBarsColor;
-  
+
   const getBarSize = () => {
     switch (size) {
-      case 'xs': return { width: '3px', height: '12px' };
-      case 'sm': return { width: '4px', height: '16px' };
-      case 'md': return { width: '5px', height: '24px' };
-      case 'lg': return { width: '6px', height: '32px' };
-      case 'xl': return { width: '8px', height: '40px' };
-      default: return { width: '5px', height: '24px' };
+      case "xs":
+        return { width: "3px", height: "12px" };
+      case "sm":
+        return { width: "4px", height: "16px" };
+      case "md":
+        return { width: "5px", height: "24px" };
+      case "lg":
+        return { width: "6px", height: "32px" };
+      case "xl":
+        return { width: "8px", height: "40px" };
+      default:
+        return { width: "5px", height: "24px" };
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   const { width, height } = getBarSize();
-  
+
   return (
     <HStack spacing="3px">
       {[0, 1, 2, 3, 4].map((index) => (
@@ -490,41 +510,46 @@ const BarsLoader: React.FC<{
 };
 
 // Waves Loader
-const WavesLoader: React.FC<{ 
-  size: LoaderSize; 
+const WavesLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
-  color,
-  speed
-}) => {
+}> = ({ size, color, speed }) => {
   // Pre-compute default color to avoid conditional hook calls
-  const defaultWavesColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultWavesColor = useColorModeValue("blue.500", "blue.300");
   const wavesColor = color || defaultWavesColor;
-  
+
   const getWaveSize = () => {
     switch (size) {
-      case 'xs': return { width: '4px', height: '12px', spacing: '2px' };
-      case 'sm': return { width: '6px', height: '16px', spacing: '3px' };
-      case 'md': return { width: '8px', height: '24px', spacing: '4px' };
-      case 'lg': return { width: '10px', height: '32px', spacing: '5px' };
-      case 'xl': return { width: '12px', height: '40px', spacing: '6px' };
-      default: return { width: '8px', height: '24px', spacing: '4px' };
+      case "xs":
+        return { width: "4px", height: "12px", spacing: "2px" };
+      case "sm":
+        return { width: "6px", height: "16px", spacing: "3px" };
+      case "md":
+        return { width: "8px", height: "24px", spacing: "4px" };
+      case "lg":
+        return { width: "10px", height: "32px", spacing: "5px" };
+      case "xl":
+        return { width: "12px", height: "40px", spacing: "6px" };
+      default:
+        return { width: "8px", height: "24px", spacing: "4px" };
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   const { width, height, spacing } = getWaveSize();
   const waveDuration = `${1 * getSpeedMultiplier()}s`;
-  
+
   return (
     <HStack spacing={spacing}>
       {[0, 1, 2, 3, 4].map((index) => (
@@ -534,7 +559,9 @@ const WavesLoader: React.FC<{
           height={height}
           bg={wavesColor}
           borderRadius="full"
-          animation={`${waveKeyframes} ${waveDuration} infinite ease-in-out ${index * 0.1}s`}
+          animation={`${waveKeyframes} ${waveDuration} infinite ease-in-out ${
+            index * 0.1
+          }s`}
         />
       ))}
     </HStack>
@@ -542,91 +569,114 @@ const WavesLoader: React.FC<{
 };
 
 // Skeleton Loader
-const SkeletonLoader: React.FC<{ 
-  size: LoaderSize; 
-  variant?: 'text' | 'circle' | 'rect';
+const SkeletonLoader: React.FC<{
+  size: LoaderSize;
+  variant?: "text" | "circle" | "rect";
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
-  variant = 'rect',
-  speed
-}) => {
+}> = ({ size, variant = "rect", speed }) => {
   const getSkeletonSize = () => {
     switch (size) {
-      case 'xs': return { width: '100px', height: '40px', circle: '24px', lines: 1 };
-      case 'sm': return { width: '150px', height: '60px', circle: '36px', lines: 2 };
-      case 'md': return { width: '200px', height: '80px', circle: '48px', lines: 3 };
-      case 'lg': return { width: '300px', height: '100px', circle: '64px', lines: 4 };
-      case 'xl': return { width: '400px', height: '120px', circle: '80px', lines: 5 };
-      default: return { width: '200px', height: '80px', circle: '48px', lines: 3 };
+      case "xs":
+        return { width: "100px", height: "40px", circle: "24px", lines: 1 };
+      case "sm":
+        return { width: "150px", height: "60px", circle: "36px", lines: 2 };
+      case "md":
+        return { width: "200px", height: "80px", circle: "48px", lines: 3 };
+      case "lg":
+        return { width: "300px", height: "100px", circle: "64px", lines: 4 };
+      case "xl":
+        return { width: "400px", height: "120px", circle: "80px", lines: 5 };
+      default:
+        return { width: "200px", height: "80px", circle: "48px", lines: 3 };
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   const { width, height, circle, lines } = getSkeletonSize();
   const speedMultiplier = getSpeedMultiplier();
-  
-  if (variant === 'circle') {
-    return <SkeletonCircle size={circle} speed={`${1.5 * speedMultiplier}s`} />;
+
+  if (variant === "circle") {
+    return <SkeletonCircle size={circle} speed={1.5 * speedMultiplier} />;
   }
-  
-  if (variant === 'text') {
-    return <SkeletonText noOfLines={lines} spacing="4" speed={`${1.5 * speedMultiplier}s`} width={width} />;
+
+  if (variant === "text") {
+    return (
+      <SkeletonText
+        noOfLines={lines}
+        spacing="4"
+        speed={1.5 * speedMultiplier}
+        width={width}
+      />
+    );
   }
-  
-  return <Skeleton height={height} width={width} speed={`${1.5 * speedMultiplier}s`} />;
+
+  return (
+    <Skeleton height={height} width={width} speed={1.5 * speedMultiplier} />
+  );
 };
 
 // Circular Progress Loader
-const CircularLoader: React.FC<{ 
-  size: LoaderSize; 
+const CircularLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   value?: number;
   isIndeterminate?: boolean;
   thickness?: number;
   showValue?: boolean;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
+}> = ({
+  size,
   color,
   value = 0,
   isIndeterminate = false,
   thickness = 8,
   showValue = true,
-  speed
+  speed,
 }) => {
   // Pre-compute default colors to avoid conditional hook calls
-  const defaultCircleColor = useColorModeValue('blue.500', 'blue.300');
-  const trackColor = useColorModeValue('gray.100', 'gray.700');
-  
+  const defaultCircleColor = useColorModeValue("blue.500", "blue.300");
+  const trackColor = useColorModeValue("gray.100", "gray.700");
+
   const circleColor = color || defaultCircleColor;
-  
+
   const getCircleSize = () => {
     switch (size) {
-      case 'xs': return '32px';
-      case 'sm': return '48px';
-      case 'md': return '80px';
-      case 'lg': return '120px';
-      case 'xl': return '160px';
-      default: return '80px';
+      case "xs":
+        return "32px";
+      case "sm":
+        return "48px";
+      case "md":
+        return "80px";
+      case "lg":
+        return "120px";
+      case "xl":
+        return "160px";
+      default:
+        return "80px";
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   return (
     <CircularProgress
       value={value}
@@ -645,8 +695,8 @@ const CircularLoader: React.FC<{
 };
 
 // Progress Bar Loader
-const ProgressLoader: React.FC<{ 
-  size: LoaderSize; 
+const ProgressLoader: React.FC<{
+  size: LoaderSize;
   color?: string;
   value?: number;
   isIndeterminate?: boolean;
@@ -654,100 +704,117 @@ const ProgressLoader: React.FC<{
   max?: number;
   hasStripe?: boolean;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
+}> = ({
+  size,
   color,
   value = 0,
   isIndeterminate = false,
   min = 0,
   max = 100,
   hasStripe = false,
-  speed
+  speed,
 }) => {
   // Pre-compute default color to avoid conditional hook calls
-  const defaultProgressColor = useColorModeValue('blue.500', 'blue.300');
+  const defaultProgressColor = useColorModeValue("blue.500", "blue.300");
   const progressColor = color || defaultProgressColor;
-  
+
   const getProgressHeight = () => {
     switch (size) {
-      case 'xs': return '4px';
-      case 'sm': return '6px';
-      case 'md': return '8px';
-      case 'lg': return '12px';
-      case 'xl': return '16px';
-      default: return '8px';
+      case "xs":
+        return "4px";
+      case "sm":
+        return "6px";
+      case "md":
+        return "8px";
+      case "lg":
+        return "12px";
+      case "xl":
+        return "16px";
+      default:
+        return "8px";
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   return (
     <Progress
       value={value}
       min={min}
       max={max}
       height={getProgressHeight()}
-      colorScheme={progressColor.split('.')[0]}
+      colorScheme={progressColor.split(".")[0]}
       isIndeterminate={isIndeterminate}
       hasStripe={hasStripe}
       isAnimated={hasStripe}
       borderRadius="full"
-      sx={isIndeterminate ? {
-        '& > div': {
-          transitionDuration: `${0.8 * getSpeedMultiplier()}s`
-        }
-      } : {}}
+      sx={
+        isIndeterminate
+          ? {
+              "& > div": {
+                transitionDuration: `${0.8 * getSpeedMultiplier()}s`,
+              },
+            }
+          : {}
+      }
     />
   );
 };
 
 // Shimmer Loader
-const ShimmerLoader: React.FC<{ 
-  size: LoaderSize; 
+const ShimmerLoader: React.FC<{
+  size: LoaderSize;
   primaryColor?: string;
   secondaryColor?: string;
   speed: LoaderSpeed;
-}> = ({ 
-  size, 
-  primaryColor,
-  secondaryColor,
-  speed
-}) => {
+}> = ({ size, primaryColor, secondaryColor, speed }) => {
   // Pre-compute default colors to avoid conditional hook calls
-  const defaultBgColor = useColorModeValue('gray.100', 'gray.700');
-  const defaultShimmerColor = useColorModeValue('gray.300', 'gray.600');
-  
+  const defaultBgColor = useColorModeValue("gray.100", "gray.700");
+  const defaultShimmerColor = useColorModeValue("gray.300", "gray.600");
+
   const bgColor = primaryColor || defaultBgColor;
   const shimmerColor = secondaryColor || defaultShimmerColor;
-  
+
   const getShimmerSize = () => {
     switch (size) {
-      case 'xs': return { width: '100px', height: '40px' };
-      case 'sm': return { width: '150px', height: '60px' };
-      case 'md': return { width: '200px', height: '80px' };
-      case 'lg': return { width: '300px', height: '100px' };
-      case 'xl': return { width: '400px', height: '120px' };
-      default: return { width: '200px', height: '80px' };
+      case "xs":
+        return { width: "100px", height: "40px" };
+      case "sm":
+        return { width: "150px", height: "60px" };
+      case "md":
+        return { width: "200px", height: "80px" };
+      case "lg":
+        return { width: "300px", height: "100px" };
+      case "xl":
+        return { width: "400px", height: "120px" };
+      default:
+        return { width: "200px", height: "80px" };
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 2;
-      case 'fast': return 0.7;
-      default: return 1.2;
+      case "slow":
+        return 2;
+      case "fast":
+        return 0.7;
+      default:
+        return 1.2;
     }
   };
-  
+
   const { width, height } = getShimmerSize();
   const shimmerDuration = `${2 * getSpeedMultiplier()}s`;
-  
+
   return (
     <Box
       width={width}
@@ -761,71 +828,86 @@ const ShimmerLoader: React.FC<{
 };
 
 // Chain Icon Loader
-const ChainIconLoader: React.FC<{ 
-  chainType: ChainType; 
+const ChainIconLoader: React.FC<{
+  chainType: ChainType;
   size: LoaderSize;
   speed: LoaderSpeed;
-}> = ({ 
-  chainType, 
-  size,
-  speed
-}) => {
+}> = ({ chainType, size, speed }) => {
   // Pre-compute all chain colors at component level to avoid conditional hook calls
   const chainColors: Record<ChainType, string> = {
-    ethereum : useColorModeValue('blue.500',   'blue.300'),
-    bitcoin  : useColorModeValue('orange.500', 'orange.300'),
-    binance  : useColorModeValue('yellow.500', 'yellow.300'),
-    polygon  : useColorModeValue('purple.500', 'purple.300'),
-    arbitrum : useColorModeValue('blue.700',   'blue.500'),
-    optimism : useColorModeValue('red.500',    'red.300'),
-    avalanche: useColorModeValue('red.600',    'red.400'),
-    solana   : useColorModeValue('purple.600', 'purple.400'),
-    cosmos   : useColorModeValue('teal.500',   'teal.300'),
-    generic  : useColorModeValue('gray.500',   'gray.300'),
+    ethereum: useColorModeValue("blue.500", "blue.300"),
+    bitcoin: useColorModeValue("orange.500", "orange.300"),
+    binance: useColorModeValue("yellow.500", "yellow.300"),
+    polygon: useColorModeValue("purple.500", "purple.300"),
+    arbitrum: useColorModeValue("blue.700", "blue.500"),
+    optimism: useColorModeValue("red.500", "red.300"),
+    avalanche: useColorModeValue("red.600", "red.400"),
+    solana: useColorModeValue("purple.600", "purple.400"),
+    cosmos: useColorModeValue("teal.500", "teal.300"),
+    generic: useColorModeValue("gray.500", "gray.300"),
   };
-  
+
   // Pre-compute background color
-  const bgColor = useColorModeValue('gray.100', 'gray.700');
-  
+  const bgColor = useColorModeValue("gray.100", "gray.700");
+
   const getIconSize = () => {
     switch (size) {
-      case 'xs': return { box: '24px', icon: '14px' };
-      case 'sm': return { box: '32px', icon: '18px' };
-      case 'md': return { box: '48px', icon: '24px' };
-      case 'lg': return { box: '64px', icon: '32px' };
-      case 'xl': return { box: '80px', icon: '40px' };
-      default: return { box: '48px', icon: '24px' };
+      case "xs":
+        return { box: "24px", icon: "14px" };
+      case "sm":
+        return { box: "32px", icon: "18px" };
+      case "md":
+        return { box: "48px", icon: "24px" };
+      case "lg":
+        return { box: "64px", icon: "32px" };
+      case "xl":
+        return { box: "80px", icon: "40px" };
+      default:
+        return { box: "48px", icon: "24px" };
     }
   };
-  
+
   const getChainIcon = () => {
     switch (chainType) {
-      case 'ethereum': return FaEthereum;
-      case 'bitcoin': return FaBitcoin;
-      case 'binance': return FaCoins;
-      case 'polygon': return FaNetworkWired;
-      case 'arbitrum': return FaLink;
-      case 'optimism': return FaArrowRight;
-      case 'avalanche': return FaChartLine;
-      case 'solana': return FaCoins;
-      case 'cosmos': return FaLink;
-      default: return FaSpinner;
+      case "ethereum":
+        return FaEthereum;
+      case "bitcoin":
+        return FaBitcoin;
+      case "binance":
+        return FaCoins;
+      case "polygon":
+        return FaNetworkWired;
+      case "arbitrum":
+        return FaLink;
+      case "optimism":
+        return FaArrowRight;
+      case "avalanche":
+        return FaChartLine;
+      case "solana":
+        return FaCoins;
+      case "cosmos":
+        return FaLink;
+      default:
+        return FaSpinner;
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   const { box, icon } = getIconSize();
   const ChainIcon = getChainIcon();
   const chainColor = chainColors[chainType] || chainColors.generic;
   const spinDuration = `${3 * getSpeedMultiplier()}s`;
-  
+
   return (
     <Box
       width={box}
@@ -849,74 +931,88 @@ const ChainIconLoader: React.FC<{
 };
 
 // Transaction Progress Loader
-const TransactionProgressLoader: React.FC<{ 
-  steps: TransactionStep[]; 
+const TransactionProgressLoader: React.FC<{
+  steps: TransactionStep[];
   currentStep: number;
   size: LoaderSize;
   color?: string;
   speed: LoaderSpeed;
-}> = ({ 
-  steps, 
-  currentStep,
-  size,
-  color,
-  speed
-}) => {
+}> = ({ steps, currentStep, size, color, speed }) => {
   // Pre-compute all colors at component level to avoid conditional hook calls
-  const defaultProgressColor = useColorModeValue('blue.500', 'blue.300');
-  const completedColor = useColorModeValue('green.500', 'green.300');
-  const errorColor = useColorModeValue('red.500', 'red.300');
-  const pendingColor = useColorModeValue('gray.300', 'gray.600');
-  
+  const defaultProgressColor = useColorModeValue("blue.500", "blue.300");
+  const completedColor = useColorModeValue("green.500", "green.300");
+  const errorColor = useColorModeValue("red.500", "red.300");
+  const pendingColor = useColorModeValue("gray.300", "gray.600");
+
   const progressColor = color || defaultProgressColor;
   // Background color for step icons (pre-computed once per render)
-  const stepBg = useColorModeValue('white', 'gray.800');
-  
+  const stepBg = useColorModeValue("white", "gray.800");
+
   const getStepSize = () => {
     switch (size) {
-      case 'xs': return { icon: '16px', line: '2px', spacing: '20px' };
-      case 'sm': return { icon: '24px', line: '3px', spacing: '30px' };
-      case 'md': return { icon: '32px', line: '4px', spacing: '40px' };
-      case 'lg': return { icon: '40px', line: '5px', spacing: '60px' };
-      case 'xl': return { icon: '48px', line: '6px', spacing: '80px' };
-      default: return { icon: '32px', line: '4px', spacing: '40px' };
+      case "xs":
+        return { icon: "16px", line: "2px", spacing: "20px" };
+      case "sm":
+        return { icon: "24px", line: "3px", spacing: "30px" };
+      case "md":
+        return { icon: "32px", line: "4px", spacing: "40px" };
+      case "lg":
+        return { icon: "40px", line: "5px", spacing: "60px" };
+      case "xl":
+        return { icon: "48px", line: "6px", spacing: "80px" };
+      default:
+        return { icon: "32px", line: "4px", spacing: "40px" };
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 1.5;
-      case 'fast': return 0.7;
-      default: return 1;
+      case "slow":
+        return 1.5;
+      case "fast":
+        return 0.7;
+      default:
+        return 1;
     }
   };
-  
+
   const { icon, line, spacing } = getStepSize();
-  
+
   const getStepColor = (status: string) => {
     switch (status) {
-      case 'completed': return completedColor;
-      case 'active': return progressColor;
-      case 'error': return errorColor;
-      default: return pendingColor;
+      case "completed":
+        return completedColor;
+      case "active":
+        return progressColor;
+      case "error":
+        return errorColor;
+      default:
+        return pendingColor;
     }
   };
-  
-  const getStepIcon = (step: TransactionStep) => {
 
+  const getStepIcon = (step: TransactionStep) => {
     if (step.icon) return step.icon;
-    
+
     switch (step.status) {
-      case 'completed': return <FaCheckCircle />;
-      case 'active': return <FaSpinner />;
-      case 'error': return <FaTimesCircle />;
-      default: return <FaSpinner opacity={0.5} />;
+      case "completed":
+        return <FaCheckCircle />;
+      case "active":
+        return <FaSpinner />;
+      case "error":
+        return <FaTimesCircle />;
+      default:
+        return <FaSpinner opacity={0.5} />;
     }
   };
-  
+
   return (
     <Box width="100%">
-      <Flex justifyContent="space-between" alignItems="center" position="relative">
+      <Flex
+        justifyContent="space-between"
+        alignItems="center"
+        position="relative"
+      >
         {/* Progress Line */}
         <Box
           position="absolute"
@@ -928,7 +1024,7 @@ const TransactionProgressLoader: React.FC<{
           transform="translateY(-50%)"
           zIndex={0}
         />
-        
+
         {/* Completed Line */}
         <MotionBox
           position="absolute"
@@ -943,7 +1039,7 @@ const TransactionProgressLoader: React.FC<{
           animate={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
           transition={{ duration: 0.5 * getSpeedMultiplier() }}
         />
-        
+
         {/* Steps */}
         {steps.map((step, index) => (
           <MotionFlex
@@ -968,13 +1064,15 @@ const TransactionProgressLoader: React.FC<{
               justifyContent="center"
               color={getStepColor(step.status)}
               position="relative"
-              {...(step.status === 'active' && {
-                animation: `${pulseKeyframes} ${1.2 * getSpeedMultiplier()}s infinite ease-in-out`
+              {...(step.status === "active" && {
+                animation: `${pulseKeyframes} ${
+                  1.2 * getSpeedMultiplier()
+                }s infinite ease-in-out`,
               })}
             >
               {getStepIcon(step)}
-              
-              {step.percentage !== undefined && step.status === 'active' && (
+
+              {step.percentage !== undefined && step.status === "active" && (
                 <CircularProgress
                   value={step.percentage}
                   size={icon}
@@ -987,18 +1085,22 @@ const TransactionProgressLoader: React.FC<{
                 />
               )}
             </MotionBox>
-            
+
             <Text
-              fontSize={size === 'xs' || size === 'sm' ? 'xs' : 'sm'}
-              fontWeight={step.status === 'active' ? 'bold' : 'normal'}
-              color={step.status === 'active' ? getStepColor(step.status) : 'gray.500'}
+              fontSize={size === "xs" || size === "sm" ? "xs" : "sm"}
+              fontWeight={step.status === "active" ? "bold" : "normal"}
+              color={
+                step.status === "active"
+                  ? getStepColor(step.status)
+                  : "gray.500"
+              }
               mt={2}
               textAlign="center"
               maxWidth={spacing}
             >
               {step.label}
             </Text>
-            
+
             {step.description && (
               <Text
                 fontSize="xs"
@@ -1018,41 +1120,46 @@ const TransactionProgressLoader: React.FC<{
 };
 
 // Portfolio Shimmer Loader
-const PortfolioShimmerLoader: React.FC<{ 
+const PortfolioShimmerLoader: React.FC<{
   itemCount: number;
   size: LoaderSize;
   speed: LoaderSpeed;
-}> = ({ 
-  itemCount = 3,
-  size,
-  speed
-}) => {
+}> = ({ itemCount = 3, size, speed }) => {
   // Pre-compute colors at component level
-  const bgColor = useColorModeValue('gray.100', 'gray.700');
-  const shimmerColor = useColorModeValue('gray.300', 'gray.600');
-  
+  const bgColor = useColorModeValue("gray.100", "gray.700");
+  const shimmerColor = useColorModeValue("gray.300", "gray.600");
+
   const getItemSize = () => {
     switch (size) {
-      case 'xs': return { height: '40px', iconSize: '20px', spacing: '10px' };
-      case 'sm': return { height: '50px', iconSize: '24px', spacing: '12px' };
-      case 'md': return { height: '60px', iconSize: '30px', spacing: '16px' };
-      case 'lg': return { height: '70px', iconSize: '36px', spacing: '20px' };
-      case 'xl': return { height: '80px', iconSize: '40px', spacing: '24px' };
-      default: return { height: '60px', iconSize: '30px', spacing: '16px' };
+      case "xs":
+        return { height: "40px", iconSize: "20px", spacing: "10px" };
+      case "sm":
+        return { height: "50px", iconSize: "24px", spacing: "12px" };
+      case "md":
+        return { height: "60px", iconSize: "30px", spacing: "16px" };
+      case "lg":
+        return { height: "70px", iconSize: "36px", spacing: "20px" };
+      case "xl":
+        return { height: "80px", iconSize: "40px", spacing: "24px" };
+      default:
+        return { height: "60px", iconSize: "30px", spacing: "16px" };
     }
   };
-  
+
   const getSpeedMultiplier = () => {
     switch (speed) {
-      case 'slow': return 2;
-      case 'fast': return 0.7;
-      default: return 1.2;
+      case "slow":
+        return 2;
+      case "fast":
+        return 0.7;
+      default:
+        return 1.2;
     }
   };
-  
+
   const { height, iconSize, spacing } = getItemSize();
   const shimmerDuration = `${2 * getSpeedMultiplier()}s`;
-  
+
   return (
     <VStack spacing={spacing} align="stretch" width="100%">
       {Array.from({ length: itemCount }).map((_, index) => (
@@ -1074,7 +1181,7 @@ const PortfolioShimmerLoader: React.FC<{
             animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear`}
             mr={3}
           />
-          
+
           {/* Token Name and Balance */}
           <Box flex="1">
             <Box
@@ -1092,10 +1199,12 @@ const PortfolioShimmerLoader: React.FC<{
               borderRadius="sm"
               background={`linear-gradient(90deg, ${bgColor}, ${shimmerColor}, ${bgColor})`}
               backgroundSize="200% 100%"
-              animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear ${index * 0.1}s`}
+              animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear ${
+                index * 0.1
+              }s`}
             />
           </Box>
-          
+
           {/* Token Value */}
           <Box>
             <Box
@@ -1104,7 +1213,9 @@ const PortfolioShimmerLoader: React.FC<{
               borderRadius="sm"
               background={`linear-gradient(90deg, ${bgColor}, ${shimmerColor}, ${bgColor})`}
               backgroundSize="200% 100%"
-              animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear ${index * 0.15}s`}
+              animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear ${
+                index * 0.15
+              }s`}
               mb={2}
             />
             <Box
@@ -1113,7 +1224,9 @@ const PortfolioShimmerLoader: React.FC<{
               borderRadius="sm"
               background={`linear-gradient(90deg, ${bgColor}, ${shimmerColor}, ${bgColor})`}
               backgroundSize="200% 100%"
-              animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear ${index * 0.2}s`}
+              animation={`${shimmerKeyframes} ${shimmerDuration} infinite linear ${
+                index * 0.2
+              }s`}
             />
           </Box>
         </Flex>
@@ -1123,7 +1236,7 @@ const PortfolioShimmerLoader: React.FC<{
 };
 
 // Page Loading Overlay
-const PageLoadingOverlay: React.FC<{ 
+const PageLoadingOverlay: React.FC<{
   message?: string;
   description?: string;
   color?: string;
@@ -1133,24 +1246,24 @@ const PageLoadingOverlay: React.FC<{
   size: LoaderSize;
   speed: LoaderSpeed;
   blockInteraction?: boolean;
-}> = ({ 
+}> = ({
   message,
   description,
   color,
   overlayColor,
   overlayOpacity = 0.7,
-  variant = 'spinner',
+  variant = "spinner",
   size,
   speed,
-  blockInteraction = true
+  blockInteraction = true,
 }) => {
   // Pre-compute colors at component level
-  const defaultBgColor = useColorModeValue('white', 'gray.800');
-  const defaultLoaderColor = useColorModeValue('blue.500', 'blue.300');
-  
+  const defaultBgColor = useColorModeValue("white", "gray.800");
+  const defaultLoaderColor = useColorModeValue("blue.500", "blue.300");
+
   const bgColor = overlayColor || defaultBgColor;
   const loaderColor = color || defaultLoaderColor;
-  
+
   return (
     <Portal>
       <MotionBox
@@ -1172,20 +1285,37 @@ const PageLoadingOverlay: React.FC<{
         exit="exit"
       >
         <Box mb={4}>
-          {variant === 'spinner' && <SpinnerLoader size={size} color={loaderColor} speed={speed} />}
-          {variant === 'pulse' && <PulseLoader size={size} color={loaderColor} speed={speed} />}
-          {variant === 'dots' && <DotsLoader size={size} color={loaderColor} speed={speed} />}
-          {variant === 'bars' && <BarsLoader size={size} color={loaderColor} speed={speed} />}
-          {variant === 'waves' && <WavesLoader size={size} color={loaderColor} speed={speed} />}
-          {variant === 'circular' && <CircularLoader size={size} color={loaderColor} isIndeterminate speed={speed} />}
+          {variant === "spinner" && (
+            <SpinnerLoader size={size} color={loaderColor} speed={speed} />
+          )}
+          {variant === "pulse" && (
+            <PulseLoader size={size} color={loaderColor} speed={speed} />
+          )}
+          {variant === "dots" && (
+            <DotsLoader size={size} color={loaderColor} speed={speed} />
+          )}
+          {variant === "bars" && (
+            <BarsLoader size={size} color={loaderColor} speed={speed} />
+          )}
+          {variant === "waves" && (
+            <WavesLoader size={size} color={loaderColor} speed={speed} />
+          )}
+          {variant === "circular" && (
+            <CircularLoader
+              size={size}
+              color={loaderColor}
+              isIndeterminate
+              speed={speed}
+            />
+          )}
         </Box>
-        
+
         {message && (
           <Heading size="md" textAlign="center" mb={description ? 2 : 0}>
             {message}
           </Heading>
         )}
-        
+
         {description && (
           <Text textAlign="center" color="gray.500" maxWidth="400px">
             {description}
@@ -1197,7 +1327,7 @@ const PageLoadingOverlay: React.FC<{
 };
 
 // Button Loading State
-const ButtonLoader: React.FC<{ 
+const ButtonLoader: React.FC<{
   text: string;
   isLoading: boolean;
   variant?: string;
@@ -1206,31 +1336,40 @@ const ButtonLoader: React.FC<{
   isDisabled?: boolean;
   onClick?: () => void;
   speed: LoaderSpeed;
-}> = ({ 
+}> = ({
   text,
   isLoading,
-  variant = 'solid',
-  size = 'md',
+  variant = "solid",
+  size = "md",
   color,
   isDisabled = false,
   onClick,
-  speed
+  speed,
 }) => {
   return (
     <Button
       variant={variant}
       size={size}
-      colorScheme={color?.split('.')[0] || 'blue'}
+      colorScheme={color?.split(".")[0] || "blue"}
       isLoading={isLoading}
       loadingText={text}
       spinnerPlacement="start"
       isDisabled={isDisabled || isLoading}
       onClick={onClick}
-      sx={isLoading ? {
-        '& .chakra-spinner': {
-          transitionDuration: speed === 'slow' ? '1.2s' : speed === 'fast' ? '0.6s' : '0.8s'
-        }
-      } : {}}
+      sx={
+        isLoading
+          ? {
+              "& .chakra-spinner": {
+                transitionDuration:
+                  speed === "slow"
+                    ? "1.2s"
+                    : speed === "fast"
+                    ? "0.6s"
+                    : "0.8s",
+              },
+            }
+          : {}
+      }
     >
       {text}
     </Button>
@@ -1238,35 +1377,30 @@ const ButtonLoader: React.FC<{
 };
 
 // Progressive Content Loader
-const ProgressiveLoader: React.FC<{ 
+const ProgressiveLoader: React.FC<{
   stageCount: number;
   stageDelay: number;
   children: React.ReactNode;
   isLoading: boolean;
-}> = ({ 
-  stageCount,
-  stageDelay,
-  children,
-  isLoading
-}) => {
+}> = ({ stageCount, stageDelay, children, isLoading }) => {
   const childrenArray = React.Children.toArray(children);
   const stages = Math.min(stageCount, childrenArray.length);
-  
+
   if (isLoading) {
     return (
       <VStack spacing={4} align="stretch">
         {Array.from({ length: stages }).map((_, index) => (
-          <SkeletonLoader 
-            key={index} 
-            size="md" 
-            variant={index % 2 === 0 ? 'rect' : 'text'} 
+          <SkeletonLoader
+            key={index}
+            size="md"
+            variant={index % 2 === 0 ? "rect" : "text"}
             speed="normal"
           />
         ))}
       </VStack>
     );
   }
-  
+
   return (
     <>
       {childrenArray.map((child, index) => (
@@ -1286,30 +1420,30 @@ const ProgressiveLoader: React.FC<{
 };
 
 // Retry Mechanism
-const RetryLoader: React.FC<{ 
+const RetryLoader: React.FC<{
   isError: boolean;
   errorMessage?: string;
   retryConfig: RetryConfig;
   children: React.ReactNode;
   size: LoaderSize;
   speed: LoaderSpeed;
-}> = ({ 
+}> = ({
   isError,
-  errorMessage = 'Something went wrong',
+  errorMessage = "Something went wrong",
   retryConfig,
   children,
   size,
-  speed
+  speed,
 }) => {
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const maxAttempts = retryConfig.maxAttempts || 3;
-  
+
   const handleRetry = () => {
     if (retryCount < maxAttempts) {
       setIsRetrying(true);
-      setRetryCount(prev => prev + 1);
-      
+      setRetryCount((prev) => prev + 1);
+
       setTimeout(() => {
         setIsRetrying(false);
         if (retryConfig.onRetry) {
@@ -1318,20 +1452,25 @@ const RetryLoader: React.FC<{
       }, retryConfig.delayMs || 1500);
     }
   };
-  
+
   if (isError) {
     return (
       <Box textAlign="center" py={6}>
-        <Icon as={FaExclamationTriangle} color="red.500" boxSize={size === 'xs' ? 6 : size === 'sm' ? 8 : 10} mb={4} />
-        <Heading size={size === 'xs' || size === 'sm' ? 'sm' : 'md'} mb={2}>
+        <Icon
+          as={FaExclamationTriangle}
+          color="red.500"
+          boxSize={size === "xs" ? 6 : size === "sm" ? 8 : 10}
+          mb={4}
+        />
+        <Heading size={size === "xs" || size === "sm" ? "sm" : "md"} mb={2}>
           {errorMessage}
         </Heading>
         <Text color="gray.500" mb={4}>
-          {retryCount >= maxAttempts 
-            ? `Maximum retry attempts (${maxAttempts}) reached.` 
+          {retryCount >= maxAttempts
+            ? `Maximum retry attempts (${maxAttempts}) reached.`
             : `Retry attempt ${retryCount} of ${maxAttempts}`}
         </Text>
-        
+
         {retryConfig.showButton && retryCount < maxAttempts && (
           <Button
             leftIcon={<FaRedo />}
@@ -1340,7 +1479,7 @@ const RetryLoader: React.FC<{
             loadingText="Retrying"
             variant="outline"
             colorScheme="blue"
-            size={size === 'xs' ? 'xs' : size === 'sm' ? 'sm' : 'md'}
+            size={size === "xs" ? "xs" : size === "sm" ? "sm" : "md"}
           >
             Retry
           </Button>
@@ -1348,7 +1487,7 @@ const RetryLoader: React.FC<{
       </Box>
     );
   }
-  
+
   if (isRetrying) {
     return (
       <Box textAlign="center" py={4}>
@@ -1357,7 +1496,7 @@ const RetryLoader: React.FC<{
       </Box>
     );
   }
-  
+
   return <>{children}</>;
 };
 
@@ -1365,16 +1504,16 @@ const RetryLoader: React.FC<{
 
 export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
   // Base props
-  variant = 'spinner',
-  size = 'md',
-  state = 'loading',
-  speed = 'normal',
-  
+  variant = "spinner",
+  size = "md",
+  state = "loading",
+  speed = "normal",
+
   // Content props
   message,
   description,
   showMessage = true,
-  
+
   // Visual props
   color,
   secondaryColor,
@@ -1383,52 +1522,52 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
   value = 0,
   min = 0,
   max = 100,
-  
+
   // Chain specific props
-  chainType = 'generic',
+  chainType = "generic",
   showChainIcon = false,
-  
+
   // Transaction loader props
   steps = [],
   currentStep = 0,
-  
+
   // Overlay props
   isOverlay = false,
   overlayColor,
   overlayOpacity = 0.7,
   blockInteraction = true,
-  
+
   // Portfolio loader props
   portfolioItemCount = 3,
-  
+
   // Button loader props
-  buttonText = 'Loading',
-  buttonVariant = 'solid',
-  buttonSize = 'md',
+  buttonText = "Loading",
+  buttonVariant = "solid",
+  buttonSize = "md",
   isDisabled = false,
-  
+
   // Progressive loading props
   stageCount = 3,
   stageDelay = 300,
-  
+
   // Animation props
   animate = true,
   animationDuration = 300,
-  
+
   // Retry mechanism props
   retry,
-  
+
   // Accessibility props
   ariaLabel,
-  ariaLive = 'polite',
-  
+  ariaLive = "polite",
+
   // Misc props
   onComplete,
   className,
-  
+
   // Children
   children,
-  
+
   // Additional props
   ...rest
 }) => {
@@ -1436,55 +1575,60 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
   const [isVisible, setIsVisible] = useState(true);
   const [retryAttempts, setRetryAttempts] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-  
+
   // Refs
   const loadingTimeRef = useRef<number | null>(null);
-  
+
   // Pre-compute all colors at component level to avoid conditional hook calls
-  const defaultColor = useColorModeValue('blue.500', 'blue.300');
-  const defaultSecondaryColor = useColorModeValue('gray.300', 'gray.600');
-  const defaultBgColor = useColorModeValue('white', 'gray.800');
-  const successColor = useColorModeValue('green.500', 'green.300');
-  const errorColor = useColorModeValue('red.500', 'red.300');
-  const warningColor = useColorModeValue('yellow.500', 'yellow.300');
-  
+  const defaultColor = useColorModeValue("blue.500", "blue.300");
+  const defaultSecondaryColor = useColorModeValue("gray.300", "gray.600");
+  const defaultBgColor = useColorModeValue("white", "gray.800");
+  const successColor = useColorModeValue("green.500", "green.300");
+  const errorColor = useColorModeValue("red.500", "red.300");
+  const warningColor = useColorModeValue("yellow.500", "yellow.300");
+
   // Effects
-  
+
   // Handle completion
   useEffect(() => {
-    if (state === 'success' && onComplete) {
+    if (state === "success" && onComplete) {
       onComplete();
     }
   }, [state, onComplete]);
-  
+
   // Track loading time for performance metrics
   useEffect(() => {
-    if (state === 'loading' && !loadingTimeRef.current) {
+    if (state === "loading" && !loadingTimeRef.current) {
       loadingTimeRef.current = Date.now();
-    } else if (state !== 'loading' && loadingTimeRef.current) {
+    } else if (state !== "loading" && loadingTimeRef.current) {
       const loadingTime = Date.now() - loadingTimeRef.current;
       console.debug(`Loading completed in ${loadingTime}ms`);
       loadingTimeRef.current = null;
     }
   }, [state]);
-  
+
   // Automatic retry logic
   useEffect(() => {
-    if (state === 'error' && retry?.enabled && retryAttempts < (retry.maxAttempts || 3) && !isRetrying) {
+    if (
+      state === "error" &&
+      retry?.enabled &&
+      retryAttempts < (retry.maxAttempts || 3) &&
+      !isRetrying
+    ) {
       setIsRetrying(true);
-      
+
       const retryTimer = setTimeout(() => {
-        setRetryAttempts(prev => prev + 1);
+        setRetryAttempts((prev) => prev + 1);
         setIsRetrying(false);
         if (retry.onRetry) {
           retry.onRetry();
         }
       }, retry.delayMs || 2000);
-      
+
       return () => clearTimeout(retryTimer);
     }
   }, [state, retry, retryAttempts, isRetrying]);
-  
+
   // Render overlay loader
   if (isOverlay) {
     return (
@@ -1501,41 +1645,47 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
       />
     );
   }
-  
+
   // Render chain-specific loader
   if (showChainIcon) {
     return (
-      <Flex direction="column" align="center" justify="center" className={className} {...rest}>
-        <ChainIconLoader 
-          chainType={chainType} 
-          size={size}
-          speed={speed}
-        />
-        
+      <Flex
+        direction="column"
+        align="center"
+        justify="center"
+        className={className}
+        {...rest}
+      >
+        <ChainIconLoader chainType={chainType} size={size} speed={speed} />
+
         {showMessage && message && (
           <Text mt={3} textAlign="center" fontWeight="medium">
             {message}
           </Text>
         )}
-        
+
         {description && (
           <Text mt={1} textAlign="center" color="gray.500" fontSize="sm">
             {description}
           </Text>
         )}
-        
+
         {/* Screen reader announcement */}
         <VisuallyHidden>
           <div aria-live={ariaLive}>
-            {state === 'loading' ? `Loading ${message || ''}` : 
-             state === 'success' ? `Completed ${message || ''}` : 
-             state === 'error' ? `Error loading ${message || ''}` : ''}
+            {state === "loading"
+              ? `Loading ${message || ""}`
+              : state === "success"
+              ? `Completed ${message || ""}`
+              : state === "error"
+              ? `Error loading ${message || ""}`
+              : ""}
           </div>
         </VisuallyHidden>
       </Flex>
     );
   }
-  
+
   // Render transaction progress
   if (steps.length > 0) {
     return (
@@ -1547,19 +1697,21 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
           color={color}
           speed={speed}
         />
-        
+
         {/* Screen reader announcement */}
         <VisuallyHidden>
           <div aria-live={ariaLive}>
-            {`Step ${currentStep + 1} of ${steps.length}: ${steps[currentStep]?.label || ''}`}
+            {`Step ${currentStep + 1} of ${steps.length}: ${
+              steps[currentStep]?.label || ""
+            }`}
           </div>
         </VisuallyHidden>
       </Box>
     );
   }
-  
+
   // Render portfolio loader
-  if (variant === 'shimmer' && portfolioItemCount > 0) {
+  if (variant === "shimmer" && portfolioItemCount > 0) {
     return (
       <PortfolioShimmerLoader
         itemCount={portfolioItemCount}
@@ -1568,13 +1720,13 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
       />
     );
   }
-  
+
   // Render button loader
   if (buttonText) {
     return (
       <ButtonLoader
         text={buttonText}
-        isLoading={state === 'loading'}
+        isLoading={state === "loading"}
         variant={buttonVariant}
         size={buttonSize}
         color={color}
@@ -1584,25 +1736,25 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
       />
     );
   }
-  
+
   // Render progressive loader
   if (children && animate) {
     return (
       <ProgressiveLoader
         stageCount={stageCount}
         stageDelay={stageDelay}
-        isLoading={state === 'loading'}
+        isLoading={state === "loading"}
       >
         {children}
       </ProgressiveLoader>
     );
   }
-  
+
   // Render retry mechanism
   if (retry?.enabled) {
     return (
       <RetryLoader
-        isError={state === 'error'}
+        isError={state === "error"}
         errorMessage={message}
         retryConfig={retry}
         size={size}
@@ -1612,40 +1764,57 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
       </RetryLoader>
     );
   }
-  
+
   // Render standard loader
   return renderLoader();
-  
+
   // Helper function to render the appropriate loader
   function renderLoader() {
     return (
-      <Flex 
-        direction="column" 
-        align="center" 
+      <Flex
+        direction="column"
+        align="center"
         justify="center"
         className={className}
-        aria-label={ariaLabel || `${state} ${message || ''}`}
+        aria-label={ariaLabel || `${state} ${message || ""}`}
         {...rest}
       >
         {/* Loader */}
         <Box>
-          {variant === 'spinner' && <SpinnerLoader size={size} color={color} speed={speed} thickness={thickness} />}
-          {variant === 'pulse' && <PulseLoader size={size} color={color} speed={speed} />}
-          {variant === 'dots' && <DotsLoader size={size} color={color} speed={speed} />}
-          {variant === 'bars' && <BarsLoader size={size} color={color} speed={speed} />}
-          {variant === 'waves' && <WavesLoader size={size} color={color} speed={speed} />}
-          {variant === 'skeleton' && <SkeletonLoader size={size} speed={speed} />}
-          {variant === 'circular' && (
-            <CircularLoader 
-              size={size} 
-              color={color} 
-              value={value} 
+          {variant === "spinner" && (
+            <SpinnerLoader
+              size={size}
+              color={color}
+              speed={speed}
+              thickness={thickness}
+            />
+          )}
+          {variant === "pulse" && (
+            <PulseLoader size={size} color={color} speed={speed} />
+          )}
+          {variant === "dots" && (
+            <DotsLoader size={size} color={color} speed={speed} />
+          )}
+          {variant === "bars" && (
+            <BarsLoader size={size} color={color} speed={speed} />
+          )}
+          {variant === "waves" && (
+            <WavesLoader size={size} color={color} speed={speed} />
+          )}
+          {variant === "skeleton" && (
+            <SkeletonLoader size={size} speed={speed} />
+          )}
+          {variant === "circular" && (
+            <CircularLoader
+              size={size}
+              color={color}
+              value={value}
               isIndeterminate={isIndeterminate}
               thickness={thickness}
               speed={speed}
             />
           )}
-          {variant === 'progress' && (
+          {variant === "progress" && (
             <ProgressLoader
               size={size}
               color={color}
@@ -1657,51 +1826,55 @@ export const EnhancedLoader: React.FC<EnhancedLoaderProps> = ({
               speed={speed}
             />
           )}
-          {variant === 'shimmer' && (
-            <ShimmerLoader 
-              size={size} 
-              primaryColor={color} 
+          {variant === "shimmer" && (
+            <ShimmerLoader
+              size={size}
+              primaryColor={color}
               secondaryColor={secondaryColor}
               speed={speed}
             />
           )}
         </Box>
-        
+
         {/* Message */}
         {showMessage && message && (
           <Text mt={3} textAlign="center" fontWeight="medium">
             {message}
           </Text>
         )}
-        
+
         {/* Description */}
         {description && (
           <Text mt={1} textAlign="center" color="gray.500" fontSize="sm">
             {description}
           </Text>
         )}
-        
+
         {/* Status indicators */}
-        {state === 'error' && (
+        {state === "error" && (
           <Flex align="center" mt={3} color="red.500">
             <Icon as={FaExclamationTriangle} mr={2} />
             <Text fontWeight="medium">Error occurred</Text>
           </Flex>
         )}
-        
-        {state === 'success' && (
+
+        {state === "success" && (
           <Flex align="center" mt={3} color="green.500">
             <Icon as={FaCheckCircle} mr={2} />
             <Text fontWeight="medium">Completed successfully</Text>
           </Flex>
         )}
-        
+
         {/* Screen reader announcement */}
         <VisuallyHidden>
           <div aria-live={ariaLive}>
-            {state === 'loading' ? `Loading ${message || ''}` : 
-             state === 'success' ? `Completed ${message || ''}` : 
-             state === 'error' ? `Error loading ${message || ''}` : ''}
+            {state === "loading"
+              ? `Loading ${message || ""}`
+              : state === "success"
+              ? `Completed ${message || ""}`
+              : state === "error"
+              ? `Error loading ${message || ""}`
+              : ""}
           </div>
         </VisuallyHidden>
       </Flex>

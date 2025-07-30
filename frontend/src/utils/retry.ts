@@ -405,7 +405,7 @@ export async function retry<T>(
       // Log retry attempt
       logger.debug(
         `Retry attempt ${attempt + 1}/${mergedOptions.maxRetries} for ${mergedOptions.operationName} ` +
-        `after ${lastDelay}ms delay. Error: ${error?.message || 'Unknown error'}`
+        `after ${lastDelay}ms delay. Error: ${(error as any)?.message || error?.toString() || 'Unknown error'}`
       );
 
       // Wait before next attempt
@@ -450,7 +450,7 @@ export function resetCircuitBreaker(operationName: string): void {
     cbInfo.state = 'closed';
     cbInfo.failures = 0;
     globalMetrics.circuitBreakerStates[operationName] = 'closed';
-    logger.info(`Circuit breaker for ${operationName} manually reset to closed state`);
+    logger.log(`Circuit breaker for ${operationName} manually reset to closed state`);
   }
 }
 
@@ -463,7 +463,7 @@ export function resetAllCircuitBreakers(): void {
     cbInfo.failures = 0;
     globalMetrics.circuitBreakerStates[name] = 'closed';
   }
-  logger.info('All circuit breakers reset to closed state');
+  logger.log('All circuit breakers reset to closed state');
 }
 
 /**

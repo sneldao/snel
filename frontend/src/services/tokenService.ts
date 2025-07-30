@@ -2,7 +2,6 @@ import { ethers } from 'ethers';
 import { ApiService } from './apiService';
 import { ChainId } from '../constants/chains';
 import { POPULAR_TOKENS, Token } from '../constants/tokens';
-import { memoize } from '../utils/memoize';
 
 // Standard ERC20 ABI for token interactions
 const ERC20_ABI = [
@@ -29,10 +28,11 @@ export interface TokenPrice {
 export interface TokenBalance {
   token: Token;
   balance: string;
-  balanceRaw: ethers.BigNumber;
+  balanceRaw: bigint;
   balanceUsd?: string;
   value?: string;
   price?: number;
+  lastUpdated?: Date;
 }
 
 // Token details interface
@@ -48,6 +48,7 @@ export interface TokenDetails extends Token {
   discord?: string;
   github?: string;
   tags?: string[];
+  lastUpdated?: Date;
 }
 
 /**
@@ -56,7 +57,7 @@ export interface TokenDetails extends Token {
  */
 export class TokenService {
   private apiService: ApiService;
-  private providers: Record<number, ethers.providers.Provider> = {};
+  private providers: Record<number, ethers.Provider> = {};
   
   // Cache for token prices (symbol -> price data)
   private tokenPriceCache: Map<string, TokenPrice> = new Map();
@@ -84,32 +85,32 @@ export class TokenService {
    */
   private initializeProviders(): void {
     // Ethereum Mainnet
-    this.providers[ChainId.ETHEREUM] = new ethers.providers.JsonRpcProvider(
+    this.providers[ChainId.ETHEREUM] = new ethers.JsonRpcProvider(
       'https://eth-mainnet.g.alchemy.com/v2/demo'
     );
     
     // Polygon
-    this.providers[ChainId.POLYGON] = new ethers.providers.JsonRpcProvider(
+    this.providers[ChainId.POLYGON] = new ethers.JsonRpcProvider(
       'https://polygon-mainnet.g.alchemy.com/v2/demo'
     );
-    
+
     // Arbitrum
-    this.providers[ChainId.ARBITRUM] = new ethers.providers.JsonRpcProvider(
+    this.providers[ChainId.ARBITRUM] = new ethers.JsonRpcProvider(
       'https://arb-mainnet.g.alchemy.com/v2/demo'
     );
-    
+
     // Optimism
-    this.providers[ChainId.OPTIMISM] = new ethers.providers.JsonRpcProvider(
+    this.providers[ChainId.OPTIMISM] = new ethers.JsonRpcProvider(
       'https://opt-mainnet.g.alchemy.com/v2/demo'
     );
-    
+
     // Base
-    this.providers[ChainId.BASE] = new ethers.providers.JsonRpcProvider(
+    this.providers[ChainId.BASE] = new ethers.JsonRpcProvider(
       'https://base-mainnet.g.alchemy.com/v2/demo'
     );
-    
+
     // Avalanche
-    this.providers[ChainId.AVALANCHE] = new ethers.providers.JsonRpcProvider(
+    this.providers[ChainId.AVALANCHE] = new ethers.JsonRpcProvider(
       'https://api.avax.network/ext/bc/C/rpc'
     );
   }
@@ -117,62 +118,61 @@ export class TokenService {
   /**
    * Get provider for a specific chain
    */
-  public getProvider(chainId: number): ethers.providers.Provider | undefined {
+  public getProvider(chainId: number): ethers.Provider | undefined {
     return this.providers[chainId];
   }
   
   /**
    * Get token price from CoinGecko or other price API
-   * Memoized to reduce API calls
+   * Uses internal caching to reduce API calls
    */
-  public getTokenPrice = memoize(
-    async (symbol: string): Promise<TokenPrice | null> => {
-      try {
-        // Check cache first
-        const cachedPrice = this.tokenPriceCache.get(symbol.toUpperCase());
-        if (cachedPrice && (new Date().getTime() - cachedPrice.lastUpdated.getTime()) < this.PRICE_CACHE_TTL) {
-          return cachedPrice;
-        }
-        
-        // Find token in our list to get coingeckoId
-        const token = POPULAR_TOKENS.find(t => t.symbol.toUpperCase() === symbol.toUpperCase());
-        if (!token || !token.coingeckoId) {
-          console.warn(`No coingeckoId found for token ${symbol}`);
-          return null;
-        }
-        
-        // Fetch price data from API
-        const response = await this.apiService.get(
-          `https://api.coingecko.com/api/v3/coins/${token.coingeckoId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`
-        );
-        
-        if (!response || !response.market_data) {
-          console.warn(`No price data found for token ${symbol}`);
-          return null;
-        }
-        
-        // Create price data object
-        const priceData: TokenPrice = {
-          symbol: symbol.toUpperCase(),
-          price: response.market_data.current_price.usd,
-          priceChange24h: response.market_data.price_change_percentage_24h,
-          priceChange7d: response.market_data.price_change_percentage_7d,
-          volume24h: response.market_data.total_volume.usd,
-          marketCap: response.market_data.market_cap.usd,
-          lastUpdated: new Date()
-        };
-        
-        // Update cache
-        this.tokenPriceCache.set(symbol.toUpperCase(), priceData);
-        
-        return priceData;
-      } catch (error) {
-        console.error(`Error fetching price for ${symbol}:`, error);
+  public async getTokenPrice(symbol: string): Promise<TokenPrice | null> {
+    try {
+      // Check cache first
+      const cachedPrice = this.tokenPriceCache.get(symbol.toUpperCase());
+      if (cachedPrice && (new Date().getTime() - cachedPrice.lastUpdated.getTime()) < this.PRICE_CACHE_TTL) {
+        return cachedPrice;
+      }
+
+      // Find token in our list to get coingeckoId
+      const token = POPULAR_TOKENS.find(t => t.symbol.toUpperCase() === symbol.toUpperCase());
+      if (!token || !token.coingeckoId) {
+        console.warn(`No coingeckoId found for token ${symbol}`);
         return null;
       }
-    },
-    { ttl: this.PRICE_CACHE_TTL, maxSize: 100 }
-  );
+
+      // Fetch price data from API
+      const response = await fetch(
+        `https://api.coingecko.com/api/v3/coins/${token.coingeckoId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`
+      );
+
+      const data = await response.json();
+
+      if (!data || !data.market_data) {
+        console.warn(`No price data found for token ${symbol}`);
+        return null;
+      }
+
+      // Create price data object
+      const priceData: TokenPrice = {
+        symbol: symbol.toUpperCase(),
+        price: data.market_data.current_price.usd,
+        priceChange24h: data.market_data.price_change_percentage_24h,
+        priceChange7d: data.market_data.price_change_percentage_7d,
+        volume24h: data.market_data.total_volume.usd,
+        marketCap: data.market_data.market_cap.usd,
+        lastUpdated: new Date()
+      };
+
+      // Update cache
+      this.tokenPriceCache.set(symbol.toUpperCase(), priceData);
+
+      return priceData;
+    } catch (error) {
+      console.error(`Error fetching price for ${symbol}:`, error);
+      return null;
+    }
+  }
   
   /**
    * Get token balance for an address
@@ -188,7 +188,7 @@ export class TokenService {
       
       // Check cache first
       const cachedBalance = this.tokenBalanceCache.get(cacheKey);
-      if (cachedBalance && (new Date().getTime() - new Date(cachedBalance.token.lastUpdated || 0).getTime()) < this.BALANCE_CACHE_TTL) {
+      if (cachedBalance && (new Date().getTime() - new Date(cachedBalance.lastUpdated || 0).getTime()) < this.BALANCE_CACHE_TTL) {
         return cachedBalance;
       }
       
@@ -209,7 +209,7 @@ export class TokenService {
         return null;
       }
       
-      let balance: ethers.BigNumber;
+      let balance: bigint;
       
       // Handle native token (ETH, MATIC, etc.)
       if (tokenAddress === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
@@ -224,20 +224,18 @@ export class TokenService {
       const priceData = await this.getTokenPrice(token.symbol);
       
       // Calculate value in USD
-      const balanceFormatted = ethers.utils.formatUnits(balance, token.decimals);
+      const balanceFormatted = ethers.formatUnits(balance, token.decimals);
       const valueUsd = priceData ? parseFloat(balanceFormatted) * priceData.price : undefined;
       
       // Create balance object
       const balanceData: TokenBalance = {
-        token: {
-          ...token,
-          lastUpdated: new Date()
-        },
+        token,
         balance: balanceFormatted,
         balanceRaw: balance,
         balanceUsd: valueUsd ? valueUsd.toFixed(2) : undefined,
         value: valueUsd ? valueUsd.toFixed(2) : undefined,
-        price: priceData?.price
+        price: priceData?.price,
+        lastUpdated: new Date()
       };
       
       // Update cache
@@ -270,9 +268,9 @@ export class TokenService {
       
       // Filter out null results and tokens with zero balance
       return balances.filter(
-        balance => balance !== null && 
-        balance.balanceRaw && 
-        !balance.balanceRaw.isZero()
+        balance => balance !== null &&
+        balance.balanceRaw &&
+        balance.balanceRaw > 0n
       ) as TokenBalance[];
     } catch (error) {
       console.error(`Error fetching all token balances for ${address} on chain ${chainId}:`, error);
@@ -327,9 +325,10 @@ export class TokenService {
       
       if (token.coingeckoId) {
         try {
-          const response = await this.apiService.get(
+          const apiResponse = await fetch(
             `https://api.coingecko.com/api/v3/coins/${token.coingeckoId}?localization=false&tickers=false&market_data=true&community_data=true&developer_data=true`
           );
+          const response = await apiResponse.json();
           
           if (response) {
             additionalDetails = {

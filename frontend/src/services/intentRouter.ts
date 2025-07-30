@@ -136,7 +136,7 @@ export class IntentRouter {
       onProgress?.(`Cross-chain fee: ${quote.fee}. Executing transfer...`, 2, 3);
 
       // Get provider from signer
-      const provider = signer.provider as ethers.providers.Web3Provider;
+      const provider = signer.provider as ethers.BrowserProvider;
       if (!provider) {
         return { success: false, error: 'Web3 provider not available' };
       }

@@ -33,7 +33,7 @@ const DEFAULT_GAS_PRICES: Record<number, GasPrice> = {
 };
 
 // Default gas limits by operation type and chain
-const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number, number>> = {
+const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>> = {
   swap: {
     [ChainId.ETHEREUM]: 180000,
     [ChainId.POLYGON]: 250000,
@@ -319,7 +319,7 @@ async function estimateDestinationGas(
   destinationChainId: number
 ): Promise<{ cost: string; time: string } | null> {
   // Skip if destination chain is not supported
-  if (!SUPPORTED_CHAINS[destinationChainId]) {
+  if (!SUPPORTED_CHAINS[destinationChainId as keyof typeof SUPPORTED_CHAINS]) {
     return null;
   }
   

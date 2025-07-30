@@ -34,6 +34,14 @@ import {
   DrawerOverlay,
   DrawerContent,
   DrawerCloseButton,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  Button,
 } from "@chakra-ui/react";
 import {
   FaExchangeAlt,
@@ -90,12 +98,12 @@ import {
 import { setupGlobalWalletErrorHandler } from "../utils/walletErrorHandler";
 
 // Import our enhanced components
-import EnhancedButton from "./ui/EnhancedButton";
-import EnhancedInput from "./ui/EnhancedInput";
-import EnhancedCard from "./ui/EnhancedCard";
-import EnhancedLoader from "./ui/EnhancedLoader";
-import EnhancedModal from "./ui/EnhancedModal";
-import InteractiveOnboardingFinal from "./onboarding/InteractiveOnboardingFinal";
+import EnhancedButton from "./UI/EnhancedButton";
+import EnhancedInput from "./UI/EnhancedInput";
+import EnhancedCard from "./UI/EnhancedCard";
+import EnhancedLoader from "./UI/EnhancedLoader";
+import EnhancedModal from "./UI/EnhancedModal";
+import InteractiveOnboarding from "./onboarding/InteractiveOnboarding";
 import CrosschainTransactionTracker from "./enhanced/CrosschainTransactionTracker";
 
 // Animation variants
@@ -107,14 +115,14 @@ const pageTransitionVariants = {
 
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
-    transition: { 
-      type: "spring", 
-      damping: 25, 
-      stiffness: 500 
-    } 
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      damping: 25,
+      stiffness: 500,
+    },
   },
   exit: { opacity: 0, y: -20, transition: { duration: 0.2 } },
 };
@@ -132,14 +140,14 @@ const staggerContainerVariants = {
 
 const featureItemVariants = {
   hidden: { opacity: 0, y: 10 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
-    transition: { 
-      type: "spring", 
-      damping: 25, 
-      stiffness: 500 
-    } 
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring",
+      damping: 25,
+      stiffness: 500,
+    },
   },
 };
 
@@ -182,7 +190,7 @@ function EnhancedMainApp() {
   // Chakra hooks
   const toast = useToast();
   const { colorMode, toggleColorMode } = useColorMode();
-  
+
   // Wallet hooks
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -262,7 +270,7 @@ function EnhancedMainApp() {
   // Refs
   const responsesEndRef = useRef<HTMLDivElement>(null);
   const commandInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Animation controls
   const controls = useAnimation();
 
@@ -273,7 +281,7 @@ function EnhancedMainApp() {
   // Setup global error handlers on mount
   useEffect(() => {
     setupGlobalWalletErrorHandler();
-    
+
     // Check if this is the user's first visit
     const hasVisitedBefore = localStorage.getItem("snel_visited");
     if (!hasVisitedBefore) {
@@ -304,7 +312,7 @@ function EnhancedMainApp() {
         ? [welcomeMessage, ...prev]
         : prev.map((r, i) => (i === 0 ? welcomeMessage : r))
     );
-    
+
     // Show onboarding for first-time visitors who connect their wallet
     if (isFirstVisit && isConnected) {
       setTimeout(() => {
@@ -345,7 +353,9 @@ function EnhancedMainApp() {
             <EnhancedCard
               variant="glass"
               title="Unsupported Network"
-              headerIcon={<Icon as={FaExclamationTriangle} color="orange.500" />}
+              headerIcon={
+                <Icon as={FaExclamationTriangle} color="orange.500" />
+              }
               footerActions={[
                 {
                   label: "Close",
@@ -354,7 +364,7 @@ function EnhancedMainApp() {
               ]}
             >
               <Text>
-                Please switch to a supported network: {" "}
+                Please switch to a supported network:{" "}
                 {Object.values(SUPPORTED_CHAINS).join(", ")}
               </Text>
             </EnhancedCard>
@@ -550,14 +560,19 @@ function EnhancedMainApp() {
               address, // Use actual connected wallet address
               chainId, // Use actual connected chain ID
               userProfile?.name,
-              (progress, stage) => {
+              (progress) => {
                 // Update progress in the UI
                 setResponses((prev) =>
                   prev.map((r) =>
                     r.status === "processing" && r.agentType === "agno"
                       ? {
                           ...r,
-                          metadata: { progress, stage },
+                          metadata: {
+                            progress: progress.completion,
+                            stage: progress.stage,
+                            details: progress.details,
+                            type: progress.type,
+                          },
                         }
                       : r
                   )
@@ -716,12 +731,13 @@ function EnhancedMainApp() {
       exit="exit"
       variants={pageTransitionVariants}
     >
-      <Box 
-        minH="100vh" 
+      <Box
+        minH="100vh"
         bg={bgColor}
-        backgroundImage={colorMode === "light" 
-          ? "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.5), transparent 70%)"
-          : "radial-gradient(circle at 50% 0%, rgba(26, 32, 44, 0.5), transparent 70%)"
+        backgroundImage={
+          colorMode === "light"
+            ? "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.5), transparent 70%)"
+            : "radial-gradient(circle at 50% 0%, rgba(26, 32, 44, 0.5), transparent 70%)"
         }
         backgroundSize="100% 100%"
         backgroundRepeat="no-repeat"
@@ -735,23 +751,25 @@ function EnhancedMainApp() {
           left="-10%"
           width="120%"
           height="120%"
-          bgGradient={colorMode === "light" 
-            ? "radial-gradient(circle at 0% 0%, rgba(66, 153, 225, 0.1), transparent 50%)"
-            : "radial-gradient(circle at 0% 0%, rgba(66, 153, 225, 0.05), transparent 50%)"
+          bgGradient={
+            colorMode === "light"
+              ? "radial-gradient(circle at 0% 0%, rgba(66, 153, 225, 0.1), transparent 50%)"
+              : "radial-gradient(circle at 0% 0%, rgba(66, 153, 225, 0.05), transparent 50%)"
           }
           zIndex={0}
           pointerEvents="none"
         />
-        
+
         <Box
           position="absolute"
           bottom="-10%"
           right="-10%"
           width="120%"
           height="120%"
-          bgGradient={colorMode === "light" 
-            ? "radial-gradient(circle at 100% 100%, rgba(159, 122, 234, 0.1), transparent 50%)"
-            : "radial-gradient(circle at 100% 100%, rgba(159, 122, 234, 0.05), transparent 50%)"
+          bgGradient={
+            colorMode === "light"
+              ? "radial-gradient(circle at 100% 100%, rgba(159, 122, 234, 0.1), transparent 50%)"
+              : "radial-gradient(circle at 100% 100%, rgba(159, 122, 234, 0.05), transparent 50%)"
           }
           zIndex={0}
           pointerEvents="none"
@@ -775,8 +793,8 @@ function EnhancedMainApp() {
                 flexDir={{ base: "column", sm: "row" }}
                 gap={{ base: 2, sm: 4 }}
               >
-                <Box 
-                  cursor="pointer" 
+                <Box
+                  cursor="pointer"
                   onClick={() => setIsLogoModalOpen(true)}
                   transition="transform 0.2s"
                   _hover={{ transform: "scale(1.1)" }}
@@ -784,9 +802,9 @@ function EnhancedMainApp() {
                   <Image src="/icon.png" alt="Logo" width={40} height={40} />
                 </Box>
 
-                <Heading 
-                  as="h1" 
-                  size="lg" 
+                <Heading
+                  as="h1"
+                  size="lg"
                   textAlign="center"
                   bgGradient="linear(to-r, blue.400, purple.500)"
                   bgClip="text"
@@ -848,17 +866,22 @@ function EnhancedMainApp() {
                       borderRadius="lg"
                       boxShadow="md"
                     >
-                      <VStack spacing={6} align="center" justify="center" py={8}>
+                      <VStack
+                        spacing={6}
+                        align="center"
+                        justify="center"
+                        py={8}
+                      >
                         {/* Logo with animation */}
                         <motion.div
-                          animate={{ 
+                          animate={{
                             scale: [1, 1.05, 1],
-                            rotate: [0, 2, 0, -2, 0]
+                            rotate: [0, 2, 0, -2, 0],
                           }}
-                          transition={{ 
-                            duration: 4, 
-                            repeat: Infinity, 
-                            repeatType: "reverse" 
+                          transition={{
+                            duration: 4,
+                            repeat: Infinity,
+                            repeatType: "reverse",
                           }}
                         >
                           <Box position="relative" width="80px" height="80px">
@@ -878,10 +901,10 @@ function EnhancedMainApp() {
                           <Heading size="md" mb={2} textAlign="center">
                             Your AI-Powered Crypto Assistant
                           </Heading>
-                          
-                          <SimpleGrid 
-                            columns={{ base: 2, md: 3 }} 
-                            spacing={4} 
+
+                          <SimpleGrid
+                            columns={{ base: 2, md: 3 }}
+                            spacing={4}
                             maxW="500px"
                           >
                             <motion.div variants={featureItemVariants}>
@@ -891,12 +914,12 @@ function EnhancedMainApp() {
                                 size="sm"
                                 isInteractive={true}
                               >
-                                <VStack
-                                  spacing={2}
-                                  align="center"
-                                  p={3}
-                                >
-                                  <Icon as={FaExchangeAlt} color="blue.500" boxSize={5} />
+                                <VStack spacing={2} align="center" p={3}>
+                                  <Icon
+                                    as={FaExchangeAlt}
+                                    color="blue.500"
+                                    boxSize={5}
+                                  />
                                   <Text
                                     fontSize="sm"
                                     fontWeight="medium"
@@ -907,7 +930,7 @@ function EnhancedMainApp() {
                                 </VStack>
                               </EnhancedCard>
                             </motion.div>
-                            
+
                             <motion.div variants={featureItemVariants}>
                               <EnhancedCard
                                 variant="glass"
@@ -915,12 +938,12 @@ function EnhancedMainApp() {
                                 size="sm"
                                 isInteractive={true}
                               >
-                                <VStack
-                                  spacing={2}
-                                  align="center"
-                                  p={3}
-                                >
-                                  <Icon as={FaLink} color="purple.500" boxSize={5} />
+                                <VStack spacing={2} align="center" p={3}>
+                                  <Icon
+                                    as={FaLink}
+                                    color="purple.500"
+                                    boxSize={5}
+                                  />
                                   <Text
                                     fontSize="sm"
                                     fontWeight="medium"
@@ -931,7 +954,7 @@ function EnhancedMainApp() {
                                 </VStack>
                               </EnhancedCard>
                             </motion.div>
-                            
+
                             <motion.div variants={featureItemVariants}>
                               <EnhancedCard
                                 variant="glass"
@@ -939,12 +962,12 @@ function EnhancedMainApp() {
                                 size="sm"
                                 isInteractive={true}
                               >
-                                <VStack
-                                  spacing={2}
-                                  align="center"
-                                  p={3}
-                                >
-                                  <Icon as={FaWallet} color="green.500" boxSize={5} />
+                                <VStack spacing={2} align="center" p={3}>
+                                  <Icon
+                                    as={FaWallet}
+                                    color="green.500"
+                                    boxSize={5}
+                                  />
                                   <Text
                                     fontSize="sm"
                                     fontWeight="medium"
@@ -955,7 +978,7 @@ function EnhancedMainApp() {
                                 </VStack>
                               </EnhancedCard>
                             </motion.div>
-                            
+
                             <motion.div variants={featureItemVariants}>
                               <EnhancedCard
                                 variant="glass"
@@ -963,12 +986,12 @@ function EnhancedMainApp() {
                                 size="sm"
                                 isInteractive={true}
                               >
-                                <VStack
-                                  spacing={2}
-                                  align="center"
-                                  p={3}
-                                >
-                                  <Icon as={FaCoins} color="yellow.500" boxSize={5} />
+                                <VStack spacing={2} align="center" p={3}>
+                                  <Icon
+                                    as={FaCoins}
+                                    color="yellow.500"
+                                    boxSize={5}
+                                  />
                                   <Text
                                     fontSize="sm"
                                     fontWeight="medium"
@@ -979,7 +1002,7 @@ function EnhancedMainApp() {
                                 </VStack>
                               </EnhancedCard>
                             </motion.div>
-                            
+
                             <motion.div variants={featureItemVariants}>
                               <EnhancedCard
                                 variant="glass"
@@ -987,12 +1010,12 @@ function EnhancedMainApp() {
                                 size="sm"
                                 isInteractive={true}
                               >
-                                <VStack
-                                  spacing={2}
-                                  align="center"
-                                  p={3}
-                                >
-                                  <Icon as={FaChartPie} color="cyan.500" boxSize={5} />
+                                <VStack spacing={2} align="center" p={3}>
+                                  <Icon
+                                    as={FaChartPie}
+                                    color="cyan.500"
+                                    boxSize={5}
+                                  />
                                   <Text
                                     fontSize="sm"
                                     fontWeight="medium"
@@ -1003,7 +1026,7 @@ function EnhancedMainApp() {
                                 </VStack>
                               </EnhancedCard>
                             </motion.div>
-                            
+
                             <motion.div variants={featureItemVariants}>
                               <EnhancedCard
                                 variant="glass"
@@ -1011,12 +1034,12 @@ function EnhancedMainApp() {
                                 size="sm"
                                 isInteractive={true}
                               >
-                                <VStack
-                                  spacing={2}
-                                  align="center"
-                                  p={3}
-                                >
-                                  <Icon as={FaSearch} color="red.500" boxSize={5} />
+                                <VStack spacing={2} align="center" p={3}>
+                                  <Icon
+                                    as={FaSearch}
+                                    color="red.500"
+                                    boxSize={5}
+                                  />
                                   <Text
                                     fontSize="sm"
                                     fontWeight="medium"
@@ -1030,7 +1053,12 @@ function EnhancedMainApp() {
                           </SimpleGrid>
 
                           {/* Hint about help modal */}
-                          <Text fontSize="sm" color={subtleTextColor} textAlign="center" mt={4}>
+                          <Text
+                            fontSize="sm"
+                            color={subtleTextColor}
+                            textAlign="center"
+                            mt={4}
+                          >
                             Click ? above for specific commands <br />
                             Click ⚙️ above to configure API keys
                           </Text>
@@ -1047,10 +1075,12 @@ function EnhancedMainApp() {
                             leftIcon={<FaWallet />}
                             onClick={() => {
                               // This will trigger the WalletButton component's connect functionality
-                              document.getElementById("wallet-connect-button")?.click();
+                              document
+                                .getElementById("wallet-connect-button")
+                                ?.click();
                             }}
-                            animate={true}
-                            pulseEffect={true}
+                            disableAnimation={false}
+                            pulseAnimation={true}
                           >
                             Connect Wallet
                           </EnhancedButton>
@@ -1071,15 +1101,66 @@ function EnhancedMainApp() {
                       borderRadius="lg"
                       boxShadow="md"
                       title="Transaction Progress"
-                      headerIcon={<Icon as={FaExchangeAlt} color={accentColor} />}
+                      headerIcon={
+                        <Icon as={FaExchangeAlt} color={accentColor} />
+                      }
                     >
                       <CrosschainTransactionTracker
-                        transaction={activeTransaction}
-                        onStatusUpdate={handleTransactionUpdate}
+                        txHash={
+                          activeTransaction.hash ||
+                          activeTransaction.txHash ||
+                          ""
+                        }
+                        sourceChain={
+                          activeTransaction.sourceChain ||
+                          activeTransaction.chainId ||
+                          1
+                        }
+                        destinationChain={
+                          activeTransaction.destinationChain ||
+                          activeTransaction.targetChain ||
+                          1
+                        }
+                        asset={
+                          activeTransaction.asset ||
+                          activeTransaction.token ||
+                          "ETH"
+                        }
+                        amount={activeTransaction.amount || "0"}
+                        sourceAddress={
+                          activeTransaction.sourceAddress ||
+                          activeTransaction.from ||
+                          ""
+                        }
+                        destinationAddress={
+                          activeTransaction.destinationAddress ||
+                          activeTransaction.to ||
+                          ""
+                        }
+                        onComplete={(success) => {
+                          if (success) {
+                            handleTransactionUpdate(
+                              "completed",
+                              activeTransaction.hash ||
+                                activeTransaction.txHash ||
+                                ""
+                            );
+                          } else {
+                            handleTransactionUpdate(
+                              "failed",
+                              activeTransaction.hash ||
+                                activeTransaction.txHash ||
+                                ""
+                            );
+                          }
+                        }}
+                        onRecoveryNeeded={(txHash) => {
+                          handleTransactionUpdate("recovery_needed", txHash);
+                        }}
                       />
                     </EnhancedCard>
                   )}
-                  
+
                   {/* Chat Messages */}
                   <AnimatePresence>
                     {responses.map((response, index) => (
@@ -1115,9 +1196,9 @@ function EnhancedMainApp() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
-                  
+
                   <div ref={responsesEndRef} />
-                  
+
                   {/* Command Input */}
                   <EnhancedCard
                     variant="glass"
@@ -1143,7 +1224,7 @@ function EnhancedMainApp() {
                                 size="sm"
                                 color={accentColor}
                               />
-                            ) : null
+                            ) : undefined
                           }
                           ref={commandInputRef}
                           onKeyPress={(e) => {
@@ -1154,19 +1235,27 @@ function EnhancedMainApp() {
                             }
                           }}
                         />
-                        
+
                         <Box position="absolute" right="4" bottom="-10">
                           <EnhancedButton
                             size="sm"
-                            variant="text"
-                            onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                            rightIcon={showAdvancedSettings ? <FaChevronUp /> : <FaChevronDown />}
+                            variant="ghost"
+                            onClick={() =>
+                              setShowAdvancedSettings(!showAdvancedSettings)
+                            }
+                            rightIcon={
+                              showAdvancedSettings ? (
+                                <FaChevronUp />
+                              ) : (
+                                <FaChevronDown />
+                              )
+                            }
                           >
                             Advanced Settings
                           </EnhancedButton>
                         </Box>
                       </Box>
-                      
+
                       {/* Advanced Settings */}
                       <Collapse in={showAdvancedSettings} animateOpacity>
                         <Box pt={2}>
@@ -1174,7 +1263,7 @@ function EnhancedMainApp() {
                             axelarUnavailable={axelarUnavailable}
                             onSettingsChange={setAdvancedSettings}
                           />
-                          
+
                           {/* Portfolio Settings */}
                           <Box
                             p={3}
@@ -1196,7 +1285,7 @@ function EnhancedMainApp() {
                                 </Text>
                               </VStack>
                               <EnhancedButton
-                                variant="switch"
+                                variant="outline"
                                 isActive={portfolioSettings.enabled}
                                 onClick={() => {
                                   const newValue = !portfolioSettings.enabled;
@@ -1224,268 +1313,279 @@ function EnhancedMainApp() {
         </Container>
 
         {/* Modals */}
-        <EnhancedModal
+        <Modal
           isOpen={isLogoModalOpen}
           onClose={() => setIsLogoModalOpen(false)}
-          title="About SNEL"
-          variant="centered"
-          animation="scale"
           size="md"
-          glassMorphism={true}
-          overlayBlur="8px"
+          isCentered
         >
-          <VStack spacing={4} align="center">
-            <Box position="relative" width="100px" height="100px">
-              <Image
-                src="/icon.png"
-                alt="SNEL Logo"
-                width={100}
-                height={100}
-                priority
-                style={{ objectFit: "contain" }}
-              />
-            </Box>
-            <Text textAlign="center">
-              SNEL is an AI-powered crypto assistant that helps you navigate the
-              world of cryptocurrencies with natural language commands. Swap tokens,
-              bridge assets across chains, check balances, and more - all in one place.
-            </Text>
-            <Text fontSize="sm" color={subtleTextColor} textAlign="center">
-              Version 1.0.0
-            </Text>
-          </VStack>
-        </EnhancedModal>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>About SNEL</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <VStack spacing={4} align="center">
+                <Box position="relative" width="100px" height="100px">
+                  <Image
+                    src="/icon.png"
+                    alt="SNEL Logo"
+                    width={100}
+                    height={100}
+                    priority
+                    style={{ objectFit: "contain" }}
+                  />
+                </Box>
+                <Text textAlign="center">
+                  SNEL is an AI-powered crypto assistant that helps you navigate
+                  the world of cryptocurrencies with natural language commands.
+                  Swap tokens, bridge assets across chains, check balances, and
+                  more - all in one place.
+                </Text>
+                <Text fontSize="sm" color={subtleTextColor} textAlign="center">
+                  Version 1.0.0
+                </Text>
+              </VStack>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
 
-        <EnhancedModal
+        <Modal
           isOpen={isHelpModalOpen}
           onClose={() => setIsHelpModalOpen(false)}
-          title="Help & Commands"
-          variant="centered"
-          animation="scale"
           size="lg"
-          glassMorphism={true}
-          overlayBlur="8px"
+          isCentered
         >
-          <VStack spacing={6} align="stretch">
-            <Box>
-              <Heading size="sm" mb={2}>
-                Example Commands
-              </Heading>
-              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                <EnhancedCard variant="outlined" size="sm">
-                  <Text fontSize="sm" fontWeight="medium">
-                    &quot;Swap 0.1 ETH for USDC&quot;
-                  </Text>
-                </EnhancedCard>
-                <EnhancedCard variant="outlined" size="sm">
-                  <Text fontSize="sm" fontWeight="medium">
-                    &quot;Bridge 100 USDC from Ethereum to Polygon&quot;
-                  </Text>
-                </EnhancedCard>
-                <EnhancedCard variant="outlined" size="sm">
-                  <Text fontSize="sm" fontWeight="medium">
-                    &quot;Check my ETH balance&quot;
-                  </Text>
-                </EnhancedCard>
-                <EnhancedCard variant="outlined" size="sm">
-                  <Text fontSize="sm" fontWeight="medium">
-                    &quot;Analyze my portfolio&quot;
-                  </Text>
-                </EnhancedCard>
-                <EnhancedCard variant="outlined" size="sm">
-                  <Text fontSize="sm" fontWeight="medium">
-                    &quot;Tell me about Uniswap&quot;
-                  </Text>
-                </EnhancedCard>
-                <EnhancedCard variant="outlined" size="sm">
-                  <Text fontSize="sm" fontWeight="medium">
-                    &quot;Send 0.01 ETH to vitalik.eth&quot;
-                  </Text>
-                </EnhancedCard>
-              </SimpleGrid>
-            </Box>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>Help & Commands</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <VStack spacing={6} align="stretch">
+                <Box>
+                  <Heading size="sm" mb={2}>
+                    Example Commands
+                  </Heading>
+                  <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                    <EnhancedCard variant="outlined" size="sm">
+                      <Text fontSize="sm" fontWeight="medium">
+                        &quot;Swap 0.1 ETH for USDC&quot;
+                      </Text>
+                    </EnhancedCard>
+                    <EnhancedCard variant="outlined" size="sm">
+                      <Text fontSize="sm" fontWeight="medium">
+                        &quot;Bridge 100 USDC from Ethereum to Polygon&quot;
+                      </Text>
+                    </EnhancedCard>
+                    <EnhancedCard variant="outlined" size="sm">
+                      <Text fontSize="sm" fontWeight="medium">
+                        &quot;Check my ETH balance&quot;
+                      </Text>
+                    </EnhancedCard>
+                    <EnhancedCard variant="outlined" size="sm">
+                      <Text fontSize="sm" fontWeight="medium">
+                        &quot;Analyze my portfolio&quot;
+                      </Text>
+                    </EnhancedCard>
+                    <EnhancedCard variant="outlined" size="sm">
+                      <Text fontSize="sm" fontWeight="medium">
+                        &quot;Tell me about Uniswap&quot;
+                      </Text>
+                    </EnhancedCard>
+                    <EnhancedCard variant="outlined" size="sm">
+                      <Text fontSize="sm" fontWeight="medium">
+                        &quot;Send 0.01 ETH to vitalik.eth&quot;
+                      </Text>
+                    </EnhancedCard>
+                  </SimpleGrid>
+                </Box>
 
-            <Divider />
+                <Divider />
 
-            <Box>
-              <Heading size="sm" mb={2}>
-                Supported Features
-              </Heading>
-              <VStack align="stretch" spacing={2}>
-                <HStack>
-                  <Icon as={FaCheckCircle} color="green.500" />
-                  <Text>Token swaps across multiple DEXs</Text>
-                </HStack>
-                <HStack>
-                  <Icon as={FaCheckCircle} color="green.500" />
-                  <Text>Cross-chain bridging via Axelar</Text>
-                </HStack>
-                <HStack>
-                  <Icon as={FaCheckCircle} color="green.500" />
-                  <Text>Portfolio analysis and tracking</Text>
-                </HStack>
-                <HStack>
-                  <Icon as={FaCheckCircle} color="green.500" />
-                  <Text>Token transfers and balance checking</Text>
-                </HStack>
-                <HStack>
-                  <Icon as={FaCheckCircle} color="green.500" />
-                  <Text>Protocol research and information</Text>
-                </HStack>
+                <Box>
+                  <Heading size="sm" mb={2}>
+                    Supported Features
+                  </Heading>
+                  <VStack align="stretch" spacing={2}>
+                    <HStack>
+                      <Icon as={FaCheckCircle} color="green.500" />
+                      <Text>Token swaps across multiple DEXs</Text>
+                    </HStack>
+                    <HStack>
+                      <Icon as={FaCheckCircle} color="green.500" />
+                      <Text>Cross-chain bridging via Axelar</Text>
+                    </HStack>
+                    <HStack>
+                      <Icon as={FaCheckCircle} color="green.500" />
+                      <Text>Portfolio analysis and tracking</Text>
+                    </HStack>
+                    <HStack>
+                      <Icon as={FaCheckCircle} color="green.500" />
+                      <Text>Token transfers and balance checking</Text>
+                    </HStack>
+                    <HStack>
+                      <Icon as={FaCheckCircle} color="green.500" />
+                      <Text>Protocol research and information</Text>
+                    </HStack>
+                  </VStack>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Heading size="sm" mb={2}>
+                    Supported Networks
+                  </Heading>
+                  <SimpleGrid columns={{ base: 2, md: 3 }} spacing={2}>
+                    {Object.entries(SUPPORTED_CHAINS).map(([id, name]) => (
+                      <HStack key={id}>
+                        <Icon as={FaEthereum} color="blue.500" />
+                        <Text fontSize="sm">{name}</Text>
+                      </HStack>
+                    ))}
+                  </SimpleGrid>
+                </Box>
               </VStack>
-            </Box>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
 
-            <Divider />
-
-            <Box>
-              <Heading size="sm" mb={2}>
-                Supported Networks
-              </Heading>
-              <SimpleGrid columns={{ base: 2, md: 3 }} spacing={2}>
-                {Object.entries(SUPPORTED_CHAINS).map(([id, name]) => (
-                  <HStack key={id}>
-                    <Icon as={FaEthereum} color="blue.500" />
-                    <Text fontSize="sm">{name}</Text>
-                  </HStack>
-                ))}
-              </SimpleGrid>
-            </Box>
-          </VStack>
-        </EnhancedModal>
-
-        <EnhancedModal
+        <ApiKeyModal
           isOpen={isApiKeyModalOpen}
           onClose={() => setIsApiKeyModalOpen(false)}
-          title="API Key Settings"
-          variant="centered"
-          animation="scale"
-          size="md"
-          glassMorphism={true}
-          overlayBlur="8px"
-        >
-          <ApiKeyModal
-            isOpen={isApiKeyModalOpen}
-            onClose={() => setIsApiKeyModalOpen(false)}
-          />
-        </EnhancedModal>
+        />
 
         {/* Settings Drawer */}
-        <EnhancedModal
+        <Drawer
           isOpen={isSettingsDrawerOpen}
           onClose={() => setIsSettingsDrawerOpen(false)}
-          title="Settings"
-          variant="drawer"
           placement="right"
-          animation="slide"
           size="md"
-          glassMorphism={true}
-          overlayBlur="8px"
-          headerIcon={<Icon as={FaCog} />}
         >
-          <VStack spacing={6} align="stretch">
-            <Box>
-              <Heading size="sm" mb={3}>
-                Appearance
-              </Heading>
-              <HStack justify="space-between">
-                <Text>Theme</Text>
-                <EnhancedButton
-                  variant="outline"
-                  size="sm"
-                  leftIcon={colorMode === "light" ? <FaSun /> : <FaMoon />}
-                  onClick={toggleColorMode}
-                >
-                  {colorMode === "light" ? "Light" : "Dark"}
-                </EnhancedButton>
+          <DrawerOverlay />
+          <DrawerContent>
+            <DrawerHeader>
+              <HStack>
+                <Icon as={FaCog} />
+                <Text>Settings</Text>
               </HStack>
-            </Box>
+            </DrawerHeader>
+            <DrawerCloseButton />
+            <DrawerBody>
+              <VStack spacing={6} align="stretch">
+                <Box>
+                  <Heading size="sm" mb={3}>
+                    Appearance
+                  </Heading>
+                  <HStack justify="space-between">
+                    <Text>Theme</Text>
+                    <EnhancedButton
+                      variant="outline"
+                      size="sm"
+                      leftIcon={colorMode === "light" ? <FaSun /> : <FaMoon />}
+                      onClick={toggleColorMode}
+                    >
+                      {colorMode === "light" ? "Light" : "Dark"}
+                    </EnhancedButton>
+                  </HStack>
+                </Box>
 
-            <Divider />
+                <Divider />
 
-            <Box>
-              <Heading size="sm" mb={3}>
-                Portfolio Settings
-              </Heading>
-              <VStack align="stretch" spacing={3}>
-                <HStack justify="space-between">
-                  <Text>Enable Portfolio Analysis</Text>
-                  <EnhancedButton
-                    variant="switch"
-                    isActive={portfolioSettings.enabled}
-                    onClick={() => {
-                      const newValue = !portfolioSettings.enabled;
-                      setPortfolioSettings((prev) => ({
-                        ...prev,
-                        enabled: newValue,
-                      }));
-                      localStorage.setItem(
-                        "snel_portfolio_enabled",
-                        newValue.toString()
-                      );
-                    }}
+                <Box>
+                  <Heading size="sm" mb={3}>
+                    Portfolio Settings
+                  </Heading>
+                  <VStack align="stretch" spacing={3}>
+                    <HStack justify="space-between">
+                      <Text>Enable Portfolio Analysis</Text>
+                      <EnhancedButton
+                        variant={
+                          portfolioSettings.enabled ? "primary" : "outline"
+                        }
+                        size="sm"
+                        onClick={() => {
+                          const newValue = !portfolioSettings.enabled;
+                          setPortfolioSettings((prev) => ({
+                            ...prev,
+                            enabled: newValue,
+                          }));
+                          localStorage.setItem(
+                            "snel_portfolio_enabled",
+                            newValue.toString()
+                          );
+                        }}
+                      >
+                        {portfolioSettings.enabled ? "Enabled" : "Disabled"}
+                      </EnhancedButton>
+                    </HStack>
+                    <HStack justify="space-between">
+                      <Text>Cache Portfolio Data</Text>
+                      <EnhancedButton
+                        variant={
+                          portfolioSettings.cacheEnabled ? "primary" : "outline"
+                        }
+                        size="sm"
+                        onClick={() => {
+                          setPortfolioSettings((prev) => ({
+                            ...prev,
+                            cacheEnabled: !prev.cacheEnabled,
+                          }));
+                        }}
+                      >
+                        {portfolioSettings.cacheEnabled
+                          ? "Enabled"
+                          : "Disabled"}
+                      </EnhancedButton>
+                    </HStack>
+                  </VStack>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Heading size="sm" mb={3}>
+                    Advanced Settings
+                  </Heading>
+                  <AdvancedSettings
+                    axelarUnavailable={axelarUnavailable}
+                    onSettingsChange={setAdvancedSettings}
                   />
-                </HStack>
-                <HStack justify="space-between">
-                  <Text>Cache Portfolio Data</Text>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Heading size="sm" mb={3}>
+                    API Keys
+                  </Heading>
                   <EnhancedButton
-                    variant="switch"
-                    isActive={portfolioSettings.cacheEnabled}
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FaKey />}
                     onClick={() => {
-                      setPortfolioSettings((prev) => ({
-                        ...prev,
-                        cacheEnabled: !prev.cacheEnabled,
-                      }));
+                      setIsSettingsDrawerOpen(false);
+                      setTimeout(() => setIsApiKeyModalOpen(true), 300);
                     }}
-                  />
-                </HStack>
+                    width="100%"
+                  >
+                    Configure API Keys
+                  </EnhancedButton>
+                </Box>
+
+                <Box pt={4}>
+                  <EnhancedButton
+                    variant="primary"
+                    size="md"
+                    onClick={() => setIsSettingsDrawerOpen(false)}
+                    width="100%"
+                  >
+                    Save Settings
+                  </EnhancedButton>
+                </Box>
               </VStack>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Heading size="sm" mb={3}>
-                Advanced Settings
-              </Heading>
-              <AdvancedSettings
-                axelarUnavailable={axelarUnavailable}
-                onSettingsChange={setAdvancedSettings}
-              />
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Heading size="sm" mb={3}>
-                API Keys
-              </Heading>
-              <EnhancedButton
-                variant="outline"
-                size="sm"
-                leftIcon={<FaKey />}
-                onClick={() => {
-                  setIsSettingsDrawerOpen(false);
-                  setTimeout(() => setIsApiKeyModalOpen(true), 300);
-                }}
-                width="100%"
-              >
-                Configure API Keys
-              </EnhancedButton>
-            </Box>
-
-            <Box pt={4}>
-              <EnhancedButton
-                variant="solid"
-                colorScheme="blue"
-                size="md"
-                onClick={() => setIsSettingsDrawerOpen(false)}
-                width="100%"
-              >
-                Save Settings
-              </EnhancedButton>
-            </Box>
-          </VStack>
-        </EnhancedModal>
+            </DrawerBody>
+          </DrawerContent>
+        </Drawer>
 
         {/* Interactive Onboarding */}
         {showOnboarding && (
@@ -1500,9 +1600,9 @@ function EnhancedMainApp() {
               zIndex={1500}
               backdropFilter="blur(8px)"
             >
-              <InteractiveOnboardingFinal
+              <InteractiveOnboarding
                 onComplete={handleOnboardingComplete}
-                onSkip={() => setShowOnboarding(false)}
+                onClose={() => setShowOnboarding(false)}
               />
             </Box>
           </Portal>

@@ -850,206 +850,6 @@ export const CrosschainTransactionTracker: React.FC<
     amount,
   ]);
 
-  // Poll for transaction status
-  useEffect(() => {
-    if (!isPolling) return;
-
-    let intervalId: NodeJS.Timeout;
-
-    const pollStatus = async () => {
-      try {
-        // Get transaction status from Axelar
-        const status = await axelarServiceV2.getTransactionStatus(
-          txHash,
-          typeof sourceChain === "number"
-            ? ChainUtils.getAxelarChainName(sourceChain) || undefined
-            : sourceChain || undefined,
-          typeof destinationChain === "number"
-            ? ChainUtils.getAxelarChainName(destinationChain) || undefined
-            : destinationChain || undefined
-        );
-
-        // Get transaction details
-        const details = axelarServiceV2.getTransaction(txHash) || {
-          txHash,
-          sourceChain: sourceChainName,
-          destinationChain: destinationChainName,
-          sourceAddress,
-          destinationAddress,
-          asset,
-          amount,
-          status: status.status,
-          timestamp: Date.now(),
-        };
-
-        setTxDetails(details);
-
-        // Update steps based on status
-        updateStepsFromStatus(status.status, status);
-      } catch (error) {
-        console.error("Error polling transaction status:", error);
-        if (error instanceof AxelarServiceError) {
-          setError(error.message);
-        } else {
-          setError("Failed to get transaction status");
-        }
-      }
-    };
-
-    // Initial poll
-    pollStatus();
-
-    // Set up polling interval - more frequent initially, then slower
-    intervalId = setInterval(pollStatus, 15000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [
-    txHash,
-    sourceChain,
-    destinationChain,
-    isPolling,
-    sourceChainName,
-    destinationChainName,
-    sourceAddress,
-    destinationAddress,
-    asset,
-    amount,
-    updateStepsFromStatus,
-  ]);
-
-  // Update steps based on transaction status
-  const updateStepsFromStatus = useCallback(
-    (status: string, statusDetails: any) => {
-      // Clone current steps
-      const updatedSteps = [...steps];
-      let updatedRouteNodes = [...routeNodes];
-      let newCurrentStepIndex = currentStepIndex;
-      let newActiveRouteNodeIndex = activeRouteNodeIndex;
-
-      switch (status) {
-        case "pending":
-          // Transaction is still being confirmed on source chain
-          break;
-
-        case "source_confirmed":
-          // Transaction confirmed on source chain, now being processed by Axelar
-          if (currentStepIndex <= 1) {
-            updatedSteps[1].status = "completed";
-            updatedSteps[1].timestamp = Date.now();
-            updatedSteps[2].status = "active";
-            newCurrentStepIndex = 2;
-
-            updatedRouteNodes[0].status = "completed";
-            updatedRouteNodes[1].status = "active";
-            newActiveRouteNodeIndex = 1;
-          }
-          break;
-
-        case "axelar_confirmed":
-          // Axelar has processed and is preparing destination chain
-          if (currentStepIndex <= 2) {
-            updatedSteps[2].status = "completed";
-            updatedSteps[2].timestamp = Date.now();
-            updatedSteps[3].status = "active";
-            newCurrentStepIndex = 3;
-
-            updatedRouteNodes[1].status = "completed";
-            newActiveRouteNodeIndex = 1;
-          }
-          break;
-
-        case "destination_executing":
-          // Transaction is being executed on destination chain
-          if (currentStepIndex <= 3) {
-            updatedSteps[3].status = "completed";
-            updatedSteps[3].timestamp = Date.now();
-            updatedSteps[4].status = "active";
-            newCurrentStepIndex = 4;
-
-            updatedRouteNodes[2].status = "active";
-            newActiveRouteNodeIndex = 2;
-          }
-          break;
-
-        case "executed":
-        case "completed":
-          // Transaction completed successfully
-          updatedSteps.forEach((step) => {
-            if (step.status !== "completed") {
-              step.status = "completed";
-              step.timestamp = Date.now();
-            }
-          });
-          newCurrentStepIndex = updatedSteps.length - 1;
-
-          updatedRouteNodes.forEach((node) => {
-            node.status = "completed";
-          });
-          newActiveRouteNodeIndex = updatedRouteNodes.length - 1;
-
-          // Stop polling
-          setIsPolling(false);
-
-          // Call onComplete callback
-          if (onComplete) {
-            onComplete(true);
-          }
-          break;
-
-        case "error":
-        case "failed":
-          // Transaction failed
-          const failedStepIndex = Math.max(1, currentStepIndex);
-          updatedSteps[failedStepIndex].status = "failed";
-
-          // Mark route node as failed
-          if (failedStepIndex <= 1) {
-            updatedRouteNodes[0].status = "failed";
-          } else if (failedStepIndex <= 3) {
-            updatedRouteNodes[1].status = "failed";
-          } else {
-            updatedRouteNodes[2].status = "failed";
-          }
-
-          // Stop polling
-          setIsPolling(false);
-
-          // Set error message
-          setError(statusDetails.message || "Transaction failed");
-
-          // Generate recovery options
-          generateRecoveryOptions();
-
-          // Call onRecoveryNeeded callback
-          if (onRecoveryNeeded) {
-            onRecoveryNeeded(txHash);
-          }
-          break;
-
-        default:
-          // Unknown status
-          break;
-      }
-
-      setSteps(updatedSteps);
-      setRouteNodes(updatedRouteNodes);
-      setCurrentStepIndex(newCurrentStepIndex);
-      setActiveRouteNodeIndex(newActiveRouteNodeIndex);
-    },
-    [
-      steps,
-      currentStepIndex,
-      routeNodes,
-      activeRouteNodeIndex,
-      onComplete,
-      onRecoveryNeeded,
-      txHash,
-      generateRecoveryOptions,
-    ]
-  );
-
   // Generate recovery options
   const generateRecoveryOptions = useCallback(async () => {
     setLoadingRecovery(true);
@@ -1256,6 +1056,206 @@ export const CrosschainTransactionTracker: React.FC<
     sourceChain,
     closeRecoveryModal,
     openRecoveryModal,
+  ]);
+
+  // Update steps based on transaction status
+  const updateStepsFromStatus = useCallback(
+    (status: string, statusDetails: any) => {
+      // Clone current steps
+      const updatedSteps = [...steps];
+      let updatedRouteNodes = [...routeNodes];
+      let newCurrentStepIndex = currentStepIndex;
+      let newActiveRouteNodeIndex = activeRouteNodeIndex;
+
+      switch (status) {
+        case "pending":
+          // Transaction is still being confirmed on source chain
+          break;
+
+        case "source_confirmed":
+          // Transaction confirmed on source chain, now being processed by Axelar
+          if (currentStepIndex <= 1) {
+            updatedSteps[1].status = "completed";
+            updatedSteps[1].timestamp = Date.now();
+            updatedSteps[2].status = "active";
+            newCurrentStepIndex = 2;
+
+            updatedRouteNodes[0].status = "completed";
+            updatedRouteNodes[1].status = "active";
+            newActiveRouteNodeIndex = 1;
+          }
+          break;
+
+        case "axelar_confirmed":
+          // Axelar has processed and is preparing destination chain
+          if (currentStepIndex <= 2) {
+            updatedSteps[2].status = "completed";
+            updatedSteps[2].timestamp = Date.now();
+            updatedSteps[3].status = "active";
+            newCurrentStepIndex = 3;
+
+            updatedRouteNodes[1].status = "completed";
+            newActiveRouteNodeIndex = 1;
+          }
+          break;
+
+        case "destination_executing":
+          // Transaction is being executed on destination chain
+          if (currentStepIndex <= 3) {
+            updatedSteps[3].status = "completed";
+            updatedSteps[3].timestamp = Date.now();
+            updatedSteps[4].status = "active";
+            newCurrentStepIndex = 4;
+
+            updatedRouteNodes[2].status = "active";
+            newActiveRouteNodeIndex = 2;
+          }
+          break;
+
+        case "executed":
+        case "completed":
+          // Transaction completed successfully
+          updatedSteps.forEach((step) => {
+            if (step.status !== "completed") {
+              step.status = "completed";
+              step.timestamp = Date.now();
+            }
+          });
+          newCurrentStepIndex = updatedSteps.length - 1;
+
+          updatedRouteNodes.forEach((node) => {
+            node.status = "completed";
+          });
+          newActiveRouteNodeIndex = updatedRouteNodes.length - 1;
+
+          // Stop polling
+          setIsPolling(false);
+
+          // Call onComplete callback
+          if (onComplete) {
+            onComplete(true);
+          }
+          break;
+
+        case "error":
+        case "failed":
+          // Transaction failed
+          const failedStepIndex = Math.max(1, currentStepIndex);
+          updatedSteps[failedStepIndex].status = "failed";
+
+          // Mark route node as failed
+          if (failedStepIndex <= 1) {
+            updatedRouteNodes[0].status = "failed";
+          } else if (failedStepIndex <= 3) {
+            updatedRouteNodes[1].status = "failed";
+          } else {
+            updatedRouteNodes[2].status = "failed";
+          }
+
+          // Stop polling
+          setIsPolling(false);
+
+          // Set error message
+          setError(statusDetails.message || "Transaction failed");
+
+          // Generate recovery options
+          generateRecoveryOptions();
+
+          // Call onRecoveryNeeded callback
+          if (onRecoveryNeeded) {
+            onRecoveryNeeded(txHash);
+          }
+          break;
+
+        default:
+          // Unknown status
+          break;
+      }
+
+      setSteps(updatedSteps);
+      setRouteNodes(updatedRouteNodes);
+      setCurrentStepIndex(newCurrentStepIndex);
+      setActiveRouteNodeIndex(newActiveRouteNodeIndex);
+    },
+    [
+      steps,
+      currentStepIndex,
+      routeNodes,
+      activeRouteNodeIndex,
+      onComplete,
+      onRecoveryNeeded,
+      txHash,
+      generateRecoveryOptions,
+    ]
+  );
+
+  // Poll for transaction status
+  useEffect(() => {
+    if (!isPolling) return;
+
+    let intervalId: NodeJS.Timeout;
+
+    const pollStatus = async () => {
+      try {
+        // Get transaction status from Axelar
+        const status = await axelarServiceV2.getTransactionStatus(
+          txHash,
+          typeof sourceChain === "number"
+            ? ChainUtils.getAxelarChainName(sourceChain) || undefined
+            : sourceChain || undefined,
+          typeof destinationChain === "number"
+            ? ChainUtils.getAxelarChainName(destinationChain) || undefined
+            : destinationChain || undefined
+        );
+
+        // Get transaction details
+        const details = axelarServiceV2.getTransaction(txHash) || {
+          txHash,
+          sourceChain: sourceChainName,
+          destinationChain: destinationChainName,
+          sourceAddress,
+          destinationAddress,
+          asset,
+          amount,
+          status: status.status,
+          timestamp: Date.now(),
+        };
+
+        setTxDetails(details);
+
+        // Update steps based on status
+        updateStepsFromStatus(status.status, status);
+      } catch (error) {
+        console.error("Error polling transaction status:", error);
+        if (error instanceof AxelarServiceError) {
+          setError(error.message);
+        } else {
+          setError("Failed to get transaction status");
+        }
+      }
+    };
+
+    // Initial poll
+    pollStatus();
+
+    // Set up polling interval - more frequent initially, then slower
+    intervalId = setInterval(pollStatus, 15000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [
+    txHash,
+    sourceChain,
+    destinationChain,
+    isPolling,
+    sourceChainName,
+    destinationChainName,
+    sourceAddress,
+    destinationAddress,
+    asset,
+    amount,
+    updateStepsFromStatus,
   ]);
 
   // Handle manual retry

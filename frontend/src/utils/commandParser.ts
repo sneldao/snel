@@ -811,11 +811,11 @@ export function formatParsedCommand(parsed: ParsedCommand): string {
   }
   
   if (parsed.sourceChain) {
-    result += `Source Chain: ${SUPPORTED_CHAINS[parsed.sourceChain] || parsed.sourceChain}\n`;
+    result += `Source Chain: ${SUPPORTED_CHAINS[parsed.sourceChain as keyof typeof SUPPORTED_CHAINS] || parsed.sourceChain}\n`;
   }
   
   if (parsed.targetChain) {
-    result += `Target Chain: ${SUPPORTED_CHAINS[parsed.targetChain] || parsed.targetChain}\n`;
+    result += `Target Chain: ${SUPPORTED_CHAINS[parsed.targetChain as keyof typeof SUPPORTED_CHAINS] || parsed.targetChain}\n`;
   }
   
   if (parsed.slippage !== undefined) {

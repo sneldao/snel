@@ -81,6 +81,7 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import {
   FaArrowRight,
   FaArrowLeft,
+  FaArrowDown,
   FaTimes,
   FaCheck,
   FaCog,
@@ -112,6 +113,7 @@ import {
   FaGasPump,
   FaQuestion,
 } from "react-icons/fa";
+import { FiChevronLeft, FiChevronRight, FiCheck } from "react-icons/fi";
 import { ChainUtils } from "../../utils/chainUtils";
 import { axelarServiceV2 } from "../../services/enhanced/axelarServiceV2";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
@@ -122,7 +124,7 @@ export interface OnboardingStep {
   id: string;
   title: string;
   description: string;
-  content: React.ReactNode;
+  content: React.ReactNode | ((props: any) => React.ReactNode);
   icon: React.ElementType;
   completionCriteria?: () => boolean;
   requiredInteraction?: boolean;
@@ -827,7 +829,7 @@ const onboardingSteps: OnboardingStep[] = [
                   const newInterests = e.target.checked
                     ? [...(preferences.interests || []), interest.id]
                     : (preferences.interests || []).filter(
-                        (i) => i !== interest.id
+                        (i: string) => i !== interest.id
                       );
                   onPreferenceChange("interests", newInterests);
                 }}
@@ -2337,7 +2339,7 @@ export const InteractiveOnboarding: React.FC<InteractiveOnboardingProps> = ({
     } else {
       // Path completed
       if (onComplete) {
-        onComplete();
+        onComplete(preferences);
       }
       handleCloseDrawer();
     }
@@ -2353,7 +2355,9 @@ export const InteractiveOnboarding: React.FC<InteractiveOnboardingProps> = ({
     });
   };
 
-  const handleExperienceLevelChange = (level: ExperienceLevel) => {
+  const handleExperienceLevelChange = (
+    level: "beginner" | "intermediate" | "advanced"
+  ) => {
     setPreferences({
       ...preferences,
       experienceLevel: level,
@@ -2474,16 +2478,18 @@ export const InteractiveOnboarding: React.FC<InteractiveOnboardingProps> = ({
 
                       {currentStep.content && (
                         <Box>
-                          {currentStep.content({
-                            preferences,
-                            onExperienceLevelChange:
-                              handleExperienceLevelChange,
-                            onInterestToggle: handleInterestToggle,
-                            onPathChange: handlePathChange,
-                            onStepComplete: handleStepComplete,
-                            currentPath,
-                            availablePaths: onboardingPaths,
-                          })}
+                          {typeof currentStep.content === "function"
+                            ? currentStep.content({
+                                preferences,
+                                onExperienceLevelChange:
+                                  handleExperienceLevelChange,
+                                onInterestToggle: handleInterestToggle,
+                                onPathChange: handlePathChange,
+                                onStepComplete: handleStepComplete,
+                                currentPath,
+                                availablePaths: onboardingPaths,
+                              })
+                            : currentStep.content}
                         </Box>
                       )}
                     </VStack>
