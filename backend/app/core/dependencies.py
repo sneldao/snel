@@ -25,7 +25,7 @@ class ServiceContainer:
         self._brian_client: Optional[object] = None
         self._command_processor: Optional[object] = None
         self._redis_client: Optional[object] = None
-        
+
         # Validate required services can be initialized
         self._validate_service_requirements()
     
@@ -61,9 +61,18 @@ class ServiceContainer:
         if self._command_processor is None:
             try:
                 from app.services.command_processor import CommandProcessor
+                # Initialize transaction flow service first to avoid circular dependency
+                transaction_flow_service = None
+                try:
+                    from app.services.transaction_flow_service import TransactionFlowService
+                    transaction_flow_service = TransactionFlowService()
+                except Exception as tfs_error:
+                    logger.warning(f"Transaction flow service initialization failed: {tfs_error}")
+
                 self._command_processor = CommandProcessor(
                     brian_client=self.brian_client,
-                    settings=self.settings
+                    settings=self.settings,
+                    transaction_flow_service=transaction_flow_service
                 )
                 logger.info("Command processor initialized successfully")
             except Exception as e:
@@ -73,7 +82,9 @@ class ServiceContainer:
                     suggestions=["Check service dependencies"]
                 )
         return self._command_processor
-    
+
+
+
     @property
     def redis_client(self):
         """Get Redis client (lazy initialization)."""

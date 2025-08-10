@@ -19,6 +19,7 @@ class CommandType(Enum):
     CONFIRMATION = "confirmation"
     GMP_OPERATION = "gmp_operation"  # General Message Passing operations
     CROSS_CHAIN_SWAP = "cross_chain_swap"  # Advanced cross-chain swaps
+    TRANSACTION_STEP_COMPLETE = "transaction_step_complete"  # Multi-step transaction management
     UNKNOWN = "unknown"
 
 
@@ -138,6 +139,15 @@ class ChatCommand(BaseModel):
     chain_id: Optional[int] = Field(default=None, description="Current chain ID")
     user_name: Optional[str] = Field(default=None, description="User name")
     openai_api_key: Optional[str] = Field(default=None, description="User-supplied OpenAI API key")
+
+
+class TransactionStepCompletion(BaseModel):
+    """Model for transaction step completion data."""
+    wallet_address: str = Field(description="User wallet address")
+    chain_id: int = Field(description="Current chain ID")
+    tx_hash: str = Field(description="Transaction hash")
+    success: bool = Field(default=True, description="Whether the transaction was successful")
+    error: Optional[str] = Field(default=None, description="Error message if transaction failed")
 
 
 class ChatResponse(BaseModel):

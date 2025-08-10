@@ -6,10 +6,10 @@ This eliminates 800+ lines of duplicate command processing logic.
 import logging
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from app.services.command_processor import CommandProcessor
-from app.models.unified_models import ChatCommand
+from app.models.unified_models import ChatCommand, CommandType, TransactionStepCompletion
 from app.core.dependencies import get_command_processor
 
 logger = logging.getLogger(__name__)
@@ -117,3 +117,64 @@ async def swap_info() -> Dict[str, Any]:
         },
         "migration_status": "Complete - all swap logic unified"
     }
+
+# Multi-step transaction endpoints that forward to unified command processor
+@router.post("/complete-step")
+async def complete_transaction_step(
+    request: TransactionStepCompletion,
+    command_processor: CommandProcessor = Depends(get_command_processor)
+) -> Dict[str, Any]:
+    """
+    Complete a transaction step and get the next step if available.
+
+    This endpoint forwards to the unified command processor for consistent,
+    DRY, modular transaction flow management.
+    """
+    try:
+        logger.info(f"Legacy complete-step endpoint processing for {request.wallet_address}")
+
+        # Create unified command for transaction step completion
+        unified_command = CommandProcessor.create_unified_command(
+            command="complete_transaction_step",  # Internal command
+            wallet_address=request.wallet_address,
+            chain_id=request.chain_id
+        )
+
+        # Override command type and add step completion details
+        unified_command.command_type = CommandType.TRANSACTION_STEP_COMPLETE
+        unified_command.details = {
+            "wallet_address": request.wallet_address,
+            "chain_id": request.chain_id,
+            "tx_hash": request.tx_hash,
+            "success": request.success,
+            "error": request.error
+        }
+
+        # Process through unified processor
+        unified_response = await command_processor.process_command(unified_command)
+
+        # Convert unified response back to legacy format for backward compatibility
+        content = unified_response.content
+        if hasattr(content, 'model_dump'):
+            content = content.model_dump()
+        elif hasattr(content, '__dict__'):
+            content = content.__dict__
+
+        # Return in legacy format expected by frontend
+        return {
+            "success": unified_response.status == "success",
+            "content": content,
+            "metadata": unified_response.metadata,
+            "agent_type": str(unified_response.agent_type),
+            "status": unified_response.status,
+            "error": unified_response.error,
+            "has_next_step": content.get("has_next_step", False) if isinstance(content, dict) else False
+        }
+
+    except Exception as e:
+        logger.exception(f"Error in legacy complete-step endpoint: {e}")
+        return {
+            "success": False,
+            "error": f"Transaction step completion failed: {str(e)}",
+            "has_next_step": False
+        }

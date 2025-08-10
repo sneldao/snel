@@ -33,16 +33,18 @@ class CommandProcessor:
     Eliminates import chaos and provides consistent service access.
     """
     
-    def __init__(self, brian_client, settings: Settings):
+    def __init__(self, brian_client, settings: Settings, transaction_flow_service=None):
         """
         Initialize command processor with dependencies.
-        
+
         Args:
             brian_client: Brian API client instance
             settings: Application settings
+            transaction_flow_service: Transaction flow service for multi-step transactions
         """
         self.brian_client = brian_client
         self.settings = settings
+        self.transaction_flow_service = transaction_flow_service
         
         # Import protocol registry for Axelar support
         from app.protocols.registry import protocol_registry
@@ -208,6 +210,8 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 return await self._process_gmp_operation(unified_command)
             elif command_type == CommandType.CROSS_CHAIN_SWAP:
                 return await self._process_cross_chain_swap(unified_command)
+            elif command_type == CommandType.TRANSACTION_STEP_COMPLETE:
+                return await self._process_transaction_step_complete(unified_command)
             else:
                 return await self._process_unknown(unified_command)
                 
@@ -1414,4 +1418,124 @@ Respond naturally as if you're having a conversation.
                 },
                 agent_type=AgentType.GMP_OPERATION,
                 status="success"
+            )
+
+    async def _process_transaction_step_complete(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """
+        Process transaction step completion and return next step if available.
+
+        This handler manages multi-step transaction flows by:
+        1. Completing the current step
+        2. Advancing to the next step
+        3. Returning the next transaction data or completion status
+        """
+        try:
+            if not self.transaction_flow_service:
+                raise BusinessLogicError(
+                    "Transaction flow service not available",
+                    suggestions=["Check service configuration"]
+                )
+
+            # Extract step completion data from command details
+            step_data = unified_command.details
+            if not step_data:
+                raise ValidationError("Missing transaction step completion data")
+
+            wallet_address = step_data.get('wallet_address') or unified_command.wallet_address
+            chain_id = step_data.get('chain_id') or unified_command.chain_id
+            tx_hash = step_data.get('tx_hash')
+            success = step_data.get('success', True)
+            error = step_data.get('error')
+
+            if not wallet_address or not tx_hash:
+                raise ValidationError("Missing required fields: wallet_address and tx_hash")
+
+            logger.info(f"Completing transaction step for {wallet_address}, tx: {tx_hash}")
+
+            # Complete the current step
+            step_completed = self.transaction_flow_service.complete_step(
+                wallet_address=wallet_address,
+                tx_hash=tx_hash,
+                success=success,
+                error=error
+            )
+
+            if not step_completed:
+                return UnifiedResponse(
+                    content={
+                        "message": "No active transaction flow found",
+                        "type": "error",
+                        "has_next_step": False
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="error",
+                    error="Failed to complete transaction step - no active flow found"
+                )
+
+            # Get the next step if available
+            next_step = self.transaction_flow_service.get_next_step(wallet_address)
+
+            if next_step:
+                # There's a next step - return it
+                transaction_data = TransactionData(
+                    to=next_step.to,
+                    data=next_step.data,
+                    value=next_step.value,
+                    gas_limit=next_step.gas_limit,
+                    chain_id=chain_id
+                )
+
+                current_flow = self.transaction_flow_service.get_current_flow(wallet_address)
+
+                return UnifiedResponse(
+                    content={
+                        "message": next_step.description,
+                        "type": "transaction_step",
+                        "has_next_step": True,
+                        "flow_info": {
+                            "current_step": next_step.step_number,
+                            "step_type": next_step.step_type.value,
+                            "total_steps": len(current_flow.steps) if current_flow else 1
+                        }
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="success",
+                    awaiting_confirmation=True,
+                    transaction=transaction_data.model_dump() if hasattr(transaction_data, 'model_dump') else transaction_data.__dict__
+                )
+            else:
+                # No more steps - flow is complete
+                return UnifiedResponse(
+                    content={
+                        "message": "Transaction flow completed successfully",
+                        "type": "completion",
+                        "has_next_step": False
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="success"
+                )
+
+        except ValidationError as e:
+            logger.error(f"Validation error in transaction step completion: {e}")
+            return UnifiedResponse(
+                content={
+                    "message": f"Invalid transaction step data: {str(e)}",
+                    "type": "error",
+                    "has_next_step": False
+                },
+                agent_type=AgentType.ERROR,
+                status="error",
+                error=str(e)
+            )
+        except Exception as e:
+            logger.exception(f"Error processing transaction step completion: {e}")
+            return UnifiedResponse(
+                content={
+                    "message": "Failed to process transaction step completion",
+                    "type": "error",
+                    "has_next_step": False
+                },
+                agent_type=AgentType.ERROR,
+                status="error",
+                error=str(e)
             )
