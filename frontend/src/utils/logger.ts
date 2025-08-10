@@ -47,6 +47,15 @@ export const logger = {
   },
 
   /**
+   * Log informational messages (alias for log method)
+   */
+  info: (...args: any[]) => {
+    if (!isProduction) {
+      console.log('[INFO]', ...args);
+    }
+  },
+
+  /**
    * Log API requests (only in development)
    */
   api: (method: string, url: string, data?: any) => {

@@ -1,5 +1,6 @@
 """
 Unified command parser for consistent command detection and parsing.
+Enhanced with intelligent pattern matching and performance optimization.
 """
 import re
 import logging
@@ -9,65 +10,33 @@ from decimal import Decimal
 from app.models.unified_models import (
     CommandType, UnifiedCommand, CommandDetails, TokenInfo, ValidationResult
 )
+from app.services.enhanced_command_patterns import enhanced_patterns
 
 logger = logging.getLogger(__name__)
 
 
 class UnifiedCommandParser:
-    """Unified parser for all command types with consistent patterns."""
-    
-    # Command patterns with named groups for better parsing
-    COMMAND_PATTERNS = {
-        CommandType.TRANSFER: [
-            r"(?:transfer|send)\s+(?P<amount>[\d\.]+)\s+(?P<token>\S+)\s+to\s+(?P<destination>\S+)",
-        ],
-        CommandType.BRIDGE: [
-            # Bridge token to another chain: "bridge 0.1 eth to arbitrum"
-            r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\S+)\s+(?:from\s+(?P<source_chain>\S+)\s+)?to\s+(?P<dest_chain>\S+)",
-            # Bridge token to same token on another chain: "bridge 0.1 eth to usdc on arbitrum"
-            r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\S+)\s+to\s+(?P<dest_token>\S+)\s+on\s+(?P<dest_chain>\S+)",
-            # Bridge with explicit destination token: "bridge 0.1 eth to usdc arbitrum"
-            r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\S+)\s+to\s+(?P<dest_token>\S+)\s+(?P<dest_chain>\S+)",
-        ],
-        CommandType.SWAP: [
-            r"swap\s+(?P<amount>[\d\.]+)\s+(?P<token_in>\S+)\s+(?:to|for)\s+(?P<token_out>\S+)",
-            r"swap\s+\$(?P<usd_amount>[\d\.]+)\s+(?:of|worth\s+of)\s+(?P<token_in>\S+)\s+(?:to|for)\s+(?P<token_out>\S+)",
-        ],
-        CommandType.BALANCE: [
-            r"(?:check|show|what's)\s+(?:my\s+)?(?P<token>\S+)?\s*balance",
-            r"balance\s+(?:of\s+)?(?P<token>\S+)?",
-        ],
-        CommandType.PORTFOLIO: [
-            r"(?:analyze|show|check)\s+(?:my\s+)?portfolio",
-            r"portfolio\s+(?:analysis|allocation|holdings)",
-            r"what's\s+my\s+(?:allocation|holdings)",
-        ],
-        CommandType.PROTOCOL_RESEARCH: [
-            r"(?:tell\s+me\s+about|what\s+is|research|info\s+about)\s+(?P<protocol>\w+)",
-            r"(?P<protocol>\w+)\s+protocol",
-            r"how\s+does\s+(?P<protocol>\w+)\s+work",
-        ],
-        CommandType.GREETING: [
-            r"^(?:gm|good\s+morning|hello|hi|hey|howdy|sup|yo)$",
-        ],
-        CommandType.CONFIRMATION: [
-            r"^(?:yes|confirm|proceed|continue)$",
-            r"^(?:no|cancel|abort|stop)$",
-        ],
-    }
+    """
+    Unified parser for all command types with intelligent pattern matching.
+    Optimized for performance, maintainability, and user experience.
+    """
     
     @classmethod
     def detect_command_type(cls, command: str) -> CommandType:
-        """Detect the type of command from the input string."""
-        command_clean = command.lower().strip()
-        
-        # Check each command type pattern
-        for command_type, patterns in cls.COMMAND_PATTERNS.items():
-            for pattern in patterns:
-                if re.search(pattern, command_clean, re.IGNORECASE):
-                    return command_type
-        
-        return CommandType.UNKNOWN
+        """
+        Detect the type of command using enhanced pattern system.
+        Optimized for performance with intelligent priority-based matching.
+        """
+        command_type, extracted_params = enhanced_patterns.detect_command_type(command)
+        return command_type
+    
+    @classmethod
+    def detect_command_with_params(cls, command: str) -> tuple[CommandType, Optional[Dict]]:
+        """
+        Detect command type and extract parameters in one operation.
+        More efficient for complex parsing operations.
+        """
+        return enhanced_patterns.detect_command_type(command)
     
     @classmethod
     def parse_command(cls, command: str, command_type: CommandType) -> Optional[CommandDetails]:

@@ -115,7 +115,7 @@ import {
 } from "react-icons/fa";
 import { FiChevronLeft, FiChevronRight, FiCheck } from "react-icons/fi";
 import { ChainUtils } from "../../utils/chainUtils";
-import { axelarServiceV2 } from "../../services/enhanced/axelarServiceV2";
+import { axelarService } from "../../services/axelarService";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 
 // ======== TypeScript Interfaces ========

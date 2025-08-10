@@ -17,6 +17,8 @@ class CommandType(Enum):
     CONTEXTUAL_QUESTION = "contextual_question"
     GREETING = "greeting"
     CONFIRMATION = "confirmation"
+    GMP_OPERATION = "gmp_operation"  # General Message Passing operations
+    CROSS_CHAIN_SWAP = "cross_chain_swap"  # Advanced cross-chain swaps
     UNKNOWN = "unknown"
 
 
@@ -36,6 +38,8 @@ class AgentType(Enum):
     BALANCE = "balance"
     PORTFOLIO = "portfolio"
     PROTOCOL_RESEARCH = "protocol_research"
+    GMP_OPERATION = "gmp_operation"
+    CROSS_CHAIN_SWAP = "cross_chain_swap"
     DEFAULT = "default"
     ERROR = "error"
 
@@ -84,6 +88,11 @@ class UnifiedCommand(BaseModel):
     user_name: Optional[str] = Field(default=None, description="User name")
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     details: Optional[CommandDetails] = Field(default=None, description="Parsed command details")
+    
+    @property
+    def original_text(self) -> str:
+        """Alias for command field to maintain compatibility."""
+        return self.command
 
 
 class ResponseContent(BaseModel):

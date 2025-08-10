@@ -47,6 +47,14 @@ class CommandProcessor:
         # Import protocol registry for Axelar support
         from app.protocols.registry import protocol_registry
         self.protocol_registry = protocol_registry
+        
+        # Import GMP service for advanced cross-chain operations
+        from app.services.axelar_gmp_service import axelar_gmp_service
+        self.gmp_service = axelar_gmp_service
+        
+        # Import enhanced cross-chain handler for GMP operations
+        from app.services.enhanced_crosschain_handler import enhanced_crosschain_handler
+        self.gmp_handler = enhanced_crosschain_handler
 
     @staticmethod
     def create_unified_command(
@@ -100,7 +108,9 @@ Command types available:
 - PROTOCOL_RESEARCH: Research requests about DeFi protocols
 - TRANSFER: Token transfer requests
 - BRIDGE: Cross-chain bridge requests
-- SWAP: Token swap requests
+- SWAP: Token swap requests (same chain)
+- CROSS_CHAIN_SWAP: Advanced cross-chain swaps using Axelar GMP (e.g., "swap USDC from Ethereum to MATIC on Polygon")
+- GMP_OPERATION: General Message Passing operations like cross-chain contract calls, complex DeFi operations across chains
 - BALANCE: Balance check requests
 - PORTFOLIO: Portfolio analysis requests
 - GREETING: Only simple greetings like "hi", "hello", "hey", without other content
@@ -112,8 +122,19 @@ Classification guidelines:
 - Questions that require explanations or detailed responses → CONTEXTUAL_QUESTION
 - Only classify as GREETING if it's a simple hello with no other content
 - If the user is asking about something that was recently discussed → CONTEXTUAL_QUESTION
+- Cross-chain swaps with different tokens or chains → CROSS_CHAIN_SWAP
+- Complex cross-chain operations (yield farming, liquidity provision across chains) → GMP_OPERATION
+- Contract calls on different chains → GMP_OPERATION
+- Simple same-chain swaps → SWAP
 
-Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
+Examples:
+- "swap 100 USDC from Ethereum to MATIC on Polygon" → CROSS_CHAIN_SWAP
+- "call mint function on Polygon using funds from Ethereum" → GMP_OPERATION
+- "add liquidity to Uniswap on Arbitrum using ETH from Ethereum" → GMP_OPERATION
+- "swap 1 ETH for USDC" → SWAP
+- "bridge 100 USDC to Arbitrum" → BRIDGE
+
+Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 """
 
             response = await client.chat.completions.create(
@@ -163,6 +184,10 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
 
             command_type = unified_command.command_type
             
+            # Check if this is a GMP operation first (before processing as regular commands)
+            if await self._should_use_gmp_handler(unified_command):
+                return await self._process_gmp_operation(unified_command)
+            
             if command_type == CommandType.TRANSFER:
                 return await self._process_transfer(unified_command)
             elif command_type == CommandType.BRIDGE:
@@ -179,6 +204,10 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
                 return await self._process_contextual_question(unified_command)
             elif command_type == CommandType.GREETING:
                 return await self._process_greeting(unified_command)
+            elif command_type == CommandType.GMP_OPERATION:
+                return await self._process_gmp_operation(unified_command)
+            elif command_type == CommandType.CROSS_CHAIN_SWAP:
+                return await self._process_cross_chain_swap(unified_command)
             else:
                 return await self._process_unknown(unified_command)
                 
@@ -1009,14 +1038,18 @@ Respond with ONLY the command type name (e.g., "CONTEXTUAL_QUESTION").
             
             # Set of facts about SNEL for the LLM to incorporate in responses
             snel_facts = """
-- You are SNEL — Stablecoin Navigation and Education Leader
+- You are SNEL — Smart, Natural, Efficient, Limitless DeFi Assistant
 - You help with stablecoin information and RWA insights
 - You provide risk assessment and portfolio diversification advice
 - You deliver real-time market data
 - You assist with DeFi operations like swaps and bridges
+- You specialize in cross-chain operations using Axelar Network's General Message Passing (GMP)
+- You can execute complex cross-chain swaps, yield farming, and liquidity provision across 16+ blockchain networks
+- You handle multi-step cross-chain operations with natural language commands like "swap USDC from Ethereum to MATIC on Polygon"
 - You're built to connect with user wallets for balance checks and portfolio analysis
 - You're designed to be conversational and personable
-- You're knowledgeable about all aspects of DeFi
+- You're knowledgeable about all aspects of DeFi and cross-chain interoperability
+- You use Axelar's secure cross-chain infrastructure for seamless multi-chain operations
 """
             
             prompt = f"""
@@ -1102,14 +1135,18 @@ Instructions:
             
             # Set of facts about SNEL for the LLM to incorporate in responses
             snel_facts = """
-- You are SNEL — Stablecoin Navigation and Education Leader
+- You are SNEL — Smart, Natural, Efficient, Limitless DeFi Assistant
 - You help with stablecoin information and RWA insights
 - You provide risk assessment and portfolio diversification advice
 - You deliver real-time market data
 - You assist with DeFi operations like swaps and bridges
+- You specialize in cross-chain operations using Axelar Network's General Message Passing (GMP)
+- You can execute complex cross-chain swaps, yield farming, and liquidity provision across 16+ blockchain networks
+- You handle multi-step cross-chain operations with natural language commands like "swap USDC from Ethereum to MATIC on Polygon"
 - You're built to connect with user wallets for balance checks and portfolio analysis
 - You're designed to be conversational and personable
-- You're knowledgeable about all aspects of DeFi
+- You're knowledgeable about all aspects of DeFi and cross-chain interoperability
+- You use Axelar's secure cross-chain infrastructure for seamless multi-chain operations
 """
 
             # Check if this is a question about the assistant itself
@@ -1237,3 +1274,144 @@ Respond naturally as if you're having a conversation.
             agent_type=AgentType.DEFAULT,
             status="success"
         )
+
+    async def _should_use_gmp_handler(self, unified_command: UnifiedCommand) -> bool:
+        """
+        Determine if a command should be handled by the GMP handler.
+        This checks for complex cross-chain operations that require GMP.
+        """
+        try:
+            # Check if the enhanced cross-chain handler can handle this command
+            return await self.gmp_handler.can_handle(unified_command)
+        except Exception as e:
+            logger.exception(f"Error checking GMP handler capability: {e}")
+            return False
+
+    async def _process_gmp_operation(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """
+        Process general message passing operations using the enhanced cross-chain handler.
+        """
+        try:
+            logger.info(f"Processing GMP operation: {unified_command.command}")
+
+            # Validate wallet connection for GMP operations
+            if not unified_command.wallet_address:
+                raise wallet_not_connected_error()
+
+            # Determine the type of GMP operation
+            if await self._is_cross_chain_swap(unified_command):
+                return await self.gmp_handler.handle_cross_chain_swap(
+                    unified_command, unified_command.wallet_address
+                )
+            else:
+                return await self.gmp_handler.handle_gmp_operation(
+                    unified_command, unified_command.wallet_address
+                )
+
+        except (ValidationError, BusinessLogicError, ExternalServiceError):
+            raise  # Re-raise known exceptions
+        except Exception as e:
+            logger.exception("Error processing GMP operation")
+            raise ExternalServiceError(
+                message="Failed to process cross-chain operation",
+                service_name="GMP Service",
+                original_error=str(e)
+            )
+
+    async def _process_cross_chain_swap(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """
+        Process cross-chain swap operations using GMP.
+        """
+        try:
+            logger.info(f"Processing cross-chain swap: {unified_command.command}")
+
+            # Validate wallet connection
+            if not unified_command.wallet_address:
+                raise wallet_not_connected_error()
+
+            # Use the enhanced cross-chain handler for cross-chain swaps
+            return await self.gmp_handler.handle_cross_chain_swap(
+                unified_command, unified_command.wallet_address
+            )
+
+        except (ValidationError, BusinessLogicError, ExternalServiceError):
+            raise  # Re-raise known exceptions
+        except Exception as e:
+            logger.exception("Error processing cross-chain swap")
+            raise ExternalServiceError(
+                message="Failed to process cross-chain swap",
+                service_name="Cross-Chain Swap Service",
+                original_error=str(e)
+            )
+
+    async def _is_cross_chain_swap(self, unified_command: UnifiedCommand) -> bool:
+        """
+        Determine if this is a cross-chain swap operation.
+        """
+        try:
+            command_text = unified_command.command.lower()
+            
+            # Check for explicit cross-chain swap patterns
+            cross_chain_patterns = [
+                r"swap.*from\s+\w+.*to\s+\w+.*on\s+\w+",
+                r"bridge.*and.*swap",
+                r"cross.chain.*swap",
+                r"swap.*on.*\w+.*chain"
+            ]
+            
+            import re
+            for pattern in cross_chain_patterns:
+                if re.search(pattern, command_text):
+                    return True
+            
+            # Check if different chains are specified
+            if hasattr(unified_command, 'from_chain') and hasattr(unified_command, 'to_chain'):
+                if (unified_command.from_chain and unified_command.to_chain and 
+                    unified_command.from_chain != unified_command.to_chain):
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.exception(f"Error determining if cross-chain swap: {e}")
+            return False
+
+    def _convert_gmp_response_to_unified(self, gmp_response: UnifiedResponse) -> UnifiedResponse:
+        """
+        Convert GMP handler response to unified response format.
+        This ensures compatibility with the existing response structure.
+        """
+        try:
+            # If it's already a UnifiedResponse, just update the agent type
+            if isinstance(gmp_response, UnifiedResponse):
+                # Determine appropriate agent type based on operation
+                if gmp_response.content and gmp_response.content.metadata:
+                    metadata = gmp_response.content.metadata
+                    if metadata.get("uses_gmp"):
+                        if "cross_chain_swap" in str(metadata.get("operation_type", "")):
+                            gmp_response.agent_type = AgentType.CROSS_CHAIN_SWAP
+                        else:
+                            gmp_response.agent_type = AgentType.GMP_OPERATION
+                
+                return gmp_response
+            
+            # If it's a different format, convert it
+            return UnifiedResponse(
+                content={
+                    "message": str(gmp_response),
+                    "type": "gmp_response"
+                },
+                agent_type=AgentType.GMP_OPERATION,
+                status="success"
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error converting GMP response: {e}")
+            return UnifiedResponse(
+                content={
+                    "message": "Cross-chain operation completed, but response formatting failed",
+                    "type": "gmp_response"
+                },
+                agent_type=AgentType.GMP_OPERATION,
+                status="success"
+            )

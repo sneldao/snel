@@ -36,7 +36,7 @@ import {
   useChainId,
 } from "wagmi";
 import { CommandInput } from "./CommandInput";
-import { CommandResponse } from "./CommandResponse";
+import { GMPCompatibleCommandResponse as CommandResponse } from "./GMPCompatibleCommandResponse";
 import { WalletButton } from "./WalletButton";
 import { ExternalLinkIcon, SettingsIcon, QuestionIcon } from "@chakra-ui/icons";
 import { ApiKeyModal } from "./ApiKeyModal";
@@ -54,6 +54,8 @@ import {
   recursionGuard,
 } from "../utils/recursionGuard";
 import { setupGlobalWalletErrorHandler } from "../utils/walletErrorHandler";
+import { useGMPIntegration } from "../hooks/useGMPIntegration";
+import { useWallet } from "../hooks/useWallet";
 
 interface ResponseContent {
   type?: string;
@@ -95,6 +97,38 @@ export default function MainApp() {
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  
+  // GMP Integration
+  const { walletClient: gmppWalletClient } = useWallet();
+  const { executeGMPTransaction } = useGMPIntegration({
+    onTransactionStart: (transactionId) => {
+      toast({
+        title: 'Cross-chain Transaction Started',
+        description: `Transaction ${transactionId} is being processed`,
+        status: 'info',
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+    onTransactionComplete: (transactionId, result) => {
+      toast({
+        title: 'Cross-chain Transaction Complete',
+        description: `Transaction ${transactionId} completed successfully`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    },
+    onTransactionError: (transactionId, error) => {
+      toast({
+        title: 'Cross-chain Transaction Failed',
+        description: `Transaction ${transactionId} failed: ${error}`,
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+      });
+    }
+  });
 
   // Initialize services with stable references
   const apiService = React.useMemo(() => new ApiService(), []);
@@ -468,6 +502,39 @@ export default function MainApp() {
     };
   }, []);
 
+  // GMP Transaction execution handler
+  const handleGMPTransaction = async (transactionData: any) => {
+    if (!gmppWalletClient || !isConnected) {
+      toast({
+        title: 'Wallet Not Connected',
+        description: 'Please connect your wallet to execute cross-chain transactions',
+        status: 'warning',
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      // Extract transaction ID from the response
+      const transactionId = transactionData?.transactionId || 
+                           transactionData?.content?.transactionId ||
+                           transactionData?.id ||
+                           `gmp_${Date.now()}`;
+
+      await executeGMPTransaction(transactionId, gmppWalletClient);
+    } catch (error) {
+      console.error('GMP transaction execution failed:', error);
+      toast({
+        title: 'Transaction Failed',
+        description: error instanceof Error ? error.message : 'Failed to execute cross-chain transaction',
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+      });
+    }
+  };
+
   return (
     <Box minH="100vh" bg="gray.50">
       <Container maxW="container.xl" py={4}>
@@ -649,6 +716,7 @@ export default function MainApp() {
                     transaction={response.transaction}
                     awaitingConfirmation={response.awaitingConfirmation}
                     onActionClick={handlePortfolioAction}
+                    onExecuteTransaction={handleGMPTransaction}
                   />
                 ))}
                 <div ref={responsesEndRef} />

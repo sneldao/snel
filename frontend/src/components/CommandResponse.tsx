@@ -68,6 +68,9 @@ interface CommandResponseProps {
   onQuoteSelect?: (response: any, quote: any) => void;
   transaction?: any;
   onActionClick?: (action: any) => void;
+  onExecuteTransaction?: (transactionData: any) => Promise<void>;
+  isExecuting?: boolean;
+  className?: string;
 }
 
 // Removed TokenInfo type - no longer needed

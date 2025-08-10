@@ -8,7 +8,8 @@
       "Bash(npm run lint:*)",
       "Bash(node:*)",
       "Bash(rm:*)",
-      "Bash(timeout 60s npm run build)"
+      "Bash(timeout 60s npm run build)",
+      "WebFetch(domain:docs.axelar.dev)"
     ],
     "deny": []
   }
