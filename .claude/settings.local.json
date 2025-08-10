@@ -9,7 +9,10 @@
       "Bash(node:*)",
       "Bash(rm:*)",
       "Bash(timeout 60s npm run build)",
-      "WebFetch(domain:docs.axelar.dev)"
+      "WebFetch(domain:docs.axelar.dev)",
+      "Bash(pip install:*)",
+      "Bash(python3:*)",
+      "Bash(source:*)"
     ],
     "deny": []
   }

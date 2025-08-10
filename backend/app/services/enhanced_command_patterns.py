@@ -139,6 +139,32 @@ class EnhancedCommandPatterns:
                         "bridge 0.1 ETH from Ethereum to Polygon"
                     ]
                 ),
+                
+                # Balance check patterns
+                CommandPattern(
+                    pattern=r"(?:balance|check balance)(?:\s+(?P<token>\w+))?",
+                    command_type=CommandType.BALANCE,
+                    priority=PatternPriority.MEDIUM,
+                    description="Check token balance",
+                    examples=[
+                        "balance",
+                        "check balance ETH",
+                        "balance USDC"
+                    ]
+                ),
+                
+                # Protocol research patterns
+                CommandPattern(
+                    pattern=r"(?:research|tell me about|what is|about|info on|explain)\s+(?P<protocol>\w+)",
+                    command_type=CommandType.PROTOCOL_RESEARCH,
+                    priority=PatternPriority.MEDIUM,
+                    description="Research DeFi protocol",
+                    examples=[
+                        "research Uniswap",
+                        "tell me about Aave",
+                        "what is Compound"
+                    ]
+                ),
             ],
             
             PatternPriority.LOW: [

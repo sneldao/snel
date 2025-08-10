@@ -68,68 +68,67 @@ class UnifiedCommandParser:
     @classmethod
     def _parse_transfer(cls, command: str) -> Optional[CommandDetails]:
         """Parse transfer command details."""
-        for pattern in cls.COMMAND_PATTERNS[CommandType.TRANSFER]:
-            match = re.search(pattern, command, re.IGNORECASE)
-            if match:
-                groups = match.groupdict()
-                return CommandDetails(
-                    amount=float(groups["amount"]),
-                    token_in=TokenInfo(symbol=groups["token"].upper()),
-                    destination=groups["destination"]
-                )
+        # Use the enhanced patterns to detect and extract parameters
+        command_type, extracted_params = enhanced_patterns.detect_command_type(command)
+        
+        if command_type == CommandType.TRANSFER and extracted_params:
+            return CommandDetails(
+                amount=float(extracted_params["amount"]),
+                token_in=TokenInfo(symbol=extracted_params["token"].upper()),
+                destination=extracted_params["destination"]
+            )
         return None
     
     @classmethod
     def _parse_bridge(cls, command: str) -> Optional[CommandDetails]:
         """Parse bridge command details."""
-        for pattern in cls.COMMAND_PATTERNS[CommandType.BRIDGE]:
-            match = re.search(pattern, command, re.IGNORECASE)
-            if match:
-                groups = match.groupdict()
-                return CommandDetails(
-                    amount=float(groups["amount"]),
-                    token_in=TokenInfo(symbol=groups["token"].upper()),
-                    source_chain=groups.get("source_chain"),
-                    destination_chain=groups["dest_chain"]
-                )
+        # Use the enhanced patterns to detect and extract parameters
+        command_type, extracted_params = enhanced_patterns.detect_command_type(command)
+        
+        if command_type == CommandType.BRIDGE and extracted_params:
+            return CommandDetails(
+                amount=float(extracted_params["amount"]),
+                token_in=TokenInfo(symbol=extracted_params["token"].upper()),
+                source_chain=extracted_params.get("source_chain"),
+                destination_chain=extracted_params["dest_chain"]
+            )
         return None
     
     @classmethod
     def _parse_swap(cls, command: str) -> Optional[CommandDetails]:
         """Parse swap command details."""
-        for pattern in cls.COMMAND_PATTERNS[CommandType.SWAP]:
-            match = re.search(pattern, command, re.IGNORECASE)
-            if match:
-                groups = match.groupdict()
-                
-                # Handle USD amount vs token amount
-                if "usd_amount" in groups and groups["usd_amount"]:
-                    amount = float(groups["usd_amount"])
-                    additional_params = {"is_usd_amount": True}
-                else:
-                    amount = float(groups["amount"])
-                    additional_params = {"is_usd_amount": False}
-                
-                return CommandDetails(
-                    amount=amount,
-                    token_in=TokenInfo(symbol=groups["token_in"].upper()),
-                    token_out=TokenInfo(symbol=groups["token_out"].upper()),
-                    additional_params=additional_params
-                )
+        # Use the enhanced patterns to detect and extract parameters
+        command_type, extracted_params = enhanced_patterns.detect_command_type(command)
+        
+        if command_type in [CommandType.SWAP, CommandType.CROSS_CHAIN_SWAP] and extracted_params:
+            # Handle USD amount vs token amount
+            if "usd_amount" in extracted_params and extracted_params["usd_amount"]:
+                amount = float(extracted_params["usd_amount"])
+                additional_params = {"is_usd_amount": True}
+            else:
+                amount = float(extracted_params["amount"])
+                additional_params = {"is_usd_amount": False}
+            
+            return CommandDetails(
+                amount=amount,
+                token_in=TokenInfo(symbol=extracted_params["token_in"].upper()),
+                token_out=TokenInfo(symbol=extracted_params["token_out"].upper()),
+                additional_params=additional_params
+            )
         return None
     
     @classmethod
     def _parse_balance(cls, command: str) -> Optional[CommandDetails]:
         """Parse balance command details."""
-        for pattern in cls.COMMAND_PATTERNS[CommandType.BALANCE]:
-            match = re.search(pattern, command, re.IGNORECASE)
-            if match:
-                groups = match.groupdict()
-                token = groups.get("token")
-                return CommandDetails(
-                    token_in=TokenInfo(symbol=token.upper()) if token else None
-                )
-        return None
+        # Use the enhanced patterns to detect and extract parameters
+        command_type, extracted_params = enhanced_patterns.detect_command_type(command)
+        
+        if command_type == CommandType.BALANCE and extracted_params:
+            token = extracted_params.get("token")
+            return CommandDetails(
+                token_in=TokenInfo(symbol=token.upper()) if token else None
+            )
+        return CommandDetails()  # Balance commands can work without specific token
     
     @classmethod
     def _parse_portfolio(cls, command: str) -> Optional[CommandDetails]:
@@ -140,15 +139,15 @@ class UnifiedCommandParser:
     @classmethod
     def _parse_protocol_research(cls, command: str) -> Optional[CommandDetails]:
         """Parse protocol research command details."""
-        for pattern in cls.COMMAND_PATTERNS[CommandType.PROTOCOL_RESEARCH]:
-            match = re.search(pattern, command, re.IGNORECASE)
-            if match:
-                groups = match.groupdict()
-                protocol = groups.get("protocol")
-                return CommandDetails(
-                    protocol=protocol,
-                    additional_params={"research_type": "protocol"}
-                )
+        # Use the enhanced patterns to detect and extract parameters
+        command_type, extracted_params = enhanced_patterns.detect_command_type(command)
+        
+        if command_type == CommandType.PROTOCOL_RESEARCH and extracted_params:
+            protocol = extracted_params.get("protocol")
+            return CommandDetails(
+                protocol=protocol,
+                additional_params={"research_type": "protocol"}
+            )
         return None
     
     @classmethod
