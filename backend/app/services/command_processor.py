@@ -350,6 +350,35 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         if amount < 1:
             return f"{amount:.18f}".rstrip('0').rstrip('.')
         return str(amount)
+
+    def _normalize_token_for_swap(self, token_symbol: str, chain_id: int) -> str:
+        """
+        Normalize token symbols for DEX compatibility.
+
+        Users often say "ETH" when they mean the native token, but DEX protocols
+        typically need "WETH" (Wrapped ETH) for swaps since you can't directly
+        swap native ETH in most AMM protocols.
+
+        Args:
+            token_symbol: Original token symbol from user input
+            chain_id: Chain ID for context
+
+        Returns:
+            Normalized token symbol suitable for DEX protocols
+        """
+        token_upper = token_symbol.upper()
+
+        # On EVM chains, normalize ETH to WETH for swaps
+        # This is because most DEX protocols (Uniswap, SushiSwap, etc.) use WETH
+        if token_upper == "ETH":
+            # Check if this is an EVM chain where WETH is used
+            evm_chains_with_weth = {1, 10, 56, 137, 42161, 8453, 43114, 59144, 324, 5000, 81457}
+            if chain_id in evm_chains_with_weth:
+                logger.info(f"Normalizing ETH to WETH for swap on chain {chain_id}")
+                return "WETH"
+
+        # For other tokens, return as-is
+        return token_upper
     
     def _create_transaction_data(self, result: dict, chain_id: int) -> Optional[TransactionData]:
         """Create transaction data from API result."""
@@ -609,6 +638,13 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 
             logger.info(f"Attempting swap: {amount_str} {details.token_in.symbol} for {details.token_out.symbol}")
 
+            # Normalize token symbols for DEX compatibility
+            # Users say "ETH" but DEX protocols need "WETH" for swaps
+            from_token_symbol = self._normalize_token_for_swap(details.token_in.symbol, unified_command.chain_id)
+            to_token_symbol = self._normalize_token_for_swap(details.token_out.symbol, unified_command.chain_id)
+
+            logger.info(f"Normalized tokens: {from_token_symbol} -> {to_token_symbol}")
+
             # Determine if this is cross-chain based on token symbols or explicit chain specification
             # This is a simple heuristic - could be enhanced with better parsing
             from_chain = unified_command.chain_id
@@ -625,8 +661,8 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 
             # Use protocol registry to get quote with Axelar priority
             quote = await self.protocol_registry.get_quote(
-                from_token=details.token_in.symbol,
-                to_token=details.token_out.symbol,
+                from_token=from_token_symbol,
+                to_token=to_token_symbol,
                 amount=amount_str,
                 from_chain=from_chain,
                 to_chain=to_chain,

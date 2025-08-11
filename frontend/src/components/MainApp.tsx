@@ -47,6 +47,7 @@ import { Response } from "../types/responses";
 import { SUPPORTED_CHAINS } from "../constants/chains";
 import { ApiService } from "../services/apiService";
 import { TransactionService } from "../services/transactionService";
+import { MultiStepTransactionService } from "../services/multiStepTransactionService";
 import { PortfolioService } from "../services/portfolioService";
 import { AdvancedSettings, AdvancedSettingsValues } from "./AdvancedSettings";
 import {
@@ -97,37 +98,37 @@ export default function MainApp() {
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  
+
   // GMP Integration
   const { walletClient: gmppWalletClient } = useWallet();
   const { executeGMPTransaction } = useGMPIntegration({
     onTransactionStart: (transactionId) => {
       toast({
-        title: 'Cross-chain Transaction Started',
+        title: "Cross-chain Transaction Started",
         description: `Transaction ${transactionId} is being processed`,
-        status: 'info',
+        status: "info",
         duration: 5000,
         isClosable: true,
       });
     },
     onTransactionComplete: (transactionId, result) => {
       toast({
-        title: 'Cross-chain Transaction Complete',
+        title: "Cross-chain Transaction Complete",
         description: `Transaction ${transactionId} completed successfully`,
-        status: 'success',
+        status: "success",
         duration: 5000,
         isClosable: true,
       });
     },
     onTransactionError: (transactionId, error) => {
       toast({
-        title: 'Cross-chain Transaction Failed',
+        title: "Cross-chain Transaction Failed",
         description: `Transaction ${transactionId} failed: ${error}`,
-        status: 'error',
+        status: "error",
         duration: 8000,
         isClosable: true,
       });
-    }
+    },
   });
 
   // Initialize services with stable references
@@ -142,6 +143,14 @@ export default function MainApp() {
         ? new TransactionService(walletClient, publicClient, chainId)
         : null,
     [walletClient, publicClient, chainId]
+  );
+
+  const multiStepTransactionService = React.useMemo(
+    () =>
+      transactionService
+        ? new MultiStepTransactionService(transactionService, apiService)
+        : null,
+    [transactionService, apiService]
   );
 
   const isResponseContent = (content: any): content is ResponseContent => {
@@ -506,9 +515,10 @@ export default function MainApp() {
   const handleGMPTransaction = async (transactionData: any) => {
     if (!gmppWalletClient || !isConnected) {
       toast({
-        title: 'Wallet Not Connected',
-        description: 'Please connect your wallet to execute cross-chain transactions',
-        status: 'warning',
+        title: "Wallet Not Connected",
+        description:
+          "Please connect your wallet to execute cross-chain transactions",
+        status: "warning",
         duration: 5000,
         isClosable: true,
       });
@@ -517,18 +527,22 @@ export default function MainApp() {
 
     try {
       // Extract transaction ID from the response
-      const transactionId = transactionData?.transactionId || 
-                           transactionData?.content?.transactionId ||
-                           transactionData?.id ||
-                           `gmp_${Date.now()}`;
+      const transactionId =
+        transactionData?.transactionId ||
+        transactionData?.content?.transactionId ||
+        transactionData?.id ||
+        `gmp_${Date.now()}`;
 
       await executeGMPTransaction(transactionId, gmppWalletClient);
     } catch (error) {
-      console.error('GMP transaction execution failed:', error);
+      console.error("GMP transaction execution failed:", error);
       toast({
-        title: 'Transaction Failed',
-        description: error instanceof Error ? error.message : 'Failed to execute cross-chain transaction',
-        status: 'error',
+        title: "Transaction Failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to execute cross-chain transaction",
+        status: "error",
         duration: 8000,
         isClosable: true,
       });

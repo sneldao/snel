@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.services.chat_history import chat_history_service
 from app.services.command_processor import CommandProcessor
-from app.models.unified_models import ChatCommand, ChatResponse
+from app.models.unified_models import ChatCommand, ChatResponse, TransactionStepCompletion
 from app.config.agent_config import AgentConfig, AgentMode
 from app.core.dependencies import get_command_processor
 from app.core.exceptions import SNELException
@@ -163,3 +163,68 @@ async def get_agent_info():
         "response_modes": [mode.value for mode in AgentMode],
         "status": "operational"
     }
+
+
+@router.post("/complete-bridge-step")
+async def complete_bridge_step(
+    request: TransactionStepCompletion,
+    command_processor: CommandProcessor = Depends(get_command_processor)
+) -> ChatResponse:
+    """
+    Complete a bridge transaction step and get the next step.
+
+    This endpoint handles multi-step bridge transactions by:
+    1. Completing the current step (e.g., approval)
+    2. Returning the next step (e.g., send_token)
+    """
+    try:
+        logger.info(f"Bridge step completion for {request.wallet_address}, tx: {request.tx_hash}")
+
+        # Create unified command for transaction step completion
+        unified_command = CommandProcessor.create_unified_command(
+            command="complete_transaction_step",  # Internal command
+            wallet_address=request.wallet_address,
+            chain_id=request.chain_id
+        )
+
+        # Override command type and add step completion details
+        from app.models.unified_models import CommandType
+        unified_command.command_type = CommandType.TRANSACTION_STEP_COMPLETE
+        unified_command.details = {
+            "wallet_address": request.wallet_address,
+            "chain_id": request.chain_id,
+            "tx_hash": request.tx_hash,
+            "success": request.success
+        }
+
+        # Process through unified command processor
+        unified_response = await command_processor.process_command(unified_command)
+
+        # Extract content
+        content = unified_response.content
+        if hasattr(content, '__dict__'):
+            content = content.__dict__
+
+        # Convert to ChatResponse format
+        return ChatResponse(
+            content=content,
+            agent_type=unified_response.agent_type.value if hasattr(unified_response.agent_type, 'value') else str(unified_response.agent_type),
+            status=unified_response.status,
+            awaiting_confirmation=unified_response.awaiting_confirmation,
+            transaction=unified_response.transaction.model_dump() if unified_response.transaction else None,
+            metadata=unified_response.metadata,
+            error=unified_response.error
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in bridge step completion: {e}")
+        return ChatResponse(
+            content={
+                "message": f"Bridge step completion failed: {str(e)}",
+                "type": "error",
+                "has_next_step": False
+            },
+            agent_type="error",
+            status="error",
+            error=str(e)
+        )

@@ -304,6 +304,161 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     [transactionService, address, chainId, apiService, toast, setUserRejected]
   );
 
+  // Unified multi-step transaction handler for bridges and swaps
+  const handleUnifiedMultiStepTransaction = React.useCallback(
+    async (agentType: "bridge" | "swap", txData: any) => {
+      if (!transactionService || !address || !chainId) {
+        toast({
+          title: "Error",
+          description: "Wallet not properly connected",
+          status: "error",
+          duration: 5000,
+        });
+        return;
+      }
+
+      try {
+        setIsExecuting(true);
+        setMultiStepState({
+          steps: [
+            {
+              step: 1,
+              stepType: "approval",
+              status: "executing",
+              description: `Approving tokens for ${agentType}...`,
+            },
+          ],
+          currentStep: 1,
+          totalSteps: 2, // Estimate: approval + main transaction
+          isComplete: false,
+        });
+
+        // Import the MultiStepTransactionService
+        const { MultiStepTransactionService } = await import(
+          "../services/multiStepTransactionService"
+        );
+        const { ApiService } = await import("../services/apiService");
+
+        const apiService = new ApiService();
+        const multiStepService = new MultiStepTransactionService(
+          transactionService,
+          apiService
+        );
+
+        // Execute unified multi-step transaction
+        const result =
+          await multiStepService.executeUnifiedMultiStepTransaction(
+            agentType,
+            txData,
+            address,
+            chainId,
+            (step, stepResult) => {
+              // Update step as completed
+              setMultiStepState((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      steps: prev.steps.map((s) =>
+                        s.step === step
+                          ? { ...s, status: "completed", hash: stepResult.hash }
+                          : s
+                      ),
+                    }
+                  : null
+              );
+
+              toast({
+                title: `Step ${step} Complete`,
+                description: `Transaction hash: ${stepResult.hash}`,
+                status: "success",
+                duration: 3000,
+              });
+            },
+            (step, stepType) => {
+              // Update step as started
+              setMultiStepState((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      currentStep: step,
+                      steps: [
+                        ...prev.steps.slice(0, step - 1),
+                        {
+                          step,
+                          stepType,
+                          status: "executing",
+                          description: `Executing ${stepType}...`,
+                        },
+                        ...prev.steps.slice(step),
+                      ],
+                    }
+                  : null
+              );
+            }
+          );
+
+        if (result.success) {
+          setMultiStepState((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  isComplete: true,
+                }
+              : null
+          );
+
+          toast({
+            title: `${
+              agentType.charAt(0).toUpperCase() + agentType.slice(1)
+            } Complete`,
+            description: `All transactions executed successfully`,
+            status: "success",
+            duration: 5000,
+          });
+        } else {
+          throw new Error(result.error || `${agentType} transaction failed`);
+        }
+      } catch (error) {
+        console.error(`Unified ${agentType} transaction failed:`, error);
+
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        const isUserRejection =
+          errorMessage.includes("cancelled") ||
+          errorMessage.includes("rejected");
+
+        if (isUserRejection) {
+          setUserRejected(true);
+        }
+
+        setMultiStepState((prev) =>
+          prev
+            ? {
+                ...prev,
+                error: errorMessage,
+              }
+            : null
+        );
+
+        toast({
+          title: isUserRejection
+            ? "Transaction Cancelled"
+            : `${
+                agentType.charAt(0).toUpperCase() + agentType.slice(1)
+              } Failed`,
+          description: isUserRejection
+            ? "You cancelled the transaction"
+            : errorMessage,
+          status: isUserRejection ? "warning" : "error",
+          duration: 5000,
+        });
+      } finally {
+        setIsExecuting(false);
+      }
+    },
+    [transactionService, address, chainId, toast, setUserRejected]
+  );
+
   // Extract transaction data from content if available
   const transactionData =
     transaction ||
@@ -334,14 +489,20 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
   const isBridgeTransaction =
     (typeof content === "object" &&
       content?.type === "bridge_ready" &&
-      agentType === "bridge") ||
+      agentType === "bridge" &&
+      !awaitingConfirmation) || // Single-step bridge (rare)
     (typeof content === "object" &&
       content?.type === "bridge_transaction" &&
-      agentType === "bridge") ||
-    (agentType === "bridge" && transactionData) ||
+      agentType === "bridge" &&
+      !awaitingConfirmation) ||
+    (agentType === "bridge" && transactionData && !awaitingConfirmation) ||
     (typeof content === "object" &&
       content?.requires_transaction &&
-      agentType === "bridge");
+      agentType === "bridge" &&
+      !awaitingConfirmation);
+
+  const isBridgeMultiStep =
+    agentType === "bridge" && awaitingConfirmation && transactionData;
   const isTransferTransaction =
     (typeof content === "object" &&
       content?.type === "transfer_confirmation" &&
@@ -360,7 +521,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     agentType === "protocol_research";
 
   const isCrossChainSuccess =
-    typeof content === "object" && 
+    typeof content === "object" &&
     content?.type === "cross_chain_success" &&
     content?.axelar_powered === true;
 
@@ -559,6 +720,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
       return () => clearTimeout(timeoutId);
     }
 
+    // Handle bridge multi-step transactions
+    if (isBridgeMultiStep && !isExecuting && !multiStepState) {
+      const timeoutId = setTimeout(() => {
+        handleUnifiedMultiStepTransaction("bridge", transactionData);
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+
     // Check if we have single-step transaction data that needs to be executed
     const shouldExecuteTransaction =
       (isBrianTransaction ||
@@ -585,6 +754,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     transactionData,
     isBrianTransaction,
     isBridgeTransaction,
+    isBridgeMultiStep,
     isTransferTransaction,
     isSwapTransaction,
     isMultiStepTransaction,
@@ -594,6 +764,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     userRejected,
     handleExecuteTransaction,
     handleMultiStepTransaction,
+    handleUnifiedMultiStepTransaction,
   ]);
 
   // Extract portfolio analysis data for modal
@@ -798,25 +969,38 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               <ProtocolResearchResult content={content} />
             ) : isPortfolioDisabled ? (
               <PortfolioEnablePrompt
-                suggestion={typeof content === "object" ? content.suggestion : {
-                  title: "Enable Portfolio Analysis",
-                  description: "Get detailed insights about your holdings",
-                  features: ["Holdings analysis", "Risk assessment", "Optimization tips"],
-                  warning: "Analysis takes 10-30 seconds"
-                }}
+                suggestion={
+                  typeof content === "object"
+                    ? content.suggestion
+                    : {
+                        title: "Enable Portfolio Analysis",
+                        description:
+                          "Get detailed insights about your holdings",
+                        features: [
+                          "Holdings analysis",
+                          "Risk assessment",
+                          "Optimization tips",
+                        ],
+                        warning: "Analysis takes 10-30 seconds",
+                      }
+                }
                 onEnable={() => {
                   // This will be handled by MainApp
                   if (onActionClick) {
                     onActionClick({
                       type: "enable_portfolio",
-                      message: "Portfolio analysis enabled"
+                      message: "Portfolio analysis enabled",
                     });
                   }
                 }}
               />
             ) : isCrossChainSuccess ? (
-              <CrossChainResult 
-                content={typeof content === "object" ? content : { type: "cross_chain_success" }}
+              <CrossChainResult
+                content={
+                  typeof content === "object"
+                    ? content
+                    : { type: "cross_chain_success" }
+                }
                 metadata={metadata}
               />
             ) : agentType === "agno" || agentType === "portfolio" ? (
@@ -1013,9 +1197,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               !isCommand &&
               !isSwapConfirmation &&
               !isDCAConfirmation &&
-              !isDCASuccess && (
-                <StatusBadge status="success" />
-              )}
+              !isDCASuccess && <StatusBadge status="success" />}
           </Box>
         </VStack>
       </HStack>

@@ -8,6 +8,8 @@ from typing import Dict, Any, Optional
 from decimal import Decimal
 import os
 import json
+from eth_abi import encode
+from eth_utils import function_signature_to_4byte_selector
 
 logger = logging.getLogger(__name__)
 
@@ -25,23 +27,27 @@ class AxelarService:
         # Chain mappings for Axelar
         self.chain_mappings = {
             1: "Ethereum",
+            10: "optimism",  # Added Optimism support
             56: "binance",
             137: "Polygon",
-            43114: "Avalanche", 
+            43114: "Avalanche",
             42161: "Arbitrum",
             10: "optimism",
             8453: "base",
-            59144: "linea"
+            59144: "linea",
+            534352: "scroll"  # Added Scroll support
         }
         
         # Supported tokens on Axelar
         self.supported_tokens = {
             "USDC": {
                 "Ethereum": "0xA0b86a33E6441b8C8A008c85c9c8B99c5b5a3c3b",
+                "optimism": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",  # USDC on Optimism
                 "Polygon": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
                 "Avalanche": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
                 "Arbitrum": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
-                "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+                "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                "scroll": "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"  # USDC on Scroll
             },
             "USDT": {
                 "Ethereum": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
@@ -142,15 +148,26 @@ class AxelarService:
 
             # Get transfer fee estimate
             fee_estimate = await self._get_transfer_fee(from_chain, to_chain, from_token, float(amount))
-            
+
             # Calculate estimated time
             estimated_time = self._get_estimated_time(from_chain, to_chain)
+
+            # Get Axelar Gateway address for the source chain
+            gateway_address = self._get_gateway_address(from_chain_id)
+            if not gateway_address:
+                return {
+                    "error": "Axelar Gateway not available for source chain",
+                    "technical_details": f"No gateway address found for chain {from_chain_id}"
+                }
             
-            # Get deposit address
-            deposit_address = await self._get_deposit_address(
-                from_chain, to_chain, wallet_address, from_token
-            )
-            
+            # Get token address for the source chain
+            token_address = self._get_token_address(from_token, from_chain_id)
+            if not token_address:
+                return {
+                    "error": f"Token {from_token} not supported on chain {from_chain_id}",
+                    "technical_details": f"No token address found for {from_token} on chain {from_chain_id}"
+                }
+
             return {
                 "success": True,
                 "protocol": "axelar",
@@ -162,16 +179,25 @@ class AxelarService:
                 "amount": str(amount),
                 "estimated_fee": fee_estimate,
                 "estimated_time": estimated_time,
-                "deposit_address": deposit_address,
+                "gateway_address": gateway_address,
+                "token_address": token_address,
                 "recipient_address": wallet_address,
                 "steps": [
                     {
-                        "type": "transfer",
-                        "description": f"Transfer {amount} {from_token} to Axelar deposit address",
+                        "type": "approve",
+                        "description": f"Approve {amount} {from_token} for Axelar Gateway",
                         "chain": from_chain,
-                        "to": deposit_address,
-                        "value": str(amount) if from_token.upper() == "ETH" else "0",
-                        "data": "0x" if from_token.upper() == "ETH" else None
+                        "to": token_address,
+                        "value": "0",
+                        "data": self._build_approve_data(gateway_address, amount, from_token)
+                    },
+                    {
+                        "type": "send_token",
+                        "description": f"Send {amount} {from_token} to {to_chain} via Axelar",
+                        "chain": from_chain,
+                        "to": gateway_address,
+                        "value": "0",
+                        "data": self._build_send_token_data(to_chain, wallet_address, from_token, amount)
                     }
                 ]
             }
@@ -207,7 +233,7 @@ class AxelarService:
     async def _get_transfer_fee(self, from_chain: str, to_chain: str, token: str, amount: float) -> str:
         """Get transfer fee estimate from Axelar API."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
                 response = await client.get(
                     f"{self.base_url}/transfer-fee",
                     params={
@@ -233,7 +259,7 @@ class AxelarService:
     async def _get_deposit_address(self, from_chain: str, to_chain: str, recipient: str, token: str) -> str:
         """Get deposit address for cross-chain transfer."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
                 response = await client.post(
                     f"{self.base_url}/deposit-address",
                     json={
@@ -281,6 +307,80 @@ class AxelarService:
             if chain_name in chains:
                 supported.append(token)
         return supported
+
+    def _get_gateway_address(self, chain_id: int) -> Optional[str]:
+        """Get Axelar Gateway contract address for a chain."""
+        # Axelar Gateway addresses for different chains
+        gateway_addresses = {
+            1: "0x4F4495243837681061C4743b74B3eEdf548D56A5",      # Ethereum
+            56: "0x304acf330bbE08d1e512eefaa92F6a57871fD895",     # BSC
+            137: "0x6f015F16De9fC8791b234eF68D486d2bF203FBA8",    # Polygon
+            43114: "0x5029C0EFf6C34351a0CEc334542cDb22c7928f78",  # Avalanche
+            42161: "0xe432150cce91c13a887f7D836923d5597adD8E31",  # Arbitrum
+            10: "0xe432150cce91c13a887f7D836923d5597adD8E31",     # Optimism
+            8453: "0xe432150cce91c13a887f7D836923d5597adD8E31",   # Base
+            59144: "0xe432150cce91c13a887f7D836923d5597adD8E31",  # Linea
+            534352: "0xe432150cce91c13a887f7D836923d5597adD8E31"  # Scroll
+        }
+        return gateway_addresses.get(chain_id)
+
+    def _get_token_address(self, token_symbol: str, chain_id: int) -> Optional[str]:
+        """Get token contract address for a specific chain."""
+        # Token addresses for different chains
+        token_addresses = {
+            "USDC": {
+                1: "0xA0b86a33E6441b8C8A008c85c9c8B99c5b5a3c3b",      # Ethereum
+                56: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",     # BSC
+                137: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",    # Polygon
+                43114: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",  # Avalanche
+                42161: "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",  # Arbitrum
+                10: "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",     # Optimism
+                8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",   # Base
+                534352: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4"  # Scroll
+            }
+        }
+        return token_addresses.get(token_symbol.upper(), {}).get(chain_id)
+
+    def _build_approve_data(self, spender: str, amount: float, token_symbol: str) -> str:
+        """Build approve transaction data for ERC20 token."""
+        try:
+            # Convert amount to wei (assuming USDC has 6 decimals)
+            decimals = 6 if token_symbol.upper() == "USDC" else 18
+            amount_wei = int(amount * (10 ** decimals))
+
+            # ERC20 approve function: approve(address spender, uint256 amount)
+            function_selector = function_signature_to_4byte_selector("approve(address,uint256)").hex()
+
+            # Encode parameters: spender address and amount
+            encoded_params = encode(['address', 'uint256'], [spender, amount_wei])
+
+            return f"0x{function_selector}{encoded_params.hex()}"
+
+        except Exception as e:
+            logger.error(f"Error building approve data: {e}")
+            return "0x095ea7b3"  # Return just selector as fallback
+
+    def _build_send_token_data(self, dest_chain: str, recipient: str, token_symbol: str, amount: float) -> str:
+        """Build sendToken transaction data for Axelar Gateway."""
+        try:
+            # Convert amount to wei (assuming USDC has 6 decimals)
+            decimals = 6 if token_symbol.upper() == "USDC" else 18
+            amount_wei = int(amount * (10 ** decimals))
+
+            # Axelar Gateway sendToken function: sendToken(string destinationChain, string destinationAddress, string symbol, uint256 amount)
+            function_selector = function_signature_to_4byte_selector("sendToken(string,string,string,uint256)").hex()
+
+            # Encode parameters
+            encoded_params = encode(
+                ['string', 'string', 'string', 'uint256'],
+                [dest_chain, recipient, token_symbol.upper(), amount_wei]
+            )
+
+            return f"0x{function_selector}{encoded_params.hex()}"
+
+        except Exception as e:
+            logger.error(f"Error building send token data: {e}")
+            return "0x442a21e8"  # Return just selector as fallback
 
 # Global instance
 axelar_service = AxelarService()

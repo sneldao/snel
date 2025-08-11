@@ -119,14 +119,18 @@ class AxelarAdapter:
                     "technical_details": "Quote missing steps"
                 }
                 
-            # For Axelar, the transaction is typically a simple transfer to deposit address
-            step = steps[0]
-            
+            # For Axelar, we need to handle multi-step transactions (approve + send)
+            # Return the first step (approval) as the main transaction
+            first_step = steps[0]
+
+            # Determine gas limit based on step type
+            gas_limit = "100000" if first_step.get("type") == "approve" else "200000"
+
             transaction = {
-                "to": step.get("to"),
-                "value": step.get("value", "0"),
-                "data": step.get("data", "0x"),
-                "gas": "21000",  # Standard transfer gas
+                "to": first_step.get("to"),
+                "value": first_step.get("value", "0"),
+                "data": first_step.get("data", "0x"),
+                "gas": gas_limit,
                 "gasPrice": None,  # Let wallet determine
             }
             

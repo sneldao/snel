@@ -88,7 +88,7 @@ export const CHAIN_CONFIG = {
   42161: { name: "Arbitrum", explorer: "https://arbiscan.io/tx/", axelarName: "Arbitrum" },
   137: { name: "Polygon", explorer: "https://polygonscan.com/tx/", axelarName: "Polygon" },
   59144: { name: "Linea", explorer: "https://lineascan.build/tx/", axelarName: "linea" },
-  534352: { name: "Scroll", explorer: "https://scrollscan.com/tx/", axelarName: null },
+  534352: { name: "Scroll", explorer: "https://scrollscan.com/tx/", axelarName: "scroll" },
   324: { name: "zkSync Era", explorer: "https://explorer.zksync.io/tx/", axelarName: null },
   34443: { name: "Mode", explorer: "https://explorer.mode.network/tx/", axelarName: null },
   167004: { name: "Taiko", explorer: "https://explorer.test.taiko.xyz/tx/", axelarName: null },
