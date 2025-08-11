@@ -401,18 +401,36 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         if not quote.get("success", False):
             return None
 
+        logger.info(f"Creating transaction data from quote: {quote}")
+
         # Handle different quote formats
         if "transaction" in quote:
             # Single transaction format
             tx = quote["transaction"]
-            return TransactionData(
-                to=tx.get("to", ""),
-                data=tx.get("data", "0x"),
-                value=str(tx.get("value", "0")),
-                gasLimit=str(tx.get("gas_limit", tx.get("gasLimit", ""))),
-                chainId=chain_id,
-                from_address=tx.get("from")
-            )
+            logger.info(f"Using transaction format: {tx}")
+
+            # Handle nested transaction structure (e.g., from Axelar adapter)
+            if "transaction" in tx and isinstance(tx["transaction"], dict):
+                actual_tx = tx["transaction"]
+                logger.info(f"Found nested transaction: {actual_tx}")
+                return TransactionData(
+                    to=actual_tx.get("to", ""),
+                    data=actual_tx.get("data", "0x"),
+                    value=str(actual_tx.get("value", "0")),
+                    gasLimit=str(actual_tx.get("gas_limit", actual_tx.get("gasLimit", ""))),
+                    chainId=chain_id,
+                    from_address=actual_tx.get("from")
+                )
+            else:
+                # Direct transaction format
+                return TransactionData(
+                    to=tx.get("to", ""),
+                    data=tx.get("data", "0x"),
+                    value=str(tx.get("value", "0")),
+                    gasLimit=str(tx.get("gas_limit", tx.get("gasLimit", ""))),
+                    chainId=chain_id,
+                    from_address=tx.get("from")
+                )
         elif "steps" in quote and quote["steps"]:
             # Multi-step format
             first_step = quote["steps"][0]

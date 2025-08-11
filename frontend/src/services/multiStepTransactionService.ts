@@ -378,6 +378,7 @@ export class MultiStepTransactionService {
           }
 
           // Check for next step
+          console.log(`Calling completeTransactionStep for ${agentType} with hash: ${result.hash}`);
           const completionResult = await this.completeTransactionStep(
             agentType,
             walletAddress,
@@ -386,14 +387,22 @@ export class MultiStepTransactionService {
             true
           );
 
+          console.log(`Completion result:`, completionResult);
+
           if (completionResult.success && completionResult.hasNextStep && completionResult.nextTransaction) {
             // Prepare next step
+            console.log(`Next step found, preparing transaction:`, completionResult.nextTransaction);
             currentTransaction = completionResult.nextTransaction;
             stepNumber++;
 
             // Add delay between steps
             await new Promise(resolve => setTimeout(resolve, 2000));
           } else {
+            console.log(`No next step found or completion failed:`, {
+              success: completionResult.success,
+              hasNextStep: completionResult.hasNextStep,
+              hasNextTransaction: !!completionResult.nextTransaction
+            });
             hasNextStep = false;
           }
 

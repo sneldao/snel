@@ -196,12 +196,26 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
           );
 
           // Notify backend of completion and get next step
-          const nextStepResponse = await apiService.completeTransactionStep(
-            address,
-            chainId,
-            result.hash as string,
-            true
-          );
+          // Use the correct endpoint based on agent type
+          const endpoint =
+            agentType === "bridge"
+              ? "/api/v1/chat/complete-bridge-step"
+              : "/api/v1/swap/complete-step";
+
+          console.log(`Using ${endpoint} for agentType: ${agentType}`);
+
+          const nextStepResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              wallet_address: address,
+              chain_id: chainId,
+              tx_hash: result.hash as string,
+              success: true,
+            }),
+          }).then((res) => res.json());
 
           if (nextStepResponse.success && nextStepResponse.has_next_step) {
             // There's a next step - execute it
