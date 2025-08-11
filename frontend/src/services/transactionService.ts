@@ -75,6 +75,11 @@ export class TransactionService {
     // Create an abort controller to handle cancellations
     const abortController = new AbortController();
 
+    // Validate transaction data exists
+    if (!txData || typeof txData !== 'object') {
+      throw new Error("Invalid transaction data: transaction data is missing or invalid");
+    }
+
     // Check if the transaction data contains an error
     if ("error" in txData && txData.error) {
       throw new Error(txData.error);

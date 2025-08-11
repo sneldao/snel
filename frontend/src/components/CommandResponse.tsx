@@ -134,6 +134,10 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
   // Multi-step transaction handler
   const handleMultiStepTransaction = React.useCallback(
     async (txData: any) => {
+      console.log("handleMultiStepTransaction called with txData:", txData);
+      console.log("txData.transaction:", txData?.transaction);
+      console.log("transactionData from props:", transactionData);
+
       if (!transactionService || !address || !chainId) {
         toast({
           title: "Error",
@@ -165,8 +169,15 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         });
 
         // Execute the transaction
+        const transactionToExecute = txData.transaction || transactionData;
+        console.log("Transaction to execute:", transactionToExecute);
+
+        if (!transactionToExecute) {
+          throw new Error("No transaction data available for execution");
+        }
+
         const result = await transactionService.executeTransaction(
-          txData.transaction
+          transactionToExecute
         );
 
         if (result.success) {
@@ -195,6 +206,10 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
           if (nextStepResponse.success && nextStepResponse.has_next_step) {
             // There's a next step - execute it
             const nextTxData = nextStepResponse.content;
+            const nextTransaction = nextStepResponse.transaction;
+
+            console.log("Next step response:", nextStepResponse);
+            console.log("Next transaction data:", nextTransaction);
 
             // Add next step to state
             setMultiStepState((prev) =>
@@ -217,7 +232,11 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
 
             // Small delay before next step
             setTimeout(() => {
-              handleMultiStepTransaction(nextTxData);
+              // Pass the next transaction data instead of reusing the original
+              handleMultiStepTransaction({
+                ...nextTxData,
+                transaction: nextTransaction,
+              });
             }, 2000);
           } else {
             // Transaction flow complete
@@ -501,8 +520,70 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
       agentType === "bridge" &&
       !awaitingConfirmation);
 
+  // Enhanced bridge detection - works even if agentType is undefined
   const isBridgeMultiStep =
-    agentType === "bridge" && awaitingConfirmation && transactionData;
+    (agentType === "bridge" && awaitingConfirmation && transactionData) ||
+    (awaitingConfirmation &&
+      transactionData &&
+      typeof content === "object" &&
+      content?.message &&
+      (content.message.toLowerCase().includes("bridge") ||
+        content.message.toLowerCase().includes("axelar"))) ||
+    // FORCE DETECTION: If we have awaiting confirmation + transaction + approval data, it's likely a bridge
+    (awaitingConfirmation &&
+      transactionData &&
+      typeof transactionData === "object" &&
+      transactionData.data &&
+      transactionData.data.startsWith("0x095ea7b3")); // approve function signature
+
+  // Debug bridge multi-step detection
+  React.useEffect(() => {
+    if (
+      agentType === "bridge" ||
+      (typeof content === "object" && content?.type?.includes("bridge"))
+    ) {
+      console.log("Bridge Multi-Step Debug:", {
+        agentType,
+        awaitingConfirmation,
+        transactionData: !!transactionData,
+        isBridgeMultiStep,
+        contentType:
+          typeof content === "object" ? content?.type : typeof content,
+        contentMessage: typeof content === "object" ? content?.message : null,
+        primaryDetection:
+          agentType === "bridge" && awaitingConfirmation && transactionData,
+        fallbackDetection:
+          awaitingConfirmation &&
+          transactionData &&
+          typeof content === "object" &&
+          content?.message &&
+          (content.message.toLowerCase().includes("bridge") ||
+            content.message.toLowerCase().includes("axelar")),
+        // Detailed breakdown
+        agentTypeCheck: agentType === "bridge",
+        awaitingConfirmationCheck: awaitingConfirmation,
+        transactionDataCheck: !!transactionData,
+        contentObjectCheck: typeof content === "object",
+        contentMessageCheck:
+          typeof content === "object" ? !!content?.message : false,
+        messageIncludesBridge:
+          typeof content === "object" && content?.message
+            ? content.message.toLowerCase().includes("bridge")
+            : false,
+        messageIncludesAxelar:
+          typeof content === "object" && content?.message
+            ? content.message.toLowerCase().includes("axelar")
+            : false,
+      });
+    }
+  }, [
+    agentType,
+    awaitingConfirmation,
+    transactionData,
+    isBridgeMultiStep,
+    content,
+  ]);
+
   const isTransferTransaction =
     (typeof content === "object" &&
       content?.type === "transfer_confirmation" &&
@@ -722,10 +803,21 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
 
     // Handle bridge multi-step transactions
     if (isBridgeMultiStep && !isExecuting && !multiStepState) {
+      console.log("🚀 Triggering unified multi-step bridge transaction!");
       const timeoutId = setTimeout(() => {
         handleUnifiedMultiStepTransaction("bridge", transactionData);
       }, 100);
       return () => clearTimeout(timeoutId);
+    }
+
+    // Debug why multi-step might not be triggering
+    if (agentType === "bridge") {
+      console.log("Bridge Multi-Step Trigger Check:", {
+        isBridgeMultiStep,
+        isExecuting,
+        multiStepState: !!multiStepState,
+        shouldTrigger: isBridgeMultiStep && !isExecuting && !multiStepState,
+      });
     }
 
     // Check if we have single-step transaction data that needs to be executed
@@ -762,7 +854,6 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     txResponse,
     multiStepState,
     userRejected,
-    handleExecuteTransaction,
     handleMultiStepTransaction,
     handleUnifiedMultiStepTransaction,
   ]);

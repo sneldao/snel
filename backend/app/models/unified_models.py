@@ -60,12 +60,15 @@ class TokenInfo(BaseModel):
 class TransactionData(BaseModel):
     """Standardized transaction data model."""
     to: str = Field(description="Transaction recipient address")
-    data: Optional[str] = Field(default=None, description="Transaction data")
+    data: Optional[str] = Field(default="0x", description="Transaction data")
     value: str = Field(default="0", description="Transaction value in wei")
-    gas_limit: Optional[str] = Field(default=None, description="Gas limit")
-    gas_price: Optional[str] = Field(default=None, description="Gas price")
-    chain_id: int = Field(description="Chain ID")
+    gasLimit: Optional[str] = Field(default=None, alias="gas_limit", description="Gas limit")
+    gasPrice: Optional[str] = Field(default=None, alias="gas_price", description="Gas price")
+    chainId: int = Field(alias="chain_id", description="Chain ID")
     from_address: Optional[str] = Field(default=None, description="Sender address")
+
+    class Config:
+        validate_by_name = True
 
 
 class CommandDetails(BaseModel):

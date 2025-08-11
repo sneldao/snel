@@ -456,8 +456,17 @@ export default function MainApp() {
           // Debug logging for bridge and transfer commands
           if (command.toLowerCase().includes("bridge")) {
             console.log("Bridge command API response:", response);
+            console.log("Response agent_type:", response.agent_type);
             console.log("Response agentType:", response.agentType);
+            console.log(
+              "Response awaiting_confirmation:",
+              response.awaiting_confirmation
+            );
             console.log("Response transaction:", response.transaction);
+            console.log(
+              "Mapping result:",
+              response.agent_type || response.agentType
+            );
           }
 
           if (command.toLowerCase().includes("transfer")) {
@@ -476,12 +485,30 @@ export default function MainApp() {
             );
           }
 
+          // Ensure proper agentType and awaitingConfirmation mapping
+          const mappedAgentType = response.agent_type || response.agentType;
+          const mappedAwaitingConfirmation =
+            response.awaiting_confirmation ?? response.awaitingConfirmation;
+
+          // Debug the mapping
+          if (command.toLowerCase().includes("bridge")) {
+            console.log("Final mapping:", {
+              original_agent_type: response.agent_type,
+              original_agentType: response.agentType,
+              mapped_agentType: mappedAgentType,
+              original_awaiting_confirmation: response.awaiting_confirmation,
+              original_awaitingConfirmation: response.awaitingConfirmation,
+              mapped_awaitingConfirmation: mappedAwaitingConfirmation,
+            });
+          }
+
           // Regular handling for non-portfolio commands
           setResponses((prev) => [
             ...prev,
             {
               ...response,
-              agentType: response.agent_type || response.agentType, // Map agent_type to agentType
+              agentType: mappedAgentType, // Use the mapped value
+              awaitingConfirmation: mappedAwaitingConfirmation, // Use the mapped value
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "success",
@@ -718,21 +745,42 @@ export default function MainApp() {
               </VStack>
             ) : (
               <VStack spacing={4} align="stretch">
-                {responses.map((response, index) => (
-                  <CommandResponse
-                    key={index}
-                    content={response.content}
-                    timestamp={response.timestamp}
-                    isCommand={response.isCommand}
-                    status={response.status}
-                    metadata={response.metadata}
-                    agentType={response.agentType}
-                    transaction={response.transaction}
-                    awaitingConfirmation={response.awaitingConfirmation}
-                    onActionClick={handlePortfolioAction}
-                    onExecuteTransaction={handleGMPTransaction}
-                  />
-                ))}
+                {responses.map((response, index) => {
+                  // Debug what's being passed to CommandResponse
+                  if (
+                    response.agentType === "bridge" ||
+                    (response.content &&
+                      typeof response.content === "object" &&
+                      response.content.message &&
+                      response.content.message.toLowerCase().includes("bridge"))
+                  ) {
+                    console.log(`Passing to CommandResponse[${index}]:`, {
+                      agentType: response.agentType,
+                      awaitingConfirmation: response.awaitingConfirmation,
+                      hasTransaction: !!response.transaction,
+                      contentMessage:
+                        typeof response.content === "object"
+                          ? response.content.message
+                          : null,
+                    });
+                  }
+
+                  return (
+                    <CommandResponse
+                      key={index}
+                      content={response.content}
+                      timestamp={response.timestamp}
+                      isCommand={response.isCommand}
+                      status={response.status}
+                      metadata={response.metadata}
+                      agentType={response.agentType}
+                      transaction={response.transaction}
+                      awaitingConfirmation={response.awaitingConfirmation}
+                      onActionClick={handlePortfolioAction}
+                      onExecuteTransaction={handleGMPTransaction}
+                    />
+                  );
+                })}
                 <div ref={responsesEndRef} />
                 <VStack spacing={4} align="stretch">
                   <CommandInput

@@ -130,7 +130,7 @@ class AxelarAdapter:
                 "to": first_step.get("to"),
                 "value": first_step.get("value", "0"),
                 "data": first_step.get("data", "0x"),
-                "gas": gas_limit,
+                "gasLimit": gas_limit,
                 "gasPrice": None,  # Let wallet determine
             }
             

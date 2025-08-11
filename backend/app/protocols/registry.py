@@ -8,6 +8,7 @@ from app.services.token_service import token_service
 from .brian_adapter import BrianAdapter
 from .zerox_adapter import ZeroXAdapter
 from .axelar_adapter import AxelarAdapter
+from .uniswap_adapter import UniswapAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,12 @@ class ProtocolRegistry:
             logger.info("Initialized Brian protocol adapter")
         except Exception as e:
             logger.error(f"Failed to initialize Brian protocol adapter: {e}")
+
+        try:
+            self.protocols["uniswap"] = UniswapAdapter()
+            logger.info("Initialized Uniswap protocol adapter")
+        except Exception as e:
+            logger.error(f"Failed to initialize Uniswap protocol adapter: {e}")
 
     def get_protocol(self, protocol_id: str) -> Optional[Any]:
         """Get a specific protocol by ID."""
@@ -164,14 +171,18 @@ class ProtocolRegistry:
             if axelar and axelar.is_supported(from_chain) and axelar.is_supported(to_chain):
                 protocols_to_try.append(("axelar", axelar))
         else:
-            # For same-chain, try Brian first, then 0x
-            brian = self.get_protocol("brian")
-            if brian and brian.is_supported(from_chain):
-                protocols_to_try.append(("brian", brian))
-                
+            # For same-chain, try 0x first (best rates), then Uniswap (reliable), then Brian
             zerox = self.get_protocol("0x")
             if zerox and zerox.is_supported(from_chain):
                 protocols_to_try.append(("0x", zerox))
+
+            uniswap = self.get_protocol("uniswap")
+            if uniswap and uniswap.is_supported(from_chain):
+                protocols_to_try.append(("uniswap", uniswap))
+
+            brian = self.get_protocol("brian")
+            if brian and brian.is_supported(from_chain):
+                protocols_to_try.append(("brian", brian))
         
         # Try each protocol in order
         for protocol_name, protocol in protocols_to_try:
@@ -201,6 +212,19 @@ class ProtocolRegistry:
                     # Add protocol info to quote
                     quote["protocol"] = protocol_name
                     logger.info(f"Successfully got quote from {protocol_name}")
+
+                    # Build transaction if protocol supports it
+                    if hasattr(protocol, 'build_transaction'):
+                        try:
+                            transaction = await protocol.build_transaction(quote, from_chain)
+                            if transaction and not transaction.get("error"):
+                                quote["transaction"] = transaction
+                                logger.info(f"Successfully built transaction for {protocol_name}")
+                            else:
+                                logger.warning(f"Failed to build transaction for {protocol_name}: {transaction}")
+                        except Exception as e:
+                            logger.error(f"Error building transaction for {protocol_name}: {e}")
+
                     return quote
                 else:
                     logger.warning(f"{protocol_name} returned unsuccessful quote: {quote}")

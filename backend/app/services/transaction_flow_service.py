@@ -38,6 +38,7 @@ class TransactionStep:
     error: Optional[str] = None
     created_at: datetime = None
     completed_at: Optional[datetime] = None
+    metadata: Optional[dict] = None
 
     def __post_init__(self):
         if self.created_at is None:
@@ -99,7 +100,8 @@ class TransactionFlowService:
                 data=step_data.get("data", ""),
                 value=step_data.get("value", "0"),
                 gas_limit=step_data.get("gasLimit", "500000"),
-                description=description
+                description=description,
+                metadata=step_data.get("metadata")
             )
             steps.append(step)
         
@@ -249,6 +251,8 @@ class TransactionFlowService:
             return StepType.APPROVAL
         elif function_sig in ["0x38ed1739", "0x7ff36ab5", "0x18cbafe5", "0x8803dbee"]:
             return StepType.SWAP
+        elif function_sig == "0x26ef699d":  # sendToken (Axelar bridge)
+            return StepType.BRIDGE
         else:
             # For complex transactions, assume it's a swap if data is substantial
             return StepType.SWAP if len(tx_data) > 100 else StepType.OTHER

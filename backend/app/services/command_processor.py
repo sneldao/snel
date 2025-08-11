@@ -391,8 +391,8 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             to=first_step.get("to", ""),
             data=first_step.get("data", "0x"),
             value=str(first_step.get("value", "0")),
-            gas_limit=str(first_step.get("gasLimit", "")),
-            chain_id=chain_id,
+            gasLimit=str(first_step.get("gasLimit", "")),
+            chainId=chain_id,
             from_address=first_step.get("from")
         )
 
@@ -400,7 +400,7 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         """Create transaction data from protocol quote."""
         if not quote.get("success", False):
             return None
-            
+
         # Handle different quote formats
         if "transaction" in quote:
             # Single transaction format
@@ -409,8 +409,8 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 to=tx.get("to", ""),
                 data=tx.get("data", "0x"),
                 value=str(tx.get("value", "0")),
-                gas_limit=str(tx.get("gas_limit", tx.get("gasLimit", ""))),
-                chain_id=chain_id,
+                gasLimit=str(tx.get("gas_limit", tx.get("gasLimit", ""))),
+                chainId=chain_id,
                 from_address=tx.get("from")
             )
         elif "steps" in quote and quote["steps"]:
@@ -420,11 +420,11 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 to=first_step.get("to", ""),
                 data=first_step.get("data", "0x"),
                 value=str(first_step.get("value", "0")),
-                gas_limit=str(first_step.get("gasLimit", first_step.get("gas_limit", ""))),
-                chain_id=chain_id,
+                gasLimit=str(first_step.get("gasLimit", first_step.get("gas_limit", ""))),
+                chainId=chain_id,
                 from_address=first_step.get("from")
             )
-        
+
         return None
 
     def _detect_cross_chain_intent(self, command: str, details) -> bool:
@@ -550,6 +550,51 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                     error="Failed to create bridge transaction"
                 )
 
+            # Check if this is a multi-step bridge operation (approval + bridge)
+            is_approval_transaction = transaction_data.data.startswith("0x095ea7b3")  # approve function
+
+            if is_approval_transaction:
+                # Create a multi-step transaction flow for bridge operations
+                try:
+                    # Store bridge context for later use in completion
+                    bridge_context = {
+                        "amount": amount_str,
+                        "token": details.token_in.symbol,
+                        "from_chain_id": from_chain_id,
+                        "to_chain_id": to_chain_id,
+                        "from_chain_name": from_chain_name,
+                        "to_chain_name": to_chain_name,
+                        "quote": quote
+                    }
+
+                    # Create transaction flow with approval step and placeholder bridge step
+                    flow = self.transaction_flow_service.create_flow(
+                        wallet_address=unified_command.wallet_address,
+                        chain_id=from_chain_id,
+                        operation_type="bridge",
+                        steps_data=[
+                            {
+                                "description": f"Approve {details.token_in.symbol} for bridge",
+                                "to": transaction_data.to,
+                                "data": transaction_data.data,
+                                "value": transaction_data.value,
+                                "gas_limit": transaction_data.gas_limit
+                            },
+                            {
+                                "description": f"Bridge {amount_str} {details.token_in.symbol} to {to_chain_name}",
+                                "to": "PLACEHOLDER",  # Will be filled when completion is called
+                                "data": "0x26ef699d",  # sendToken function signature to trigger bridge detection
+                                "value": "0",
+                                "gas_limit": "",
+                                "metadata": bridge_context  # Store context for later use
+                            }
+                        ]
+                    )
+                    logger.info(f"Created bridge transaction flow {flow.flow_id} for {unified_command.wallet_address}")
+                except Exception as e:
+                    logger.warning(f"Failed to create bridge transaction flow: {e}")
+                    # Continue with single transaction if flow creation fails
+
             # Format response content based on protocol used
             protocol_name = quote.get("protocol", "unknown")
             if protocol_name == "axelar":
@@ -615,6 +660,81 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 service_name="Bridge Service",
                 original_error=str(e)
             )
+
+    async def _generate_bridge_transaction(self, wallet_address: str, bridge_context: dict) -> dict:
+        """Generate the actual bridge transaction using stored context."""
+        try:
+            # Extract context
+            amount = bridge_context.get("amount")
+            token = bridge_context.get("token")
+            from_chain_id = bridge_context.get("from_chain_id")
+            to_chain_id = bridge_context.get("to_chain_id")
+            to_chain_name = bridge_context.get("to_chain_name")
+
+            logger.info(f"Generating bridge transaction: {amount} {token} from {from_chain_id} to {to_chain_id}")
+
+            # Get Axelar Gateway address for the source chain
+            gateway_address = self.axelar_service._get_gateway_address(from_chain_id)
+            if not gateway_address:
+                raise ValueError(f"No Axelar Gateway found for chain {from_chain_id}")
+
+            # Build the sendToken transaction data
+            send_token_data = self.axelar_service._build_send_token_data(
+                dest_chain=to_chain_name,
+                recipient=wallet_address,  # Bridge to same address
+                token_symbol=token,
+                amount=float(amount)
+            )
+
+            return {
+                "to": gateway_address,
+                "data": send_token_data,
+                "value": "0",
+                "gas_limit": "500000"
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to generate bridge transaction: {e}")
+            raise
+
+    def _generate_bridge_transaction_sync(self, wallet_address: str, bridge_context: dict) -> dict:
+        """Generate the actual bridge transaction using stored context (sync version)."""
+        try:
+            # Extract context
+            amount = bridge_context.get("amount")
+            token = bridge_context.get("token")
+            from_chain_id = bridge_context.get("from_chain_id")
+            to_chain_id = bridge_context.get("to_chain_id")
+            to_chain_name = bridge_context.get("to_chain_name")
+
+            logger.info(f"Generating bridge transaction (sync): {amount} {token} from {from_chain_id} to {to_chain_id}")
+
+            # Import axelar_service directly
+            from app.services.axelar_service import axelar_service
+
+            # Get Axelar Gateway address for the source chain
+            gateway_address = axelar_service._get_gateway_address(from_chain_id)
+            if not gateway_address:
+                raise ValueError(f"No Axelar Gateway found for chain {from_chain_id}")
+
+            # Build the sendToken transaction data
+            send_token_data = axelar_service._build_send_token_data(
+                dest_chain=to_chain_name,
+                recipient=wallet_address,  # Bridge to same address
+                token_symbol=token,
+                amount=float(amount)
+            )
+
+            return {
+                "to": gateway_address,
+                "data": send_token_data,
+                "value": "0",
+                "gas_limit": "500000"
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to generate bridge transaction (sync): {e}")
+            raise
 
     async def _process_swap(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Process swap commands using protocol registry with Axelar priority."""
@@ -685,6 +805,20 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                     error="No valid quote available for this swap"
                 )
             
+            # Check if approval is needed for 0x protocol
+            protocol_name = quote.get("protocol", "unknown")
+            allowance_issues = quote.get("metadata", {}).get("allowanceIssues")
+
+            if protocol_name == "0x" and allowance_issues:
+                actual_allowance = int(allowance_issues.get("actual", "0"))
+                spender = allowance_issues.get("spender")
+
+                # If allowance is insufficient, create multi-step transaction
+                if actual_allowance == 0 and spender:
+                    return await self._create_approval_flow(
+                        unified_command, quote, details, amount_str, spender, from_chain
+                    )
+
             # Create transaction data from quote
             transaction_data = self._create_transaction_data_from_quote(quote, from_chain)
             if not transaction_data:
@@ -765,6 +899,144 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 message="Failed to prepare swap transaction",
                 service_name="Swap Service",
                 original_error=str(e)
+            )
+
+    async def _create_approval_flow(
+        self,
+        unified_command: UnifiedCommand,
+        quote: Dict[str, Any],
+        details: Any,
+        amount_str: str,
+        spender: str,
+        chain_id: int
+    ) -> UnifiedResponse:
+        """Create a multi-step transaction flow with approval + swap."""
+        try:
+            # Get the token address from the quote metadata
+            from_token_address = quote.get("metadata", {}).get("from_token", {}).get("address")
+            if not from_token_address:
+                raise ValueError("Token address not found in quote")
+
+            # Calculate approval amount (use a large amount for unlimited approval)
+            # This is a common pattern to avoid repeated approvals
+            max_uint256 = "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+
+            # Import the 0x adapter to create approval transaction
+            from app.protocols.zerox_adapter import ZeroXAdapter
+            zerox_adapter = ZeroXAdapter()
+
+            # Create approval transaction
+            approval_tx = zerox_adapter.create_approval_transaction(
+                token_address=from_token_address,
+                spender_address=spender,
+                amount=max_uint256,
+                chain_id=chain_id
+            )
+
+            # Create transaction flow with approval step and placeholder swap step
+            flow = self.transaction_flow_service.create_flow(
+                wallet_address=unified_command.wallet_address,
+                chain_id=chain_id,
+                operation_type="swap",
+                steps_data=[
+                    {
+                        "description": f"Approve {details.token_in.symbol} for 0x Protocol",
+                        "to": approval_tx["to"],
+                        "data": approval_tx["data"],
+                        "value": approval_tx["value"],
+                        "gas_limit": approval_tx["gas_limit"]
+                    },
+                    {
+                        "description": f"Swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol}",
+                        "to": "PLACEHOLDER",  # Will be filled when completion is called
+                        "data": "0x2213bc0b",  # 0x swap function signature to trigger swap detection
+                        "value": "0",
+                        "gas_limit": "",
+                        "metadata": {
+                            "original_command": unified_command.command,
+                            "quote": quote,
+                            "from_chain": chain_id
+                        }
+                    }
+                ]
+            )
+
+            return UnifiedResponse(
+                content={
+                    "message": f"Ready to approve and swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol} via 0x Protocol",
+                    "amount": amount_str,
+                    "token_in": details.token_in.symbol,
+                    "token_out": details.token_out.symbol,
+                    "protocol": "0x",
+                    "type": "multi_step_transaction",
+                    "requires_transaction": True,
+                    "steps": [
+                        f"Approve {details.token_in.symbol} for 0x Protocol",
+                        f"Swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol}"
+                    ]
+                },
+                agent_type=AgentType.SWAP,
+                status="success",
+                awaiting_confirmation=True,
+                transaction={
+                    "to": flow.steps[0].to,
+                    "data": flow.steps[0].data,
+                    "value": flow.steps[0].value,
+                    "gas_limit": flow.steps[0].gas_limit,
+                    "chain_id": chain_id
+                },  # Return first step (approval)
+                metadata={
+                    "parsed_command": {
+                        "amount": amount_str,
+                        "token_in": details.token_in.symbol,
+                        "token_out": details.token_out.symbol,
+                        "command_type": "swap",
+                        "protocol": "0x"
+                    },
+                    "transaction_ready": True,
+                    "protocol_used": "0x",
+                    "is_cross_chain": False,
+                    "quote_data": quote,
+                    "flow_id": flow.flow_id,
+                    "current_step": 1,
+                    "total_steps": 2,
+                    "requires_approval": True
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create approval flow: {e}")
+            # Fall back to regular transaction creation
+            transaction_data = self._create_transaction_data_from_quote(quote, chain_id)
+            return UnifiedResponse(
+                content={
+                    "message": f"Ready to swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol} via 0x Protocol (approval may be required)",
+                    "amount": amount_str,
+                    "token_in": details.token_in.symbol,
+                    "token_out": details.token_out.symbol,
+                    "protocol": "0x",
+                    "type": "swap_ready",
+                    "requires_transaction": True,
+                    "approval_warning": "You may need to approve tokens before this transaction"
+                },
+                agent_type=AgentType.SWAP,
+                status="success",
+                awaiting_confirmation=True,
+                transaction=transaction_data,
+                metadata={
+                    "parsed_command": {
+                        "amount": amount_str,
+                        "token_in": details.token_in.symbol,
+                        "token_out": details.token_out.symbol,
+                        "command_type": "swap",
+                        "protocol": "0x"
+                    },
+                    "transaction_ready": True,
+                    "protocol_used": "0x",
+                    "is_cross_chain": False,
+                    "quote_data": quote,
+                    "requires_approval": True
+                }
             )
 
     async def _process_balance(self, unified_command: UnifiedCommand) -> UnifiedResponse:
@@ -1512,13 +1784,64 @@ Respond naturally as if you're having a conversation.
             next_step = self.transaction_flow_service.get_next_step(wallet_address)
 
             if next_step:
-                # There's a next step - return it
+                # Debug logging
+                logger.info(f"Next step found: type={next_step.step_type.value}, to={next_step.to}, data={next_step.data[:20] if next_step.data else 'None'}")
+
+                # Check if this is a bridge step that needs to be generated
+                if next_step.step_type.value == "bridge" and next_step.to == "PLACEHOLDER":
+                    logger.info("Bridge step with placeholder detected, generating real transaction...")
+                    # Generate the actual bridge transaction
+                    bridge_context = next_step.metadata
+                    if bridge_context:
+                        try:
+                            # Generate bridge transaction using Axelar service (sync version)
+                            bridge_tx = self._generate_bridge_transaction_sync(
+                                wallet_address=wallet_address,
+                                bridge_context=bridge_context
+                            )
+                            if bridge_tx:
+                                # Update the step with actual transaction data
+                                next_step.to = bridge_tx["to"]
+                                next_step.data = bridge_tx["data"]
+                                next_step.value = bridge_tx.get("value", "0")
+                                next_step.gas_limit = bridge_tx.get("gas_limit", "")
+                                logger.info(f"Generated bridge transaction: to={bridge_tx['to'][:10]}..., data={bridge_tx['data'][:20]}...")
+                        except Exception as e:
+                            logger.error(f"Failed to generate bridge transaction: {e}")
+                            # Continue with placeholder data - will likely fail but better than crashing
+
+                # Check if this is a swap step that needs to be generated
+                elif next_step.step_type.value == "swap" and next_step.to == "PLACEHOLDER":
+                    logger.info("Swap step with placeholder detected, generating real transaction...")
+                    # Generate the actual swap transaction
+                    swap_context = next_step.metadata
+                    if swap_context:
+                        try:
+                            # Get the original quote from metadata
+                            quote = swap_context.get("quote")
+                            from_chain = swap_context.get("from_chain")
+
+                            if quote and from_chain:
+                                # Create transaction data from the stored quote
+                                swap_tx_data = self._create_transaction_data_from_quote(quote, from_chain)
+                                if swap_tx_data:
+                                    # Update the step with actual transaction data
+                                    next_step.to = swap_tx_data.to
+                                    next_step.data = swap_tx_data.data
+                                    next_step.value = swap_tx_data.value
+                                    next_step.gas_limit = swap_tx_data.gas_limit
+                                    logger.info(f"Generated swap transaction: to={swap_tx_data.to[:10]}..., data={swap_tx_data.data[:20]}...")
+                        except Exception as e:
+                            logger.error(f"Failed to generate swap transaction: {e}")
+                            # Continue with placeholder data - will likely fail but better than crashing
+
+                # Create transaction data from the step
                 transaction_data = TransactionData(
                     to=next_step.to,
                     data=next_step.data,
                     value=next_step.value,
-                    gas_limit=next_step.gas_limit,
-                    chain_id=chain_id
+                    gasLimit=next_step.gas_limit,
+                    chainId=chain_id
                 )
 
                 current_flow = self.transaction_flow_service.get_current_flow(wallet_address)

@@ -304,6 +304,6 @@ class BrianAdapter:
             "to": tx_data.get("to", ""),
             "data": tx_data.get("data", ""),
             "value": tx_data.get("value", "0"),
-            "gas_limit": tx_data.get("gasLimit", "500000"),
+            "gasLimit": tx_data.get("gasLimit", "500000"),
             "chainId": chain_id
         }

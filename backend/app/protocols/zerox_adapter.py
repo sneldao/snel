@@ -4,26 +4,19 @@
 import os
 import httpx
 from decimal import Decimal
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.models.token import TokenInfo, TokenType
+from eth_abi import encode
 
 
 class ZeroXAdapter:
     """0x Protocol adapter."""
     
-    # Chain-specific base URLs
-    BASE_URLS = {
-        1: "https://api.0x.org",  # Ethereum
-        137: "https://polygon.api.0x.org",  # Polygon 
-        56: "https://bsc.api.0x.org",  # BSC
-        42161: "https://arbitrum.api.0x.org",  # Arbitrum
-        10: "https://optimism.api.0x.org",  # Optimism
-        43114: "https://avalanche.api.0x.org",  # Avalanche
-        59144: "https://linea.api.0x.org",  # Linea
-        8453: "https://base.api.0x.org",  # Base
-        5000: "https://mantle.api.0x.org",  # Mantle
-        81457: "https://blast.api.0x.org",  # Blast
-    }
+    # Unified API endpoint for v2
+    BASE_URL = "https://api.0x.org"
+
+    # Supported chains for 0x API v2
+    SUPPORTED_CHAINS = [1, 137, 56, 42161, 10, 43114, 59144, 8453, 5000, 81457]
 
     def __init__(self):
         """Initialize the 0x protocol adapter."""
@@ -44,7 +37,7 @@ class ZeroXAdapter:
     @property
     def supported_chains(self) -> List[int]:
         """List of supported chain IDs."""
-        return list(self.BASE_URLS.keys())
+        return self.SUPPORTED_CHAINS
     
     def is_supported(self, chain_id: int) -> bool:
         """Check if this protocol supports the given chain."""
@@ -68,8 +61,8 @@ class ZeroXAdapter:
             await self.http_client.aclose()
     
     def get_api_url(self, chain_id: int) -> str:
-        """Get chain-specific API URL."""
-        return self.BASE_URLS.get(chain_id, self.BASE_URLS[1])  # Default to Ethereum
+        """Get API URL (unified for v2)."""
+        return self.BASE_URL
     
     async def get_quote(
         self,
@@ -78,6 +71,7 @@ class ZeroXAdapter:
         amount: Decimal,
         chain_id: int,
         wallet_address: str,
+        to_chain_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Get swap quote from 0x API."""
         if not self.is_supported(chain_id):
@@ -104,7 +98,7 @@ class ZeroXAdapter:
         try:
             # Get price quote first
             price_resp = await client.get(
-                f"{api_url}/swap/permit2/price",
+                f"{api_url}/swap/allowance-holder/price",
                 params={
                     "sellToken": from_token_param,
                     "buyToken": to_token_param,
@@ -114,10 +108,10 @@ class ZeroXAdapter:
                 }
             )
             price_resp.raise_for_status()
-            
+
             # If price looks good, get quote
             quote_resp = await client.get(
-                f"{api_url}/swap/permit2/quote",
+                f"{api_url}/swap/allowance-holder/quote",
                 params={
                     "sellToken": from_token_param,
                     "buyToken": to_token_param,
@@ -147,7 +141,8 @@ class ZeroXAdapter:
                 },
                 "metadata": {
                     "gasPrice": quote_data.get("gasPrice"),
-                    "permit2": quote_data.get("permit2"),
+                    "allowanceTarget": quote_data.get("allowanceTarget"),
+                    "allowanceIssues": quote_data.get("issues", {}).get("allowance"),
                     "zid": quote_data.get("zid"),
                     "source": "0x",
                     "from_token": {
@@ -180,6 +175,34 @@ class ZeroXAdapter:
             "to": tx_data.get("to", ""),
             "data": tx_data.get("data", ""),
             "value": tx_data.get("value", "0"),
-            "gas_limit": quote.get("estimatedGas", "500000"),
+            "gasLimit": quote.get("estimatedGas", "500000"),
             "chainId": chain_id
-        } 
+        }
+
+    def create_approval_transaction(
+        self,
+        token_address: str,
+        spender_address: str,
+        amount: str,
+        chain_id: int,
+    ) -> Dict[str, Any]:
+        """Create an ERC20 approval transaction."""
+        # ERC20 approve function signature: approve(address spender, uint256 amount)
+        function_selector = "0x095ea7b3"  # approve(address,uint256)
+
+        # Encode the parameters
+        encoded_params = encode(
+            ['address', 'uint256'],
+            [spender_address, int(amount)]
+        ).hex()
+
+        # Combine function selector and encoded parameters
+        data = function_selector + encoded_params
+
+        return {
+            "to": token_address,
+            "data": data,
+            "value": "0",
+            "gas_limit": "100000",  # Standard gas limit for approval
+            "chainId": chain_id
+        }

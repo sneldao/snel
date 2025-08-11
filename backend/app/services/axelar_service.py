@@ -21,7 +21,7 @@ class AxelarService:
         # Axelar API endpoints
         self.testnet_api = "https://api.testnet.axelar.dev"
         self.mainnet_api = "https://api.axelar.dev"
-        self.environment = os.getenv("AXELAR_ENVIRONMENT", "testnet")
+        self.environment = os.getenv("AXELAR_ENVIRONMENT", "mainnet")
         self.base_url = self.mainnet_api if self.environment == "mainnet" else self.testnet_api
         
         # Chain mappings for Axelar
