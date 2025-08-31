@@ -9,6 +9,7 @@ passlib>=1.7.4
 bcrypt>=4.0.1
 openai>=1.0.0
 aiohttp>=3.8.0
+aioredis>=2.0.0  # For Redis caching layer
 web3>=6.0.0  # For on-chain token lookups
 eth-abi>=4.0.0  # For encoding transaction data
 exa-py>=1.0.0  # For enhanced search and protocol discovery

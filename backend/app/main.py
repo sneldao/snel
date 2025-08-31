@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config.settings import get_settings
 from app.core.error_handlers import register_error_handlers
 from app.core.dependencies import get_service_container
+from app.core.config_manager import config_manager
 
 # Import API routers
 from app.api.v1 import chat, swap, agno, health
@@ -34,6 +35,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Starting SNEL API in {settings.environment} mode")
 
+    # Initialize configuration manager first
+    try:
+        await config_manager.initialize()
+        logger.info("Configuration manager initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize configuration manager: {e}")
+        raise
+
     # Initialize service container to validate configuration
     try:
         container = get_service_container(settings)
@@ -49,6 +58,7 @@ async def lifespan(app: FastAPI):
     try:
         await protocol_registry.close()
         await container.close()
+        await config_manager.close()
         logger.info("Cleanup completed successfully")
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
@@ -91,5 +101,3 @@ async def root():
         "docs": "/docs",
         "health": "/api/v1/health"
     }
-
-
