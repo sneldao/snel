@@ -33,6 +33,19 @@ class AxelarService:
         # Response cache for fee estimates
         self._fee_cache = {}
         self._fee_cache_ttl = 300  # 5 minutes
+        
+        # Initialize chain mappings immediately
+        self.chain_mappings = {
+            1: "ethereum",
+            10: "optimism", 
+            56: "binance",
+            137: "polygon",
+            43114: "avalanche",
+            42161: "arbitrum",
+            8453: "base",
+            59144: "linea",
+            534352: "scroll"
+        }
 
     async def initialize(self):
         """Initialize service with configuration manager."""
@@ -50,19 +63,6 @@ class AxelarService:
             "User-Agent": "SNEL/1.0"
         }
         self.session = httpx.AsyncClient(timeout=timeout, headers=headers)
-
-        # Enhanced chain mappings using ConfigurationManager (single source of truth)
-        self.chain_mappings = {
-            1: "ethereum",
-            10: "optimism", 
-            56: "binance",
-            137: "polygon",
-            43114: "avalanche",
-            42161: "arbitrum",
-            8453: "base",
-            59144: "linea",
-            534352: "scroll"
-        }
 
         # Remove hardcoded token addresses - use ConfigurationManager instead
         logger.info("Axelar service initialized - using ConfigurationManager for token addresses")

@@ -9,6 +9,7 @@ from .brian_adapter import BrianAdapter
 from .zerox_adapter import ZeroXAdapter
 from .axelar_adapter import AxelarAdapter
 from .uniswap_adapter import UniswapAdapter
+from .circle_cctp_adapter import CircleCCTPAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,12 @@ class ProtocolRegistry:
         except Exception as e:
             logger.error(f"Failed to initialize Uniswap protocol adapter: {e}")
 
+        try:
+            self.protocols["cctp_v2"] = CircleCCTPAdapter()
+            logger.info("Initialized Circle CCTP V2 protocol adapter")
+        except Exception as e:
+            logger.error(f"Failed to initialize Circle CCTP V2 protocol adapter: {e}")
+
     def get_protocol(self, protocol_id: str) -> Optional[Any]:
         """Get a specific protocol by ID."""
         return self.protocols.get(protocol_id)
@@ -84,9 +91,15 @@ class ProtocolRegistry:
         # No supported protocols
         return None
 
-    def get_cross_chain_protocol(self, from_chain_id: int, to_chain_id: int) -> Optional[Any]:
+    def get_cross_chain_protocol(self, from_chain_id: int, to_chain_id: int, token_symbol: str = None) -> Optional[Any]:
         """Get the best protocol for cross-chain operations."""
-        # Axelar is designed for cross-chain
+        # For USDC transfers, prefer Circle CCTP V2 (faster and cheaper)
+        if token_symbol and token_symbol.upper() == "USDC":
+            cctp = self.get_protocol("cctp_v2")
+            if cctp and cctp.is_supported(from_chain_id) and cctp.is_supported(to_chain_id):
+                return cctp
+        
+        # Axelar is designed for cross-chain (fallback for other tokens)
         axelar = self.get_protocol("axelar")
         if axelar and axelar.is_supported(from_chain_id) and axelar.is_supported(to_chain_id):
             return axelar
@@ -166,7 +179,13 @@ class ProtocolRegistry:
         protocols_to_try = []
         
         if is_cross_chain:
-            # For cross-chain, prioritize Axelar
+            # For cross-chain USDC transfers, prioritize Circle CCTP V2
+            if from_token.upper() == "USDC" and to_token.upper() == "USDC":
+                cctp = self.get_protocol("cctp_v2")
+                if cctp and cctp.is_supported(from_chain) and cctp.is_supported(to_chain):
+                    protocols_to_try.append(("cctp_v2", cctp))
+            
+            # For cross-chain, also try Axelar as fallback
             axelar = self.get_protocol("axelar")
             if axelar and axelar.is_supported(from_chain) and axelar.is_supported(to_chain):
                 protocols_to_try.append(("axelar", axelar))

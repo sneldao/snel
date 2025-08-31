@@ -255,6 +255,8 @@ class ConfigurationManager:
                 8453: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",    # Base
                 43114: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",   # Avalanche
                 59144: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff",   # Linea
+                480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",     # World Chain
+                146: "0x29219dd400f2Bf60E5a23d13Be72B486D4038894",     # Sonic
             },
             coingecko_id="usd-coin",
             verified=True
@@ -315,7 +317,7 @@ class ConfigurationManager:
                 explorer_url="https://etherscan.io",
                 native_token="ETH",
                 block_time=12.0,
-                supported_protocols={"0x", "uniswap", "axelar"}
+                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
             ),
             ChainConfig(
                 chain_id=8453,
@@ -328,7 +330,7 @@ class ConfigurationManager:
                 explorer_url="https://basescan.org",
                 native_token="ETH",
                 block_time=2.0,
-                supported_protocols={"0x", "uniswap"}
+                supported_protocols={"0x", "uniswap", "cctp_v2"}
             ),
             ChainConfig(
                 chain_id=42161,
@@ -341,7 +343,7 @@ class ConfigurationManager:
                 explorer_url="https://arbiscan.io",
                 native_token="ETH",
                 block_time=0.25,
-                supported_protocols={"0x", "uniswap", "axelar"}
+                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
             ),
             ChainConfig(
                 chain_id=137,
@@ -354,7 +356,57 @@ class ConfigurationManager:
                 explorer_url="https://polygonscan.com",
                 native_token="MATIC",
                 block_time=2.0,
-                supported_protocols={"0x", "uniswap", "axelar"}
+                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
+            ),
+            ChainConfig(
+                chain_id=43114,
+                name="avalanche",
+                display_name="Avalanche",
+                rpc_urls=[
+                    "https://api.avax.network/ext/bc/C/rpc",
+                    "https://avalanche.public-rpc.com"
+                ],
+                explorer_url="https://snowtrace.io",
+                native_token="AVAX",
+                block_time=2.0,
+                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
+            ),
+            ChainConfig(
+                chain_id=59144,
+                name="linea",
+                display_name="Linea",
+                rpc_urls=[
+                    "https://rpc.linea.build",
+                    "https://linea-mainnet.public.blastapi.io"
+                ],
+                explorer_url="https://lineascan.build",
+                native_token="ETH",
+                block_time=1.0,
+                supported_protocols={"axelar", "cctp_v2"}
+            ),
+            ChainConfig(
+                chain_id=480,
+                name="worldchain",
+                display_name="World Chain",
+                rpc_urls=[
+                    "https://worldchain-mainnet.g.alchemy.com/public"
+                ],
+                explorer_url="https://worldscan.org",
+                native_token="ETH",
+                block_time=2.0,
+                supported_protocols={"cctp_v2"}
+            ),
+            ChainConfig(
+                chain_id=146,
+                name="sonic",
+                display_name="Sonic",
+                rpc_urls=[
+                    "https://rpc.soniclabs.com"
+                ],
+                explorer_url="https://sonicscan.org",
+                native_token="S",
+                block_time=1.0,
+                supported_protocols={"cctp_v2"}
             ),
         ]
 
@@ -429,10 +481,73 @@ class ConfigurationManager:
             rate_limits={"requests_per_minute": 600}
         )
 
+        # Circle CCTP V2
+        cctp_v2 = ProtocolConfig(
+            id="cctp_v2",
+            name="Circle CCTP V2",
+            type=ProtocolType.BRIDGE,
+            supported_chains={1, 42161, 8453, 137, 10, 43114, 59144, 480, 146},
+            api_endpoints={
+                "mainnet": os.getenv("CIRCLE_CCTP_API_URL", "https://api.circle.com/v1/w3s"),
+                "attestation": "https://iris-api.circle.com"
+            },
+            contract_addresses={
+                # TokenMessenger contracts for CCTP V2
+                1: {
+                    "token_messenger": "0xBd3fa81B58Ba92a82136038B25aDec7066af3155",
+                    "message_transmitter": "0x0a992d191DEeC32aFe36203Ad87D7d289a738F81",
+                    "usdc": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                },
+                42161: {
+                    "token_messenger": "0x19330d10D9Cc8751218eaf51E8885D058642E08A",
+                    "message_transmitter": "0xC30362313FBBA5cf9163F0bb16a0e01f01A896ca",
+                    "usdc": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+                },
+                8453: {
+                    "token_messenger": "0x1682Ae6375C4E4A97e4B583BC394c861A46D8962",
+                    "message_transmitter": "0xAD09780d193884d503182aD4588450C416D6F9D4",
+                    "usdc": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+                },
+                137: {
+                    "token_messenger": "0x9daF8c91AEFAE50b9c0E69629D3F6Ca40cA3B3FE",
+                    "message_transmitter": "0xF3be9355363857F3e001be68856A2f96b4C39Ba9",
+                    "usdc": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+                },
+                10: {
+                    "token_messenger": "0x2B4069517957735bE00ceE0fadAE88a26365528f",
+                    "message_transmitter": "0x4D41f22c5a0e5c74090899E5a8Fb597a8842b3e8",
+                    "usdc": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
+                },
+                43114: {
+                    "token_messenger": "0x6B25532e1060CE10cc3B0A99e5683b91BFDe6982",
+                    "message_transmitter": "0x8186359aF5F57FbB40c6b14A588d2A59C0C29880",
+                    "usdc": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"
+                },
+                59144: {
+                    "token_messenger": "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5",
+                    "message_transmitter": "0x4C1A2e70A006C29079c7d4073d8C3c7b8C5D8686",
+                    "usdc": "0x176211869cA2b568f2A7D4EE941E073a821EE1ff"
+                },
+                480: {
+                    "token_messenger": "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5",
+                    "message_transmitter": "0x4C1A2e70A006C29079c7d4073d8C3c7b8C5D8686",
+                    "usdc": "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1"
+                },
+                146: {
+                    "token_messenger": "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5",
+                    "message_transmitter": "0x4C1A2e70A006C29079c7d4073d8C3c7b8C5D8686",
+                    "usdc": "0x29219dd400f2Bf60E5a23d13Be72B486D4038894"
+                }
+            },
+            api_keys={"default": os.getenv("CIRCLE_API_KEY", "")},
+            rate_limits={"requests_per_minute": 600}
+        )
+
         self._protocols = {
             "0x": zerox,
             "uniswap": uniswap,
             "axelar": axelar,
+            "cctp_v2": cctp_v2,
         }
 
     async def _validate_configuration(self):
