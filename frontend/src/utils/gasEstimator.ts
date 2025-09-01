@@ -1,4 +1,16 @@
-import { ParsedCommand, CommandType } from './commandParser';
+// Simplified gas estimation interface
+interface CommandForGas {
+  rawCommand?: string;
+  type?: string;
+  sourceToken?: string;
+  targetToken?: string;
+  sourceAmount?: number;
+  targetChain?: number;
+  slippage?: number;
+  dex?: string;
+  message?: string;
+  recipientAddress?: string;
+}
 import { ChainId, SUPPORTED_CHAINS } from '../constants/chains';
 import { ethers } from 'ethers';
 // Icon used by some consumers of this utility; imported here to avoid runtime missing symbol errors
@@ -33,6 +45,8 @@ const DEFAULT_GAS_PRICES: Record<number, GasPrice> = {
 };
 
 // Default gas limits by operation type and chain
+type CommandType = 'swap' | 'bridge' | 'send' | 'analyze' | 'check' | 'info' | 'set' | 'connect' | 'disconnect' | 'help' | 'stake' | 'unstake' | 'provide' | 'remove' | 'borrow' | 'repay' | 'claim' | 'alert' | 'schedule' | 'switch' | 'generate' | 'verify' | 'decode' | 'find' | 'join' | 'share' | 'follow' | 'calculate' | 'show' | 'compare' | 'estimate' | 'unknown';
+
 const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>> = {
   swap: {
     [ChainId.ETHEREUM]: 180000,
@@ -151,7 +165,7 @@ const TIME_ESTIMATES: Record<string, Record<string, number>> = {
  * @returns Estimated gas cost and time information
  */
 export async function estimateGasCost(
-  command: ParsedCommand, 
+  command: CommandForGas, 
   chainId: number,
   speedPreference: 'slow' | 'average' | 'fast' = 'average'
 ): Promise<{ cost: string; time: string }> {
@@ -236,9 +250,10 @@ async function getGasPrices(chainId: number): Promise<GasPrice> {
 /**
  * Get gas limit for a given command and chain
  */
-function getGasLimit(command: ParsedCommand, chainId: number): number {
+function getGasLimit(command: CommandForGas, chainId: number): number {
   // Get gas limits for this command type
-  const gasLimits = DEFAULT_GAS_LIMITS[command.type];
+  const commandType = command.type || 'unknown';
+  const gasLimits = DEFAULT_GAS_LIMITS[commandType as keyof typeof DEFAULT_GAS_LIMITS] || DEFAULT_GAS_LIMITS.unknown;
   
   // Use chain-specific limit if available, otherwise use default
   const gasLimit = gasLimits[chainId] || gasLimits.default || 0;
@@ -315,7 +330,7 @@ function getTimeEstimate(chainId: number, speedPreference: 'slow' | 'average' | 
  * Estimate gas costs for destination chain in bridge operations
  */
 async function estimateDestinationGas(
-  command: ParsedCommand,
+  command: CommandForGas,
   destinationChainId: number
 ): Promise<{ cost: string; time: string } | null> {
   // Skip if destination chain is not supported

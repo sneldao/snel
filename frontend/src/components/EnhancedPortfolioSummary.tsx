@@ -363,12 +363,17 @@ const TokenHoldingsTable = ({ analysis }: { analysis?: PortfolioAnalysis }) => {
 
                 // Only show tokens with meaningful balances
                 if (balance > 0.001) {
+                  // Calculate token value using price data from metadata if available
+                  const tokenPrice = tokenMeta.price || 0;
+                  const tokenValue = balance * tokenPrice;
+                  const priceChange24h = tokenMeta.priceChange24h || 0;
+                  
                   tokens.push({
                     symbol: tokenMeta.symbol || "UNKNOWN",
                     name: tokenMeta.name || "Unknown Token",
                     balance: balance.toFixed(4),
-                    value: `$${(balance * 1).toFixed(2)}`, // Placeholder value
-                    change: "+0.00%", // Placeholder change
+                    value: tokenPrice > 0 ? `$${tokenValue.toFixed(2)}` : "Price unavailable",
+                    change: tokenPrice > 0 ? `${priceChange24h >= 0 ? '+' : ''}${priceChange24h.toFixed(2)}%` : "N/A",
                     chain: chainName,
                     contractAddress,
                   });

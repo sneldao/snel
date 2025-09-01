@@ -100,7 +100,7 @@ export class TransactionService {
       }
 
       // Format transaction parameters - handle both gasLimit and gas_limit
-      const gas = txData.gasLimit || txData.gas_limit || "300000";
+      const gas = txData.gas_limit || "300000";
 
       // Format transaction parameters
       const transaction = {
@@ -109,7 +109,7 @@ export class TransactionService {
         to: txData.to as `0x${string}`,
         data: txData.data as `0x${string}`,
         value: parseEthToWei(txData.value),
-        chainId: txData.chainId || this.chainId,
+        chainId: txData.chain_id || this.chainId,
         gas: BigInt(gas),
       };
 

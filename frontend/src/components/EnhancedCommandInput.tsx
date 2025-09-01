@@ -108,12 +108,12 @@ import { COMMAND_TEMPLATES } from "../constants/commandTemplates";
 import { ApiService } from "../services/apiService";
 import { PortfolioService } from "../services/portfolioService";
 import { TokenService } from "../services/tokenService";
+import { commandService, CommandPreview } from "../services/commandService";
 
 // Import utils
 import { formatAddress, formatTokenAmount } from "../utils/formatters";
 import { estimateGasCost } from "../utils/gasEstimator";
-import { parseCommand } from "../utils/commandParser";
-import { validateCommand } from "../utils/commandValidator";
+// Removed: Using backend unified parser instead of duplicate frontend parsing
 
 // Animation variants
 const suggestionVariants = {
@@ -441,9 +441,12 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
 
       setIsAnalyzing(true);
 
-      // Validate command
-      const validation = validateCommand(command);
-      setValidationResult(validation);
+      // Get command preview for validation
+      const preview = getCommandPreview(command);
+      setValidationResult({
+        isValid: preview.isValid,
+        message: preview.isValid ? undefined : 'Invalid command format'
+      });
 
       // Generate suggestions
       generateSuggestions(command);
@@ -674,8 +677,8 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
       lowerCommand.startsWith("transfer")
     ) {
       try {
-        const parsedCommand = parseCommand(command);
-        const estimation = await estimateGasCost(parsedCommand, chainId);
+        // Simplified: Let backend handle parsing, frontend focuses on UX
+        const estimation = await estimateGasCost({ rawCommand: command }, chainId);
         setGasEstimation(estimation);
       } catch (error) {
         console.error("Error estimating gas:", error);
@@ -685,6 +688,11 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
       setGasEstimation(null);
     }
   };
+
+  // Get command preview for UI feedback
+  const getCommandPreview = useCallback((command: string): CommandPreview => {
+    return commandService.getCommandPreview(command);
+  }, []);
 
   // Check for cross-chain operations
   const checkCrossChainOperation = (command: string) => {

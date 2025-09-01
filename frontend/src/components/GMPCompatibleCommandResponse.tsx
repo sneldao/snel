@@ -13,18 +13,25 @@ import { VStack, Alert, AlertIcon, Text, useColorModeValue, Spinner, Box } from 
 const GMPCommandHandler = lazy(() => import('./GMP/GMPCommandHandler').then(m => ({ default: m.GMPCommandHandler })));
 import { AgentType } from '../utils/agentInfo'; // Correct import for AgentType
 
+import { ResponseContent, ResponseMetadata, TransactionData } from '../types/responses';
+
 interface GMPCompatibleCommandResponseProps {
-  content: any;
+  content: ResponseContent;
   timestamp: string;
   isCommand: boolean;
-  agentType?: AgentType; // Corrected type
-  status?: "pending" | "processing" | "success" | "error"; // Corrected type
-  awaitingConfirmation?: boolean; // Corrected property name
-  transaction?: any;
-  metadata?: any;
-  onExecuteTransaction?: (transactionData: any) => Promise<void>;
+  agentType?: AgentType;
+  status?: "pending" | "processing" | "success" | "error";
+  awaitingConfirmation?: boolean;
+  transaction?: TransactionData;
+  metadata?: ResponseMetadata;
+  onExecuteTransaction?: (transactionData: TransactionData) => Promise<void>;
   isExecuting?: boolean;
-  [key: string]: any; // Allow all existing props
+  // Additional props for compatibility
+  requires_selection?: boolean;
+  all_quotes?: any[];
+  onQuoteSelect?: (response: any, quote: any) => void;
+  onActionClick?: (action: Record<string, unknown>) => void;
+  className?: string;
 }
 
 export const GMPCompatibleCommandResponse: React.FC<GMPCompatibleCommandResponseProps> = memo((props) => {
@@ -32,17 +39,31 @@ export const GMPCompatibleCommandResponse: React.FC<GMPCompatibleCommandResponse
   
   // Check if this is a GMP operation
   const isGMPOperation = useMemo(() => {
-    return props.content?.metadata?.uses_gmp || 
-           props.content?.metadata?.axelar_powered ||
-           props.content?.transaction_data?.protocol === 'axelar_gmp';
-  }, [props.content]);
+    // Simple type checks without type predicates
+    const hasMetadata = (content: ResponseContent): boolean => {
+      return typeof content === 'object' && content !== null && 'metadata' in content;
+    };
+    
+    const hasTransactionData = (content: ResponseContent): boolean => {
+      return typeof content === 'object' && content !== null && 'transaction_data' in content;
+    };
+    
+    const hasOriginalCommand = (content: ResponseContent): boolean => {
+      return typeof content === 'object' && content !== null && 'original_command' in (content as any);
+    };
+    
+    return (hasMetadata(props.content) && (props.content as any).metadata?.uses_gmp) ||
+           (hasMetadata(props.content) && (props.content as any).metadata?.axelar_powered) ||
+           (hasTransactionData(props.content) && (props.content as any).transaction_data?.protocol === 'axelar_gmp') ||
+           (hasOriginalCommand(props.content) && isLikelyGMPCommand(((props.content as any).original_command) || ''));
+  }, [props.content, isLikelyGMPCommand]);
 
   // Check if command suggests GMP (for hints)
   const showGMPHint = useMemo(() => {
     if (isGMPOperation) return false; // Don't show hint if already GMP
     
-    const command = props.metadata?.parsed_command?.original_command || 
-                   props.content?.metadata?.command || 
+    const command = (props.metadata?.parsed_command as any)?.original_command || 
+                   (props.content as any)?.metadata?.command || 
                    '';
     return isLikelyGMPCommand(command);
   }, [props, isGMPOperation, isLikelyGMPCommand]);
@@ -77,8 +98,8 @@ export const GMPCompatibleCommandResponse: React.FC<GMPCompatibleCommandResponse
         }>
           <GMPCommandHandler
             response={{
-              content: props.content,
-              message: props.content?.message || 'Cross-chain operation prepared',
+              content: typeof props.content === 'object' && props.content !== null ? props.content as any : {} as any,
+              message: typeof props.content === 'object' && props.content !== null && 'message' in props.content ? (props.content as any).message || 'Cross-chain operation prepared' : 'Cross-chain operation prepared',
               success: props.status === 'success'
             }}
             onExecute={props.onExecuteTransaction}

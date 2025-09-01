@@ -43,7 +43,6 @@ import { ApiKeyModal } from "./ApiKeyModal";
 import { LogoModal } from "./LogoModal";
 import { HelpModal } from "./HelpModal";
 import { fetchUserProfile } from "../services/profileService";
-import { Response } from "../types/responses";
 import { SUPPORTED_CHAINS } from "../constants/chains";
 import { ApiService } from "../services/apiService";
 import { TransactionService } from "../services/transactionService";
@@ -58,39 +57,17 @@ import { setupGlobalWalletErrorHandler } from "../utils/walletErrorHandler";
 import { useGMPIntegration } from "../hooks/useGMPIntegration";
 import { useWallet } from "../hooks/useWallet";
 
-interface ResponseContent {
-  type?: string;
-  confirmation_type?: string;
-  pendingCommand?: string;
-  transaction?: any;
-  [key: string]: any;
-}
+// Import types
+import {
+  Response,
+  ResponseContent,
+  ResponseMetadata,
+  TransactionData,
+  SwapQuote,
+} from "../types/responses";
 
-interface ResponseType {
-  content: string | ResponseContent;
-  timestamp: string;
-  isCommand: boolean;
-  status?: "pending" | "processing" | "success" | "error";
-  metadata?: any;
-  awaitingConfirmation?: boolean;
-  agentType?:
-    | "default"
-    | "swap"
-    | "dca"
-    | "brian"
-    | "bridge"
-    | "transfer"
-    | "agno"
-    | "settings";
-  requires_selection?: boolean;
-  all_quotes?: any[];
-  type?: string;
-  confirmation_type?: string;
-  pendingCommand?: string;
-  transaction?: any;
-  summary?: string;
-  fullAnalysis?: string;
-}
+// Use the imported Response type instead of local interfaces
+type ResponseType = Response;
 
 export default function MainApp() {
   const toast = useToast();
@@ -314,7 +291,7 @@ export default function MainApp() {
         timestamp,
         isCommand: false,
         status: "success" as const,
-        agentType: "settings" as const,
+        agentType: "default" as const,
       };
       setResponses((prev) => [...prev, confirmationResponse]);
 
@@ -383,7 +360,7 @@ export default function MainApp() {
         if (isPortfolioCommand) {
           // Add processing state immediately for portfolio commands
           const processingResponse = {
-            content: { type: "portfolio_progress" },
+            content: { type: "portfolio_progress" } as any,
             timestamp: new Date().toISOString(),
             isCommand: false,
             status: "processing" as const,
@@ -420,16 +397,17 @@ export default function MainApp() {
             );
           } catch (error) {
             console.error("Portfolio analysis failed:", error);
+            const errorMessage =
+              error instanceof Error ? error.message : "Analysis failed";
+            console.log("Creating error response with message:", errorMessage);
+
             // Replace processing with error
             setResponses((prev) =>
               prev.map((r) =>
                 r.status === "processing" && r.agentType === "agno"
                   ? {
                       content: {
-                        error:
-                          error instanceof Error
-                            ? error.message
-                            : "Analysis failed",
+                        message: errorMessage,
                         type: "error",
                       },
                       timestamp: new Date().toISOString(),
@@ -751,15 +729,20 @@ export default function MainApp() {
                     response.agentType === "bridge" ||
                     (response.content &&
                       typeof response.content === "object" &&
-                      response.content.message &&
-                      response.content.message.toLowerCase().includes("bridge"))
+                      "message" in response.content &&
+                      typeof (response.content as any).message === "string" &&
+                      (response.content as any).message
+                        .toLowerCase()
+                        .includes("bridge"))
                   ) {
                     console.log(`Passing to CommandResponse[${index}]:`, {
                       agentType: response.agentType,
                       awaitingConfirmation: response.awaitingConfirmation,
                       hasTransaction: !!response.transaction,
                       contentMessage:
-                        typeof response.content === "object"
+                        typeof response.content === "object" &&
+                        "message" in response.content &&
+                        typeof response.content.message === "string"
                           ? response.content.message
                           : null,
                     });

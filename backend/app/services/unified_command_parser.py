@@ -105,13 +105,19 @@ class UnifiedCommandParser:
             if "usd_amount" in extracted_params and extracted_params["usd_amount"]:
                 amount = float(extracted_params["usd_amount"])
                 additional_params = {"is_usd_amount": True}
-            else:
+                # Use token_in for USD amount pattern
+                token_in_symbol = extracted_params["token_in"]
+            elif "amount" in extracted_params and extracted_params["amount"]:
                 amount = float(extracted_params["amount"])
                 additional_params = {"is_usd_amount": False}
+                # Use token_in for regular amount pattern
+                token_in_symbol = extracted_params["token_in"]
+            else:
+                return None
             
             return CommandDetails(
                 amount=amount,
-                token_in=TokenInfo(symbol=extracted_params["token_in"].upper()),
+                token_in=TokenInfo(symbol=token_in_symbol.upper()),
                 token_out=TokenInfo(symbol=extracted_params["token_out"].upper()),
                 additional_params=additional_params
             )

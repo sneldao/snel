@@ -148,8 +148,8 @@ function normalizeCommand(command: string): string {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
-    .replace(/,/g, '') // Remove commas
-    .replace(/\$/g, ''); // Remove dollar signs
+    .replace(/,/g, ''); // Remove commas
+    // Note: Preserving dollar signs for USD amount parsing
 }
 
 /**
@@ -235,7 +235,28 @@ function determineCommandType(firstWord: string, fullCommand: string): CommandTy
  * Parse swap command parameters
  */
 function parseSwapCommand(command: string, result: ParsedCommand): void {
-  // Extract source amount and token
+  // Check for USD amount patterns first
+  const usdPatterns = [
+    /swap\s+\$(?<usd_amount>[\d\.]+)\s+(?:of\s+)?(?<token_in>\w+)\s+(?:to|for)\s+(?<token_out>\w+)/i,
+    /swap\s+\$(?<usd_amount>[\d\.]+)\s+worth\s+of\s+(?<token_in>\w+)\s+(?:to|for)\s+(?<token_out>\w+)/i,
+    /swap\s+(?<usd_amount>[\d\.]+)\s+dollars?\s+(?:of\s+)?(?<token_in>\w+)\s+(?:to|for)\s+(?<token_out>\w+)/i,
+    /swap\s+(?<usd_amount>[\d\.]+)\s+usd\s+(?:of\s+)?(?<token_in>\w+)\s+(?:to|for)\s+(?<token_out>\w+)/i
+  ];
+  
+  // Try USD patterns first
+  for (const pattern of usdPatterns) {
+    const usdMatch = command.match(pattern);
+    if (usdMatch && usdMatch.groups) {
+      result.sourceAmount = parseFloat(usdMatch.groups.usd_amount);
+      result.sourceToken = usdMatch.groups.token_in.toUpperCase();
+      result.targetToken = usdMatch.groups.token_out.toUpperCase();
+      result.params.isUsdAmount = true;
+      result.params.usdAmount = result.sourceAmount;
+      return; // Exit early if USD pattern matched
+    }
+  }
+  
+  // Extract source amount and token (regular pattern)
   const amountTokenPattern = /swap\s+(?:(all|[\d.]+%?)\s+(?:of\s+my\s+)?)?([a-z0-9]+)(?:\s+for|$)/i;
   const amountTokenMatch = command.match(amountTokenPattern);
   

@@ -37,7 +37,7 @@ export class MultiStepTransactionService {
    * Detect if transaction data is an approval transaction
    */
   private isApprovalTransaction(txData: TransactionData): boolean {
-    return txData.data.startsWith("0x095ea7b3"); // approve(address,uint256)
+    return txData.data ? txData.data.startsWith("0x095ea7b3") : false; // approve(address,uint256)
   }
 
   /**
@@ -51,6 +51,10 @@ export class MultiStepTransactionService {
    * Detect transaction type based on function signature
    */
   private detectTransactionType(txData: TransactionStep | TransactionData): "approval" | "swap" | "bridge" | "other" {
+    if (!txData.data) {
+      return "other";
+    }
+
     const functionSig = txData.data.slice(0, 10);
 
     switch (functionSig) {
@@ -106,9 +110,9 @@ export class MultiStepTransactionService {
             to: step.to,
             data: step.data,
             value: step.value,
-            chainId: step.chainId || 1, // Default to mainnet if not specified
+            chain_id: step.chainId || 1, // Default to mainnet if not specified
             method: stepType, // Use detected step type as method
-            gasLimit: step.gasLimit,
+            gas_limit: step.gasLimit,
           };
 
           const result = await this.transactionService.executeTransaction(txData);

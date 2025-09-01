@@ -4,7 +4,7 @@ import {
   AnalysisProgress,
 } from "./portfolioService";
 import { websocketService } from "./websocketService";
-import { intentRouter, UserIntent } from "./intentRouter";
+// Removed: Using unified backend parsing instead of intentRouter
 import { axelarService } from "./axelarService";
 import { PortfolioGatekeeper, PortfolioSettings } from "./portfolioGatekeeper";
 import { logger } from "../utils/logger";
@@ -60,7 +60,7 @@ export class ApiService {
     chainId?: number,
     userName?: string,
     onProgress?: (progress: AnalysisProgress) => void,
-    signer?: any, // ethers.Signer for Axelar transactions
+    signer?: unknown, // ethers.Signer for Axelar transactions
     portfolioSettings?: PortfolioSettings
   ) {
     // Portfolio gatekeeper check
@@ -142,59 +142,7 @@ export class ApiService {
       }
     }
 
-    // Check for cross-chain intent BEFORE sending to backend
-    const intent = intentRouter.parseIntent(command, chainId);
-    
-    // If cross-chain operation and Axelar supports the chains, handle directly
-    if (intent.isCrossChain && signer && this.shouldUseAxelar(intent)) {
-      try {
-        onProgress?.({
-          stage: 'cross_chain_routing',
-          completion: 10,
-          details: 'Detecting cross-chain operation...',
-          type: 'progress'
-        });
-
-        const result = await intentRouter.executeIntent(
-          intent, 
-          signer,
-          (message, step, total) => {
-            onProgress?.({
-              stage: 'cross_chain_execution',
-              completion: 30 + ((step || 0) / (total || 3)) * 60,
-              details: message,
-              type: 'progress'
-            });
-          }
-        );
-
-        if (result.success) {
-          return {
-            content: {
-              type: 'cross_chain_success',
-              transaction: { hash: result.txHash },
-              steps: result.steps,
-              message: `Cross-chain operation initiated successfully!`,
-              axelar_powered: true
-            },
-            agentType: 'bridge',
-            status: 'success',
-            metadata: {
-              intent,
-              estimatedTime: result.steps?.[2]?.description || '5-10 minutes'
-            }
-          };
-        } else if (result.requiresConfirmation) {
-          // Fall back to backend for complex operations requiring confirmation
-          logger.debug('Cross-chain operation requires backend confirmation, falling back...');
-        } else {
-          throw new Error(result.error || 'Cross-chain operation failed');
-        }
-      } catch (error) {
-        logger.warn('Axelar execution failed, falling back to backend:', error);
-        // Continue to backend fallback below
-      }
-    }
+    // All cross-chain operations are now handled by the unified backend
 
     // For other commands, use the chat endpoint
     const { openaiKey } = this.getApiKeys();
@@ -254,7 +202,7 @@ export class ApiService {
   async executeSwap(
     walletAddress?: string,
     chainId?: number,
-    selectedQuote?: any
+    selectedQuote?: Record<string, unknown>
   ) {
     const response = await fetch(`${this.apiUrl}/swap/execute`, {
       method: "POST",
@@ -364,9 +312,9 @@ export class ApiService {
   }
 
   // Add method to execute portfolio actions
-  async executePortfolioAction(action: any) {
+  async executePortfolioAction(action: Record<string, unknown>) {
     try {
-      return await this.portfolioService.executeAction(action);
+      return await this.portfolioService.executeAction(action as any);
     } catch (error) {
       logger.error("Failed to execute portfolio action:", error);
       throw error;
@@ -374,7 +322,7 @@ export class ApiService {
   }
 
   // Add these methods to support the PortfolioService
-  async post(endpoint: string, data: any) {
+  async post(endpoint: string, data: Record<string, unknown>) {
     logger.api("POST", `${this.apiUrl}${endpoint}`, data);
 
     try {
@@ -435,16 +383,17 @@ export class ApiService {
 
   /**
    * Check if Axelar should be used for the given intent
+   * DEPRECATED: Now handled by unified backend
    */
-  private shouldUseAxelar(intent: UserIntent): boolean {
+  private shouldUseAxelar(intent: Record<string, unknown>): boolean {
     // Only use Axelar for cross-chain operations with supported chains
     if (!intent.isCrossChain || !intent.fromChain || !intent.toChain) {
       return false;
     }
 
     // Check if both chains are supported by Axelar
-    const fromSupported = axelarService.isChainSupported(intent.fromChain);
-    const toSupported = axelarService.isChainSupported(intent.toChain);
+    const fromSupported = axelarService.isChainSupported(intent.fromChain as string);
+    const toSupported = axelarService.isChainSupported(intent.toChain as string);
     
     return fromSupported && toSupported;
   }

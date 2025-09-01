@@ -55,20 +55,55 @@ import { LoadingState } from "./UI/LoadingState";
 
 // Removed unused helper functions - now handled by PortfolioSummary component
 
+import {
+  ResponseContent,
+  ResponseMetadata,
+  TransactionData,
+  SwapQuote,
+  Response,
+} from "../types/responses";
+import {
+  isStringContent,
+  isObjectContent,
+  getContentMessage,
+  getContentType,
+  getContentData,
+  getContentAnalysis,
+  getContentSuggestion,
+  getContentAxelarPowered,
+  isConfirmationType,
+  hasMessageProperty,
+  hasBridgeKeywords,
+  getTransactionData,
+  getQuotes,
+  getFlowInfo,
+  isTransferContent,
+  isBalanceResultContent,
+  isProtocolResearchContent,
+  isCrossChainSuccessContent,
+  isPortfolioDisabledContent,
+  isBridgeReadyContent,
+  isSwapQuotesContent,
+  isDCAOrderCreatedContent,
+  getContentError,
+  getContentText,
+  getContentResponse,
+} from "../utils/contentTypeGuards";
+
 interface CommandResponseProps {
-  content: string | any; // Updated to accept structured content
+  content: ResponseContent;
   timestamp: string;
   isCommand: boolean;
   status?: "pending" | "processing" | "success" | "error";
   awaitingConfirmation?: boolean;
   agentType?: AgentType;
-  metadata?: any;
+  metadata?: ResponseMetadata;
   requires_selection?: boolean;
-  all_quotes?: any[];
-  onQuoteSelect?: (response: any, quote: any) => void;
-  transaction?: any;
-  onActionClick?: (action: any) => void;
-  onExecuteTransaction?: (transactionData: any) => Promise<void>;
+  all_quotes?: SwapQuote[];
+  onQuoteSelect?: (response: Response, quote: SwapQuote) => void;
+  transaction?: TransactionData;
+  onActionClick?: (action: Record<string, unknown>) => void;
+  onExecuteTransaction?: (transactionData: TransactionData) => Promise<void>;
   isExecuting?: boolean;
   className?: string;
 }
@@ -130,6 +165,30 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         : null,
     [walletClient, publicClient, chainId]
   );
+
+  // Extract transaction data from content if available
+  const getTransactionFromContent = (
+    content: ResponseContent
+  ): TransactionData | undefined => {
+    if (typeof content === "object" && content !== null) {
+      // Check if content has transaction property
+      if ("transaction" in content) {
+        return (content as any).transaction;
+      }
+      // Check if content has nested content with transaction
+      if (
+        "content" in content &&
+        typeof content.content === "object" &&
+        content.content !== null &&
+        "transaction" in content.content
+      ) {
+        return (content.content as any).transaction;
+      }
+    }
+    return undefined;
+  };
+
+  const transactionData = transaction || getTransactionFromContent(content);
 
   // Multi-step transaction handler
   const handleMultiStepTransaction = React.useCallback(
@@ -334,7 +393,17 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         setIsExecuting(false);
       }
     },
-    [transactionService, address, chainId, apiService, toast, setUserRejected]
+    [
+      transactionService,
+      address,
+      chainId,
+      apiService,
+      toast,
+      setUserRejected,
+      agentType,
+      transaction,
+      content,
+    ]
   );
 
   // Unified multi-step transaction handler for bridges and swaps
@@ -489,31 +558,37 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         setIsExecuting(false);
       }
     },
-    [transactionService, address, chainId, toast, setUserRejected]
+    [
+      transactionService,
+      address,
+      chainId,
+      toast,
+      setUserRejected,
+      transactionData,
+    ]
   );
-
-  // Extract transaction data from content if available
-  const transactionData =
-    transaction ||
-    (typeof content === "object" && content?.transaction) ||
-    (typeof content === "object" && content?.content?.transaction);
 
   // Check for various response types (moved before useEffect that uses them)
   const isSwapConfirmation =
-    typeof content === "object" && content?.type === "swap_confirmation";
+    typeof content === "object" &&
+    (content as any)?.type === "swap_confirmation";
   const isDCAConfirmation =
-    typeof content === "object" && content?.type === "dca_confirmation";
+    typeof content === "object" &&
+    (content as any)?.type === "dca_confirmation";
   const isSwapTransaction =
-    (typeof content === "object" && content?.type === "swap_transaction") ||
     (typeof content === "object" &&
-      content?.type === "swap_ready" &&
+      (content as any)?.type === "swap_transaction") ||
+    (typeof content === "object" &&
+      (content as any)?.type === "swap_ready" &&
       agentType === "swap") ||
     (agentType === "swap" && transactionData);
   const isDCASuccess =
     typeof content === "object" &&
-    (content?.type === "dca_success" || content?.type === "dca_order_created");
+    ((content as any)?.type === "dca_success" ||
+      (content as any)?.type === "dca_order_created");
   const isMultiStepTransaction =
-    typeof content === "object" && content?.type === "multi_step_transaction";
+    typeof content === "object" &&
+    (content as any)?.type === "multi_step_transaction";
   const isBrianTransaction =
     (typeof content === "object" &&
       content?.type === "transaction" &&
@@ -521,28 +596,23 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     (agentType === "brian" && transactionData);
   const isBridgeTransaction =
     (typeof content === "object" &&
-      content?.type === "bridge_ready" &&
+      (content as any)?.type === "bridge_ready" &&
       agentType === "bridge" &&
       !awaitingConfirmation) || // Single-step bridge (rare)
     (typeof content === "object" &&
-      content?.type === "bridge_transaction" &&
+      (content as any)?.type === "bridge_transaction" &&
       agentType === "bridge" &&
       !awaitingConfirmation) ||
     (agentType === "bridge" && transactionData && !awaitingConfirmation) ||
     (typeof content === "object" &&
-      content?.requires_transaction &&
+      (content as any)?.requires_transaction &&
       agentType === "bridge" &&
       !awaitingConfirmation);
 
   // Enhanced bridge detection - works even if agentType is undefined
   const isBridgeMultiStep =
     (agentType === "bridge" && awaitingConfirmation && transactionData) ||
-    (awaitingConfirmation &&
-      transactionData &&
-      typeof content === "object" &&
-      content?.message &&
-      (content.message.toLowerCase().includes("bridge") ||
-        content.message.toLowerCase().includes("axelar"))) ||
+    (awaitingConfirmation && transactionData && hasBridgeKeywords(content)) ||
     // FORCE DETECTION: If we have awaiting confirmation + transaction + approval data, it's likely a bridge
     (awaitingConfirmation &&
       transactionData &&
@@ -554,7 +624,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
   React.useEffect(() => {
     if (
       agentType === "bridge" ||
-      (typeof content === "object" && content?.type?.includes("bridge"))
+      (typeof content === "object" &&
+        (content as any)?.type?.includes("bridge"))
     ) {
       console.log("Bridge Multi-Step Debug:", {
         agentType,
@@ -563,31 +634,18 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         isBridgeMultiStep,
         contentType:
           typeof content === "object" ? content?.type : typeof content,
-        contentMessage: typeof content === "object" ? content?.message : null,
+        contentMessage: getContentMessage(content),
         primaryDetection:
           agentType === "bridge" && awaitingConfirmation && transactionData,
-        fallbackDetection:
-          awaitingConfirmation &&
-          transactionData &&
-          typeof content === "object" &&
-          content?.message &&
-          (content.message.toLowerCase().includes("bridge") ||
-            content.message.toLowerCase().includes("axelar")),
+        fallbackDetection: hasBridgeKeywords(content),
         // Detailed breakdown
         agentTypeCheck: agentType === "bridge",
         awaitingConfirmationCheck: awaitingConfirmation,
         transactionDataCheck: !!transactionData,
         contentObjectCheck: typeof content === "object",
-        contentMessageCheck:
-          typeof content === "object" ? !!content?.message : false,
-        messageIncludesBridge:
-          typeof content === "object" && content?.message
-            ? content.message.toLowerCase().includes("bridge")
-            : false,
-        messageIncludesAxelar:
-          typeof content === "object" && content?.message
-            ? content.message.toLowerCase().includes("axelar")
-            : false,
+        contentMessageCheck: hasMessageProperty(content),
+        messageIncludesBridge: hasBridgeKeywords(content),
+        messageIncludesAxelar: hasBridgeKeywords(content),
       });
     }
   }, [
@@ -599,29 +657,17 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
   ]);
 
   const isTransferTransaction =
-    (typeof content === "object" &&
-      content?.type === "transfer_confirmation" &&
-      agentType === "transfer") ||
-    (typeof content === "object" &&
-      content?.type === "transfer_ready" &&
-      agentType === "transfer") ||
+    (isTransferContent(content) && agentType === "transfer") ||
     (agentType === "transfer" && transactionData);
   const isBalanceResult =
-    typeof content === "object" &&
-    content?.type === "balance_result" &&
-    agentType === "balance";
+    isBalanceResultContent(content) && agentType === "balance";
   const isProtocolResearch =
-    typeof content === "object" &&
-    content?.type === "protocol_research_result" &&
-    agentType === "protocol_research";
+    isProtocolResearchContent(content) && agentType === "protocol_research";
 
   const isCrossChainSuccess =
-    typeof content === "object" &&
-    content?.type === "cross_chain_success" &&
-    content?.axelar_powered === true;
+    isCrossChainSuccessContent(content) && getContentAxelarPowered(content);
 
-  const isPortfolioDisabled =
-    typeof content === "object" && content?.type === "portfolio_disabled";
+  const isPortfolioDisabled = isPortfolioDisabledContent(content);
 
   // Debug logging for bridge and transfer transactions
   React.useEffect(() => {
@@ -870,11 +916,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     userRejected,
     handleMultiStepTransaction,
     handleUnifiedMultiStepTransaction,
+    agentType,
+    handleExecuteTransaction,
   ]);
 
   // Extract portfolio analysis data for modal
-  const portfolioAnalysis =
-    typeof content === "object" && content.analysis ? content.analysis : null;
+  const portfolioAnalysis = getContentAnalysis(content);
 
   // Function to handle portfolio action clicks
   const handleActionClick = (action: any) => {
@@ -947,18 +994,19 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 whiteSpace="pre-wrap"
                 wordBreak="break-word"
               >
-                {content}
+                {isStringContent(content)
+                  ? content
+                  : JSON.stringify(content, null, 2)}
               </Text>
             ) : isSwapConfirmation ? (
               <UnifiedConfirmation
                 agentType="swap"
                 content={{
-                  message:
-                    typeof content === "object" && content.message
-                      ? content.message
-                      : "Ready to swap tokens",
+                  message: getContentMessage(content) || "Ready to swap tokens",
                   type: "swap_confirmation",
-                  details: typeof content === "object" ? content : {},
+                  details: isObjectContent(content)
+                    ? (content as any).details || {}
+                    : {},
                 }}
                 transaction={transactionData}
                 metadata={metadata}
@@ -970,12 +1018,11 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               <UnifiedConfirmation
                 agentType="swap"
                 content={{
-                  message:
-                    typeof content === "object" && content.message
-                      ? content.message
-                      : "Ready to set up DCA",
+                  message: getContentMessage(content) || "Ready to set up DCA",
                   type: "dca_confirmation",
-                  details: typeof content === "object" ? content : {},
+                  details: isObjectContent(content)
+                    ? (content as any).details || {}
+                    : {},
                 }}
                 transaction={transactionData}
                 metadata={metadata}
@@ -1030,44 +1077,52 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 onExecute={handleExecuteTransaction}
                 onCancel={handleCancel}
               />
-            ) : content.type === "brian_confirmation" ? (
-              <UnifiedConfirmation
-                agentType="bridge"
-                content={{
-                  message:
-                    content.message || "Ready to execute bridge transaction",
-                  type: "brian_confirmation",
-                  details: {
-                    token: content.data?.token,
-                    amount: content.data?.amount,
-                    source_chain: content.data?.from_chain?.name,
-                    destination_chain: content.data?.to_chain?.name,
-                  },
-                }}
-                transaction={
-                  content.data?.tx_steps
-                    ? {
-                        to: content.data.tx_steps[0]?.to,
-                        data: content.data.tx_steps[0]?.data,
-                        value: content.data.tx_steps[0]?.value || "0",
-                        chain_id: content.data.from_chain?.id,
-                        gas_limit:
-                          content.data.tx_steps[0]?.gasLimit || "500000",
-                      }
-                    : undefined
-                }
-                metadata={{
-                  token_symbol: content.data?.token,
-                  amount: content.data?.amount,
-                  from_chain_id: content.data?.from_chain?.id,
-                  to_chain_id: content.data?.to_chain?.id,
-                  from_chain_name: content.data?.from_chain?.name,
-                  to_chain_name: content.data?.to_chain?.name,
-                }}
-                onExecute={handleExecuteTransaction}
-                onCancel={handleCancel}
-                isLoading={isExecuting}
-              />
+            ) : isObjectContent(content) &&
+              (content as any).type === "brian_confirmation" ? (
+              (() => {
+                const brianContent = content as any;
+                return (
+                  <UnifiedConfirmation
+                    agentType="bridge"
+                    content={{
+                      message:
+                        getContentMessage(content) ||
+                        "Ready to execute bridge transaction",
+                      type: "brian_confirmation",
+                      details: {
+                        token: brianContent.data?.token,
+                        amount: brianContent.data?.amount,
+                        source_chain: brianContent.data?.from_chain?.name,
+                        destination_chain: brianContent.data?.to_chain?.name,
+                      },
+                    }}
+                    transaction={
+                      brianContent.data?.tx_steps
+                        ? {
+                            to: brianContent.data.tx_steps[0]?.to,
+                            data: brianContent.data.tx_steps[0]?.data,
+                            value: brianContent.data.tx_steps[0]?.value || "0",
+                            chain_id: brianContent.data.from_chain?.id,
+                            gas_limit:
+                              brianContent.data.tx_steps[0]?.gasLimit ||
+                              "500000",
+                          }
+                        : undefined
+                    }
+                    metadata={{
+                      token_symbol: brianContent.data?.token,
+                      amount: brianContent.data?.amount,
+                      from_chain_id: brianContent.data?.from_chain?.id,
+                      to_chain_id: brianContent.data?.to_chain?.id,
+                      from_chain_name: brianContent.data?.from_chain?.name,
+                      to_chain_name: brianContent.data?.to_chain?.name,
+                    }}
+                    onExecute={handleExecuteTransaction}
+                    onCancel={handleCancel}
+                    isLoading={isExecuting}
+                  />
+                );
+              })()
             ) : isBalanceResult ? (
               <BalanceResult content={content} />
             ) : isProtocolResearch ? (
@@ -1106,29 +1161,21 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     ? content
                     : { type: "cross_chain_success" }
                 }
-                metadata={metadata}
+                metadata={metadata as any}
               />
             ) : agentType === "agno" || agentType === "portfolio" ? (
               <VStack spacing={4} align="stretch" w="100%">
                 {/* Enhanced Portfolio Summary */}
                 <EnhancedPortfolioSummary
                   response={{
-                    analysis:
-                      typeof content === "object"
-                        ? content.analysis
-                        : undefined,
+                    analysis: getContentAnalysis(content),
                     summary:
-                      typeof content === "object"
-                        ? content.analysis?.summary
-                        : content,
-                    fullAnalysis:
-                      typeof content === "object"
-                        ? content.analysis?.fullAnalysis
-                        : undefined,
+                      getContentAnalysis(content)?.summary ||
+                      (isStringContent(content) ? content : undefined),
+                    fullAnalysis: getContentAnalysis(content)?.fullAnalysis,
                     content:
-                      typeof content === "object"
-                        ? content.analysis?.summary
-                        : content,
+                      getContentAnalysis(content)?.summary ||
+                      (isStringContent(content) ? content : undefined),
                     status: status,
                     metadata: metadata,
                   }}
@@ -1171,11 +1218,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                   <AlertIcon />
                   <AlertTitle>Success!</AlertTitle>
                   <AlertDescription>
-                    {content.type === "dca_order_created"
+                    {getContentType(content) === "dca_order_created"
                       ? "DCA order successfully created. You'll be swapping the specified amount on your chosen schedule."
-                      : content.message || "DCA order setup complete."}
-                    {content?.type === "error" &&
-                      content?.content?.includes("minimum") && (
+                      : getContentMessage(content) ||
+                        "DCA order setup complete."}
+                    {isObjectContent(content) &&
+                      content.type === "error" &&
+                      (content as any).content?.includes("minimum") && (
                         <Box mt={2}>
                           <Alert status="warning" rounded="md" size="sm">
                             <AlertIcon />
@@ -1196,16 +1245,16 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                           </Alert>
                         </Box>
                       )}
-                    {metadata?.order_id && (
+                    {(metadata as any)?.order_id && (
                       <Box mt={1}>
-                        <Text>Order ID: {metadata.order_id}</Text>
+                        <Text>Order ID: {(metadata as any).order_id}</Text>
                       </Box>
                     )}
-                    {metadata?.details?.duration && (
+                    {(metadata as any)?.details?.duration && (
                       <Box mt={1}>
                         <Text>
-                          Schedule: {metadata.details.frequency} for{" "}
-                          {metadata.details.duration} days
+                          Schedule: {(metadata as any).details.frequency} for{" "}
+                          {(metadata as any).details.duration} days
                         </Text>
                       </Box>
                     )}
@@ -1215,10 +1264,10 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             ) : needsSelection ? (
               <Box mt={2} width="100%">
                 <AggregatorSelection
-                  quotes={all_quotes}
-                  tokenSymbol={metadata?.token_out_symbol || "tokens"}
-                  tokenDecimals={metadata?.token_out_decimals || 18}
-                  onSelect={handleQuoteSelect}
+                  quotes={all_quotes as any}
+                  tokenSymbol={(metadata as any)?.token_out_symbol || "tokens"}
+                  tokenDecimals={(metadata as any)?.token_out_decimals || 18}
+                  onSelect={handleQuoteSelect as any}
                 />
               </Box>
             ) : (
@@ -1229,28 +1278,22 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 overflowWrap="break-word"
                 whiteSpace="pre-wrap"
               >
-                {typeof content === "string"
+                {isStringContent(content)
                   ? formatLinks(
                       content.startsWith('{"response":')
                         ? JSON.parse(content).response
                         : content
                     )
-                  : typeof content === "object" &&
-                    content !== null &&
-                    content.text
-                  ? formatLinks(content.text)
-                  : typeof content === "object" &&
-                    content !== null &&
-                    content.message
-                  ? formatLinks(content.message)
-                  : typeof content === "object" &&
-                    content !== null &&
-                    content.response
-                  ? formatLinks(content.response)
+                  : getContentText(content)
+                  ? formatLinks(getContentText(content)!)
+                  : getContentMessage(content)
+                  ? formatLinks(getContentMessage(content)!)
+                  : getContentResponse(content)
+                  ? formatLinks(getContentResponse(content)!)
                   : formatLinks(
-                      typeof content === "string"
+                      isStringContent(content)
                         ? content
-                        : content !== null && content !== undefined
+                        : isObjectContent(content)
                         ? JSON.stringify(content, null, 2)
                         : ""
                     )}
@@ -1285,11 +1328,11 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                   <Box>
                     <AlertTitle mb={1}>Transaction Failed</AlertTitle>
                     <AlertDescription>
-                      {typeof content === "object" && content?.error
-                        ? formatErrorMessage(content.error)
-                        : typeof content === "object" && content?.message
-                        ? formatErrorMessage(content.message)
-                        : typeof content === "string"
+                      {getContentError(content)
+                        ? formatErrorMessage(getContentError(content)!)
+                        : getContentMessage(content)
+                        ? formatErrorMessage(getContentMessage(content)!)
+                        : isStringContent(content)
                         ? formatErrorMessage(content)
                         : "An error occurred. Please try again."}
                     </AlertDescription>
