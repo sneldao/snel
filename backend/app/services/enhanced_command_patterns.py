@@ -84,52 +84,52 @@ class EnhancedCommandPatterns:
             ],
             
             PatternPriority.MEDIUM: [
-                # USD amount patterns (high priority for user-friendly input)
+                # Token amount patterns with $ symbol ($ is just currency symbol, not USD amount!)
                 CommandPattern(
-                    pattern=r"swap\s+\$(?P<usd_amount>[\d\.]+)\s+(?:of\s+)?(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
+                    pattern=r"swap\s+\$(?P<amount>[\d\.]+)\s+of\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
                     command_type=CommandType.SWAP,
                     priority=PatternPriority.MEDIUM,
-                    description="USD amount token swap with optional 'of'",
+                    description="Token amount swap with $ symbol and 'of' ($ is currency symbol, not USD value)",
                     examples=[
-                        "swap $1 of USDC to ETH",
-                        "swap $100 USDC for ETH",
-                        "swap $50 of ETH to USDC"
+                        "swap $1 of USDC to ETH",  # means: swap 1 USDC for ETH
+                        "swap $100 of ETH for USDC",  # means: swap 100 ETH for USDC
+                        "swap $50 of DAI to USDC"  # means: swap 50 DAI for USDC
                     ]
                 ),
                 
-                # Additional USD patterns for more natural language
+                # TRUE USD amount patterns (when user explicitly says "worth of")
                 CommandPattern(
                     pattern=r"swap\s+\$(?P<usd_amount>[\d\.]+)\s+worth\s+of\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
                     command_type=CommandType.SWAP,
                     priority=PatternPriority.MEDIUM,
-                    description="USD amount with 'worth of' phrasing",
+                    description="TRUE USD amount with 'worth of' phrasing",
                     examples=[
-                        "swap $1 worth of USDC to ETH",
-                        "swap $100 worth of ETH for USDC"
+                        "swap $1 worth of USDC to ETH",  # means: swap $1 USD worth of USDC for ETH
+                        "swap $100 worth of ETH for USDC"  # means: swap $100 USD worth of ETH for USDC
                     ]
                 ),
                 
                 CommandPattern(
-                    pattern=r"swap\s+(?P<usd_amount>[\d\.]+)\s+dollars?\s+(?:of\s+)?(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
+                    pattern=r"swap\s+(?P<usd_amount>[\d\.]+)\s+dollars?\s+worth\s+of\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
                     command_type=CommandType.SWAP,
                     priority=PatternPriority.MEDIUM,
-                    description="USD amount with 'dollar/dollars' keyword",
+                    description="TRUE USD amount with 'dollars worth of' phrasing",
                     examples=[
-                        "swap 1 dollar of USDC to ETH",
-                        "swap 100 dollars USDC for ETH",
-                        "swap 50 dollars of ETH to USDC"
+                        "swap 1 dollar worth of USDC to ETH",
+                        "swap 100 dollars worth of ETH for USDC",
+                        "swap 50 dollars worth of DAI to USDC"
                     ]
                 ),
                 
                 CommandPattern(
-                    pattern=r"swap\s+(?P<usd_amount>[\d\.]+)\s+usd\s+(?:of\s+)?(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
+                    pattern=r"swap\s+(?P<usd_amount>[\d\.]+)\s+usd\s+worth\s+of\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
                     command_type=CommandType.SWAP,
                     priority=PatternPriority.MEDIUM,
-                    description="USD amount with 'usd' keyword",
+                    description="TRUE USD amount with 'usd worth of' phrasing",
                     examples=[
-                        "swap 1 usd of USDC to ETH",
-                        "swap 100 usd USDC for ETH",
-                        "swap 50 usd of ETH to USDC"
+                        "swap 1 usd worth of USDC to ETH",
+                        "swap 100 usd worth of ETH for USDC",
+                        "swap 50 usd worth of DAI to USDC"
                     ]
                 ),
                 
@@ -167,6 +167,30 @@ class EnhancedCommandPatterns:
                     ]
                 ),
                 
+                # Bridge patterns (MISSING - this is why bridge commands fail!)
+                CommandPattern(
+                    pattern=r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+from\s+(?P<source_chain>\w+)\s+to\s+(?P<dest_chain>\w+)",
+                    command_type=CommandType.BRIDGE,
+                    priority=PatternPriority.MEDIUM,
+                    description="Bridge tokens between chains with explicit source and destination",
+                    examples=[
+                        "bridge 1 USDC from base to scroll",
+                        "bridge 0.1 ETH from ethereum to polygon",
+                        "bridge 100 USDC from arbitrum to optimism"
+                    ]
+                ),
+                CommandPattern(
+                    pattern=r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<dest_chain>\w+)",
+                    command_type=CommandType.BRIDGE,
+                    priority=PatternPriority.MEDIUM,
+                    description="Bridge tokens to destination chain (source chain inferred from current chain)",
+                    examples=[
+                        "bridge 1 USDC to scroll",
+                        "bridge 0.1 ETH to polygon",
+                        "bridge 100 USDC to arbitrum"
+                    ]
+                ),
+
                 # Regular token amount swaps (no dollar sign)
                 CommandPattern(
                     pattern=r"swap\s+(?P<amount>[\d\.]+)\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)(?!\s+(?:from|on))",

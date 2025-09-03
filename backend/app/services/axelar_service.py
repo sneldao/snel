@@ -138,11 +138,8 @@ class AxelarService:
         if not self.config:
             await self.initialize()
 
-        # Check if chain is supported by Axelar
-        if chain_id not in self.config.supported_chains:
-            return None
-            
         # Use our chain mapping for Axelar-specific names
+        # The chain_mappings dict is the authoritative source for Axelar support
         return self.chain_mappings.get(chain_id)
 
     def is_chain_supported(self, chain_id: int) -> bool:

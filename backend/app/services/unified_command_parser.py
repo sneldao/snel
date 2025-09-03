@@ -103,14 +103,14 @@ class UnifiedCommandParser:
         if command_type in [CommandType.SWAP, CommandType.CROSS_CHAIN_SWAP] and extracted_params:
             # Handle USD amount vs token amount
             if "usd_amount" in extracted_params and extracted_params["usd_amount"]:
+                # TRUE USD amount (only when "worth of" is explicitly used)
                 amount = float(extracted_params["usd_amount"])
                 additional_params = {"is_usd_amount": True}
-                # Use token_in for USD amount pattern
                 token_in_symbol = extracted_params["token_in"]
             elif "amount" in extracted_params and extracted_params["amount"]:
+                # Token amount (including "$1 of USDC" which means 1 USDC, not $1 USD)
                 amount = float(extracted_params["amount"])
                 additional_params = {"is_usd_amount": False}
-                # Use token_in for regular amount pattern
                 token_in_symbol = extracted_params["token_in"]
             else:
                 return None
