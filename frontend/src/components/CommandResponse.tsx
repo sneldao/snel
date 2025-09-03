@@ -571,7 +571,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
   // Check for various response types (moved before useEffect that uses them)
   const isSwapConfirmation =
     typeof content === "object" &&
-    (content as any)?.type === "swap_confirmation";
+    ((content as any)?.type === "swap_confirmation" || 
+     (content as any)?.type === "swap_ready");
   const isDCAConfirmation =
     typeof content === "object" &&
     (content as any)?.type === "dca_confirmation";

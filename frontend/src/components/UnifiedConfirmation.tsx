@@ -179,10 +179,11 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
   };
 
   const renderSwapDetails = () => {
-    const amount = content.details?.amount || "0";
+    // Extract values from content object (directly from backend) or fallback to details
+    const amount = (content as any)?.amount || content.details?.amount || "0";
     const tokenIn =
-      content.details?.token_in || content.details?.token || "ETH";
-    const tokenOut = content.details?.token_out || "USDC";
+      (content as any)?.token_in || content.details?.token_in || content.details?.token || "ETH";
+    const tokenOut = (content as any)?.token_out || content.details?.token_out || "USDC";
 
     // Format amount to avoid scientific notation
     const formatAmount = (amt: string | number) => {
@@ -212,6 +213,12 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
           <HStack justify="space-between">
             <Text color="gray.600">Network:</Text>
             <Text fontWeight="bold">{content.details.chain}</Text>
+          </HStack>
+        )}
+        {(content as any)?.protocol && (
+          <HStack justify="space-between">
+            <Text color="gray.600">Protocol:</Text>
+            <Badge colorScheme="green">{(content as any)?.protocol}</Badge>
           </HStack>
         )}
         {content.details?.protocol && (
