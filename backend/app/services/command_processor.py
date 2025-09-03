@@ -10,7 +10,7 @@ from app.models.unified_models import (
     CommandType, UnifiedCommand, UnifiedResponse, AgentType,
     ResponseContent, ValidationResult, TransactionData
 )
-from app.services.unified_command_parser import UnifiedCommandParser
+from app.core.parser.unified_parser import unified_parser
 from app.config.settings import Settings
 from app.services.chat_history import chat_history_service
 from app.core.exceptions import (
@@ -67,7 +67,7 @@ class CommandProcessor:
         openai_api_key: str = None
     ) -> UnifiedCommand:
         """Create a unified command using the unified parser."""
-        return UnifiedCommandParser.create_unified_command(
+        return unified_parser.create_unified_command(
             command=command,
             wallet_address=wallet_address,
             chain_id=chain_id,
@@ -78,7 +78,7 @@ class CommandProcessor:
     @staticmethod
     def validate_command(unified_command: UnifiedCommand) -> ValidationResult:
         """Validate a unified command."""
-        return UnifiedCommandParser.validate_command(unified_command)
+        return unified_parser.validate_command(unified_command)
     
     async def _classify_with_ai(self, unified_command: UnifiedCommand) -> CommandType:
         """Use AI to classify ambiguous commands based on context."""
