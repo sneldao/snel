@@ -401,8 +401,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
       toast,
       setUserRejected,
       agentType,
-      transaction,
-      content,
+      transactionData,
     ]
   );
 
@@ -558,14 +557,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         setIsExecuting(false);
       }
     },
-    [
-      transactionService,
-      address,
-      chainId,
-      toast,
-      setUserRejected,
-      transactionData,
-    ]
+    [transactionService, address, chainId, toast, setUserRejected]
   );
 
   // Check for various response types (moved before useEffect that uses them)
