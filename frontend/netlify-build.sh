@@ -13,40 +13,52 @@ echo "Current directory: $(pwd)"
 echo "Node.js version: $(node --version)"
 echo "NPM version: $(npm --version)"
 
+# Set Netlify environment variable
+export NETLIFY=true
+
 # Check if package.json exists
 if [ ! -f "package.json" ]; then
     echo "ERROR: package.json not found in $(pwd)"
     exit 1
 fi
 
-# Clean npm cache to avoid potential issues
-echo "Cleaning npm cache..."
-npm cache clean --force
+# Check current directory contents
+echo "Current directory contents:"
+ls -la
 
-# Remove existing node_modules and package-lock.json to ensure clean install
-echo "Cleaning existing dependencies..."
-rm -rf node_modules package-lock.json
-
-# Install dependencies with legacy peer deps flag to handle potential conflicts
+# Install dependencies
 echo "Installing dependencies..."
-npm install --legacy-peer-deps
+npm ci --legacy-peer-deps --no-audit --no-fund
 
-# Verify node_modules exists and has content
-if [ ! -d "node_modules" ]; then
+# Verify installation
+echo "Verifying installation..."
+if [ -d "node_modules" ]; then
+    echo "✓ node_modules directory exists"
+    echo "✓ Contains $(ls node_modules 2>/dev/null | wc -l) packages"
+    
+    # Check for key dependencies
+    [ -d "node_modules/next" ] && echo "✓ Next.js installed" || echo "✗ Next.js missing"
+    [ -d "node_modules/react" ] && echo "✓ React installed" || echo "✗ React missing"
+    [ -d "node_modules/@chakra-ui" ] && echo "✓ Chakra UI installed" || echo "✗ Chakra UI missing"
+else
     echo "ERROR: node_modules directory not found after npm install"
+    echo "Directory contents after npm install:"
+    ls -la
     exit 1
 fi
-
-echo "node_modules directory verified, contains $(ls node_modules | wc -l) packages"
-
-# List some key dependencies to verify installation
-echo "Checking key dependencies..."
-ls -la node_modules/next/ > /dev/null && echo "✓ Next.js installed" || echo "✗ Next.js missing"
-ls -la node_modules/react/ > /dev/null && echo "✓ React installed" || echo "✗ React missing"
-ls -la node_modules/@chakra-ui/ > /dev/null && echo "✓ Chakra UI installed" || echo "✗ Chakra UI missing"
 
 # Run the build
 echo "Building Next.js application..."
 npm run build
 
-echo "Build completed successfully!"
+# Verify build output
+if [ -d ".next" ]; then
+    echo "✓ Build completed successfully!"
+    echo "Build output directory contents:"
+    ls -la .next/
+else
+    echo "ERROR: Build failed - .next directory not found"
+    exit 1
+fi
+
+echo "Netlify build process completed successfully!"

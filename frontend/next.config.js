@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Disable static optimization for Web3 app
-  output: "standalone",
+  // Use standalone for local development, but not for Netlify
+  ...(process.env.NETLIFY ? {} : { output: "standalone" }),
   // Fix workspace root detection
   outputFileTracingRoot: require('path').join(__dirname, '../'),
   webpack: (config) => {
