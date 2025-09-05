@@ -116,4 +116,4 @@ export const isEthersCompatible = (walletClient: any): boolean => {
 };
 
 // Re-export from centralized mappings for backward compatibility
-export { getAxelarChainName } from './chainMappings';
+export { getAxelarChainName } from '../constants/chains';

@@ -5,12 +5,13 @@
 
 import { ethers } from 'ethers';
 import { logger } from '../utils/logger';
-import { 
-  getAxelarGatewayAddress, 
-  getAxelarGasServiceAddress, 
-  isAxelarSupported, 
-  getSupportedAxelarChains 
-} from '../utils/chainMappings';
+import {
+  getAxelarChainName,
+  getAxelarGatewayAddress,
+  getAxelarGasServiceAddress,
+  getSupportedAxelarChains,
+  isAxelarSupported
+} from '../constants/chains';
 
 // Axelar Gateway ABI (simplified - key functions only)
 const AXELAR_GATEWAY_ABI = [
