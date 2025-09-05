@@ -28,7 +28,7 @@ ls -la
 
 # Install dependencies
 echo "Installing dependencies..."
-npm ci --legacy-peer-deps --no-audit --no-fund
+npm install --legacy-peer-deps --no-audit --no-fund
 
 # Verify installation
 echo "Verifying installation..."
