@@ -2,6 +2,8 @@
 const nextConfig = {
   // Disable static optimization for Web3 app
   output: "standalone",
+  // Fix workspace root detection
+  outputFileTracingRoot: require('path').join(__dirname, '../'),
   webpack: (config) => {
     config.resolve.fallback = {
       fs: false,

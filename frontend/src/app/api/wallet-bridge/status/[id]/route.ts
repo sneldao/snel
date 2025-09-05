@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 // API route to check wallet bridge connection status
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     const connectionId = params.id;
 

@@ -1,7 +1,12 @@
 {
   "name": "snel",
   "version": "1.0.0",
-  "description": "Dual-Mode Crypto Assistant with Agent and Bot capabilities",
+  "description": "AI-Powered Cross-Chain DeFi Assistant",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev": "make dev",
     "all-dev": "make all-dev",
@@ -9,19 +14,17 @@
     "frontend": "make frontend-dev",
     "telegram": "make telegram-dev",
     "install-deps": "make install",
-    "clean": "make clean"
+    "clean": "make clean",
+    "build": "npm run build --workspace=frontend",
+    "test": "npm run test --workspace=frontend && npm run test --workspace=backend",
+    "lint": "npm run lint --workspace=frontend"
   },
   "devDependencies": {
-    "@types/node": "^22.15.18",
-    "@types/react": "^19.1.4",
-    "@types/react-dom": "^19.1.5",
     "concurrently": "^9.1.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.2"
   },
-  "dependencies": {
-    "next": "^15.3.2",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-is": "^19.1.0"
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
