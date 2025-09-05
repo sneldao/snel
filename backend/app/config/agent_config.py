@@ -28,7 +28,7 @@ class AgentConfig:
         "token_swaps": AgentCapability(
             name="Token Swaps",
             description="Execute token swaps across multiple chains using DEX aggregators",
-            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 81457, 100],
+            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 81457, 100, 8217],
             required_protocols=["0x", "brian"],
             examples=[
                 "swap 1 ETH for USDC",
@@ -50,7 +50,7 @@ class AgentConfig:
         "portfolio_management": AgentCapability(
             name="Portfolio Management",
             description="Check balances and monitor transactions across chains",
-            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 81457, 100],
+            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 81457, 100, 8217],
             required_protocols=["rpc"],
             examples=[
                 "show my ETH balance",
@@ -61,7 +61,7 @@ class AgentConfig:
         "price_information": AgentCapability(
             name="Price Information",
             description="Get real-time token prices and market data",
-            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 81457, 100],
+            supported_chains=[1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 81457, 100, 8217],
             required_protocols=["coingecko", "0x"],
             examples=[
                 "what's the price of ETH",
@@ -88,7 +88,8 @@ class AgentConfig:
         100: {"name": "Gnosis", "symbol": "xDAI", "type": "L1"},
         34443: {"name": "Mode", "symbol": "ETH", "type": "L2"},
         167000: {"name": "Taiko", "symbol": "ETH", "type": "L2"},
-        1101: {"name": "Starknet", "symbol": "ETH", "type": "L2"}
+        1101: {"name": "Starknet", "symbol": "ETH", "type": "L2"},
+        8217: {"name": "Kaia", "symbol": "KAIA", "type": "L1"}
     }
     
     # Protocol capabilities

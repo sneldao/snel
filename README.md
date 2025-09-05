@@ -24,8 +24,18 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 snel/
 ├── frontend/          # Next.js application
 ├── backend/           # FastAPI application
-└── docs/              # Documentation
+├── docs/              # Documentation
+│   ├── ARCHITECTURE_FOUNDATION.md    # Core architecture & foundation
+│   ├── GMP_INTEGRATION.md            # GMP integration guide
+│   └── CHAIN_INTEGRATIONS_DEPLOYMENT.md  # Chain integrations & deployment
+└── public/           # Static assets
 ```
+
+### 📚 Documentation
+
+- **[Architecture & Foundation](docs/ARCHITECTURE_FOUNDATION.md)** - Core architecture, foundation upgrades, and current status
+- **[GMP Integration](docs/GMP_INTEGRATION.md)** - General Message Passing integration guide and implementation
+- **[Chain Integrations & Deployment](docs/CHAIN_INTEGRATIONS_DEPLOYMENT.md)** - Blockchain integrations and deployment guides
 
 ### Supported Swap Commands
 
