@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "custom-tools": {
+      "command": "echo",
+      "args": ["Custom MCP server placeholder"],
+      "env": {}
+    }
+  }
+}

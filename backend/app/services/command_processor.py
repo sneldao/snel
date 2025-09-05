@@ -57,6 +57,10 @@ class CommandProcessor:
         # Import enhanced cross-chain handler for GMP operations
         from app.services.enhanced_crosschain_handler import enhanced_crosschain_handler
         self.gmp_handler = enhanced_crosschain_handler
+        
+        # Import price service for USD to token conversions
+        from app.services.price_service import price_service
+        self.price_service = price_service
 
     @staticmethod
     def create_unified_command(
@@ -771,17 +775,53 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             if details.amount <= 0:
                 raise invalid_amount_error(details.amount)
 
-            # Format amount to avoid scientific notation
-            amount_str = self._format_amount(details.amount)
+            # Check if this is a USD amount that needs conversion to token amount
+            amount_value = details.amount
+            from_token_symbol = details.token_in.symbol
+            
+            # Check if the parsed amount was a USD amount that needs conversion
+            additional_params = details.additional_params or {}
+            parsed_amount_info = additional_params.get("parsed_amount", {})
+            amount_type = additional_params.get("amount_type")
+            
+            if amount_type == "usd_amount":
+                # This is a USD amount that needs to be converted to token amount
+                logger.info(f"Converting USD amount ${amount_value} to {from_token_symbol} token amount")
+                
+                # Get token price and convert USD to token amount
+                token_price = await self.price_service.get_token_price(from_token_symbol)
+                if not token_price or token_price <= 0:
+                    return UnifiedResponse(
+                        content={
+                            "message": f"Unable to fetch price for {from_token_symbol}. Please try specifying the token amount directly.",
+                            "type": "swap_error",
+                            "suggestions": [
+                                f"Try 'swap 0.001 {from_token_symbol} for {details.token_out.symbol}' instead",
+                                "Check if the token symbol is correct",
+                                "Try again in a moment"
+                            ]
+                        },
+                        agent_type=AgentType.SWAP,
+                        status="error",
+                        error=f"Could not fetch price for {from_token_symbol}"
+                    )
+                
+                # Convert USD to token amount: token_amount = usd_amount / token_price
+                token_amount = amount_value / float(token_price)
+                amount_value = token_amount
+                logger.info(f"Converted ${amount_value * float(token_price):.2f} to {token_amount:.6f} {from_token_symbol} (price: ${token_price})")
 
-            logger.info(f"Attempting swap: {amount_str} {details.token_in.symbol} for {details.token_out.symbol}")
+            # Format amount to avoid scientific notation
+            amount_str = self._format_amount(amount_value)
+
+            logger.info(f"Attempting swap: {amount_str} {from_token_symbol} for {details.token_out.symbol}")
 
             # Normalize token symbols for DEX compatibility
             # Users say "ETH" but DEX protocols need "WETH" for swaps
-            from_token_symbol = self._normalize_token_for_swap(details.token_in.symbol, unified_command.chain_id)
+            normalized_from_token = self._normalize_token_for_swap(from_token_symbol, unified_command.chain_id)
             to_token_symbol = self._normalize_token_for_swap(details.token_out.symbol, unified_command.chain_id)
 
-            logger.info(f"Normalized tokens: {from_token_symbol} -> {to_token_symbol}")
+            logger.info(f"Normalized tokens: {normalized_from_token} -> {to_token_symbol}")
 
             # Determine if this is cross-chain based on token symbols or explicit chain specification
             # This is a simple heuristic - could be enhanced with better parsing
@@ -799,7 +839,7 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 
             # Use protocol registry to get quote with Axelar priority
             quote = await self.protocol_registry.get_quote(
-                from_token=from_token_symbol,
+                from_token=normalized_from_token,
                 to_token=to_token_symbol,
                 amount=amount_str,
                 from_chain=from_chain,
@@ -859,9 +899,9 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             protocol_name = quote.get("protocol", "unknown")
             if protocol_name == "axelar":
                 content = {
-                    "message": f"Ready to bridge {amount_str} {details.token_in.symbol} via Axelar Network",
+                    "message": f"Ready to bridge {amount_str} {from_token_symbol} via Axelar Network",
                     "amount": amount_str,
-                    "token_in": details.token_in.symbol,
+                    "token_in": from_token_symbol,
                     "token_out": details.token_out.symbol,
                     "protocol": protocol_name,
                     "estimated_time": quote.get("estimated_time", "5-15 minutes"),
@@ -878,9 +918,9 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 }.get(protocol_name, protocol_name.title())
                 
                 content = {
-                    "message": f"Ready to swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol} via {protocol_display}",
+                    "message": f"Ready to swap {amount_str} {from_token_symbol} for {details.token_out.symbol} via {protocol_display}",
                     "amount": amount_str,
-                    "token_in": details.token_in.symbol,
+                    "token_in": from_token_symbol,
                     "token_out": details.token_out.symbol,
                     "protocol": protocol_name,
                     "gas_cost_usd": quote.get("gas_cost_usd", ""),
@@ -897,7 +937,7 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 metadata={
                     "parsed_command": {
                         "amount": amount_str,
-                        "token_in": details.token_in.symbol,
+                        "token_in": from_token_symbol,
                         "token_out": details.token_out.symbol,
                         "command_type": "swap",
                         "protocol": protocol_name

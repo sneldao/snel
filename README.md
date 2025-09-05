@@ -6,10 +6,11 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 
 ## ✨ Key Features
 
-- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"`.
+- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"` or `"swap $100 of USDC for ETH"`.
 - **🌐 Multi-Chain Support**: Operates on 16+ networks including Ethereum, Polygon, Base, and Arbitrum.
 - **🔄 Advanced Transaction Handling**: Automatically handles multi-step processes like approvals and swaps with real-time status updates.
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
+- **💰 Smart Amount Conversion**: Automatically converts USD amounts to token amounts using real-time price data from CoinGecko.
 - **🔐 Secure & User-Friendly**: Non-custodial, supports 50+ wallets, and provides transaction simulation.
 
 ## 🏗️ Architecture
@@ -25,6 +26,13 @@ snel/
 ├── backend/           # FastAPI application
 └── docs/              # Documentation
 ```
+
+### Supported Swap Commands
+
+- `swap 1 ETH for USDC` - Standard token amount swap
+- `swap $100 of USDC for ETH` - USD amount converted to token amount
+- `swap $50 worth of ETH for USDC` - USD amount converted to token amount
+- `swap 100 USDC to DAI on Polygon` - Cross-chain swap
 
 ## 🚀 Quick Start
 

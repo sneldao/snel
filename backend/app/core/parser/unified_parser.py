@@ -79,9 +79,9 @@ class UnifiedParser:
                         r"swap\s+\$(?P<amount>[\d\.]+)\s+of\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
                         re.IGNORECASE
                     ),
-                    "amount_type": AmountType.TOKEN_AMOUNT,
-                    "description": "Token amount with $ symbol and 'of' (CRITICAL FIX)",
-                    "priority": 2
+                    "amount_type": AmountType.USD_AMOUNT,  # FIXED: This should be USD_AMOUNT
+                    "description": "TRUE USD amount with $ symbol and 'of' phrasing",
+                    "priority": 1  # Increased priority to match other USD patterns
                 },
                 {
                     "pattern": re.compile(
