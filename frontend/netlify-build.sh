@@ -26,9 +26,16 @@ fi
 echo "Current directory contents:"
 ls -la
 
-# Install dependencies
+# Install dependencies using CI for production reliability
 echo "Installing dependencies..."
-npm install --legacy-peer-deps --no-audit --no-fund
+npm ci --no-audit --no-fund
+
+# Fallback: if node_modules still missing, force clean install
+if [ ! -d "node_modules" ]; then
+    echo "WARNING: node_modules not found after npm ci, performing clean install..."
+    rm -rf node_modules package-lock.json
+    npm install --no-audit --no-fund
+fi
 
 # Verify installation
 echo "Verifying installation..."
