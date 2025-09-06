@@ -26,42 +26,31 @@ fi
 echo "Current directory contents:"
 ls -la
 
-# Install dependencies with fallback strategy
+# Install dependencies
 echo "Installing dependencies..."
+npm ci --no-audit --no-fund
 
-# Try installing from the root to leverage workspace structure
-cd ..
-echo "Changed to root directory: $(pwd)"
-
-# First, try npm ci for faster, reliable builds
-if npm ci --no-audit --no-fund --workspace=frontend 2>/dev/null; then
-    echo "✓ npm ci completed successfully"
-else
-    echo "WARNING: npm ci failed, falling back to npm install..."
-    # Clean up any partial installation
-    rm -rf frontend/node_modules
-    # Use npm install as fallback
-    npm install --no-audit --no-fund --workspace=frontend
-fi
-
-# Verify installation by checking if we can run the build
+# Verify installation by checking key dependencies
 echo "Verifying installation..."
-# Check if we can run a simple npm command in the frontend workspace
-if npm run build --workspace=frontend -- --dry-run 2>/dev/null; then
-    echo "✓ Dependencies verified successfully"
+if [ -d "node_modules" ]; then
+    echo "✓ node_modules directory exists"
+    echo "✓ Contains $(ls node_modules | wc -l) packages"
 else
-    echo "✓ Dependencies verified successfully (dry-run not supported, but install likely successful)"
+    echo "ERROR: node_modules directory not found after npm install"
+    echo "Directory contents after npm install:"
+    ls -la
+    exit 1
 fi
 
-# Run the build from the root
+# Run the build
 echo "Building Next.js application..."
-npm run build --workspace=frontend
+npm run build
 
 # Verify build output
-if [ -d "frontend/.next" ]; then
+if [ -d ".next" ]; then
     echo "✓ Build completed successfully!"
     echo "Build output directory contents:"
-    ls -la frontend/.next/
+    ls -la .next/
 else
     echo "ERROR: Build failed - .next directory not found"
     exit 1

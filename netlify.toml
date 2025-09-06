@@ -1,7 +1,7 @@
 [build]
   base = "frontend"
-  publish = ".next"
-  command = "./netlify-build.sh"
+  publish = "frontend/.next"
+  command = "npm run build"
   environment = { NODE_VERSION = "20" }
 
 [[plugins]]
@@ -16,4 +16,4 @@
   from = "/api/*"
   to = "https://p02--snel-web-app--wxd25gkpcp8m.code.run/api/:splat"
   status = 200
-  force = true 
+  force = true
