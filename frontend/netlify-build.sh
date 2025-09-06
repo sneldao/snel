@@ -26,14 +26,17 @@ fi
 echo "Current directory contents:"
 ls -la
 
-# Install dependencies using CI for production reliability
+# Install dependencies with fallback strategy
 echo "Installing dependencies..."
-npm ci --no-audit --no-fund
 
-# Fallback: if node_modules still missing, force clean install
-if [ ! -d "node_modules" ]; then
-    echo "WARNING: node_modules not found after npm ci, performing clean install..."
-    rm -rf node_modules package-lock.json
+# First, try npm ci for faster, reliable builds
+if npm ci --no-audit --no-fund 2>/dev/null; then
+    echo "✓ npm ci completed successfully"
+else
+    echo "WARNING: npm ci failed, falling back to npm install..."
+    # Clean up any partial installation
+    rm -rf node_modules
+    # Use npm install as fallback
     npm install --no-audit --no-fund
 fi
 
