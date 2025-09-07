@@ -5,9 +5,6 @@ set -e
 
 echo "Starting Netlify build process..."
 
-# Ensure we're in the frontend directory
-cd "$(dirname "$0")"
-
 # Print current directory and Node.js version for debugging
 echo "Current directory: $(pwd)"
 echo "Node.js version: $(node --version)"
