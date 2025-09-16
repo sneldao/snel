@@ -23,20 +23,39 @@ fi
 echo "Current directory contents:"
 ls -la
 
-# Handle missing package-lock.json for workspace setup
+# Handle workspace setup by bypassing it for Netlify builds
 echo "Checking for package-lock.json..."
 if [ ! -f "package-lock.json" ]; then
-    echo "No package-lock.json found. Using npm install instead of npm ci..."
+    echo "No package-lock.json found. Creating minimal lockfile to bypass workspace..."
+    
+    # Create a minimal package-lock.json with lockfileVersion 2 for compatibility
+    cat > package-lock.json << 'EOF'
+{
+  "name": "snel",
+  "version": "0.1.0",
+  "lockfileVersion": 2,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "snel",
+      "version": "0.1.0",
+      "dependencies": {},
+      "devDependencies": {},
+      "engines": {
+        "node": ">=18"
+      }
+    }
+  }
+}
+EOF
+    
+    echo "Minimal package-lock.json created. Now running npm install to populate it..."
     npm install --no-audit --no-fund
-    echo "Dependencies installed and package-lock.json created. Verifying:"
-    if [ -f "package-lock.json" ]; then
-        ls -la package-lock.json
-        head -5 package-lock.json
-    else
-        echo "Warning: package-lock.json still not found, but continuing..."
-    fi
+    echo "Installation completed. Verifying:"
+    ls -la package-lock.json
+    ls -la node_modules/ | head -5
 else
-    echo "package-lock.json found. Using npm ci for faster installation..."
+    echo "package-lock.json found. Using npm ci..."
     npm ci --no-audit --no-fund
 fi
 
