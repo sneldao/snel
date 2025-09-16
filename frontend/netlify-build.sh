@@ -26,16 +26,19 @@ ls -la
 # Handle missing package-lock.json for workspace setup
 echo "Checking for package-lock.json..."
 if [ ! -f "package-lock.json" ]; then
-    echo "No package-lock.json found. Generating one with npm install..."
-    npm install --package-lock-only --no-audit --no-fund
-    echo "package-lock.json generated. Verifying:"
-    ls -la package-lock.json
-    head -5 package-lock.json
+    echo "No package-lock.json found. Using npm install instead of npm ci..."
+    npm install --no-audit --no-fund
+    echo "Dependencies installed and package-lock.json created. Verifying:"
+    if [ -f "package-lock.json" ]; then
+        ls -la package-lock.json
+        head -5 package-lock.json
+    else
+        echo "Warning: package-lock.json still not found, but continuing..."
+    fi
+else
+    echo "package-lock.json found. Using npm ci for faster installation..."
+    npm ci --no-audit --no-fund
 fi
-
-# Install dependencies
-echo "Installing dependencies..."
-npm ci --no-audit --no-fund
 
 # Verify installation by checking key dependencies
 echo "Verifying installation..."
