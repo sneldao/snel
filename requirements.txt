@@ -7,7 +7,7 @@ sse-starlette==1.6.5
 
 # Agent Framework
 agno==1.0.0
-browser-use==1.0.0
+browser-use==0.7.7
 duckduckgo-search==4.4.0
 yfinance==0.2.36
 

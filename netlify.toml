@@ -1,7 +1,7 @@
 [build]
   base = "."
   publish = "frontend/.next"
-  command = "npm install && npm run build --workspace=frontend"
+  command = "mv requirements.txt requirements.txt.bak 2>/dev/null || true && npm install && npm run build --workspace=frontend"
   environment = { NODE_VERSION = "20" }
 
 [[plugins]]
