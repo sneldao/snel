@@ -23,9 +23,16 @@ fi
 echo "Current directory contents:"
 ls -la
 
+# Handle workspace setup - copy root package-lock.json if it exists
+echo "Checking for workspace setup..."
+if [ -f "../package-lock.json" ] && [ ! -f "package-lock.json" ]; then
+    echo "Copying root package-lock.json to frontend directory..."
+    cp ../package-lock.json ./package-lock.json
+fi
+
 # Install dependencies
 echo "Installing dependencies..."
-npm install --no-audit --no-fund
+npm ci --no-audit --no-fund
 
 # Verify installation by checking key dependencies
 echo "Verifying installation..."
