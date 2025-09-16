@@ -79,7 +79,8 @@ frontend/yarn-error.log*
 frontend/.pnpm-debug.log*
 
 # Package managers
-package-lock.json
+frontend/package-lock.json
+backend/package-lock.json
 yarn.lock
 .pnp.*
 .yarn/*
