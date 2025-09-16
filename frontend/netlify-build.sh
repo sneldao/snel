@@ -25,9 +25,25 @@ ls -la
 
 # Handle workspace setup - copy root package-lock.json if it exists
 echo "Checking for workspace setup..."
+echo "Contents of parent directory:"
+ls -la ../
+echo "Checking for ../package-lock.json: $([ -f "../package-lock.json" ] && echo "EXISTS" || echo "NOT FOUND")"
+echo "Checking for ./package-lock.json: $([ -f "package-lock.json" ] && echo "EXISTS" || echo "NOT FOUND")"
+
 if [ -f "../package-lock.json" ] && [ ! -f "package-lock.json" ]; then
     echo "Copying root package-lock.json to frontend directory..."
     cp ../package-lock.json ./package-lock.json
+    echo "Copy completed. Verifying:"
+    ls -la package-lock.json
+    head -5 package-lock.json
+else
+    echo "Workspace copy condition not met."
+    if [ ! -f "../package-lock.json" ]; then
+        echo "  - ../package-lock.json does not exist"
+    fi
+    if [ -f "package-lock.json" ]; then
+        echo "  - ./package-lock.json already exists"
+    fi
 fi
 
 # Install dependencies
