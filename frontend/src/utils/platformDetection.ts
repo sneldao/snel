@@ -42,6 +42,33 @@ export const detectPlatform = (): Platform => {
 };
 
 /**
+ * Checks if the current domain is whitelisted for LINE SDK usage
+ * SECURITY: Ensures SDK only works on pre-registered domains
+ */
+export const isDomainWhitelisted = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  const whitelistedDomains = [
+    'localhost:3000', // Local development
+    'localhost',      // Local development
+    // Add any other whitelisted domains here
+  ];
+  
+  const currentDomain = window.location.host;
+  
+  // Check if current domain is in the whitelisted domains
+  return whitelistedDomains.some(domain => currentDomain.includes(domain));
+};
+
+/**
+ * Validates if LINE SDK can be initialized safely
+ * SECURITY: Combines platform detection with domain validation
+ */
+export const canInitializeLINE = (): boolean => {
+  return detectPlatform() === Platform.LINE && isDomainWhitelisted();
+};
+
+/**
  * Gets platform-specific configuration
  * DRY: Single source of truth for platform capabilities
  */
@@ -128,7 +155,6 @@ export const trackPlatformEvent = (event: string, properties?: Record<string, an
   // Platform-specific analytics
   const eventData = {
     event,
-    platform,
     timestamp: new Date().toISOString(),
     ...config,
     ...properties,

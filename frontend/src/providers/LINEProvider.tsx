@@ -4,13 +4,20 @@
  * DRY: Reuses existing provider structure and patterns
  */
 
+// Type declaration for LIFF on window object
+declare global {
+  interface Window {
+    liff: any; // We'll use 'any' for now to avoid complex LIFF SDK typings
+  }
+}
+
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { usePlatform } from '../utils/platformDetection';
 
 // LINE SDK types (will be replaced with actual SDK types)
-interface LIFFContext {
+export interface LIFFContext {
   type: 'utou' | 'room' | 'group' | 'square_chat';
   groupId?: string;
   roomId?: string;
@@ -18,7 +25,7 @@ interface LIFFContext {
   utouId?: string;
 }
 
-interface LIFFProfile {
+export interface LIFFProfile {
   userId: string;
   displayName: string;
   pictureUrl?: string;
@@ -80,6 +87,12 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const initializeLIFF = async () => {
       try {
+        // SECURITY: Check if domain is whitelisted for LINE SDK usage
+        const { isDomainWhitelisted } = await import('../utils/platformDetection');
+        if (!isDomainWhitelisted()) {
+          throw new Error('Current domain is not whitelisted for LINE SDK usage');
+        }
+
         if (typeof window !== 'undefined' && window.liff) {
           const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
           if (!liffId) {
