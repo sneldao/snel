@@ -114,3 +114,4 @@ backend/app/agents/crossmint-keypair.json
 backend/app/agents/generate_crossmint_keypair.py
 *.keypair.json
 .aider*
+.aider.chat.history.md
