@@ -370,13 +370,14 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         timestamp: new Date().toISOString(),
       };
       
-      console.log('LINE transaction execution', { 
-        testMode, 
+      console.log('LINE transaction execution', {
+        testMode,
         walletAddress: walletAddress.slice(0, 6) + '...', // Partial address for security
         userId: state.profile?.userId,
       });
-      
+
       // Execute transaction through ethereum provider
+      let hash: string;
       if (typeof window !== 'undefined' && (window as any).ethereum) {
         const transactionParams = {
           to: txData.to,
@@ -384,25 +385,25 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           data: txData.data || '0x',
           from: walletAddress,
         };
-        
-        const hash = await (window as any).ethereum.request({
+
+        hash = await (window as any).ethereum.request({
           method: 'eth_sendTransaction',
           params: [transactionParams],
         });
-        
+
         console.log('Transaction sent through LINE wallet', { hash });
+
+        // Track transaction for LINE analytics
+        const { trackPlatformEvent } = await import('../utils/platformDetection');
+        trackPlatformEvent('transaction_executed', {
+          hash,
+          testMode,
+          userId: state.profile?.userId,
+          platform: 'line',
+        });
       } else {
         throw new Error('No ethereum provider available for transaction');
       }
-      
-      // Track transaction for LINE analytics
-      const { trackPlatformEvent } = await import('../utils/platformDetection');
-      trackPlatformEvent('transaction_executed', {
-        hash,
-        testMode,
-        userId: state.profile?.userId,
-        platform: 'line',
-      });
       
       return hash;
     } catch (error) {
