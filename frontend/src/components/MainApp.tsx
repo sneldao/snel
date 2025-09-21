@@ -66,15 +66,58 @@ import {
   SwapQuote,
 } from "../types/responses";
 
+// LINE-specific types
+import { Platform } from "../utils/platformDetection";
+import { LIFFProfile } from "../providers/LINEProvider";
+
 // Use the imported Response type instead of local interfaces
 type ResponseType = Response;
 
-export default function MainApp() {
+// Define props interface for MainApp to support LINE integration
+interface MainAppProps {
+  // LINE-specific props
+  platform?: Platform;
+  lineFeatures?: {
+    isAvailable: boolean;
+    canLogin: boolean;
+    canShare: boolean;
+    canConnectWallet: boolean;
+    canExecuteTransactions: boolean;
+  };
+  lineProfile?: LIFFProfile | null;
+  isLineLoggedIn?: boolean;
+  
+  // LINE-specific callbacks
+  onLineLogin?: () => Promise<void>;
+  onLineLogout?: () => Promise<void>;
+  onLineShare?: (message: string) => Promise<void>;
+  onLineClose?: () => void;
+  onLineConnectWallet?: () => Promise<void>;
+  onLineGetAddress?: () => Promise<string | null>;
+  onLineExecuteTransaction?: (txData: any) => Promise<string>;
+}
+
+export default function MainApp(props: MainAppProps) {
   const toast = useToast();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+
+  // Destructure LINE props with defaults
+  const {
+    platform,
+    lineFeatures,
+    lineProfile,
+    isLineLoggedIn,
+    onLineLogin,
+    onLineLogout,
+    onLineShare,
+    onLineClose,
+    onLineConnectWallet,
+    onLineGetAddress,
+    onLineExecuteTransaction
+  } = props;
 
   // GMP Integration
   const { walletClient: gmppWalletClient } = useWallet();
