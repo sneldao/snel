@@ -6,7 +6,7 @@
 
 import { Metadata } from 'next';
 import { ChakraProvider } from '@chakra-ui/react';
-import { Providers } from '../providers';
+import { Providers } from '../../providers/Providers';
 import { LINEProvider } from '../../providers/LINEProvider';
 
 export const metadata: Metadata = {

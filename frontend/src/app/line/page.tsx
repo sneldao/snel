@@ -131,11 +131,6 @@ export default function LINEPage() {
 }
 
 /**
- * Export metadata for LINE Mini-dApp optimization
- * ORGANIZED: Consistent structure with web version
+ * Metadata moved to layout.tsx to avoid 'use client' conflict
+ * CLEAN: Proper separation of server/client components
  */
-export const metadata = {
-  title: 'SNEL Chat - AI DeFi Assistant',
-  description: 'Chat with your crypto portfolio through LINE',
-  robots: 'noindex, nofollow', // LINE Mini-dApps typically shouldn't be indexed
-};
