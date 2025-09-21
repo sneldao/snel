@@ -156,10 +156,57 @@ export const trackPlatformEvent = (event: string, properties?: Record<string, an
   const eventData = {
     event,
     timestamp: new Date().toISOString(),
-    ...config,
+    platform: config.platform,
+    features: config.features,
     ...properties,
   };
   
   // Implementation will be added based on your analytics setup
   console.log('[Platform Analytics]', eventData);
+};
+
+/**
+ * LINE-specific configuration validation
+ * SECURITY: Ensures all required LINE configurations are present
+ */
+export const validateLINEConfig = (): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  // Check required environment variables
+  if (!process.env.NEXT_PUBLIC_LIFF_ID) {
+    errors.push('NEXT_PUBLIC_LIFF_ID is required for LINE integration');
+  }
+  
+  if (!process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) {
+    errors.push('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is required for Bitget Wallet integration');
+  }
+  
+  // Check domain whitelisting
+  if (!isDomainWhitelisted()) {
+    errors.push('Current domain is not whitelisted for LINE SDK usage');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+/**
+ * Get LINE test mode configuration
+ * SECURITY: Ensures testMode is properly set based on environment
+ */
+export const getLINETestMode = (): boolean => {
+  // Always use test mode in development
+  if (process.env.NODE_ENV === 'development') {
+    return true;
+  }
+  
+  // Check for explicit test mode override
+  if (process.env.NEXT_PUBLIC_LINE_TEST_MODE === 'true') {
+    return true;
+  }
+  
+  // Production should use live mode (false) unless explicitly overridden
+  return false;
 };
