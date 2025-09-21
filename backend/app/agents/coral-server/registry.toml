@@ -1,0 +1,19 @@
+# SNEL Coral Agent Registry
+# ENHANCEMENT FIRST: Registers our proven DeFi agent with Coral Server
+
+[registry]
+name = "snel-agents"
+version = "1.0.0"
+description = "SNEL DeFi Agent Registry for Coral Protocol"
+
+[[agents]]
+path = "./snel-defi"
+name = "snel-defi-agent"
+enabled = true
+
+[agents.metadata]
+category = "defi"
+tags = ["swap", "bridge", "portfolio", "analysis", "multi-chain"]
+author = "SNEL Team"
+license = "MIT"
+homepage = "https://github.com/snel-defi"

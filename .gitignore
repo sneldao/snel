@@ -100,3 +100,16 @@ out/
 
 # Ignore research directory
 research/
+
+# Additional .env protection
+backend/.env
+backend/.env.coral
+backend/app/agents/.env
+*.env
+!*.env.example
+!*.env.template
+
+# Coral Protocol sensitive files
+backend/app/agents/crossmint-keypair.json
+backend/app/agents/generate_crossmint_keypair.py
+*.keypair.json

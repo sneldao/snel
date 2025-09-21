@@ -1,0 +1,21 @@
+[payments]
+type = "crossmint"
+environment = "staging"
+api_key_env = "CROSSMINT_API_KEY"
+
+[payments.config]
+agent_id = "snel-defi-agent"
+billing_currency = "coral"
+claim_endpoint = "/api/v1/internal/claim"
+
+[payments.pricing]
+execute_swap = { base_fee = 0.10, premium_multiplier = 2.0 }
+execute_bridge = { base_fee = 0.15, premium_multiplier = 2.0 }
+analyze_portfolio = { base_fee = 0.05, premium_multiplier = 1.0 }
+research_protocol = { base_fee = 0.08, premium_multiplier = 1.0 }
+general_defi_help = { base_fee = 0.03, premium_multiplier = 1.0 }
+
+[payments.conversion]
+usd_to_coral_rate = 10.0
+auto_claim = true
+claim_threshold = 1.0

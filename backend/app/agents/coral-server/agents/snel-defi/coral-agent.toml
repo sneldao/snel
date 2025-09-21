@@ -1,0 +1,43 @@
+[agent]
+name = "snel-defi-agent"
+version = "1.0.0"
+description = "SNEL DeFi Assistant - Cross-chain swaps, bridging, portfolio analysis, and protocol research with multi-agent coordination capabilities"
+
+[agent.options]
+# Core Configuration
+openai_api_key = { type = "string", description = "OpenAI API key for LLM operations", required = true }
+model_name = { type = "string", description = "OpenAI model to use", default = "gpt-4o-mini" }
+model_temperature = { type = "number", description = "Model temperature for response creativity", default = 0.1 }
+model_token_limit = { type = "number", description = "Maximum tokens per request", default = 8000 }
+
+# External Service APIs
+brian_api_key = { type = "string", description = "Brian API key for DeFi operations", required = true }
+exa_api_key = { type = "string", description = "Exa API key for research", required = false }
+firecrawl_api_key = { type = "string", description = "Firecrawl API key for web scraping", required = false }
+
+# Performance Settings
+max_concurrent_requests = { type = "number", description = "Maximum concurrent DeFi operations", default = 5 }
+request_timeout = { type = "number", description = "Request timeout in seconds", default = 30 }
+cache_ttl = { type = "number", description = "Cache TTL in seconds", default = 300 }
+
+# Chain Configuration
+default_chain_id = { type = "number", description = "Default blockchain network ID", default = 1 }
+supported_chains = { type = "string", description = "Comma-separated list of supported chain IDs", default = "1,8453,42161,10,137,43114,56,324" }
+
+[agent.runtime]
+type = "docker"
+dockerfile = "Dockerfile.coral"
+ports = []
+environment = [
+    "CORAL_CONNECTION_URL",
+    "CORAL_AGENT_ID", 
+    "CORAL_ORCHESTRATION_RUNTIME",
+    "CORAL_SESSION_ID",
+    "CORAL_SSE_URL"
+]
+
+[agent.runtime.health_check]
+endpoint = "/health"
+interval = 30
+timeout = 10
+retries = 3

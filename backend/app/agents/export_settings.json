@@ -1,0 +1,112 @@
+{
+  "agent_id": "snel-defi-agent",
+  "export_format": "coral_remote",
+  "version": "1.0.0",
+  "capabilities": [
+    {
+      "name": "execute_swap",
+      "description": "Execute token swaps across supported chains",
+      "pricing": {
+        "base_fee": 0.10,
+        "premium_multiplier": 2.0
+      }
+    },
+    {
+      "name": "execute_bridge",
+      "description": "Execute cross-chain bridge operations",
+      "pricing": {
+        "base_fee": 0.15,
+        "premium_multiplier": 2.5
+      }
+    },
+    {
+      "name": "analyze_portfolio",
+      "description": "Analyze wallet portfolio and provide recommendations",
+      "pricing": {
+        "base_fee": 0.05,
+        "premium_multiplier": 1.5
+      }
+    },
+    {
+      "name": "research_protocol",
+      "description": "Research DeFi protocol information and analysis",
+      "pricing": {
+        "base_fee": 0.08,
+        "premium_multiplier": 1.0
+      }
+    },
+    {
+      "name": "general_defi_help",
+      "description": "Provide general DeFi assistance and guidance",
+      "pricing": {
+        "base_fee": 0.03,
+        "premium_multiplier": 1.0
+      }
+    }
+  ],
+  "pricing": {
+    "currency": "USD",
+    "billing_model": "per_operation",
+    "subscription_tiers": {
+      "basic": {
+        "monthly_fee": 29.99,
+        "included_operations": 100,
+        "overage_rate": 0.05
+      },
+      "pro": {
+        "monthly_fee": 99.99,
+        "included_operations": 500,
+        "overage_rate": 0.03
+      },
+      "enterprise": {
+        "monthly_fee": 299.99,
+        "included_operations": 2000,
+        "overage_rate": 0.02
+      }
+    }
+  },
+  "metadata": {
+    "category": "defi",
+    "tags": ["swap", "bridge", "portfolio", "analysis", "multi-chain", "crossmint", "coral"],
+    "supported_chains": [
+      "ethereum",
+      "base", 
+      "arbitrum",
+      "optimism",
+      "polygon",
+      "avalanche",
+      "bsc",
+      "zksync"
+    ],
+    "supported_protocols": [
+      "uniswap",
+      "sushiswap",
+      "curve",
+      "aave",
+      "compound",
+      "axelar",
+      "layerzero"
+    ],
+    "integration_status": "production",
+    "last_updated": "2024-09-20",
+    "documentation_url": "https://github.com/snel-defi/coral-agent",
+    "demo_url": "https://stable-snel.netlify.app/"
+  },
+  "requirements": {
+    "api_keys": [
+      "OPENAI_API_KEY",
+      "BRIAN_API_KEY",
+      "CROSSMINT_API_KEY"
+    ],
+    "minimum_balance": 0.01,
+    "supported_wallets": ["crossmint", "metamask", "walletconnect"]
+  },
+  "sla": {
+    "uptime_guarantee": "99.5%",
+    "response_time_ms": 2000,
+    "rate_limits": {
+      "requests_per_minute": 60,
+      "requests_per_hour": 1000
+    }
+  }
+}

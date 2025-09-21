@@ -1,0 +1,189 @@
+{
+  "manifest": {
+    "id": "snel-defi-agent-v2",
+    "name": "SNEL DeFi Assistant",
+    "description": "AI-powered cross-chain DeFi assistant specialized in swaps, bridging, portfolio analysis, and protocol research across 17+ blockchain networks",
+    "version": "2.0.0",
+    "category": "DeFi",
+    "tags": [
+      "DeFi",
+      "CrossChain",
+      "Swaps",
+      "Portfolio",
+      "AI",
+      "Multi-Agent"
+    ],
+    "pricing": {
+      "model": "usage_based",
+      "base_price": 0.1,
+      "premium_multiplier": 2.0,
+      "bulk_discount": {
+        "threshold": 100,
+        "rate": 0.15
+      }
+    },
+    "capabilities": {
+      "operations": [
+        {
+          "name": "Token Swap",
+          "description": "Execute token swaps across multiple DEXs",
+          "cost_multiplier": 2.0,
+          "supported_chains": [
+            1,
+            8453,
+            42161,
+            10,
+            137,
+            43114,
+            56,
+            324,
+            11235
+          ]
+        },
+        {
+          "name": "Cross-Chain Bridge",
+          "description": "Bridge tokens across blockchain networks",
+          "cost_multiplier": 2.0,
+          "supported_chains": [
+            1,
+            8453,
+            42161,
+            10,
+            137,
+            43114,
+            56,
+            324,
+            11235
+          ]
+        },
+        {
+          "name": "Portfolio Analysis",
+          "description": "Comprehensive wallet and portfolio analysis",
+          "cost_multiplier": 1.5,
+          "daily_limit": 500
+        },
+        {
+          "name": "Protocol Research",
+          "description": "AI-powered DeFi protocol research and analysis",
+          "cost_multiplier": 1.0,
+          "supported_protocols": [
+            "Uniswap",
+            "Sushiswap",
+            "Curve",
+            "Balancer",
+            "1inch",
+            "Aave",
+            "Compound",
+            "MakerDAO",
+            "Axelar",
+            "LayerZero"
+          ]
+        },
+        {
+          "name": "General DeFi Assistance",
+          "description": "Natural language DeFi guidance and recommendations",
+          "cost_multiplier": 1.0
+        }
+      ],
+      "coordination": {
+        "multi_agent_ready": true,
+        "data_sharing": true,
+        "strategy_collaboration": true,
+        "market_coordination": true
+      }
+    },
+    "technical": {
+      "supported_chains": [
+        1,
+        8453,
+        42161,
+        10,
+        137,
+        43114,
+        56,
+        324,
+        11235
+      ],
+      "supported_tokens": [
+        "ETH",
+        "USDC",
+        "USDT",
+        "DAI",
+        "WETH",
+        "WBTC",
+        "MATIC",
+        "AVAX",
+        "BNB",
+        "OP",
+        "ARB",
+        "KAIA"
+      ],
+      "supported_protocols": [
+        "Uniswap",
+        "Sushiswap",
+        "Curve",
+        "Balancer",
+        "1inch",
+        "Aave",
+        "Compound",
+        "MakerDAO",
+        "Axelar",
+        "LayerZero"
+      ],
+      "max_concurrent_requests": 50,
+      "target_response_time": 3.0
+    },
+    "sla": {
+      "uptime_target": 0.99,
+      "success_rate_target": 0.95,
+      "max_response_time": 6.0
+    },
+    "contact": {
+      "support_email": "support@snel.ai",
+      "documentation_url": "https://docs.snel.ai/coral-agent",
+      "github_url": "https://github.com/snel/coral-agent"
+    }
+  },
+  "deployment": {
+    "environment": "production",
+    "runtime": "python3.11",
+    "dependencies": {
+      "langchain": ">=0.1.0",
+      "langchain-openai": ">=0.0.5",
+      "openai": ">=1.0.0",
+      "aiohttp": ">=3.9.0",
+      "python-dotenv": ">=1.0.0",
+      "pydantic": ">=2.0.0",
+      "requests": ">=2.31.0"
+    },
+    "environment_variables": {
+      "OPENAI_API_KEY": "OpenAI API key for LLM operations",
+      "BRIAN_API_KEY": "Brian API key for DeFi operations (optional)",
+      "AXELAR_API_KEY": "Axelar API key for bridging (optional)",
+      "AGENT_SUPPORT_EMAIL": "Support email for the agent",
+      "CORAL_AGENT_SECRET": "Agent secret for Coral Protocol authentication"
+    },
+    "health_check": {
+      "endpoint": "/health",
+      "timeout_seconds": 5,
+      "interval_seconds": 30
+    },
+    "scaling": {
+      "min_instances": 1,
+      "max_instances": 10,
+      "cpu_threshold": 70,
+      "memory_threshold": 80
+    },
+    "monitoring": {
+      "metrics_enabled": true,
+      "logging_level": "INFO",
+      "performance_tracking": true
+    }
+  },
+  "metadata": {
+    "created_at": "2024-01-20T00:00:00Z",
+    "created_by": "SNEL Development Team",
+    "deployment_version": "1.0.0",
+    "coral_sdk_version": "2.1.0"
+  }
+}

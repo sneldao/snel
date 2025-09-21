@@ -1,0 +1,50 @@
+# Coral Server Registry Configuration
+# This file defines the agents available to this Coral Server instance
+
+[registry]
+name = "SNEL DeFi Agent Registry"
+version = "1.0.0"
+description = "Registry for SNEL DeFi agents in the Coral Protocol ecosystem"
+
+# SNEL DeFi Agent
+[agents.snel-defi-agent]
+path = "./backend/app/agents"
+enabled = true
+description = "AI-powered DeFi assistant with cross-chain capabilities"
+tags = ["defi", "cross-chain", "portfolio", "research", "multi-agent"]
+author = "SNEL Team"
+license = "MIT"
+homepage = "https://github.com/snel-team/snel-coral-agents"
+
+# Agent capabilities for multi-agent coordination
+[agents.snel-defi-agent.capabilities]
+swap = "Execute token swaps across 17+ blockchain networks"
+bridge = "Cross-chain bridging with multiple protocols"
+portfolio = "Comprehensive portfolio analysis and risk assessment"
+research = "DeFi protocol research and recommendations"
+coordination = "Multi-agent coordination and collaboration"
+
+# Supported networks
+[agents.snel-defi-agent.networks]
+ethereum = { chain_id = 1, supported = true }
+base = { chain_id = 8453, supported = true }
+arbitrum = { chain_id = 42161, supported = true }
+optimism = { chain_id = 10, supported = true }
+polygon = { chain_id = 137, supported = true }
+avalanche = { chain_id = 43114, supported = true }
+bsc = { chain_id = 56, supported = true }
+zksync = { chain_id = 324, supported = true }
+kaia = { chain_id = 11235, supported = true }
+
+# Supported protocols
+[agents.snel-defi-agent.protocols]
+uniswap = "v2, v3"
+sushiswap = "v2, v3"
+curve = "stable swaps"
+balancer = "weighted pools"
+oneinch = "aggregator"
+aave = "lending"
+compound = "lending"
+makerdao = "dai stablecoin"
+axelar = "cross-chain bridge"
+layerzero = "cross-chain bridge"
