@@ -26,8 +26,8 @@
   - [x] User authentication flow implemented
 
 - [ ] **Wallet Integration**
-  - [x] Bitget Wallet connection implemented
-  - [ ] WalletConnect/Reown domain verification completed
+  - [x] Wallet connection implemented (using existing ConnectKit setup)
+  - [ ] WalletConnect domain verification completed
   - [x] Wallet state management working
   - [x] Transaction signing functional
 

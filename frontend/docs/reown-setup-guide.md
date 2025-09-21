@@ -1,7 +1,7 @@
-# Reown Domain Verification Setup Guide
+# WalletConnect Domain Verification Setup Guide
 
 ## Overview
-This guide explains how to set up domain verification with Reown (formerly WalletConnect) for Bitget Wallet integration in the LINE Mini Dapp.
+This guide explains how to set up domain verification with WalletConnect for wallet integration in the LINE Mini Dapp using the existing ConnectKit infrastructure.
 
 ## Prerequisites
 - WalletConnect Project ID from [WalletConnect Cloud](https://cloud.walletconnect.com/)
