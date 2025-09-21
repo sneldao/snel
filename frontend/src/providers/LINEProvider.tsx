@@ -231,15 +231,55 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error('WalletConnect Project ID not configured for Bitget integration');
       }
 
-      // Implementation will use LINE Mini-dApp SDK wallet features
-      // This maintains compatibility with existing Web3 patterns
-      console.log('LINE wallet connection - Bitget integration', {
+      // SECURITY: Validate domain is whitelisted for wallet operations
+      const { validateLINEConfig } = await import('../utils/platformDetection');
+      const validation = validateLINEConfig();
+      if (!validation.isValid) {
+        throw new Error(`Configuration invalid: ${validation.errors.join(', ')}`);
+      }
+
+      // Initialize Bitget Wallet connection through WalletConnect/Reown
+      const { createAppKit } = await import('@reown/appkit');
+      const { WagmiAdapter } = await import('@reown/appkit-adapter-wagmi');
+      const { mainnet, arbitrum, base } = await import('wagmi/chains');
+
+      // Create Wagmi adapter for LINE Mini-dApp
+      const wagmiAdapter = new WagmiAdapter({
+        projectId: walletConnectProjectId,
+        networks: [mainnet, arbitrum, base],
+      });
+
+      // Create AppKit instance for LINE environment
+      const modal = createAppKit({
+        adapters: [wagmiAdapter],
+        projectId: walletConnectProjectId,
+        networks: [mainnet, arbitrum, base],
+        defaultNetwork: base,
+        metadata: {
+          name: 'Snel - DeFi Assistant',
+          description: 'DeFi operations through LINE Mini-dApp',
+          url: window.location.origin,
+          icons: ['https://stable-snel.netlify.app/icon.png'],
+        },
+        features: {
+          analytics: true,
+          email: false, // Disable email login in LINE environment
+          socials: [], // Use LINE social login instead
+        },
+        themeMode: 'light',
+        themeVariables: {
+          '--w3m-accent': '#00C300', // LINE green
+        },
+      });
+
+      // Open wallet connection modal
+      await modal.open();
+      
+      console.log('Bitget Wallet connection initiated through LINE Mini-dApp', {
         projectId: walletConnectProjectId,
         userId: state.profile?.userId,
+        domain: window.location.host,
       });
-      
-      // TODO: Implement Bitget Wallet connection through LINE Mini-dApp SDK
-      // This will require domain verification via Reown as mentioned in requirements
       
     } catch (error) {
       console.error('LINE wallet connection failed:', error);
@@ -251,18 +291,44 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    * Get wallet address from LINE
    */
   const getWalletAddress = async (): Promise<string | null> => {
-    // Implementation will use LINE Mini-dApp SDK
-    console.log('Get LINE wallet address to be implemented');
-    return null;
+    try {
+      // Check if wallet is connected through AppKit
+      const { getAccount } = await import('@wagmi/core');
+      const account = getAccount();
+      
+      if (account.isConnected && account.address) {
+        return account.address;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to get wallet address:', error);
+      return null;
+    }
   };
 
   /**
    * Sign message with LINE wallet
    */
   const signMessage = async (message: string): Promise<string> => {
-    // Implementation will use LINE Mini-dApp SDK
-    console.log('LINE message signing to be implemented');
-    return '';
+    try {
+      const { signMessage: wagmiSignMessage } = await import('@wagmi/core');
+      
+      const signature = await wagmiSignMessage({
+        message,
+      });
+      
+      console.log('Message signed through LINE wallet integration', {
+        message,
+        signature: signature.slice(0, 10) + '...', // Log partial signature for security
+        userId: state.profile?.userId,
+      });
+      
+      return signature;
+    } catch (error) {
+      console.error('LINE message signing failed:', error);
+      throw error;
+    }
   };
 
   /**
@@ -276,21 +342,50 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       // SECURITY: Ensure testMode is enabled during development
-      const isProduction = process.env.NODE_ENV === 'production';
-      const testMode = !isProduction; // Always use testMode in development
+      const { getLINETestMode } = await import('../utils/platformDetection');
+      const testMode = getLINETestMode();
       
-      // Implementation will bridge to existing transaction services
+      // Get connected wallet for transaction execution
+      const walletAddress = await getWalletAddress();
+      if (!walletAddress) {
+        throw new Error('Wallet not connected - please connect wallet first');
+      }
+
+      // Prepare transaction with LINE-specific metadata
       const transactionRequest = {
         ...txData,
         testMode, // IMPORTANT: Prevents revenue attribution to wrong team
         platform: 'line',
         userId: state.profile?.userId,
+        walletAddress,
+        timestamp: new Date().toISOString(),
       };
       
-      console.log('LINE transaction execution', { testMode, transactionRequest });
+      console.log('LINE transaction execution', { 
+        testMode, 
+        walletAddress: walletAddress.slice(0, 6) + '...', // Partial address for security
+        userId: state.profile?.userId,
+      });
       
-      // TODO: Implement actual LINE Mini-dApp transaction flow
-      return 'transaction_hash_placeholder';
+      // Execute transaction through wagmi
+      const { sendTransaction } = await import('@wagmi/core');
+      
+      const hash = await sendTransaction({
+        to: txData.to as `0x${string}`,
+        value: BigInt(txData.value || '0'),
+        data: txData.data as `0x${string}`,
+      });
+      
+      // Track transaction for LINE analytics
+      const { trackPlatformEvent } = await import('../utils/platformDetection');
+      trackPlatformEvent('transaction_executed', {
+        hash,
+        testMode,
+        userId: state.profile?.userId,
+        platform: 'line',
+      });
+      
+      return hash;
     } catch (error) {
       console.error('LINE transaction failed:', error);
       throw error;
@@ -302,9 +397,34 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    * PERFORMANT: Can reuse existing caching mechanisms
    */
   const getBalance = async (address: string, token?: string): Promise<string> => {
-    // Implementation will reuse existing balance services
-    console.log('LINE balance query to be implemented');
-    return '0';
+    try {
+      // Use existing API service for balance queries
+      const { ApiService } = await import('../services/apiService');
+      const apiService = new ApiService();
+      
+      // Reuse existing balance endpoint with LINE context
+      const balanceData = await apiService.post('/api/v1/chat/process-command', {
+        command: `get balance for ${address}${token ? ` ${token}` : ''}`,
+        platform: 'line',
+        userId: state.profile?.userId,
+      });
+      
+      console.log('LINE balance query executed', {
+        address: address.slice(0, 6) + '...',
+        token,
+        userId: state.profile?.userId,
+      });
+      
+      // Extract balance from response
+      if (balanceData?.content?.balance) {
+        return balanceData.content.balance;
+      }
+      
+      return '0';
+    } catch (error) {
+      console.error('LINE balance query failed:', error);
+      return '0';
+    }
   };
 
   const contextValue: LINEContextValue = {

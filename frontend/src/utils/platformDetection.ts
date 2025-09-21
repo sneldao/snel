@@ -186,6 +186,37 @@ export const validateLINEConfig = (): { isValid: boolean; errors: string[] } => 
     errors.push('Current domain is not whitelisted for LINE SDK usage');
   }
   
+  // Check if running in secure context (required for wallet operations)
+  if (typeof window !== 'undefined' && !window.isSecureContext) {
+    errors.push('Secure context (HTTPS) required for wallet operations');
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+/**
+ * Check if Reown/WalletConnect is properly configured
+ * SECURITY: Validates domain verification requirements
+ */
+export const validateReownConfig = (): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  if (!projectId) {
+    errors.push('WalletConnect Project ID is required for Reown integration');
+  }
+  
+  // Check if domain is likely to be verified with Reown
+  if (typeof window !== 'undefined') {
+    const domain = window.location.host;
+    if (domain.includes('localhost') && !domain.includes('localhost:3000')) {
+      errors.push('For local testing, use localhost:3000 or register your domain with Reown');
+    }
+  }
+  
   return {
     isValid: errors.length === 0,
     errors,

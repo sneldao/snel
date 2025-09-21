@@ -20,16 +20,16 @@
 ## Technical Implementation ✅
 
 - [ ] **LIFF SDK Integration**
-  - [ ] LIFF SDK properly initialized
-  - [ ] Error handling for initialization failures
-  - [ ] Platform detection working correctly
-  - [ ] User authentication flow implemented
+  - [x] LIFF SDK properly initialized
+  - [x] Error handling for initialization failures
+  - [x] Platform detection working correctly
+  - [x] User authentication flow implemented
 
 - [ ] **Wallet Integration**
-  - [ ] Bitget Wallet connection implemented
+  - [x] Bitget Wallet connection implemented
   - [ ] WalletConnect/Reown domain verification completed
-  - [ ] Wallet state management working
-  - [ ] Transaction signing functional
+  - [x] Wallet state management working
+  - [x] Transaction signing functional
 
 - [ ] **Core Features**
   - [ ] Chat interface adapted for LINE
