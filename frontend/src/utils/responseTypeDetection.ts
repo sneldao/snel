@@ -110,7 +110,7 @@ export const detectResponseTypes = ({
         isProtocolResearchContent(content) && agentType === 'protocol_research';
 
     const isCrossChainSuccess =
-        isCrossChainSuccessContent(content) && getContentAxelarPowered(content);
+        isCrossChainSuccessContent(content) && (getContentAxelarPowered(content) || false);
 
     const isPortfolioDisabled = isPortfolioDisabledContent(content);
 

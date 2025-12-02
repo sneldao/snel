@@ -258,6 +258,16 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     quotes={all_quotes}
                     onSelect={handleQuoteSelect}
                     isLoading={status === 'processing'}
+                    tokenSymbol={
+                        typeof content === 'object' && content !== null && 'tokenOut' in content
+                            ? (content as any).tokenOut?.symbol || 'Tokens'
+                            : 'Tokens'
+                    }
+                    tokenDecimals={
+                        typeof content === 'object' && content !== null && 'tokenOut' in content
+                            ? (content as any).tokenOut?.decimals || 18
+                            : 18
+                    }
                 />
             </Box>
         );
@@ -327,14 +337,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                                         fontSize="sm"
                                         color={textColor}
                                         whiteSpace="pre-wrap"
-                                        dangerouslySetInnerHTML={{
-                                            __html: formatLinks(
-                                                getContentError(content) ||
-                                                getContentMessage(content) ||
-                                                (isStringContent(content) ? content : JSON.stringify(content))
-                                            ),
-                                        }}
-                                    />
+                                    >
+                                        {formatLinks(
+                                            getContentError(content) ||
+                                            getContentMessage(content) ||
+                                            (isStringContent(content) ? content : JSON.stringify(content))
+                                        )}
+                                    </Text>
                                 )}
                         </Box>
                     </VStack>
@@ -342,7 +351,17 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             </Box>
 
             {/* Portfolio Modal */}
-            <PortfolioModal isOpen={isPortfolioModalOpen} onClose={onPortfolioModalClose} />
+            <PortfolioModal
+                isOpen={isPortfolioModalOpen}
+                onClose={onPortfolioModalClose}
+                portfolioAnalysis={
+                    typeof content === 'object' && content !== null && 'type' in content && (content as any).type === 'portfolio'
+                        ? (content as any).analysis
+                        : {}
+                }
+                metadata={metadata}
+                onActionClick={handleActionClick}
+            />
         </>
     );
 };

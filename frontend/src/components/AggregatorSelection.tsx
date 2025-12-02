@@ -15,26 +15,16 @@ import {
 import { formatTokenAmount, smallestUnitsToAmount } from "../utils/tokenUtils";
 import { formatAmountForDisplay, validateGasUsd } from "../utils/formatUtils";
 
-interface Quote {
-  aggregator: string;
-  protocol: string;
-  buy_amount: string;
-  minimum_received: string;
-  gas_usd: string;
-  gas: string;
-  to: string;
-  data: string;
-  value: string;
-  is_brian_api?: boolean;
-}
+import { SwapQuote } from "../types/responses";
 
 interface AggregatorSelectionProps {
-  quotes: Quote[];
+  quotes: SwapQuote[];
   tokenSymbol: string;
   tokenDecimals: number;
-  onSelect: (quote: Quote) => void;
+  onSelect: (quote: SwapQuote) => void;
   chainId?: number;
   scrollNote?: string;
+  isLoading?: boolean;
 }
 
 const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
@@ -44,6 +34,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
   onSelect,
   chainId,
   scrollNote,
+  isLoading,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const bgColor = useColorModeValue("white", "gray.800");
@@ -54,7 +45,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
   // Check if we're on Scroll chain
   const isScrollChain = chainId === 534352;
 
-  // Sort quotes by buy_amount (descending), but prioritize Brian API for Scroll
+  // Sort quotes by buyAmount (descending), but prioritize Brian API for Scroll
   const sortedQuotes = [...quotes].sort((a, b) => {
     // If we're on Scroll and one is Brian API, prioritize it
     if (isScrollChain) {
@@ -62,13 +53,13 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
       if (a.aggregator !== "brian" && b.aggregator === "brian") return 1;
     }
 
-    // Otherwise sort by buy_amount
+    // Otherwise sort by buyAmount
     try {
-      const amountA = BigInt(a.buy_amount || "0");
-      const amountB = BigInt(b.buy_amount || "0");
+      const amountA = BigInt(a.buyAmount || "0");
+      const amountB = BigInt(b.buyAmount || "0");
       return amountB > amountA ? 1 : amountB < amountA ? -1 : 0;
     } catch (e) {
-      // Handle case where buy_amount might not be a valid BigInt
+      // Handle case where buyAmount might not be a valid BigInt
       return 0;
     }
   });
@@ -125,7 +116,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
   }
 
   return (
-    <VStack spacing={4} align="stretch" w="100%">
+    <VStack spacing={4} align="stretch" w="100%" opacity={isLoading ? 0.6 : 1} pointerEvents={isLoading ? "none" : "auto"}>
       <Text fontWeight="medium" fontSize="sm">
         Select a provider for your swap:
       </Text>
@@ -138,7 +129,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
       )}
 
       {sortedQuotes.map((quote, index) => {
-        const isBrianApi = quote.aggregator === "brian" || quote.is_brian_api;
+        const isBrianApi = quote.aggregator === "brian";
 
         return (
           <Box
@@ -150,8 +141,8 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
               selectedIndex === index
                 ? "blue.500"
                 : isBrianApi && isScrollChain
-                ? "purple.300"
-                : borderColor
+                  ? "purple.300"
+                  : borderColor
             }
             bg={selectedIndex === index ? selectedBgColor : bgColor}
             cursor="pointer"
@@ -179,7 +170,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
                 fontWeight="semibold"
                 color={selectedIndex === index ? "blue.500" : undefined}
               >
-                {formatAmount(quote.buy_amount)} {tokenSymbol}
+                {formatAmount(quote.buyAmount)} {tokenSymbol}
               </Text>
             </HStack>
 
@@ -189,8 +180,7 @@ const AggregatorSelection: React.FC<AggregatorSelectionProps> = ({
               color="gray.500"
             >
               <Text>
-                Min. received: {formatAmount(quote.minimum_received)}{" "}
-                {tokenSymbol}
+                Price Impact: {quote.priceImpact || "0"}%
               </Text>
               {/* Gas estimate removed - users will see actual gas in their wallet */}
             </HStack>

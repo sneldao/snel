@@ -99,15 +99,14 @@ export class TransactionFlowService {
     private walletClient: WalletClient,
     private publicClient: PublicClient,
     private chainId: number
-  ) {}
+  ) { }
 
   // ========== BLOCK EXPLORER ==========
 
   getBlockExplorerLink(hash: string): string {
-    return `${
-      BLOCK_EXPLORERS[this.chainId as keyof typeof BLOCK_EXPLORERS] ||
+    return `${BLOCK_EXPLORERS[this.chainId as keyof typeof BLOCK_EXPLORERS] ||
       BLOCK_EXPLORERS[8453]
-    }${hash}`;
+      }${hash}`;
   }
 
   // ========== TRANSACTION TYPE DETECTION ==========
@@ -264,7 +263,7 @@ export class TransactionFlowService {
                 reject(new Error("Transaction timeout - please try again"));
               }, 60000);
             }),
-          ]);
+          ]) as string;
 
           console.log("Transaction sent with hash:", hash);
 

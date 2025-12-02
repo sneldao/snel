@@ -24,6 +24,7 @@ import {
     isStringContent,
     isBridgePrivacyReadyContent,
 } from '../../utils/contentTypeGuards';
+import { useAccount } from 'wagmi';
 
 interface ResponseRendererProps {
     content: ResponseContent;
@@ -37,7 +38,7 @@ interface ResponseRendererProps {
     isExecuting: boolean;
     onExecute: () => void;
     onCancel: () => void;
-    onActionClick?: (action: Record<string, unknown>) => void;
+    onActionClick?: (action: any) => void;
 }
 
 export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
@@ -54,6 +55,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     onCancel,
     onActionClick,
 }) => {
+    const { address } = useAccount();
     const {
         isSwapConfirmation,
         isDCAConfirmation,
@@ -236,8 +238,8 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         return (
             <PortfolioEnablePrompt
                 suggestion={
-                    typeof content === 'object'
-                        ? content.suggestion
+                    typeof content === 'object' && content !== null && 'suggestion' in content
+                        ? (content as any).suggestion
                         : {
                             title: 'Enable Portfolio Analysis',
                             description: 'Get detailed insights about your holdings',
@@ -282,6 +284,8 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                             token: content.token,
                             protocol: content.protocol,
                         },
+                        updatedAt: new Date(),
+                        recipient: address || '',
                     }}
                     variant="privacy"
                     privacyLevel={content.privacy_level}

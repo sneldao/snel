@@ -3,7 +3,7 @@
  * Extracted from CommandResponse.tsx for modularity
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useToast } from '@chakra-ui/react';
 import { TransactionService } from '../services/transactionService';
 import { ApiService } from '../services/apiService';
@@ -37,7 +37,7 @@ export const useMultiStepTransaction = ({
     const [userRejected, setUserRejected] = useState(false);
     const [multiStepState, setMultiStepState] = useState<MultiStepState | null>(null);
     const toast = useToast();
-    const apiService = new ApiService();
+    const apiService = useMemo(() => new ApiService(), []);
 
     const handleMultiStepTransaction = useCallback(
         async (txData: any) => {

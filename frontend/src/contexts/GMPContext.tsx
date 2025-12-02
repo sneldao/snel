@@ -12,7 +12,7 @@ import { logger } from '../utils/logger';
 // Types for clean type safety
 export interface GMPTransaction {
   id: string;
-  type: 'cross_chain_swap' | 'gmp_operation';
+  type: 'cross_chain_swap' | 'gmp_operation' | 'bridge_to_privacy';
   status: 'pending' | 'processing' | 'completed' | 'error';
   sourceChain: string;
   destChain: string;
@@ -22,7 +22,7 @@ export interface GMPTransaction {
   metadata: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
-  
+
   // Transaction details
   recipient: string;
   sourceToken?: string;
@@ -76,10 +76,10 @@ const gmpReducer = (state: GMPState, action: GMPAction): GMPState => {
   switch (action.type) {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
-    
+
     case 'SET_ERROR':
       return { ...state, error: action.payload, isLoading: false };
-    
+
     case 'ADD_TRANSACTION':
       return {
         ...state,
@@ -89,7 +89,7 @@ const gmpReducer = (state: GMPState, action: GMPAction): GMPState => {
         },
         activeTransaction: action.payload.id
       };
-    
+
     case 'UPDATE_TRANSACTION':
       const { id, updates } = action.payload;
       return {
@@ -103,15 +103,15 @@ const gmpReducer = (state: GMPState, action: GMPAction): GMPState => {
           }
         }
       };
-    
+
     case 'SET_ACTIVE_TRANSACTION':
       return { ...state, activeTransaction: action.payload };
-    
+
     case 'UPDATE_TRANSACTION_STEP':
       const { transactionId, stepId, updates: stepUpdates } = action.payload;
       const transaction = state.transactions[transactionId];
       if (!transaction) return state;
-      
+
       return {
         ...state,
         transactions: {
@@ -125,13 +125,13 @@ const gmpReducer = (state: GMPState, action: GMPAction): GMPState => {
           }
         }
       };
-    
+
     case 'SET_SUPPORTED_CHAINS':
       return { ...state, supportedChains: action.payload };
-    
+
     case 'SET_SUPPORTED_OPERATIONS':
       return { ...state, supportedOperations: action.payload };
-    
+
     default:
       return state;
   }
@@ -140,21 +140,21 @@ const gmpReducer = (state: GMPState, action: GMPAction): GMPState => {
 // Context interface
 interface GMPContextValue {
   state: GMPState;
-  
+
   // Transaction management
   createTransaction: (transactionData: any) => Promise<string>;
   updateTransactionStatus: (id: string, status: GMPTransactionStatus) => void;
   trackTransaction: (id: string) => Promise<void>;
-  
+
   // Execution
   executeTransaction: (id: string, signer: any) => Promise<void>;
-  
+
   // Utilities
   getTransaction: (id: string) => GMPTransaction | undefined;
   getActiveTransaction: () => GMPTransaction | undefined;
   getSupportedChains: () => string[];
   getSupportedOperations: () => string[];
-  
+
   // UI helpers
   setError: (error: string | null) => void;
   clearError: () => void;
@@ -174,11 +174,11 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const chains = axelarGMPService.getSupportedChains();
         dispatch({ type: 'SET_SUPPORTED_CHAINS', payload: chains.map(String) });
-        
+
         // Mock supported operations - in real app, this would come from API
         const operations = [
           'cross_chain_swap',
-          'cross_chain_transfer', 
+          'cross_chain_transfer',
           'general_message_passing',
           'cross_chain_contract_call',
           'cross_chain_liquidity_provision'
@@ -196,7 +196,7 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Create transaction
   const createTransaction = useCallback(async (transactionData: any): Promise<string> => {
     const transactionId = `gmp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const transaction: GMPTransaction = {
       id: transactionId,
       type: transactionData.type || 'cross_chain_swap',
@@ -221,7 +221,7 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     dispatch({ type: 'ADD_TRANSACTION', payload: transaction });
-    
+
     logger.info('Created GMP transaction:', transactionId);
     return transactionId;
   }, []);
@@ -314,7 +314,7 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       // Import wallet adapter
       const { createEthersSigner, getAxelarChainName } = await import('../utils/walletAdapters');
-      
+
       // Convert wallet client to ethers signer
       const signer = createEthersSigner(walletClient);
       if (!signer) {
@@ -341,7 +341,7 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (transaction.type === 'cross_chain_swap') {
         // Execute cross-chain swap via Axelar GMP
         const swapParams = {
-          destinationChain: typeof transaction.destChain === 'number' 
+          destinationChain: typeof transaction.destChain === 'number'
             ? getAxelarChainName(transaction.destChain)
             : transaction.destChain,
           destinationAddress: transaction.recipient,
@@ -360,7 +360,7 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         // Execute regular contract call
         const callParams = {
-          destinationChain: typeof transaction.destChain === 'number' 
+          destinationChain: typeof transaction.destChain === 'number'
             ? getAxelarChainName(transaction.destChain)
             : transaction.destChain,
           destinationAddress: transaction.recipient,
@@ -437,7 +437,7 @@ export const GMPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Utility functions
   const getTransaction = useCallback((id: string) => state.transactions[id], [state.transactions]);
-  const getActiveTransaction = useCallback(() => 
+  const getActiveTransaction = useCallback(() =>
     state.activeTransaction ? state.transactions[state.activeTransaction] : undefined,
     [state.activeTransaction, state.transactions]
   );
