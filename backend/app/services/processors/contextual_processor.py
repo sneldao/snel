@@ -164,6 +164,22 @@ Keep your response brief (1-2 sentences) and friendly.
 - You can execute complex cross-chain swaps, yield farming, and liquidity provision across 16+ blockchain networks
 - You handle multi-step cross-chain operations with natural language commands
 
+PRIVACY FEATURES YOU ENABLE:
+- **Privacy Bridging to Zcash**: Bridge assets from any supported chain (Ethereum, Base, Polygon, Arbitrum, etc.) to Zcash for private transactions
+- **Shielded Transactions**: Zcash uses zero-knowledge proofs to hide transaction details (sender, receiver, amount)
+- **Unified Addresses (UA)**: Modern Zcash addresses that work across all pools (shielded and transparent)
+- **Encrypted Transaction History**: Your transaction history is only visible to you, not publicly on the blockchain
+- **Confidential Amounts**: Transaction amounts are encrypted and hidden from public view
+- **Private Memos**: Send encrypted messages with your transactions that only the recipient can read
+- **Anonymity Set**: Larger privacy pools mean better anonymity as your transaction blends with others
+
+HOW PRIVACY WORKS:
+- Bridge assets to Zcash using Axelar's secure cross-chain protocol
+- Receive funds in a shielded address (recommended wallets: Zashi mobile, Nighthawk desktop)
+- All transaction details (addresses, amounts, memos) are encrypted using zero-knowledge proofs
+- Only you can view your transaction history with your viewing key
+- Transactions are mathematically verified without revealing private information
+
 PRIVACY OPERATIONS (Zcash Integration):
 - You support PRIVACY BRIDGING: Bridge assets to Zcash for enhanced transaction privacy
 - Zcash uses shielded addresses to hide transaction details (addresses, amounts, history)
@@ -194,7 +210,10 @@ PRIVACY GUIDANCE FOR USERS:
                 "about snel", "your purpose", "what is snel", "describe yourself",
                 "tell me about you", "capabilities", "features", "help me",
                 "what do you know", "what's your name", "introduce yourself",
-                "private", "privacy", "private transaction", "stuff in private"
+                "private", "privacy", "private transaction", "stuff in private",
+                "privacy features", "privacy feature", "enable", "support",
+                "what privacy", "how private", "make private", "keep private",
+                "anonymous", "anonymity", "confidential", "secure transaction"
             ]
             
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
@@ -219,7 +238,7 @@ PRIVACY GUIDANCE FOR USERS:
             if is_about_assistant:
                 prompt = f"""
 You are SNEL, a conversational DeFi assistant. The user is asking about you or your capabilities.
-Respond naturally, not robotic. Be concise (2-4 sentences).
+Respond naturally and concisely. Keep it minimal - 1-2 sentences max.
 
 USER QUERY: "{unified_command.command}"
 
@@ -229,8 +248,10 @@ FACTS ABOUT YOU: {snel_facts}
 
 Guidelines:
 - Be conversational and personable
-- Don't use the same canned response every time
-- Vary your phrasing and personality
+- Keep responses SHORT and to the point (1-2 sentences)
+- Don't list everything - just highlight key points
+- Users can ask follow-ups if they want more details
+- Vary your phrasing naturally
 """
             else:
                 prompt = f"""
@@ -243,17 +264,18 @@ CONTEXT: {context}
 Guidelines:
 - Answer based on recent conversation
 - If researching a protocol, provide insights from that research
-- Keep responses concise but informative (2-4 sentences)
+- Keep responses CONCISE and minimal (1-2 sentences)
 - Act like an intelligent agent, not a command processor
+- Users can ask follow-ups for more details
 """
             
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are SNEL, a helpful and conversational DeFi assistant."},
+                    {"role": "system", "content": "You are SNEL, a helpful and conversational DeFi assistant. Keep responses concise and minimal."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=300,
+                max_tokens=150,  # Reduced from 300 to enforce concise responses
                 temperature=0.7
             )
             

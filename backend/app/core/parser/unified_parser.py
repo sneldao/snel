@@ -76,11 +76,19 @@ class UnifiedParser:
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:private|privacy|private.*transaction|stuff.*private)",
+                        r"(?:send|transfer|move|bridge)\s+.*(?:private|privacy|zcash)",
                         re.IGNORECASE
                     ),
-                    "description": "General privacy inquiry",
+                    "description": "Transfer with privacy intent",
                     "priority": 3
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:want|need)\s+(?:to\s+)?(?:make|keep|send).*(?:private|privacy)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Privacy action intent",
+                    "priority": 4
                 }
             ],
             CommandType.SWAP: [
