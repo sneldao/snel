@@ -5,10 +5,10 @@
 
 import { useState, useCallback } from 'react';
 import { useToast } from '@chakra-ui/react';
-import { TransactionService } from '../../services/transactionService';
-import { ApiService } from '../../services/apiService';
-import type { TransactionData } from '../../types/responses';
-import type { AgentType } from '../../utils/agentInfo';
+import { TransactionService } from '../services/transactionService';
+import { ApiService } from '../services/apiService';
+import type { TransactionData } from '../types/responses';
+import type { AgentType } from '../utils/agentInfo';
 
 interface MultiStepState {
     steps: any[];
@@ -81,11 +81,11 @@ export const useMultiStepTransaction = ({
                 const result = await transactionService.executeTransaction(transactionToExecute);
 
                 if (result.success) {
-                    setMultiStepState((prev) =>
+                    setMultiStepState((prev: MultiStepState | null) =>
                         prev
                             ? {
                                 ...prev,
-                                steps: prev.steps.map((step) =>
+                                steps: prev.steps.map((step: any) =>
                                     step.step === (flowInfo.current_step || 1)
                                         ? { ...step, status: 'completed', hash: result.hash }
                                         : step
@@ -114,7 +114,7 @@ export const useMultiStepTransaction = ({
                         const nextTxData = nextStepResponse.content;
                         const nextTransaction = nextStepResponse.transaction;
 
-                        setMultiStepState((prev) =>
+                        setMultiStepState((prev: MultiStepState | null) =>
                             prev
                                 ? {
                                     ...prev,
@@ -139,7 +139,7 @@ export const useMultiStepTransaction = ({
                             });
                         }, 2000);
                     } else {
-                        setMultiStepState((prev) =>
+                        setMultiStepState((prev: MultiStepState | null) =>
                             prev ? { ...prev, isComplete: true } : null
                         );
 
@@ -164,11 +164,11 @@ export const useMultiStepTransaction = ({
                     setUserRejected(true);
                 }
 
-                setMultiStepState((prev) =>
+                setMultiStepState((prev: MultiStepState | null) =>
                     prev
                         ? {
                             ...prev,
-                            steps: prev.steps.map((step) =>
+                            steps: prev.steps.map((step: any) =>
                                 step.step === currentStepNumber
                                     ? { ...step, status: 'failed', error: errorMessage }
                                     : step

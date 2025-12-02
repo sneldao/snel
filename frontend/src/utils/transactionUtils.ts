@@ -3,7 +3,7 @@
  * Extracted from CommandResponse.tsx for better separation of concerns
  */
 
-import type { TransactionData } from '../../types/responses';
+import type { TransactionData } from '../types/responses';
 
 /**
  * Extract transaction data from response content

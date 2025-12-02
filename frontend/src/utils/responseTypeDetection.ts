@@ -3,8 +3,8 @@
  * Extracted from CommandResponse.tsx for better organization
  */
 
-import type { ResponseContent } from '../../types/responses';
-import type { AgentType } from '../../utils/agentInfo';
+import type { ResponseContent } from '../types/responses';
+import type { AgentType } from './agentInfo';
 import {
     isTransferContent,
     isBalanceResultContent,
@@ -15,7 +15,7 @@ import {
     getContentAxelarPowered,
     hasMessageProperty,
     hasBridgeKeywords,
-} from '../../utils/contentTypeGuards';
+} from './contentTypeGuards';
 
 export interface ResponseTypeChecks {
     isSwapConfirmation: boolean;
