@@ -20,6 +20,7 @@ class CommandType(Enum):
     GMP_OPERATION = "gmp_operation"  # General Message Passing operations
     CROSS_CHAIN_SWAP = "cross_chain_swap"  # Advanced cross-chain swaps
     TRANSACTION_STEP_COMPLETE = "transaction_step_complete"  # Multi-step transaction management
+    BRIDGE_TO_PRIVACY = "bridge_to_privacy"  # Bridge to privacy chain (Zcash)
     UNKNOWN = "unknown"
 
 
@@ -41,6 +42,7 @@ class AgentType(Enum):
     PROTOCOL_RESEARCH = "protocol_research"
     GMP_OPERATION = "gmp_operation"
     CROSS_CHAIN_SWAP = "cross_chain_swap"
+    BRIDGE_TO_PRIVACY = "bridge_to_privacy"
     DEFAULT = "default"
     ERROR = "error"
 

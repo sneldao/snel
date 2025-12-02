@@ -111,7 +111,7 @@ export const POPULAR_TOKENS: Token[] = [
     coingeckoId: 'aave',
     isPopular: true
   },
-  
+
   // Polygon Tokens
   {
     symbol: 'MATIC',
@@ -166,7 +166,7 @@ export const POPULAR_TOKENS: Token[] = [
     isPopular: true,
     isStablecoin: true
   },
-  
+
   // Arbitrum Tokens
   {
     symbol: 'ETH',
@@ -209,7 +209,7 @@ export const POPULAR_TOKENS: Token[] = [
     coingeckoId: 'arbitrum',
     isPopular: true
   },
-  
+
   // Optimism Tokens
   {
     symbol: 'ETH',
@@ -252,7 +252,7 @@ export const POPULAR_TOKENS: Token[] = [
     coingeckoId: 'optimism',
     isPopular: true
   },
-  
+
   // Avalanche Tokens
   {
     symbol: 'AVAX',
@@ -285,7 +285,7 @@ export const POPULAR_TOKENS: Token[] = [
     isPopular: true,
     isStablecoin: true
   },
-  
+
   // Base Tokens
   {
     symbol: 'ETH',
@@ -308,7 +308,7 @@ export const POPULAR_TOKENS: Token[] = [
     isPopular: true,
     isStablecoin: true
   },
-  
+
   // Additional Popular DeFi Tokens (Ethereum)
   {
     symbol: 'SNX',
@@ -378,6 +378,30 @@ export const POPULAR_TOKENS: Token[] = [
     decimals: 18,
     logoURI: 'https://assets.coingecko.com/coins/images/11683/small/Balancer.png',
     coingeckoId: 'balancer',
+    isPopular: true
+  },
+
+  // Zcash Tokens
+  {
+    symbol: 'ZEC',
+    name: 'Zcash',
+    address: '0x0000000000000000000000000000000000000000', // Native Zcash
+    chainId: ChainId.ZCASH,
+    decimals: 8,
+    logoURI: 'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
+    coingeckoId: 'zcash',
+    isPopular: true
+  },
+
+  // Wrapped Zcash (Ethereum)
+  {
+    symbol: 'WZEC',
+    name: 'Wrapped Zcash',
+    address: '0x4a64515E5E1d1073e83f30cB97BEd20400b66E10', // Mainnet WZEC
+    chainId: ChainId.ETHEREUM,
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
+    coingeckoId: 'zcash',
     isPopular: true
   }
 ];

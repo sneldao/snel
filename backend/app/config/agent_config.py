@@ -68,6 +68,17 @@ class AgentConfig:
                 "show me USDC/ETH rate",
                 "get current gas prices on Ethereum"
             ]
+        ),
+        "privacy_bridging": AgentCapability(
+            name="Privacy Bridging",
+            description="Bridge assets to privacy-preserving chains like Zcash using Axelar GMP",
+            supported_chains=[1, 8453, 42161, 10, 137],
+            required_protocols=["axelar"],
+            examples=[
+                "bridge 1 ETH to Zcash",
+                "make my 100 USDC private",
+                "send 0.5 ETH to privacy pool"
+            ]
         )
     }
     
@@ -89,7 +100,8 @@ class AgentConfig:
         34443: {"name": "Mode", "symbol": "ETH", "type": "L2"},
         167000: {"name": "Taiko", "symbol": "ETH", "type": "L2"},
         1101: {"name": "Starknet", "symbol": "ETH", "type": "L2"},
-        8217: {"name": "Kaia", "symbol": "KAIA", "type": "L1"}
+        8217: {"name": "Kaia", "symbol": "KAIA", "type": "L1"},
+        1337: {"name": "Zcash", "symbol": "ZEC", "type": "Privacy"}
     }
     
     # Protocol capabilities
@@ -105,6 +117,12 @@ class AgentConfig:
             "description": "AI-powered DeFi protocol aggregator",
             "supported_chains": [1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 100, 1101],
             "features": ["swap", "bridge", "natural_language"]
+        },
+        "axelar": {
+            "name": "Axelar Network",
+            "description": "Cross-chain communication and privacy bridging via GMP",
+            "supported_chains": [1, 8453, 42161, 10, 137, 43114, 56, 1337],
+            "features": ["bridge", "gmp", "privacy"]
         }
     }
     

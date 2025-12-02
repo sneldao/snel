@@ -51,6 +51,7 @@ import { PortfolioModal } from "./Portfolio/PortfolioModal";
 import { PortfolioEnablePrompt } from "./Portfolio/PortfolioEnablePrompt";
 import { StatusBadge } from "./UI/StatusBadge";
 import { LoadingState } from "./UI/LoadingState";
+import { GMPTransactionCard } from "./GMP/GMPTransactionCard";
 // Removed LoadingSteps import - no longer needed
 
 // Removed unused helper functions - now handled by PortfolioSummary component
@@ -88,6 +89,7 @@ import {
   getContentError,
   getContentText,
   getContentResponse,
+  isBridgePrivacyReadyContent,
 } from "../utils/contentTypeGuards";
 
 interface CommandResponseProps {
@@ -244,13 +246,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
           setMultiStepState((prev) =>
             prev
               ? {
-                  ...prev,
-                  steps: prev.steps.map((step) =>
-                    step.step === (flowInfo.current_step || 1)
-                      ? { ...step, status: "completed", hash: result.hash }
-                      : step
-                  ),
-                }
+                ...prev,
+                steps: prev.steps.map((step) =>
+                  step.step === (flowInfo.current_step || 1)
+                    ? { ...step, status: "completed", hash: result.hash }
+                    : step
+                ),
+              }
               : null
           );
 
@@ -288,18 +290,18 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             setMultiStepState((prev) =>
               prev
                 ? {
-                    ...prev,
-                    steps: [
-                      ...prev.steps,
-                      {
-                        step: nextTxData.flow_info.current_step,
-                        stepType: nextTxData.flow_info.step_type,
-                        status: "pending",
-                        description: nextTxData.message,
-                      },
-                    ],
-                    currentStep: nextTxData.flow_info.current_step,
-                  }
+                  ...prev,
+                  steps: [
+                    ...prev.steps,
+                    {
+                      step: nextTxData.flow_info.current_step,
+                      stepType: nextTxData.flow_info.step_type,
+                      status: "pending",
+                      description: nextTxData.message,
+                    },
+                  ],
+                  currentStep: nextTxData.flow_info.current_step,
+                }
                 : null
             );
 
@@ -316,9 +318,9 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             setMultiStepState((prev) =>
               prev
                 ? {
-                    ...prev,
-                    isComplete: true,
-                  }
+                  ...prev,
+                  isComplete: true,
+                }
                 : null
             );
 
@@ -350,14 +352,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         setMultiStepState((prev) =>
           prev
             ? {
-                ...prev,
-                steps: prev.steps.map((step) =>
-                  step.step === currentStepNumber
-                    ? { ...step, status: "failed", error: errorMessage }
-                    : step
-                ),
-                error: errorMessage,
-              }
+              ...prev,
+              steps: prev.steps.map((step) =>
+                step.step === currentStepNumber
+                  ? { ...step, status: "failed", error: errorMessage }
+                  : step
+              ),
+              error: errorMessage,
+            }
             : null
         );
 
@@ -458,13 +460,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               setMultiStepState((prev) =>
                 prev
                   ? {
-                      ...prev,
-                      steps: prev.steps.map((s) =>
-                        s.step === step
-                          ? { ...s, status: "completed", hash: stepResult.hash }
-                          : s
-                      ),
-                    }
+                    ...prev,
+                    steps: prev.steps.map((s) =>
+                      s.step === step
+                        ? { ...s, status: "completed", hash: stepResult.hash }
+                        : s
+                    ),
+                  }
                   : null
               );
 
@@ -480,19 +482,19 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               setMultiStepState((prev) =>
                 prev
                   ? {
-                      ...prev,
-                      currentStep: step,
-                      steps: [
-                        ...prev.steps.slice(0, step - 1),
-                        {
-                          step,
-                          stepType,
-                          status: "executing",
-                          description: `Executing ${stepType}...`,
-                        },
-                        ...prev.steps.slice(step),
-                      ],
-                    }
+                    ...prev,
+                    currentStep: step,
+                    steps: [
+                      ...prev.steps.slice(0, step - 1),
+                      {
+                        step,
+                        stepType,
+                        status: "executing",
+                        description: `Executing ${stepType}...`,
+                      },
+                      ...prev.steps.slice(step),
+                    ],
+                  }
                   : null
               );
             }
@@ -502,16 +504,15 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
           setMultiStepState((prev) =>
             prev
               ? {
-                  ...prev,
-                  isComplete: true,
-                }
+                ...prev,
+                isComplete: true,
+              }
               : null
           );
 
           toast({
-            title: `${
-              agentType.charAt(0).toUpperCase() + agentType.slice(1)
-            } Complete`,
+            title: `${agentType.charAt(0).toUpperCase() + agentType.slice(1)
+              } Complete`,
             description: `All transactions executed successfully`,
             status: "success",
             duration: 5000,
@@ -535,18 +536,17 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         setMultiStepState((prev) =>
           prev
             ? {
-                ...prev,
-                error: errorMessage,
-              }
+              ...prev,
+              error: errorMessage,
+            }
             : null
         );
 
         toast({
           title: isUserRejection
             ? "Transaction Cancelled"
-            : `${
-                agentType.charAt(0).toUpperCase() + agentType.slice(1)
-              } Failed`,
+            : `${agentType.charAt(0).toUpperCase() + agentType.slice(1)
+            } Failed`,
           description: isUserRejection
             ? "You cancelled the transaction"
             : errorMessage,
@@ -563,8 +563,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
   // Check for various response types (moved before useEffect that uses them)
   const isSwapConfirmation =
     typeof content === "object" &&
-    ((content as any)?.type === "swap_confirmation" || 
-     (content as any)?.type === "swap_ready");
+    ((content as any)?.type === "swap_confirmation" ||
+      (content as any)?.type === "swap_ready");
   const isDCAConfirmation =
     typeof content === "object" &&
     (content as any)?.type === "dca_confirmation";
@@ -661,6 +661,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     isCrossChainSuccessContent(content) && getContentAxelarPowered(content);
 
   const isPortfolioDisabled = isPortfolioDisabledContent(content);
+  const isBridgePrivacyReady = isBridgePrivacyReadyContent(content);
 
   // Debug logging for bridge and transfer transactions
   React.useEffect(() => {
@@ -1092,14 +1093,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     transaction={
                       brianContent.data?.tx_steps
                         ? {
-                            to: brianContent.data.tx_steps[0]?.to,
-                            data: brianContent.data.tx_steps[0]?.data,
-                            value: brianContent.data.tx_steps[0]?.value || "0",
-                            chain_id: brianContent.data.from_chain?.id,
-                            gas_limit:
-                              brianContent.data.tx_steps[0]?.gasLimit ||
-                              "500000",
-                          }
+                          to: brianContent.data.tx_steps[0]?.to,
+                          data: brianContent.data.tx_steps[0]?.data,
+                          value: brianContent.data.tx_steps[0]?.value || "0",
+                          chain_id: brianContent.data.from_chain?.id,
+                          gas_limit:
+                            brianContent.data.tx_steps[0]?.gasLimit ||
+                            "500000",
+                        }
                         : undefined
                     }
                     metadata={{
@@ -1126,16 +1127,16 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                   typeof content === "object"
                     ? content.suggestion
                     : {
-                        title: "Enable Portfolio Analysis",
-                        description:
-                          "Get detailed insights about your holdings",
-                        features: [
-                          "Holdings analysis",
-                          "Risk assessment",
-                          "Optimization tips",
-                        ],
-                        warning: "Analysis takes 10-30 seconds",
-                      }
+                      title: "Enable Portfolio Analysis",
+                      description:
+                        "Get detailed insights about your holdings",
+                      features: [
+                        "Holdings analysis",
+                        "Risk assessment",
+                        "Optimization tips",
+                      ],
+                      warning: "Analysis takes 10-30 seconds",
+                    }
                 }
                 onEnable={() => {
                   // This will be handled by MainApp
@@ -1147,6 +1148,36 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                   }
                 }}
               />
+            ) : isBridgePrivacyReadyContent(content) ? (
+              <Box mt={4} width="100%">
+                <GMPTransactionCard
+                  transaction={{
+                    id: `privacy-${Date.now()}`,
+                    type: 'bridge_to_privacy',
+                    sourceChain: content.from_chain,
+                    destChain: content.to_chain,
+                    status: 'pending',
+                    steps: content.steps?.map((step: any, idx: number) => ({
+                      id: `step-${idx}`,
+                      title: step.description || step.type,
+                      description: step.description || '',
+                      status: 'pending' as const,
+                      estimatedTime: idx === 0 ? content.estimated_time : undefined
+                    })) || [],
+                    createdAt: new Date(),
+                    metadata: {
+                      amount: content.amount,
+                      token: content.token,
+                      protocol: content.protocol
+                    }
+                  }}
+                  variant="privacy"
+                  privacyLevel={content.privacy_level}
+                  onExecute={handleExecuteTransaction}
+                  onCancel={handleCancel}
+                  isExecuting={isExecuting}
+                />
+              </Box>
             ) : isCrossChainSuccess ? (
               <CrossChainResult
                 content={
@@ -1214,7 +1245,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     {getContentType(content) === "dca_order_created"
                       ? "DCA order successfully created. You'll be swapping the specified amount on your chosen schedule."
                       : getContentMessage(content) ||
-                        "DCA order setup complete."}
+                      "DCA order setup complete."}
                     {isObjectContent(content) &&
                       content.type === "error" &&
                       (content as any).content?.includes("minimum") && (
@@ -1273,23 +1304,23 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
               >
                 {isStringContent(content)
                   ? formatLinks(
-                      content.startsWith('{"response":')
-                        ? JSON.parse(content).response
-                        : content
-                    )
+                    content.startsWith('{"response":')
+                      ? JSON.parse(content).response
+                      : content
+                  )
                   : getContentText(content)
-                  ? formatLinks(getContentText(content)!)
-                  : getContentMessage(content)
-                  ? formatLinks(getContentMessage(content)!)
-                  : getContentResponse(content)
-                  ? formatLinks(getContentResponse(content)!)
-                  : formatLinks(
-                      isStringContent(content)
-                        ? content
-                        : isObjectContent(content)
-                        ? JSON.stringify(content, null, 2)
-                        : ""
-                    )}
+                    ? formatLinks(getContentText(content)!)
+                    : getContentMessage(content)
+                      ? formatLinks(getContentMessage(content)!)
+                      : getContentResponse(content)
+                        ? formatLinks(getContentResponse(content)!)
+                        : formatLinks(
+                          isStringContent(content)
+                            ? content
+                            : isObjectContent(content)
+                              ? JSON.stringify(content, null, 2)
+                              : ""
+                        )}
               </Text>
             )}
 
@@ -1324,10 +1355,10 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                       {getContentError(content)
                         ? formatErrorMessage(getContentError(content)!)
                         : getContentMessage(content)
-                        ? formatErrorMessage(getContentMessage(content)!)
-                        : isStringContent(content)
-                        ? formatErrorMessage(content)
-                        : "An error occurred. Please try again."}
+                          ? formatErrorMessage(getContentMessage(content)!)
+                          : isStringContent(content)
+                            ? formatErrorMessage(content)
+                            : "An error occurred. Please try again."}
                     </AlertDescription>
                   </Box>
                 </Alert>

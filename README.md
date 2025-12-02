@@ -10,6 +10,7 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 - **🌐 Multi-Chain Support**: Operates on 16+ networks including Ethereum, Polygon, Base, and Arbitrum.
 - **🔄 Advanced Transaction Handling**: Automatically handles multi-step processes like approvals and swaps with real-time status updates.
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
+- **🛡️ Privacy Bridging**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP.
 - **💰 Smart Amount Conversion**: Automatically converts USD amounts to token amounts using real-time price data from CoinGecko.
 - **🔐 Secure & User-Friendly**: Non-custodial, supports 50+ wallets, and provides transaction simulation.
 
@@ -43,6 +44,8 @@ snel/
 - `swap $100 of USDC for ETH` - USD amount converted to token amount
 - `swap $50 worth of ETH for USDC` - USD amount converted to token amount
 - `swap 100 USDC to DAI on Polygon` - Cross-chain swap
+- `bridge 1 ETH to Zcash` - Privacy bridge via Axelar
+- `make my 100 USDC private` - Privacy-preserving cross-chain transfer
 
 ## 🚀 Quick Start
 

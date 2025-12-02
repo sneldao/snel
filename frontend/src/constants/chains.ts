@@ -28,6 +28,9 @@ export enum ChainId {
   MANTLE = 5000,
   BLAST = 81457,
   KAIA = 8217,
+
+  // Non-EVM Chains (Hackathon)
+  ZCASH = 1337,
 }
 
 export const SUPPORTED_CHAINS = {
@@ -52,6 +55,9 @@ export const SUPPORTED_CHAINS = {
   5000: "Mantle",
   81457: "Blast",
   8217: "Kaia",
+
+  // Non-EVM Chains
+  1337: "Zcash",
 } as const;
 
 export const BLOCK_EXPLORERS = {
@@ -76,6 +82,7 @@ export const BLOCK_EXPLORERS = {
   5000: "https://explorer.mantle.xyz/tx/",
   81457: "https://blastscan.io/tx/",
   8217: "https://kaiascan.io/tx/",
+  1337: "https://zcashblockexplorer.com/transactions/",
 } as const;
 
 // Consolidated chain data for various use cases
@@ -101,6 +108,7 @@ export const CHAIN_CONFIG = {
   5000: { name: "Mantle", explorer: "https://explorer.mantle.xyz/tx/", axelarName: null },
   81457: { name: "Blast", explorer: "https://blastscan.io/tx/", axelarName: null },
   8217: { name: "Kaia", explorer: "https://kaiascan.io/tx/", axelarName: null },
+  1337: { name: "Zcash", explorer: "https://zcashblockexplorer.com/transactions/", axelarName: "zcash" },
 } as const;
 
 export type SupportedChainId = keyof typeof SUPPORTED_CHAINS;
@@ -138,6 +146,7 @@ export const CHAIN_COLORS: Record<string, string> = {
   'Avalanche': '#E84142',
   'BSC': '#F0B90B',
   'Kaia': '#00D2FF', // Kaia brand color
+  'Zcash': '#F4B728', // Zcash brand color
 } as const;
 
 // Utility functions (consolidated from chainMappings.ts)

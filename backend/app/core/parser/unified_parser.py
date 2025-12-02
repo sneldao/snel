@@ -119,6 +119,24 @@ class UnifiedParser:
                     "priority": 3
                 }
             ],
+            CommandType.BRIDGE_TO_PRIVACY: [
+                {
+                    "pattern": re.compile(
+                        r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<dest_chain>zcash|privacy)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Bridge to Zcash/Privacy",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"make\s+(?:my\s+)?(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+private",
+                        re.IGNORECASE
+                    ),
+                    "description": "Make funds private intent",
+                    "priority": 2
+                }
+            ],
             CommandType.TRANSFER: [
                 {
                     "pattern": re.compile(
@@ -198,6 +216,8 @@ class UnifiedParser:
             return self._extract_balance_details(match)
         elif command_type == CommandType.PROTOCOL_RESEARCH:
             return self._extract_research_details(match)
+        elif command_type == CommandType.BRIDGE_TO_PRIVACY:
+            return self._extract_bridge_to_privacy_details(match)
 
         return CommandDetails()
 
@@ -248,6 +268,18 @@ class UnifiedParser:
             token_in=TokenInfo(symbol=groups["token"].upper()),
             source_chain=groups.get("source_chain"),
             destination_chain=groups["dest_chain"]
+        )
+
+    def _extract_bridge_to_privacy_details(self, match: re.Match) -> CommandDetails:
+        """Extract bridge to privacy details."""
+        groups = match.groupdict()
+        amount = self._parse_decimal(groups["amount"])
+        
+        return CommandDetails(
+            amount=float(amount),
+            token_in=TokenInfo(symbol=groups["token"].upper()),
+            destination_chain="Zcash",
+            additional_params={"is_privacy": True}
         )
 
     def _extract_transfer_details(self, match: re.Match) -> CommandDetails:

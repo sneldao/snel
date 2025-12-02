@@ -147,6 +147,20 @@ export interface DCAOrderCreatedContent {
   token_out: TokenInfo;
 }
 
+export interface BridgePrivacyReadyContent {
+  type: 'bridge_privacy_ready';
+  message: string;
+  amount: string;
+  token: string;
+  from_chain: string;
+  to_chain: string;
+  protocol: string;
+  estimated_time: string;
+  privacy_level: string;
+  requires_transaction: boolean;
+  steps?: any[];
+}
+
 export type ResponseContent =
   | string
   | BalanceContent
@@ -162,7 +176,8 @@ export type ResponseContent =
   | PortfolioDisabledContent
   | BridgeReadyContent
   | SwapQuotesContent
-  | DCAOrderCreatedContent;
+  | DCAOrderCreatedContent
+  | BridgePrivacyReadyContent;
 
 // Supporting interfaces
 export interface TokenBalance {

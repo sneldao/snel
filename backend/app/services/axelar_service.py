@@ -44,7 +44,8 @@ class AxelarService:
             42161: "arbitrum",
             8453: "base",
             59144: "linea",
-            534352: "scroll"
+            534352: "scroll",
+            1337: "zcash"  # Hackathon support
         }
 
     async def initialize(self):

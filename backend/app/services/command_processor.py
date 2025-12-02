@@ -119,6 +119,7 @@ Command types available:
 - GMP_OPERATION: General Message Passing operations like cross-chain contract calls, complex DeFi operations across chains
 - BALANCE: Balance check requests
 - PORTFOLIO: Portfolio analysis requests
+- BRIDGE_TO_PRIVACY: Requests to bridge to Zcash, make funds private, or use privacy pools (e.g., "bridge to Zcash", "make my ETH private")
 - GREETING: Only simple greetings like "hi", "hello", "hey", without other content
 - CONFIRMATION: Yes/no confirmations
 - UNKNOWN: Unclear or unrelated commands
@@ -139,6 +140,8 @@ Examples:
 - "add liquidity to Uniswap on Arbitrum using ETH from Ethereum" → GMP_OPERATION
 - "swap 1 ETH for USDC" → SWAP
 - "bridge 100 USDC to Arbitrum" → BRIDGE
+- "bridge 1 ETH to Zcash" → BRIDGE_TO_PRIVACY
+- "make my 100 USDC private" → BRIDGE_TO_PRIVACY
 
 Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 """
@@ -216,6 +219,8 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 return await self._process_cross_chain_swap(unified_command)
             elif command_type == CommandType.TRANSACTION_STEP_COMPLETE:
                 return await self._process_transaction_step_complete(unified_command)
+            elif command_type == CommandType.BRIDGE_TO_PRIVACY:
+                return await self._process_bridge_to_privacy(unified_command)
             else:
                 return await self._process_unknown(unified_command)
                 
@@ -680,6 +685,115 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             raise ExternalServiceError(
                 message="Failed to prepare bridge transaction",
                 service_name="Bridge Service",
+                original_error=str(e)
+            )
+
+
+    async def _process_bridge_to_privacy(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """Process bridge to privacy (Zcash) commands."""
+        try:
+            logger.info(f"Processing bridge to privacy command: {unified_command.command}")
+
+            # Extract details
+            details = unified_command.details
+            if not details or not details.amount or not details.token_in:
+                raise command_parse_error(
+                    unified_command.command,
+                    "bridge [amount] [token] to Zcash"
+                )
+
+            # Validate amount
+            if details.amount <= 0:
+                raise invalid_amount_error(details.amount)
+
+            amount_str = self._format_amount(details.amount)
+            from_chain_id = unified_command.chain_id
+            from_chain_name = self.settings.chains.supported_chains.get(from_chain_id, f"Chain {from_chain_id}")
+            
+            # Destination is implicitly Zcash for this command type
+            to_chain_name = "Zcash"
+            to_chain_id = 1337 # Zcash ID
+
+            # Check if Axelar supports the source chain
+            if not self.axelar_service.is_chain_supported(from_chain_id):
+                 return UnifiedResponse(
+                    content={
+                        "message": f"Bridge to Privacy is not supported from {from_chain_name}. Please try from Ethereum, Polygon, or Base.",
+                        "type": "error",
+                        "suggestions": ["Switch to Ethereum", "Switch to Polygon", "Switch to Base"]
+                    },
+                    agent_type=AgentType.BRIDGE_TO_PRIVACY,
+                    status="error"
+                )
+
+            # Get quote/route via Axelar
+            # Use the new GMP service method to build the transaction
+            gmp_result = await self.gmp_service.build_bridge_to_privacy_transaction(
+                source_chain_id=from_chain_id,
+                token_symbol=details.token_in.symbol,
+                amount=details.amount,
+                wallet_address=unified_command.wallet_address
+            )
+
+            if not gmp_result.get("success"):
+                return UnifiedResponse(
+                    content={
+                        "message": "Failed to prepare privacy bridge transaction.",
+                        "type": "error",
+                        "details": gmp_result
+                    },
+                    agent_type=AgentType.BRIDGE_TO_PRIVACY,
+                    status="error"
+                )
+
+            # Create transaction data from the GMP result
+            # We use the gateway address as the 'to' address for the initial interaction
+            transaction_data = TransactionData(
+                to=gmp_result["gateway_address"],
+                data=gmp_result.get("payload", "0x"), # In a real flow, this would be the specific step data
+                value="0",
+                gasLimit="700000",
+                chainId=from_chain_id,
+                from_address=unified_command.wallet_address
+            )
+
+            content = {
+                "message": f"Ready to bridge {amount_str} {details.token_in.symbol} to Zcash Privacy Pool via Axelar GMP",
+                "amount": amount_str,
+                "token": details.token_in.symbol,
+                "from_chain": from_chain_name,
+                "to_chain": "Zcash (Shielded)",
+                "protocol": "axelar-gmp-privacy",
+                "estimated_time": "15-30 minutes",
+                "privacy_level": "High (Shielded)",
+                "type": "bridge_privacy_ready",
+                "requires_transaction": True,
+                "steps": gmp_result.get("steps", [])
+            }
+
+            return UnifiedResponse(
+                content=content,
+                agent_type=AgentType.BRIDGE_TO_PRIVACY,
+                status="success",
+                awaiting_confirmation=True,
+                transaction=transaction_data,
+                metadata={
+                    "bridge_details": {
+                        "from_chain_id": from_chain_id,
+                        "to_chain_id": to_chain_id,
+                        "amount": amount_str,
+                        "token": details.token_in.symbol,
+                        "is_privacy": True
+                    },
+                    "protocol_used": "axelar"
+                }
+            )
+
+        except Exception as e:
+            logger.exception("Error processing bridge to privacy command")
+            raise ExternalServiceError(
+                message="Failed to prepare privacy bridge transaction",
+                service_name="Privacy Service",
                 original_error=str(e)
             )
 

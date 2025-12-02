@@ -36,7 +36,8 @@ import {
   FiExternalLink,
   FiZap,
   FiShield,
-  FiTrendingUp
+  FiTrendingUp,
+  FiLock
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GMPTransaction, GMPTransactionStep } from '../../contexts/GMPContext';
@@ -50,14 +51,17 @@ interface GMPTransactionCardProps {
   transaction: GMPTransaction;
   onExecute?: () => void;
   onViewDetails?: () => void;
+  onCancel?: () => void;
   isExecuting?: boolean;
   compact?: boolean;
+  variant?: 'default' | 'privacy';
+  privacyLevel?: string;
 }
 
 // Step status icon component
 const StepStatusIcon: React.FC<{ status: GMPTransactionStep['status'] }> = memo(({ status }) => {
   const iconProps = { size: '16px' };
-  
+
   switch (status) {
     case 'completed':
       return <Icon as={FiCheck} color="green.500" {...iconProps} />;
@@ -108,7 +112,7 @@ const useTransactionProgress = (steps: GMPTransactionStep[]) => {
     const completedSteps = steps.filter(step => step.status === 'completed').length;
     const totalSteps = steps.length;
     const progress = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-    
+
     return {
       progress,
       completedSteps,
@@ -153,17 +157,33 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
   transaction,
   onExecute,
   onViewDetails,
+  onCancel,
   isExecuting = false,
-  compact = false
+  compact = false,
+  variant = 'default',
+  privacyLevel
 }) => {
-  // Theme colors
-  const cardBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  // Theme colors (privacy variant uses yellow/gold theme)
+  const isPrivacy = variant === 'privacy';
+  const cardBg = useColorModeValue(
+    isPrivacy ? 'yellow.50' : 'white',
+    isPrivacy ? 'gray.800' : 'gray.800'
+  );
+  const borderColor = useColorModeValue(
+    isPrivacy ? 'yellow.200' : 'gray.200',
+    isPrivacy ? 'yellow.600' : 'gray.600'
+  );
   const textColor = useColorModeValue('gray.600', 'gray.300');
-  const accentColor = useColorModeValue('blue.500', 'blue.300');
+  const accentColor = useColorModeValue(
+    isPrivacy ? 'yellow.500' : 'blue.500',
+    isPrivacy ? 'yellow.300' : 'blue.300'
+  );
   const progressBg = useColorModeValue('gray.100', 'gray.700');
   const stepBg = useColorModeValue('gray.50', 'gray.700');
-  const axelarBoxBg = useColorModeValue('blue.50', 'blue.900');
+  const axelarBoxBg = useColorModeValue(
+    isPrivacy ? 'yellow.50' : 'blue.50',
+    isPrivacy ? 'yellow.900' : 'blue.900'
+  );
 
   // Progress calculation
   const { progress, completedSteps, totalSteps, isComplete, hasError } = useTransactionProgress(transaction.steps);
@@ -196,16 +216,25 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
       <CardHeader pb={compact ? 2 : 4}>
         <Flex align="center" justify="space-between">
           <HStack spacing={3}>
+            {/* Privacy badge for privacy variant */}
+            {isPrivacy && (
+              <Badge colorScheme="yellow" variant="solid" display="flex" alignItems="center" gap={1}>
+                <Icon as={FiLock} boxSize={3} />
+                SHIELDED
+              </Badge>
+            )}
+
             {/* Chain flow visualization */}
             <HStack spacing={2}>
               <ChainAvatar chain={transaction.sourceChain} />
               <Icon as={FiArrowRight} color={accentColor} size="16px" />
               <ChainAvatar chain={transaction.destChain} />
             </HStack>
-            
+
             <VStack align="start" spacing={0}>
               <Text fontSize="sm" fontWeight="semibold" color={textColor}>
                 {transaction.sourceChain} → {transaction.destChain}
+                {isPrivacy && ' (Privacy)'}
               </Text>
               <Text fontSize="xs" color={textColor} opacity={0.8}>
                 {transaction.type.replace('_', ' ').toUpperCase()}
@@ -234,7 +263,7 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
                 {completedSteps}/{totalSteps} steps
               </Text>
             </Flex>
-            
+
             <Progress
               value={progress}
               colorScheme={progressColor}
@@ -255,8 +284,8 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
                     borderRadius="full"
                     bg={
                       step.status === 'completed' ? 'green.100' :
-                      step.status === 'processing' ? 'blue.100' :
-                      step.status === 'error' ? 'red.100' : 'gray.100'
+                        step.status === 'processing' ? 'blue.100' :
+                          step.status === 'error' ? 'red.100' : 'gray.100'
                     }
                     display="flex"
                     alignItems="center"
@@ -311,6 +340,16 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
             </VStack>
           )}
 
+          {/* Privacy level indicator */}
+          {isPrivacy && privacyLevel && (
+            <HStack justify="space-between" fontSize="sm" p={2} bg={stepBg} borderRadius="md">
+              <Text color="gray.500">Privacy Level:</Text>
+              <Text fontWeight="bold" color="green.500">
+                {privacyLevel}
+              </Text>
+            </HStack>
+          )}
+
           {/* Action buttons */}
           <Divider />
           <HStack spacing={2} justify="space-between">
@@ -322,6 +361,17 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
             </HStack>
 
             <HStack spacing={2}>
+              {onCancel && transaction.status === 'pending' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onCancel}
+                  isDisabled={isExecuting}
+                >
+                  Cancel
+                </Button>
+              )}
+
               {onViewDetails && (
                 <Button
                   size="sm"
@@ -332,17 +382,17 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
                   Details
                 </Button>
               )}
-              
+
               {onExecute && transaction.status === 'pending' && (
                 <Button
                   size="sm"
-                  colorScheme="blue"
+                  colorScheme={isPrivacy ? 'yellow' : 'blue'}
                   onClick={onExecute}
                   isLoading={isExecuting}
-                  loadingText="Executing..."
-                  leftIcon={<FiZap />}
+                  loadingText={isPrivacy ? 'Bridging...' : 'Executing...'}
+                  leftIcon={isPrivacy ? <FiLock /> : <FiZap />}
                 >
-                  Execute
+                  {isPrivacy ? 'Bridge to Privacy' : 'Execute'}
                 </Button>
               )}
             </HStack>

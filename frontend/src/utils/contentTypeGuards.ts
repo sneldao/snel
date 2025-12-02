@@ -14,7 +14,8 @@ import {
   PortfolioDisabledContent,
   BridgeReadyContent,
   SwapQuotesContent,
-  DCAOrderCreatedContent
+  DCAOrderCreatedContent,
+  BridgePrivacyReadyContent
 } from '../types/responses';
 
 // Type guard functions
@@ -48,7 +49,7 @@ export const isTransactionContent = (content: ResponseContent): content is Trans
 
 export const isTransferContent = (content: ResponseContent): content is TransferContent => {
   return typeof content === 'object' && content !== null && 'type' in content &&
-         (content.type === 'transfer_confirmation' || content.type === 'transfer_ready');
+    (content.type === 'transfer_confirmation' || content.type === 'transfer_ready');
 };
 
 export const isBalanceResultContent = (content: ResponseContent): content is BalanceResultContent => {
@@ -77,6 +78,10 @@ export const isSwapQuotesContent = (content: ResponseContent): content is SwapQu
 
 export const isDCAOrderCreatedContent = (content: ResponseContent): content is DCAOrderCreatedContent => {
   return typeof content === 'object' && content !== null && 'type' in content && content.type === 'dca_order_created';
+};
+
+export const isBridgePrivacyReadyContent = (content: ResponseContent): content is BridgePrivacyReadyContent => {
+  return typeof content === 'object' && content !== null && 'type' in content && content.type === 'bridge_privacy_ready';
 };
 
 export const isObjectContent = (content: ResponseContent): content is Exclude<ResponseContent, string> => {

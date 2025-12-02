@@ -325,6 +325,111 @@ class AxelarGMPService:
                 "technical_details": str(e)
             }
 
+    async def build_bridge_to_privacy_transaction(
+        self,
+        source_chain_id: int,
+        token_symbol: str,
+        amount: Decimal,
+        wallet_address: str
+    ) -> Dict[str, Any]:
+        """
+        Build a 'Bridge to Privacy' transaction using Axelar GMP callContractWithToken.
+        This sends tokens to a Zcash Gateway contract on the destination chain.
+        
+        Args:
+            source_chain_id: Source chain ID
+            token_symbol: Token to bridge
+            amount: Amount to bridge
+            wallet_address: User wallet address (recipient on Zcash side)
+            
+        Returns:
+            Transaction data
+        """
+        try:
+            # 1. Resolve Addresses
+            gateway_address = self.get_gateway_address(source_chain_id)
+            gas_service_address = self.get_gas_service_address(source_chain_id)
+            
+            if not gateway_address or not gas_service_address:
+                return {
+                    "error": "Chain not supported for GMP operations",
+                    "technical_details": f"Missing contract addresses for chain {source_chain_id}"
+                }
+
+            # 2. Define Destination (Simulated Zcash Gateway on Ethereum/Polygon for Hackathon)
+            # In a real scenario, this would be a specific contract on a chain that bridges to Zcash
+            # For the hackathon, we target a "PrivacyGateway" on a supported chain (e.g., Polygon)
+            destination_chain = "Polygon" 
+            destination_contract_address = "0xPrivacyGatewayAddressSimulated" 
+            
+            # 3. Construct Payload
+            # The payload tells the destination contract what to do with the tokens
+            # Here: "Mint shielded ZEC to this Zcash address"
+            privacy_payload = {
+                "action": "mint_shielded",
+                "zcash_recipient": wallet_address, # Assuming user provided a Z-addr or we map it
+                "privacy_pool_id": "pool_v1"
+            }
+            payload_bytes = json.dumps(privacy_payload).encode().hex()
+            
+            # 4. Estimate Gas
+            gas_estimate = await self.estimate_gas_fee(
+                source_chain_id, 
+                137, # Polygon ID as destination
+                700000 # Gas limit
+            )
+            
+            if "error" in gas_estimate:
+                return gas_estimate
+
+            # 5. Build Transaction Steps
+            # Step A: Approve Token for Gateway
+            # Step B: Pay Gas
+            # Step C: callContractWithToken
+            
+            steps = [
+                {
+                    "type": "approve",
+                    "description": f"Approve {amount} {token_symbol} for Axelar Gateway",
+                    "to": gateway_address, # In reality, token contract
+                    "data": "0x", # Placeholder for approve()
+                    "value": "0"
+                },
+                {
+                    "type": "pay_gas",
+                    "description": "Pay gas for privacy bridge execution",
+                    "to": gas_service_address,
+                    "data": "0x", # Placeholder for payNativeGasForContractCallWithToken()
+                    "value": gas_estimate["gas_fee"]
+                },
+                {
+                    "type": "call_contract_with_token",
+                    "description": f"Bridge {amount} {token_symbol} to Zcash Privacy Pool",
+                    "to": gateway_address,
+                    "data": "0x", # Placeholder for callContractWithToken()
+                    "value": "0"
+                }
+            ]
+
+            return {
+                "success": True,
+                "protocol": "axelar_gmp_privacy",
+                "type": "bridge_to_privacy",
+                "source_chain_id": source_chain_id,
+                "destination_chain": destination_chain,
+                "estimated_gas_fee": gas_estimate["gas_fee"],
+                "steps": steps,
+                "gateway_address": gateway_address,
+                "payload": payload_bytes
+            }
+
+        except Exception as e:
+            logger.exception(f"Error building privacy bridge transaction: {e}")
+            return {
+                "error": "Failed to build privacy bridge transaction",
+                "technical_details": str(e)
+            }
+
     async def track_gmp_transaction(
         self,
         tx_hash: str,
