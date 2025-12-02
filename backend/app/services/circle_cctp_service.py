@@ -14,6 +14,7 @@ from eth_abi import encode as abi_encode
 from eth_utils import function_signature_to_4byte_selector, to_checksum_address
 from ..core.config_manager import config_manager
 from ..core.errors import ProtocolError, ProtocolAPIError, NetworkError, ValidationError
+from .utils.transaction_utils import transaction_utils
 
 logger = logging.getLogger(__name__)
 
@@ -451,23 +452,22 @@ class CircleCCTPService:
         return steps
 
     async def _build_approve_data(self, spender: str, amount: Decimal) -> str:
-        """Build approve transaction data for USDC token."""
+        """
+        Build approve transaction data for USDC token.
+        Uses shared utility for consistency across codebase.
+        """
         try:
             # Get USDC configuration for accurate decimals
             token_config = await config_manager.get_token_by_symbol("USDC")
             if not token_config:
                 raise ValueError("USDC token not found in configuration")
             
-            decimals = token_config.decimals
-            amount_wei = int(amount * (Decimal(10) ** decimals))
-
-            # ERC20 approve function: approve(address spender, uint256 amount)
-            function_selector = function_signature_to_4byte_selector("approve(address,uint256)").hex()
-
-            # Encode parameters: spender address and amount
-            encoded_params = abi_encode(['address', 'uint256'], [to_checksum_address(spender), amount_wei])
-
-            return f"0x{function_selector}{encoded_params.hex()}"
+            # Use shared utility with USDC decimals
+            return transaction_utils.encode_erc20_approval_with_decimals(
+                spender=to_checksum_address(spender),
+                amount=amount,
+                decimals=token_config.decimals
+            )
 
         except Exception as e:
             logger.error(f"Error building approve data: {e}")

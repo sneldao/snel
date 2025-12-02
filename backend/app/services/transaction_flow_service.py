@@ -240,22 +240,22 @@ class TransactionFlowService:
             logger.info(f"Cleaned up {len(flows_to_remove)} old transaction flows")
     
     def _detect_step_type(self, tx_data: str) -> StepType:
-        """Detect the type of transaction step based on function signature."""
-        if not tx_data or len(tx_data) < 10:
-            return StepType.OTHER
+        """
+        Detect the type of transaction step based on function signature.
+        Uses shared utility for consistency across codebase.
+        """
+        from app.services.utils.transaction_utils import transaction_utils
         
-        function_sig = tx_data[:10].lower()
+        step_type_str = transaction_utils.detect_step_type(tx_data)
         
-        # Common function signatures
-        if function_sig == "0x095ea7b3":  # approve(address,uint256)
+        if step_type_str == "approval":
             return StepType.APPROVAL
-        elif function_sig in ["0x38ed1739", "0x7ff36ab5", "0x18cbafe5", "0x8803dbee"]:
+        elif step_type_str == "swap":
             return StepType.SWAP
-        elif function_sig == "0x26ef699d":  # sendToken (Axelar bridge)
+        elif step_type_str == "bridge":
             return StepType.BRIDGE
         else:
-            # For complex transactions, assume it's a swap if data is substantial
-            return StepType.SWAP if len(tx_data) > 100 else StepType.OTHER
+            return StepType.OTHER
     
     def _generate_step_description(self, step_type: StepType, step_num: int, total_steps: int) -> str:
         """Generate a user-friendly description for a transaction step."""

@@ -1,14 +1,15 @@
 """
-Unified command processor with dependency injection.
-Clean, modular, DRY implementation without import chaos.
+Unified command processor orchestrator.
+Routes commands to domain-specific processors via the registry pattern.
+Clean separation of concerns - orchestration vs. command handling.
 """
 import logging
-from typing import Dict, Any, Optional, Union
+from typing import Optional
+
 from openai import AsyncOpenAI
 
 from app.models.unified_models import (
-    CommandType, UnifiedCommand, UnifiedResponse, AgentType,
-    ResponseContent, ValidationResult, TransactionData
+    CommandType, UnifiedCommand, UnifiedResponse, AgentType
 )
 from app.core.parser.unified_parser import unified_parser
 from app.config.settings import Settings
@@ -17,20 +18,24 @@ from app.core.exceptions import (
     ValidationError, 
     BusinessLogicError, 
     ExternalServiceError,
-    command_parse_error,
-    invalid_amount_error,
-    invalid_address_error,
-    unsupported_chain_error,
-    wallet_not_connected_error
+    wallet_not_connected_error,
+    unsupported_chain_error
 )
+from app.services.processors.registry import ProcessorRegistry
 
 logger = logging.getLogger(__name__)
 
 
 class CommandProcessor:
     """
-    Unified command processor with dependency injection.
-    Eliminates import chaos and provides consistent service access.
+    Unified command processor - orchestrator for domain-specific processors.
+    
+    Responsibilities:
+    - Command parsing and validation
+    - Command type detection (including AI classification)
+    - Routing to appropriate domain processor
+    - Consistent error handling
+    - Response formatting
     """
     
     def __init__(self, brian_client, settings: Settings, transaction_flow_service=None):
@@ -46,7 +51,7 @@ class CommandProcessor:
         self.settings = settings
         self.transaction_flow_service = transaction_flow_service
         
-        # Import protocol registry for Axelar support
+        # Import protocol registry for cross-chain support
         from app.protocols.registry import protocol_registry
         self.protocol_registry = protocol_registry
         
@@ -61,6 +66,15 @@ class CommandProcessor:
         # Import price service for USD to token conversions
         from app.services.price_service import price_service
         self.price_service = price_service
+        
+        # Initialize processor registry with shared dependencies
+        self.processor_registry = ProcessorRegistry(
+            brian_client=brian_client,
+            settings=settings,
+            protocol_registry=self.protocol_registry,
+            gmp_service=self.gmp_service,
+            price_service=price_service
+        )
 
     @staticmethod
     def create_unified_command(
@@ -80,7 +94,7 @@ class CommandProcessor:
         )
 
     @staticmethod
-    def validate_command(unified_command: UnifiedCommand) -> ValidationResult:
+    def validate_command(unified_command: UnifiedCommand):
         """Validate a unified command."""
         return unified_parser.validate_command(unified_command)
     
@@ -115,33 +129,24 @@ Command types available:
 - TRANSFER: Token transfer requests
 - BRIDGE: Cross-chain bridge requests
 - SWAP: Token swap requests (same chain)
-- CROSS_CHAIN_SWAP: Advanced cross-chain swaps using Axelar GMP (e.g., "swap USDC from Ethereum to MATIC on Polygon")
-- GMP_OPERATION: General Message Passing operations like cross-chain contract calls, complex DeFi operations across chains
+- CROSS_CHAIN_SWAP: Advanced cross-chain swaps using Axelar GMP
+- GMP_OPERATION: General Message Passing operations like cross-chain contract calls
 - BALANCE: Balance check requests
 - PORTFOLIO: Portfolio analysis requests
-- BRIDGE_TO_PRIVACY: Requests to bridge to Zcash, make funds private, or use privacy pools (e.g., "bridge to Zcash", "make my ETH private")
+- BRIDGE_TO_PRIVACY: Requests to bridge to Zcash or use privacy pools
 - GREETING: Only simple greetings like "hi", "hello", "hey", without other content
 - CONFIRMATION: Yes/no confirmations
 - UNKNOWN: Unclear or unrelated commands
 
 Classification guidelines:
-- Questions about who you are, what you can do, or your capabilities → CONTEXTUAL_QUESTION (not GREETING)
+- Questions about who you are, what you can do → CONTEXTUAL_QUESTION (not GREETING)
 - Questions that require explanations or detailed responses → CONTEXTUAL_QUESTION
 - Only classify as GREETING if it's a simple hello with no other content
-- If the user is asking about something that was recently discussed → CONTEXTUAL_QUESTION
+- If the user is asking about something recently discussed → CONTEXTUAL_QUESTION
 - Cross-chain swaps with different tokens or chains → CROSS_CHAIN_SWAP
 - Complex cross-chain operations (yield farming, liquidity provision across chains) → GMP_OPERATION
 - Contract calls on different chains → GMP_OPERATION
 - Simple same-chain swaps → SWAP
-
-Examples:
-- "swap 100 USDC from Ethereum to MATIC on Polygon" → CROSS_CHAIN_SWAP
-- "call mint function on Polygon using funds from Ethereum" → GMP_OPERATION
-- "add liquidity to Uniswap on Arbitrum using ETH from Ethereum" → GMP_OPERATION
-- "swap 1 ETH for USDC" → SWAP
-- "bridge 100 USDC to Arbitrum" → BRIDGE
-- "bridge 1 ETH to Zcash" → BRIDGE_TO_PRIVACY
-- "make my 100 USDC private" → BRIDGE_TO_PRIVACY
 
 Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 """
@@ -170,17 +175,29 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             return CommandType.UNKNOWN
 
     async def process_command(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process a command using the appropriate handler."""
+        """
+        Process a command by routing to appropriate processor.
+        
+        Flow:
+        1. Classify command if needed (using AI for ambiguous cases)
+        2. Validate wallet/chain requirements
+        3. Route to domain-specific processor
+        4. Handle errors consistently
+        """
         try:
             # If command was classified as UNKNOWN, try AI classification
             if unified_command.command_type == CommandType.UNKNOWN:
                 ai_classification = await self._classify_with_ai(unified_command)
                 if ai_classification != CommandType.UNKNOWN:
                     unified_command.command_type = ai_classification
-                    logger.info(f"AI reclassified command '{unified_command.command}' as {ai_classification}")
+                    logger.info(f"AI reclassified command as {ai_classification}")
 
             # Validate wallet connection for transaction commands
-            if unified_command.command_type in [CommandType.TRANSFER, CommandType.BRIDGE, CommandType.SWAP]:
+            if unified_command.command_type in [
+                CommandType.TRANSFER, CommandType.BRIDGE, CommandType.SWAP,
+                CommandType.CROSS_CHAIN_SWAP, CommandType.GMP_OPERATION,
+                CommandType.BRIDGE_TO_PRIVACY
+            ]:
                 if not unified_command.wallet_address:
                     raise wallet_not_connected_error()
 
@@ -191,36 +208,23 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                     list(self.settings.chains.supported_chains.keys())
                 )
 
+            # Route to appropriate processor
             command_type = unified_command.command_type
             
-            # Check if this is a GMP operation first (before processing as regular commands)
+            # Handle special cases
             if await self._should_use_gmp_handler(unified_command):
                 return await self._process_gmp_operation(unified_command)
             
-            if command_type == CommandType.TRANSFER:
-                return await self._process_transfer(unified_command)
-            elif command_type == CommandType.BRIDGE:
-                return await self._process_bridge(unified_command)
-            elif command_type == CommandType.SWAP:
-                return await self._process_swap(unified_command)
-            elif command_type == CommandType.BALANCE:
-                return await self._process_balance(unified_command)
-            elif command_type == CommandType.PORTFOLIO:
-                return await self._process_portfolio(unified_command)
-            elif command_type == CommandType.PROTOCOL_RESEARCH:
-                return await self._process_protocol_research(unified_command)
-            elif command_type == CommandType.CONTEXTUAL_QUESTION:
-                return await self._process_contextual_question(unified_command)
-            elif command_type == CommandType.GREETING:
-                return await self._process_greeting(unified_command)
-            elif command_type == CommandType.GMP_OPERATION:
+            # Try to get a processor for this command type
+            if self.processor_registry.has_processor(command_type):
+                processor = self.processor_registry.get_processor(command_type)
+                return await processor.process(unified_command)
+            
+            # Handle GMP and special operations
+            if command_type == CommandType.GMP_OPERATION:
                 return await self._process_gmp_operation(unified_command)
-            elif command_type == CommandType.CROSS_CHAIN_SWAP:
-                return await self._process_cross_chain_swap(unified_command)
             elif command_type == CommandType.TRANSACTION_STEP_COMPLETE:
                 return await self._process_transaction_step_complete(unified_command)
-            elif command_type == CommandType.BRIDGE_TO_PRIVACY:
-                return await self._process_bridge_to_privacy(unified_command)
             else:
                 return await self._process_unknown(unified_command)
                 
@@ -271,1493 +275,6 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 status="error",
                 error=str(e)
             )
-    
-    async def _process_transfer(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process transfer commands using injected Brian client."""
-        try:
-            logger.info(f"Processing transfer command: {unified_command.command}")
-
-            # Extract and validate transfer details
-            details = unified_command.details
-            if not details or not details.amount or not details.token_in or not details.destination:
-                raise command_parse_error(
-                    unified_command.command,
-                    "transfer [amount] [token] to [address/ENS]"
-                )
-
-            # Validate amount
-            if details.amount <= 0:
-                raise invalid_amount_error(details.amount)
-
-            # Format amount to avoid scientific notation
-            amount_str = self._format_amount(details.amount)
-
-            logger.info(f"Attempting transfer: {amount_str} {details.token_in.symbol} to {details.destination}")
-
-            # Call Brian API for transfer transaction
-            result = await self.brian_client.get_transfer_transaction(
-                token=details.token_in.symbol,
-                amount=amount_str,
-                to_address=details.destination,
-                chain_id=unified_command.chain_id,
-                wallet_address=unified_command.wallet_address
-            )
-
-            if "error" in result:
-                raise ExternalServiceError(
-                    message=result.get("message", "Transfer preparation failed"),
-                    service_name="Brian API"
-                )
-
-            # Format response content
-            content = {
-                "message": f"Ready to transfer {amount_str} {details.token_in.symbol} to {details.destination}",
-                "amount": amount_str,
-                "token": details.token_in.symbol,
-                "destination": details.destination,
-                "gas_cost_usd": result.get("gasCostUSD", ""),
-                "type": "transfer_ready",
-                "requires_transaction": True
-            }
-
-            # Format transaction data
-            transaction_data = self._create_transaction_data(result, unified_command.chain_id)
-
-            return UnifiedResponse(
-                content=content,
-                agent_type=AgentType.TRANSFER,
-                status="success",
-                awaiting_confirmation=True,
-                transaction=transaction_data,
-                metadata={
-                    "parsed_command": {
-                        "amount": amount_str,
-                        "token": details.token_in.symbol,
-                        "destination": details.destination,
-                        "command_type": "transfer"
-                    },
-                    "resolved_address": details.destination,
-                    "transaction_ready": True,
-                    "description": result.get("description", f"Transfer {amount_str} {details.token_in.symbol}"),
-                    "solver": result.get("solver", ""),
-                    "protocol": result.get("protocol", {})
-                }
-            )
-
-        except (ValidationError, BusinessLogicError, ExternalServiceError):
-            raise  # Re-raise known exceptions
-        except Exception as e:
-            logger.exception("Error processing transfer command")
-            raise ExternalServiceError(
-                message="Failed to prepare transfer transaction",
-                service_name="Transfer Service",
-                original_error=str(e)
-            )
-    
-    def _format_amount(self, amount: float) -> str:
-        """Format amount to avoid scientific notation."""
-        if amount < 1:
-            return f"{amount:.18f}".rstrip('0').rstrip('.')
-        return str(amount)
-
-    def _normalize_token_for_swap(self, token_symbol: str, chain_id: int) -> str:
-        """
-        Normalize token symbols for DEX compatibility.
-
-        Users often say "ETH" when they mean the native token, but DEX protocols
-        typically need "WETH" (Wrapped ETH) for swaps since you can't directly
-        swap native ETH in most AMM protocols.
-
-        Args:
-            token_symbol: Original token symbol from user input
-            chain_id: Chain ID for context
-
-        Returns:
-            Normalized token symbol suitable for DEX protocols
-        """
-        token_upper = token_symbol.upper()
-
-        # On EVM chains, normalize ETH to WETH for swaps
-        # This is because most DEX protocols (Uniswap, SushiSwap, etc.) use WETH
-        if token_upper == "ETH":
-            # Check if this is an EVM chain where WETH is used
-            evm_chains_with_weth = {1, 10, 56, 137, 42161, 8453, 43114, 59144, 324, 5000, 81457}
-            if chain_id in evm_chains_with_weth:
-                logger.info(f"Normalizing ETH to WETH for swap on chain {chain_id}")
-                return "WETH"
-
-        # For other tokens, return as-is
-        return token_upper
-    
-    def _create_transaction_data(self, result: dict, chain_id: int) -> Optional[TransactionData]:
-        """Create transaction data from API result."""
-        steps = result.get("steps", [])
-        if not steps:
-            return None
-
-        first_step = steps[0]
-        return TransactionData(
-            to=first_step.get("to", ""),
-            data=first_step.get("data", "0x"),
-            value=str(first_step.get("value", "0")),
-            gasLimit=str(first_step.get("gasLimit", "")),
-            chainId=chain_id,
-            from_address=first_step.get("from")
-        )
-
-    def _create_transaction_data_from_quote(self, quote: dict, chain_id: int) -> Optional[TransactionData]:
-        """Create transaction data from protocol quote."""
-        if not quote.get("success", False):
-            return None
-
-        logger.info(f"Creating transaction data from quote: {quote}")
-
-        # Handle different quote formats
-        if "transaction" in quote:
-            # Single transaction format
-            tx = quote["transaction"]
-            logger.info(f"Using transaction format: {tx}")
-
-            # Handle nested transaction structure (e.g., from Axelar adapter)
-            if "transaction" in tx and isinstance(tx["transaction"], dict):
-                actual_tx = tx["transaction"]
-                logger.info(f"Found nested transaction: {actual_tx}")
-                return TransactionData(
-                    to=actual_tx.get("to", ""),
-                    data=actual_tx.get("data", "0x"),
-                    value=str(actual_tx.get("value", "0")),
-                    gasLimit=str(actual_tx.get("gas_limit", actual_tx.get("gasLimit", ""))),
-                    chainId=chain_id,
-                    from_address=actual_tx.get("from")
-                )
-            else:
-                # Direct transaction format
-                return TransactionData(
-                    to=tx.get("to", ""),
-                    data=tx.get("data", "0x"),
-                    value=str(tx.get("value", "0")),
-                    gasLimit=str(tx.get("gas_limit", tx.get("gasLimit", ""))),
-                    chainId=chain_id,
-                    from_address=tx.get("from")
-                )
-        elif "steps" in quote and quote["steps"]:
-            # Multi-step format
-            first_step = quote["steps"][0]
-            return TransactionData(
-                to=first_step.get("to", ""),
-                data=first_step.get("data", "0x"),
-                value=str(first_step.get("value", "0")),
-                gasLimit=str(first_step.get("gasLimit", first_step.get("gas_limit", ""))),
-                chainId=chain_id,
-                from_address=first_step.get("from")
-            )
-
-        return None
-
-    def _detect_cross_chain_intent(self, command: str, details) -> bool:
-        """Detect if the user intends a cross-chain operation."""
-        command_lower = command.lower()
-        
-        # Look for explicit cross-chain keywords
-        cross_chain_keywords = [
-            "bridge", "cross-chain", "cross chain", "to arbitrum", "to polygon",
-            "to ethereum", "to base", "to optimism", "from arbitrum", "from polygon",
-            "from ethereum", "from base", "from optimism"
-        ]
-        
-        for keyword in cross_chain_keywords:
-            if keyword in command_lower:
-                return True
-        
-        # Check if tokens suggest different chains (basic heuristic)
-        # This could be enhanced with a token-to-chain mapping
-        if details and details.token_in and details.token_out:
-            # For now, assume same-chain unless explicitly specified
-            # This could be enhanced with better token analysis
-            pass
-        
-        return False
-
-    def _infer_destination_chain(self, token_symbol: str, from_chain: int) -> int:
-        """Infer destination chain from token symbol or context."""
-        # For now, return the same chain
-        # This could be enhanced with token-to-chain mapping
-        # or by parsing the command for chain names
-        return from_chain
-
-    async def _process_bridge(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process bridge commands using protocol registry with Axelar priority."""
-        try:
-            from app.config.chains import get_chain_id_by_name
-
-            logger.info(f"Processing bridge command: {unified_command.command}")
-
-            # Extract and validate bridge details
-            details = unified_command.details
-            if not details or not details.amount or not details.token_in or not details.destination_chain:
-                raise command_parse_error(
-                    unified_command.command,
-                    "bridge [amount] [token] to [chain]"
-                )
-
-            # Validate amount
-            if details.amount <= 0:
-                raise invalid_amount_error(details.amount)
-
-            # Get chain IDs
-            from_chain_id = unified_command.chain_id
-            to_chain_id = get_chain_id_by_name(details.destination_chain)
-
-            if not to_chain_id:
-                raise ValidationError(
-                    f"Unsupported destination chain: {details.destination_chain}",
-                    field="destination_chain",
-                    value=details.destination_chain,
-                    suggestions=[f"Supported chains: {', '.join(self.settings.chains.supported_chains.values())}"]
-                )
-
-            # Get chain names for display
-            from_chain_name = self.settings.chains.supported_chains.get(from_chain_id, f"Chain {from_chain_id}")
-            to_chain_name = self.settings.chains.supported_chains.get(to_chain_id, f"Chain {to_chain_id}")
-
-            # Format amount
-            amount_str = self._format_amount(details.amount)
-
-            logger.info(f"Attempting bridge: {amount_str} {details.token_in.symbol} from {from_chain_id} to {to_chain_id}")
-
-            # Use protocol registry to get quote with Axelar priority for cross-chain
-            quote = await self.protocol_registry.get_quote(
-                from_token=details.token_in.symbol,
-                to_token=details.token_in.symbol,  # Same token for bridging
-                amount=amount_str,
-                from_chain=from_chain_id,
-                to_chain=to_chain_id,
-                user_address=unified_command.wallet_address
-            )
-            
-            if not quote or not quote.get("success", False):
-                return UnifiedResponse(
-                    content={
-                        "message": "Cross-chain routing unavailable",
-                        "type": "bridge_error",
-                        "from_chain": from_chain_name,
-                        "to_chain": to_chain_name,
-                        "token": details.token_in.symbol,
-                        "amount": amount_str,
-                        "suggestions": [
-                            "Try a different bridge route",
-                            "Check if the token is supported on both chains",
-                            "Try bridging ETH instead of other tokens"
-                        ]
-                    },
-                    agent_type=AgentType.BRIDGE,
-                    status="error",
-                    error="Cross-chain routing unavailable"
-                )
-            
-            # Create transaction data from quote
-            transaction_data = self._create_transaction_data_from_quote(quote, from_chain_id)
-            if not transaction_data:
-                return UnifiedResponse(
-                    content={
-                        "message": "Failed to create bridge transaction",
-                        "type": "bridge_error",
-                        "from_chain": from_chain_name,
-                        "to_chain": to_chain_name,
-                        "token": details.token_in.symbol,
-                        "amount": amount_str,
-                        "suggestions": [
-                            "Try again in a moment",
-                            "Check if the bridge amount is valid",
-                            "Verify token is supported on both chains"
-                        ]
-                    },
-                    agent_type=AgentType.BRIDGE,
-                    status="error",
-                    error="Failed to create bridge transaction"
-                )
-
-            # Check if this is a multi-step bridge operation (approval + bridge)
-            is_approval_transaction = transaction_data.data.startswith("0x095ea7b3")  # approve function
-
-            if is_approval_transaction:
-                # Create a multi-step transaction flow for bridge operations
-                try:
-                    # Store bridge context for later use in completion
-                    bridge_context = {
-                        "amount": amount_str,
-                        "token": details.token_in.symbol,
-                        "from_chain_id": from_chain_id,
-                        "to_chain_id": to_chain_id,
-                        "from_chain_name": from_chain_name,
-                        "to_chain_name": to_chain_name,
-                        "quote": quote
-                    }
-
-                    # Create transaction flow with approval step and placeholder bridge step
-                    flow = self.transaction_flow_service.create_flow(
-                        wallet_address=unified_command.wallet_address,
-                        chain_id=from_chain_id,
-                        operation_type="bridge",
-                        steps_data=[
-                            {
-                                "description": f"Approve {details.token_in.symbol} for bridge",
-                                "to": transaction_data.to,
-                                "data": transaction_data.data,
-                                "value": transaction_data.value,
-                                "gas_limit": transaction_data.gas_limit
-                            },
-                            {
-                                "description": f"Bridge {amount_str} {details.token_in.symbol} to {to_chain_name}",
-                                "to": "PLACEHOLDER",  # Will be filled when completion is called
-                                "data": "0x26ef699d",  # sendToken function signature to trigger bridge detection
-                                "value": "0",
-                                "gas_limit": "",
-                                "metadata": bridge_context  # Store context for later use
-                            }
-                        ]
-                    )
-                    logger.info(f"Created bridge transaction flow {flow.flow_id} for {unified_command.wallet_address}")
-                except Exception as e:
-                    logger.warning(f"Failed to create bridge transaction flow: {e}")
-                    # Continue with single transaction if flow creation fails
-
-            # Format response content based on protocol used
-            protocol_name = quote.get("protocol", "unknown")
-            if protocol_name == "axelar":
-                content = {
-                    "message": f"Ready to bridge {amount_str} {details.token_in.symbol} via Axelar Network",
-                    "amount": amount_str,
-                    "token": details.token_in.symbol,
-                    "from_chain": from_chain_name,
-                    "to_chain": to_chain_name,
-                    "protocol": protocol_name,
-                    "estimated_time": quote.get("estimated_time", "5-15 minutes"),
-                    "estimated_fee": quote.get("estimated_fee", ""),
-                    "type": "bridge_ready",
-                    "requires_transaction": True
-                }
-            else:
-                content = {
-                    "message": f"Ready to bridge {amount_str} {details.token_in.symbol} from {from_chain_name} to {to_chain_name}",
-                    "amount": amount_str,
-                    "token": details.token_in.symbol,
-                    "from_chain": from_chain_name,
-                    "to_chain": to_chain_name,
-                    "protocol": protocol_name,
-                    "estimated_time": "5-15 minutes",
-                    "gas_cost_usd": quote.get("gas_cost_usd", ""),
-                    "type": "bridge_ready",
-                    "requires_transaction": True
-                }
-
-            return UnifiedResponse(
-                content=content,
-                agent_type=AgentType.BRIDGE,
-                status="success",
-                awaiting_confirmation=True,
-                transaction=transaction_data,
-                metadata={
-                    "bridge_details": {
-                        "from_chain_id": from_chain_id,
-                        "to_chain_id": to_chain_id,
-                        "amount": amount_str,
-                        "token": details.token_in.symbol,
-                        "transaction_ready": True
-                    },
-                    "parsed_command": {
-                        "amount": amount_str,
-                        "token": details.token_in.symbol,
-                        "from_chain": from_chain_name,
-                        "to_chain": to_chain_name,
-                        "command_type": "bridge",
-                        "protocol": protocol_name
-                    },
-                    "protocol_used": protocol_name,
-                    "quote_data": quote
-                }
-            )
-
-        except (ValidationError, BusinessLogicError, ExternalServiceError):
-            raise  # Re-raise known exceptions
-        except Exception as e:
-            logger.exception("Error processing bridge command")
-            raise ExternalServiceError(
-                message="Failed to prepare bridge transaction",
-                service_name="Bridge Service",
-                original_error=str(e)
-            )
-
-
-    async def _process_bridge_to_privacy(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process bridge to privacy (Zcash) commands."""
-        try:
-            logger.info(f"Processing bridge to privacy command: {unified_command.command}")
-
-            # Extract details
-            details = unified_command.details
-            if not details or not details.amount or not details.token_in:
-                raise command_parse_error(
-                    unified_command.command,
-                    "bridge [amount] [token] to Zcash"
-                )
-
-            # Validate amount
-            if details.amount <= 0:
-                raise invalid_amount_error(details.amount)
-
-            amount_str = self._format_amount(details.amount)
-            from_chain_id = unified_command.chain_id
-            from_chain_name = self.settings.chains.supported_chains.get(from_chain_id, f"Chain {from_chain_id}")
-            
-            # Destination is implicitly Zcash for this command type
-            to_chain_name = "Zcash"
-            to_chain_id = 1337 # Zcash ID
-
-            # Check if Axelar supports the source chain
-            if not self.axelar_service.is_chain_supported(from_chain_id):
-                 return UnifiedResponse(
-                    content={
-                        "message": f"Bridge to Privacy is not supported from {from_chain_name}. Please try from Ethereum, Polygon, or Base.",
-                        "type": "error",
-                        "suggestions": ["Switch to Ethereum", "Switch to Polygon", "Switch to Base"]
-                    },
-                    agent_type=AgentType.BRIDGE_TO_PRIVACY,
-                    status="error"
-                )
-
-            # Get quote/route via Axelar
-            # Use the new GMP service method to build the transaction
-            gmp_result = await self.gmp_service.build_bridge_to_privacy_transaction(
-                source_chain_id=from_chain_id,
-                token_symbol=details.token_in.symbol,
-                amount=details.amount,
-                wallet_address=unified_command.wallet_address
-            )
-
-            if not gmp_result.get("success"):
-                return UnifiedResponse(
-                    content={
-                        "message": "Failed to prepare privacy bridge transaction.",
-                        "type": "error",
-                        "details": gmp_result
-                    },
-                    agent_type=AgentType.BRIDGE_TO_PRIVACY,
-                    status="error"
-                )
-
-            # Create transaction data from the GMP result
-            # We use the gateway address as the 'to' address for the initial interaction
-            transaction_data = TransactionData(
-                to=gmp_result["gateway_address"],
-                data=gmp_result.get("payload", "0x"), # In a real flow, this would be the specific step data
-                value="0",
-                gasLimit="700000",
-                chainId=from_chain_id,
-                from_address=unified_command.wallet_address
-            )
-
-            content = {
-                "message": f"Ready to bridge {amount_str} {details.token_in.symbol} to Zcash Privacy Pool via Axelar GMP",
-                "amount": amount_str,
-                "token": details.token_in.symbol,
-                "from_chain": from_chain_name,
-                "to_chain": "Zcash (Shielded)",
-                "protocol": "axelar-gmp-privacy",
-                "estimated_time": "15-30 minutes",
-                "privacy_level": "High (Shielded)",
-                "type": "bridge_privacy_ready",
-                "requires_transaction": True,
-                "steps": gmp_result.get("steps", [])
-            }
-
-            return UnifiedResponse(
-                content=content,
-                agent_type=AgentType.BRIDGE_TO_PRIVACY,
-                status="success",
-                awaiting_confirmation=True,
-                transaction=transaction_data,
-                metadata={
-                    "bridge_details": {
-                        "from_chain_id": from_chain_id,
-                        "to_chain_id": to_chain_id,
-                        "amount": amount_str,
-                        "token": details.token_in.symbol,
-                        "is_privacy": True
-                    },
-                    "protocol_used": "axelar"
-                }
-            )
-
-        except Exception as e:
-            logger.exception("Error processing bridge to privacy command")
-            raise ExternalServiceError(
-                message="Failed to prepare privacy bridge transaction",
-                service_name="Privacy Service",
-                original_error=str(e)
-            )
-
-    async def _generate_bridge_transaction(self, wallet_address: str, bridge_context: dict) -> dict:
-        """Generate the actual bridge transaction using stored context."""
-        try:
-            # Extract context
-            amount = bridge_context.get("amount")
-            token = bridge_context.get("token")
-            from_chain_id = bridge_context.get("from_chain_id")
-            to_chain_id = bridge_context.get("to_chain_id")
-            to_chain_name = bridge_context.get("to_chain_name")
-
-            logger.info(f"Generating bridge transaction: {amount} {token} from {from_chain_id} to {to_chain_id}")
-
-            # Get Axelar Gateway address for the source chain
-            gateway_address = self.axelar_service._get_gateway_address(from_chain_id)
-            if not gateway_address:
-                raise ValueError(f"No Axelar Gateway found for chain {from_chain_id}")
-
-            # Build the sendToken transaction data
-            send_token_data = self.axelar_service._build_send_token_data(
-                dest_chain=to_chain_name,
-                recipient=wallet_address,  # Bridge to same address
-                token_symbol=token,
-                amount=float(amount)
-            )
-
-            return {
-                "to": gateway_address,
-                "data": send_token_data,
-                "value": "0",
-                "gas_limit": "500000"
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to generate bridge transaction: {e}")
-            raise
-
-    def _generate_bridge_transaction_sync(self, wallet_address: str, bridge_context: dict) -> dict:
-        """Generate the actual bridge transaction using stored context (sync version)."""
-        try:
-            # Extract context
-            amount = bridge_context.get("amount")
-            token = bridge_context.get("token")
-            from_chain_id = bridge_context.get("from_chain_id")
-            to_chain_id = bridge_context.get("to_chain_id")
-            to_chain_name = bridge_context.get("to_chain_name")
-
-            logger.info(f"Generating bridge transaction (sync): {amount} {token} from {from_chain_id} to {to_chain_id}")
-
-            # Import axelar_service directly
-            from app.services.axelar_service import axelar_service
-
-            # Get Axelar Gateway address for the source chain
-            gateway_address = axelar_service._get_gateway_address(from_chain_id)
-            if not gateway_address:
-                raise ValueError(f"No Axelar Gateway found for chain {from_chain_id}")
-
-            # Build the sendToken transaction data
-            send_token_data = axelar_service._build_send_token_data(
-                dest_chain=to_chain_name,
-                recipient=wallet_address,  # Bridge to same address
-                token_symbol=token,
-                amount=float(amount)
-            )
-
-            return {
-                "to": gateway_address,
-                "data": send_token_data,
-                "value": "0",
-                "gas_limit": "500000"
-            }
-
-        except Exception as e:
-            logger.error(f"Failed to generate bridge transaction (sync): {e}")
-            raise
-
-    async def _process_swap(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process swap commands using protocol registry with Axelar priority."""
-        try:
-            logger.info(f"Processing swap command: {unified_command.command}")
-
-            # Extract and validate swap details
-            details = unified_command.details
-            if not details or not details.amount or not details.token_in or not details.token_out:
-                raise command_parse_error(
-                    unified_command.command,
-                    "swap [amount] [token_in] for [token_out]"
-                )
-
-            # Validate amount
-            if details.amount <= 0:
-                raise invalid_amount_error(details.amount)
-
-            # Check if this is a USD amount that needs conversion to token amount
-            amount_value = details.amount
-            from_token_symbol = details.token_in.symbol
-            
-            # Check if the parsed amount was a USD amount that needs conversion
-            additional_params = details.additional_params or {}
-            parsed_amount_info = additional_params.get("parsed_amount", {})
-            amount_type = additional_params.get("amount_type")
-            
-            if amount_type == "usd_amount":
-                # This is a USD amount that needs to be converted to token amount
-                logger.info(f"Converting USD amount ${amount_value} to {from_token_symbol} token amount")
-                
-                # Get token price and convert USD to token amount
-                token_price = await self.price_service.get_token_price(from_token_symbol)
-                if not token_price or token_price <= 0:
-                    return UnifiedResponse(
-                        content={
-                            "message": f"Unable to fetch price for {from_token_symbol}. Please try specifying the token amount directly.",
-                            "type": "swap_error",
-                            "suggestions": [
-                                f"Try 'swap 0.001 {from_token_symbol} for {details.token_out.symbol}' instead",
-                                "Check if the token symbol is correct",
-                                "Try again in a moment"
-                            ]
-                        },
-                        agent_type=AgentType.SWAP,
-                        status="error",
-                        error=f"Could not fetch price for {from_token_symbol}"
-                    )
-                
-                # Convert USD to token amount: token_amount = usd_amount / token_price
-                token_amount = amount_value / float(token_price)
-                amount_value = token_amount
-                logger.info(f"Converted ${amount_value * float(token_price):.2f} to {token_amount:.6f} {from_token_symbol} (price: ${token_price})")
-
-            # Format amount to avoid scientific notation
-            amount_str = self._format_amount(amount_value)
-
-            logger.info(f"Attempting swap: {amount_str} {from_token_symbol} for {details.token_out.symbol}")
-
-            # Normalize token symbols for DEX compatibility
-            # Users say "ETH" but DEX protocols need "WETH" for swaps
-            normalized_from_token = self._normalize_token_for_swap(from_token_symbol, unified_command.chain_id)
-            to_token_symbol = self._normalize_token_for_swap(details.token_out.symbol, unified_command.chain_id)
-
-            logger.info(f"Normalized tokens: {normalized_from_token} -> {to_token_symbol}")
-
-            # Determine if this is cross-chain based on token symbols or explicit chain specification
-            # This is a simple heuristic - could be enhanced with better parsing
-            from_chain = unified_command.chain_id
-            to_chain = unified_command.chain_id  # Default to same chain
-            
-            # Enhanced cross-chain detection
-            is_cross_chain = self._detect_cross_chain_intent(unified_command.command, details)
-            if is_cross_chain:
-                # For cross-chain, we might need to infer the destination chain
-                # This could be enhanced with better parsing
-                to_chain = self._infer_destination_chain(details.token_out.symbol, from_chain)
-
-            logger.info(f"Cross-chain operation: {is_cross_chain}, from_chain: {from_chain}, to_chain: {to_chain}")
-
-            # Use protocol registry to get quote with Axelar priority
-            quote = await self.protocol_registry.get_quote(
-                from_token=normalized_from_token,
-                to_token=to_token_symbol,
-                amount=amount_str,
-                from_chain=from_chain,
-                to_chain=to_chain,
-                user_address=unified_command.wallet_address
-            )
-            
-            if not quote or not quote.get("success", False):
-                return UnifiedResponse(
-                    content={
-                        "message": "No valid quote available for this swap",
-                        "type": "swap_error",
-                        "suggestions": [
-                            "Try a different token pair",
-                            "Check if tokens are supported on this chain",
-                            "Try again in a moment"
-                        ]
-                    },
-                    agent_type=AgentType.SWAP,
-                    status="error",
-                    error="No valid quote available for this swap"
-                )
-            
-            # Check if approval is needed for 0x protocol
-            protocol_name = quote.get("protocol", "unknown")
-            allowance_issues = quote.get("metadata", {}).get("allowanceIssues")
-
-            if protocol_name == "0x" and allowance_issues:
-                actual_allowance = int(allowance_issues.get("actual", "0"))
-                spender = allowance_issues.get("spender")
-
-                # If allowance is insufficient, create multi-step transaction
-                if actual_allowance == 0 and spender:
-                    return await self._create_approval_flow(
-                        unified_command, quote, details, amount_str, spender, from_chain
-                    )
-
-            # Create transaction data from quote
-            transaction_data = self._create_transaction_data_from_quote(quote, from_chain)
-            if not transaction_data:
-                return UnifiedResponse(
-                    content={
-                        "message": "Failed to create transaction data",
-                        "type": "swap_error",
-                        "suggestions": [
-                            "Try again in a moment",
-                            "Check if the swap amount is valid",
-                            "Verify token addresses are correct"
-                        ]
-                    },
-                    agent_type=AgentType.SWAP,
-                    status="error",
-                    error="Failed to create transaction data"
-                )
-            
-            # Format response content based on protocol used
-            protocol_name = quote.get("protocol", "unknown")
-            if protocol_name == "axelar":
-                content = {
-                    "message": f"Ready to bridge {amount_str} {from_token_symbol} via Axelar Network",
-                    "amount": amount_str,
-                    "token_in": from_token_symbol,
-                    "token_out": details.token_out.symbol,
-                    "protocol": protocol_name,
-                    "estimated_time": quote.get("estimated_time", "5-15 minutes"),
-                    "estimated_fee": quote.get("estimated_fee", ""),
-                    "type": "cross_chain_ready",
-                    "requires_transaction": True
-                }
-            else:
-                # Add protocol attribution for trust and transparency
-                protocol_display = {
-                    "brian": "Brian AI",
-                    "0x": "0x Protocol",
-                    "uniswap": "Uniswap"
-                }.get(protocol_name, protocol_name.title())
-                
-                content = {
-                    "message": f"Ready to swap {amount_str} {from_token_symbol} for {details.token_out.symbol} via {protocol_display}",
-                    "amount": amount_str,
-                    "token_in": from_token_symbol,
-                    "token_out": details.token_out.symbol,
-                    "protocol": protocol_name,
-                    "gas_cost_usd": quote.get("gas_cost_usd", ""),
-                    "type": "swap_ready",
-                    "requires_transaction": True
-                }
-
-            return UnifiedResponse(
-                content=content,
-                agent_type=AgentType.SWAP,
-                status="success",
-                awaiting_confirmation=True,
-                transaction=transaction_data,
-                metadata={
-                    "parsed_command": {
-                        "amount": amount_str,
-                        "token_in": from_token_symbol,
-                        "token_out": details.token_out.symbol,
-                        "command_type": "swap",
-                        "protocol": protocol_name
-                    },
-                    "transaction_ready": True,
-                    "protocol_used": protocol_name,
-                    "is_cross_chain": is_cross_chain,
-                    "quote_data": quote
-                }
-            )
-
-        except (ValidationError, BusinessLogicError, ExternalServiceError):
-            raise  # Re-raise known exceptions
-        except Exception as e:
-            logger.exception("Error processing swap command")
-            raise ExternalServiceError(
-                message="Failed to prepare swap transaction",
-                service_name="Swap Service",
-                original_error=str(e)
-            )
-
-    async def _create_approval_flow(
-        self,
-        unified_command: UnifiedCommand,
-        quote: Dict[str, Any],
-        details: Any,
-        amount_str: str,
-        spender: str,
-        chain_id: int
-    ) -> UnifiedResponse:
-        """Create a multi-step transaction flow with approval + swap."""
-        try:
-            # Get the token address from the quote metadata
-            from_token_address = quote.get("metadata", {}).get("from_token", {}).get("address")
-            if not from_token_address:
-                raise ValueError("Token address not found in quote")
-
-            # Calculate approval amount (use a large amount for unlimited approval)
-            # This is a common pattern to avoid repeated approvals
-            max_uint256 = "115792089237316195423570985008687907853269984665640564039457584007913129639935"
-
-            # Import the 0x adapter to create approval transaction
-            from app.protocols.zerox_adapter import ZeroXAdapter
-            zerox_adapter = ZeroXAdapter()
-
-            # Create approval transaction
-            approval_tx = zerox_adapter.create_approval_transaction(
-                token_address=from_token_address,
-                spender_address=spender,
-                amount=max_uint256,
-                chain_id=chain_id
-            )
-
-            # Create transaction flow with approval step and placeholder swap step
-            flow = self.transaction_flow_service.create_flow(
-                wallet_address=unified_command.wallet_address,
-                chain_id=chain_id,
-                operation_type="swap",
-                steps_data=[
-                    {
-                        "description": f"Approve {details.token_in.symbol} for 0x Protocol",
-                        "to": approval_tx["to"],
-                        "data": approval_tx["data"],
-                        "value": approval_tx["value"],
-                        "gas_limit": approval_tx["gas_limit"]
-                    },
-                    {
-                        "description": f"Swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol}",
-                        "to": "PLACEHOLDER",  # Will be filled when completion is called
-                        "data": "0x2213bc0b",  # 0x swap function signature to trigger swap detection
-                        "value": "0",
-                        "gas_limit": "",
-                        "metadata": {
-                            "original_command": unified_command.command,
-                            "quote": quote,
-                            "from_chain": chain_id
-                        }
-                    }
-                ]
-            )
-
-            return UnifiedResponse(
-                content={
-                    "message": f"Ready to approve and swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol} via 0x Protocol",
-                    "amount": amount_str,
-                    "token_in": details.token_in.symbol,
-                    "token_out": details.token_out.symbol,
-                    "protocol": "0x",
-                    "type": "multi_step_transaction",
-                    "requires_transaction": True,
-                    "steps": [
-                        f"Approve {details.token_in.symbol} for 0x Protocol",
-                        f"Swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol}"
-                    ]
-                },
-                agent_type=AgentType.SWAP,
-                status="success",
-                awaiting_confirmation=True,
-                transaction={
-                    "to": flow.steps[0].to,
-                    "data": flow.steps[0].data,
-                    "value": flow.steps[0].value,
-                    "gas_limit": flow.steps[0].gas_limit,
-                    "chain_id": chain_id
-                },  # Return first step (approval)
-                metadata={
-                    "parsed_command": {
-                        "amount": amount_str,
-                        "token_in": details.token_in.symbol,
-                        "token_out": details.token_out.symbol,
-                        "command_type": "swap",
-                        "protocol": "0x"
-                    },
-                    "transaction_ready": True,
-                    "protocol_used": "0x",
-                    "is_cross_chain": False,
-                    "quote_data": quote,
-                    "flow_id": flow.flow_id,
-                    "current_step": 1,
-                    "total_steps": 2,
-                    "requires_approval": True
-                }
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to create approval flow: {e}")
-            # Fall back to regular transaction creation
-            transaction_data = self._create_transaction_data_from_quote(quote, chain_id)
-            return UnifiedResponse(
-                content={
-                    "message": f"Ready to swap {amount_str} {details.token_in.symbol} for {details.token_out.symbol} via 0x Protocol (approval may be required)",
-                    "amount": amount_str,
-                    "token_in": details.token_in.symbol,
-                    "token_out": details.token_out.symbol,
-                    "protocol": "0x",
-                    "type": "swap_ready",
-                    "requires_transaction": True,
-                    "approval_warning": "You may need to approve tokens before this transaction"
-                },
-                agent_type=AgentType.SWAP,
-                status="success",
-                awaiting_confirmation=True,
-                transaction=transaction_data,
-                metadata={
-                    "parsed_command": {
-                        "amount": amount_str,
-                        "token_in": details.token_in.symbol,
-                        "token_out": details.token_out.symbol,
-                        "command_type": "swap",
-                        "protocol": "0x"
-                    },
-                    "transaction_ready": True,
-                    "protocol_used": "0x",
-                    "is_cross_chain": False,
-                    "quote_data": quote,
-                    "requires_approval": True
-                }
-            )
-
-    async def _process_balance(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process balance check commands using Brian API."""
-        try:
-            logger.info(f"Processing balance command: {unified_command.command}")
-
-            # Extract token if specified
-            details = unified_command.details
-            token = details.token_in.symbol if details and details.token_in else None
-
-            # Validate wallet connection
-            if not unified_command.wallet_address:
-                raise wallet_not_connected_error()
-
-            # Get chain name for display
-            chain_name = self.settings.chains.supported_chains.get(
-                unified_command.chain_id,
-                f"Chain {unified_command.chain_id}"
-            )
-
-            logger.info(f"Checking balance for {unified_command.wallet_address} on {chain_name}")
-            if token:
-                logger.info(f"Specific token requested: {token}")
-
-            # Call Brian API for balance check
-            result = await self.brian_client.get_balance(
-                wallet_address=unified_command.wallet_address,
-                chain_id=unified_command.chain_id,
-                token=token
-            )
-
-            if "error" in result:
-                # Return user-friendly error response
-                return UnifiedResponse(
-                    content={
-                        "message": result.get("message", "Unable to check balance"),
-                        "type": "balance_error",
-                        "chain": chain_name,
-                        "token": token or "All tokens",
-                        "suggestions": [
-                            "Try again in a moment",
-                            "Check if you're on a supported network",
-                            "Verify your wallet is connected"
-                        ]
-                    },
-                    agent_type=AgentType.BALANCE,
-                    status="error",
-                    error=result.get("message", "Balance check failed")
-                )
-
-            # Format successful balance response
-            balance_data = result.get("balance_data", {})
-
-            content = {
-                "message": f"Balance check complete for {chain_name}",
-                "type": "balance_result",
-                "chain": chain_name,
-                "address": unified_command.wallet_address,
-                "token": token or "All tokens",
-                "balance_data": balance_data,
-                "requires_transaction": False
-            }
-
-            return UnifiedResponse(
-                content=content,
-                agent_type=AgentType.BALANCE,
-                status="success",
-                metadata={
-                    "parsed_command": {
-                        "token": token,
-                        "chain": chain_name,
-                        "command_type": "balance"
-                    },
-                    "balance_details": {
-                        "chain_id": unified_command.chain_id,
-                        "wallet_address": unified_command.wallet_address,
-                        "token_filter": token
-                    }
-                }
-            )
-
-        except (ValidationError, BusinessLogicError, ExternalServiceError):
-            raise  # Re-raise known exceptions
-        except Exception as e:
-            logger.exception("Error processing balance command")
-            raise ExternalServiceError(
-                message="Failed to check balance",
-                service_name="Balance Service",
-                original_error=str(e)
-            )
-
-    async def _process_portfolio(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process portfolio analysis commands."""
-        return UnifiedResponse(
-            content={
-                "message": "Portfolio analysis functionality coming soon!",
-                "type": "info"
-            },
-            agent_type=AgentType.PORTFOLIO,
-            status="success"
-        )
-
-    async def _process_protocol_research(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process protocol research commands using Firecrawl and AI analysis."""
-        try:
-            from app.services.external.firecrawl_service import get_protocol_details, analyze_protocol_with_ai
-
-            logger.info(f"Processing protocol research command: {unified_command.command}")
-
-            # Extract protocol name from command
-            details = unified_command.details
-            protocol_name = None
-
-            # Try to extract protocol name from various sources
-            if details and details.token_in and details.token_in.symbol:
-                protocol_name = details.token_in.symbol
-            elif details and hasattr(details, 'protocol_name'):
-                protocol_name = details.protocol_name
-            else:
-                # Try to extract from the command text
-                command_lower = unified_command.command.lower()
-                # Look for common patterns like "research X", "tell me about X", "what is X"
-                import re
-                patterns = [
-                    r'research\s+(\w+)',
-                    r'tell me about\s+(\w+)',
-                    r'what is\s+(\w+)',
-                    r'about\s+(\w+)',
-                    r'info on\s+(\w+)',
-                    r'explain\s+(\w+)'
-                ]
-
-                for pattern in patterns:
-                    match = re.search(pattern, command_lower)
-                    if match:
-                        protocol_name = match.group(1)
-                        break
-
-            if not protocol_name:
-                return UnifiedResponse(
-                    content={
-                        "message": "Please specify a protocol to research. For example: 'research Uniswap' or 'tell me about Aave'",
-                        "type": "protocol_research_error",
-                        "suggestions": [
-                            "research Uniswap",
-                            "tell me about Aave",
-                            "what is Compound",
-                            "explain Curve protocol"
-                        ]
-                    },
-                    agent_type=AgentType.PROTOCOL_RESEARCH,
-                    status="error",
-                    error="No protocol specified"
-                )
-
-            logger.info(f"Researching protocol: {protocol_name}")
-
-            # First, scrape the protocol content using Firecrawl
-            scrape_result = await get_protocol_details(
-                protocol_name=protocol_name,
-                max_content_length=2000,  # Increased for better AI analysis
-                timeout=15,
-                debug=True
-            )
-
-            if not scrape_result.get("scraping_success", False):
-                # Return user-friendly error response
-                return UnifiedResponse(
-                    content={
-                        "message": f"Unable to find detailed information about {protocol_name}. The protocol might not exist or our research service is temporarily unavailable.",
-                        "type": "protocol_research_error",
-                        "protocol": protocol_name,
-                        "suggestions": [
-                            "Check the protocol name spelling",
-                            "Try researching a well-known protocol like Uniswap or Aave",
-                            "Try again in a moment"
-                        ]
-                    },
-                    agent_type=AgentType.PROTOCOL_RESEARCH,
-                    status="error",
-                    error=scrape_result.get("error", "Research failed")
-                )
-
-            # Now analyze the scraped content with AI
-            # Use user-provided key or fall back to environment variable
-            import os
-            openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
-            logger.info(f"Starting AI analysis for {protocol_name}. OpenAI key available: {bool(openai_key)}")
-            ai_result = await analyze_protocol_with_ai(
-                protocol_name=protocol_name,
-                raw_content=scrape_result.get("raw_content", ""),
-                source_url=scrape_result.get("source_url", ""),
-                openai_api_key=openai_key
-            )
-            logger.info(f"AI analysis completed for {protocol_name}. Success: {ai_result.get('analysis_success', False)}")
-
-            # Combine scraping and AI analysis results
-            result = {
-                **scrape_result,
-                **ai_result,
-                "type": "protocol_research_result"
-            }
-
-            # Format successful research response with AI analysis
-            content = {
-                "message": f"Research complete for {protocol_name}",
-                "type": "protocol_research_result",
-                "protocol_name": protocol_name,
-                "ai_summary": result.get("ai_summary", ""),
-                "protocol_type": result.get("protocol_type", "DeFi Protocol"),
-                "key_features": result.get("key_features", []),
-                "security_info": result.get("security_info", ""),
-                "financial_metrics": result.get("financial_metrics", ""),
-                "analysis_quality": result.get("analysis_quality", "medium"),
-                "source_url": result.get("source_url", ""),
-                "raw_content": result.get("raw_content", ""),
-                "analysis_success": result.get("analysis_success", False),
-                "content_length": result.get("content_length", 0),
-                "requires_transaction": False
-            }
-
-            return UnifiedResponse(
-                content=content,
-                agent_type=AgentType.PROTOCOL_RESEARCH,
-                status="success",
-                metadata={
-                    "parsed_command": {
-                        "protocol": protocol_name,
-                        "command_type": "protocol_research"
-                    },
-                    "research_details": {
-                        "protocols_scraped": result.get("protocols_scraped", 1),
-                        "scraping_success": result.get("scraping_success", False),
-                        "source": result.get("source", "firecrawl")
-                    }
-                }
-            )
-
-        except Exception as e:
-            logger.exception("Error processing protocol research command")
-            return UnifiedResponse(
-                content={
-                    "message": f"Protocol research service is temporarily unavailable. Please try again later.",
-                    "type": "protocol_research_error",
-                    "suggestions": [
-                        "Try again in a moment",
-                        "Check your internet connection",
-                        "Try researching a different protocol"
-                    ]
-                },
-                agent_type=AgentType.PROTOCOL_RESEARCH,
-                status="error",
-                error=str(e)
-            )
-
-    async def _process_greeting(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process greeting and self-awareness commands."""
-        import os
-        
-        # Get recent conversation context
-        context = chat_history_service.get_recent_context(
-            unified_command.wallet_address,
-            unified_command.user_name,
-            num_messages=5
-        )
-        
-        # If it's a simple greeting (one or two words), use canned responses for speed
-        cmd_lower = unified_command.command.lower().strip()
-        simple_greetings = {
-            "gm": "Good morning! How can I help you with crypto today?",
-            "good morning": "Good morning! How can I help you with crypto today?",
-            "hello": "Hello there! How can I assist you with crypto today?",
-            "hi": "Hi! How can I help you with crypto today?",
-            "hey": "Hey there! How can I assist you with crypto today?",
-            "howdy": "Howdy! How can I help you with crypto today?",
-            "sup": "Sup! How can I assist you with crypto today?",
-            "yo": "Yo! How can I help you with crypto today?"
-        }
-        
-        if cmd_lower in simple_greetings:
-            return UnifiedResponse(
-                content={
-                    "message": simple_greetings[cmd_lower],
-                    "type": "greeting"
-                },
-                agent_type=AgentType.DEFAULT,
-                status="success"
-            )
-            
-        # For more complex questions like "who are you?" or "what can you do?", use the LLM
-        try:
-            openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
-            if not openai_key:
-                # Fallback to canned response if no API key
-                about_snel = (
-                    "I'm SNEL — Stablecoin Navigation and Education Leader. "
-                    "I help with stablecoin info, RWA insights, risk assessment, portfolio diversification, market data, and DeFi operations. "
-                    "Ask me about swaps, bridges, or your portfolio."
-                )
-                return UnifiedResponse(
-                    content={
-                        "message": about_snel,
-                        "type": "about"
-                    },
-                    agent_type=AgentType.DEFAULT,
-                    status="success"
-                )
-                
-            client = AsyncOpenAI(api_key=openai_key)
-            
-            # Set of facts about SNEL for the LLM to incorporate in responses
-            snel_facts = """
-- You are SNEL — Smart, Natural, Efficient, Limitless DeFi Assistant
-- You help with stablecoin information and RWA insights
-- You provide risk assessment and portfolio diversification advice
-- You deliver real-time market data
-- You assist with DeFi operations like swaps and bridges
-- You specialize in cross-chain operations using Axelar Network's General Message Passing (GMP)
-- You can execute complex cross-chain swaps, yield farming, and liquidity provision across 16+ blockchain networks
-- You handle multi-step cross-chain operations with natural language commands like "swap USDC from Ethereum to MATIC on Polygon"
-- You're built to connect with user wallets for balance checks and portfolio analysis
-- You're designed to be conversational and personable
-- You're knowledgeable about all aspects of DeFi and cross-chain interoperability
-- You use Axelar's secure cross-chain infrastructure for seamless multi-chain operations
-"""
-            
-            prompt = f"""
-You are SNEL, a conversational DeFi assistant. The user is asking something about you or what you can do.
-Respond in a natural, friendly way while accurately describing your capabilities.
-
-USER QUERY: "{unified_command.command}"
-
-RECENT CONVERSATION CONTEXT:
-{context}
-
-FACTS ABOUT YOURSELF:
-{snel_facts}
-
-Instructions:
-- Be conversational and personable, not robotic
-- Be concise but informative (2-4 sentences is ideal)
-- Don't use the exact same canned response for similar questions
-- Vary your phrasing and personality for each response
-- Incorporate your capabilities without listing all of them
-- Don't start with "I'm SNEL" for every response
-"""
-
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are SNEL, a friendly and conversational DeFi assistant. Respond naturally."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=200,
-                temperature=0.7  # Higher temperature for more natural responses
-            )
-
-            ai_response = response.choices[0].message.content
-
-            return UnifiedResponse(
-                content={
-                    "message": ai_response,
-                    "type": "about"
-                },
-                agent_type=AgentType.DEFAULT,
-                status="success"
-            )
-        except Exception as e:
-            logger.exception(f"Error generating greeting response: {unified_command.command}")
-            # Fallback to canned response if AI fails
-            about_snel = (
-                "I'm SNEL — Stablecoin Navigation and Education Leader. "
-                "I help with stablecoin info, RWA insights, risk assessment, portfolio diversification, market data, and DeFi operations. "
-                "Ask me about swaps, bridges, or your portfolio."
-            )
-            return UnifiedResponse(
-                content={
-                    "message": about_snel,
-                    "type": "about"
-                },
-                agent_type=AgentType.DEFAULT,
-                status="success"
-            )
-
-    async def _process_contextual_question(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process contextual questions using AI and conversation history."""
-        try:
-            import os
-            openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
-            if not openai_key:
-                return UnifiedResponse(
-                    content={
-                        "message": "I need an OpenAI API key to answer contextual questions.",
-                        "type": "error"
-                    },
-                    agent_type=AgentType.DEFAULT,
-                    status="error",
-                    error="No OpenAI API key"
-                )
-
-            # Get recent conversation context
-            context = chat_history_service.get_recent_context(
-                unified_command.wallet_address,
-                unified_command.user_name,
-                num_messages=10  # Get more context for better answers
-            )
-            
-            # Set of facts about SNEL for the LLM to incorporate in responses
-            snel_facts = """
-- You are SNEL — Smart, Natural, Efficient, Limitless DeFi Assistant
-- You help with stablecoin information and RWA insights
-- You provide risk assessment and portfolio diversification advice
-- You deliver real-time market data
-- You assist with DeFi operations like swaps and bridges
-- You specialize in cross-chain operations using Axelar Network's General Message Passing (GMP)
-- You can execute complex cross-chain swaps, yield farming, and liquidity provision across 16+ blockchain networks
-- You handle multi-step cross-chain operations with natural language commands like "swap USDC from Ethereum to MATIC on Polygon"
-- You're built to connect with user wallets for balance checks and portfolio analysis
-- You're designed to be conversational and personable
-- You're knowledgeable about all aspects of DeFi and cross-chain interoperability
-- You use Axelar's secure cross-chain infrastructure for seamless multi-chain operations
-"""
-
-            # Check if this is a question about the assistant itself
-            cmd_lower = unified_command.command.lower().strip()
-            about_assistant_patterns = [
-                "who are you", "what are you", "what can you do", "about you", 
-                "about snel", "your purpose", "what is snel", "describe yourself",
-                "tell me about you", "capabilities", "features", "help me", 
-                "what do you know", "what's your name", "introduce yourself"
-            ]
-            
-            is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
-
-            if not context and not is_about_assistant:
-                return UnifiedResponse(
-                    content={
-                        "message": "I don't have enough context to answer that question. Could you be more specific or ask about a particular protocol?",
-                        "type": "contextual_response",
-                        "suggestions": [
-                            "Try asking 'research Uniswap' first",
-                            "Ask about a specific protocol",
-                            "Be more specific about what you want to know"
-                        ]
-                    },
-                    agent_type=AgentType.DEFAULT,
-                    status="success"
-                )
-
-            client = AsyncOpenAI(api_key=openai_key)
-
-            # Adjust the prompt based on whether the question is about the assistant
-            prompt = ""
-            if is_about_assistant:
-                prompt = f"""
-You are SNEL, a conversational DeFi assistant. The user is asking something about you or what you can do.
-Respond in a natural, friendly way while accurately describing your capabilities.
-
-USER QUERY: "{unified_command.command}"
-
-RECENT CONVERSATION CONTEXT:
-{context}
-
-FACTS ABOUT YOURSELF:
-{snel_facts}
-
-Instructions:
-- Be conversational and personable, not robotic
-- Be concise but informative (2-4 sentences is ideal)
-- Don't use the exact same canned response for similar questions
-- Vary your phrasing and personality for each response
-- Incorporate your capabilities without listing all of them
-- Don't start with "I'm SNEL" for every response
-"""
-            else:
-                prompt = f"""
-You are SNEL, a helpful DeFi assistant. Answer the user's question based on the recent conversation context.
-
-RECENT CONVERSATION CONTEXT:
-{context}
-
-USER QUESTION: "{unified_command.command}"
-
-FACTS ABOUT YOURSELF:
-{snel_facts}
-
-Instructions:
-- Answer based on the conversation context
-- If the user is asking about a protocol that was recently researched, provide insights from that research
-- Be conversational and helpful, not robotic
-- If you can't answer based on the context, say so and suggest what they could ask instead
-- Keep responses concise but informative (2-4 sentences)
-- Act like an intelligent agent, not a command processor
-
-Respond naturally as if you're having a conversation.
-"""
-
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are SNEL, a helpful and conversational DeFi assistant. Respond naturally based on conversation context."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=300,
-                temperature=0.7  # Higher temperature for more natural responses
-            )
-            
-            # Log the response for monitoring
-            logger.info(f"Generated contextual response for: '{unified_command.command}'")
-
-            ai_response = response.choices[0].message.content
-
-            return UnifiedResponse(
-                content={
-                    "message": ai_response,
-                    "type": "contextual_response"
-                },
-                agent_type=AgentType.DEFAULT,
-                status="success"
-            )
-
-        except Exception as e:
-            logger.exception(f"Error processing contextual question: {unified_command.command}")
-            return UnifiedResponse(
-                content={
-                    "message": "I encountered an error while trying to answer your question. Could you try rephrasing it?",
-                    "type": "error"
-                },
-                agent_type=AgentType.DEFAULT,
-                status="error",
-                error=str(e)
-            )
-
-    async def _process_unknown(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process unknown commands."""
-        return UnifiedResponse(
-            content={
-                "message": "I'm not sure how to help with that. Please try a specific command like 'swap', 'transfer', or 'bridge'.",
-                "type": "help",
-                "suggestions": [
-                    "Try 'swap 1 eth for usdc'",
-                    "Try 'transfer 0.1 eth to address'",
-                    "Try 'bridge 100 usdc to arbitrum'"
-                ]
-            },
-            agent_type=AgentType.DEFAULT,
-            status="success"
-        )
 
     async def _should_use_gmp_handler(self, unified_command: UnifiedCommand) -> bool:
         """
@@ -1765,7 +282,6 @@ Respond naturally as if you're having a conversation.
         This checks for complex cross-chain operations that require GMP.
         """
         try:
-            # Check if the enhanced cross-chain handler can handle this command
             return await self.gmp_handler.can_handle(unified_command)
         except Exception as e:
             logger.exception(f"Error checking GMP handler capability: {e}")
@@ -1802,32 +318,6 @@ Respond naturally as if you're having a conversation.
                 original_error=str(e)
             )
 
-    async def _process_cross_chain_swap(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """
-        Process cross-chain swap operations using GMP.
-        """
-        try:
-            logger.info(f"Processing cross-chain swap: {unified_command.command}")
-
-            # Validate wallet connection
-            if not unified_command.wallet_address:
-                raise wallet_not_connected_error()
-
-            # Use the enhanced cross-chain handler for cross-chain swaps
-            return await self.gmp_handler.handle_cross_chain_swap(
-                unified_command, unified_command.wallet_address
-            )
-
-        except (ValidationError, BusinessLogicError, ExternalServiceError):
-            raise  # Re-raise known exceptions
-        except Exception as e:
-            logger.exception("Error processing cross-chain swap")
-            raise ExternalServiceError(
-                message="Failed to process cross-chain swap",
-                service_name="Cross-Chain Swap Service",
-                original_error=str(e)
-            )
-
     async def _is_cross_chain_swap(self, unified_command: UnifiedCommand) -> bool:
         """
         Determine if this is a cross-chain swap operation.
@@ -1859,46 +349,6 @@ Respond naturally as if you're having a conversation.
         except Exception as e:
             logger.exception(f"Error determining if cross-chain swap: {e}")
             return False
-
-    def _convert_gmp_response_to_unified(self, gmp_response: UnifiedResponse) -> UnifiedResponse:
-        """
-        Convert GMP handler response to unified response format.
-        This ensures compatibility with the existing response structure.
-        """
-        try:
-            # If it's already a UnifiedResponse, just update the agent type
-            if isinstance(gmp_response, UnifiedResponse):
-                # Determine appropriate agent type based on operation
-                if gmp_response.content and gmp_response.content.metadata:
-                    metadata = gmp_response.content.metadata
-                    if metadata.get("uses_gmp"):
-                        if "cross_chain_swap" in str(metadata.get("operation_type", "")):
-                            gmp_response.agent_type = AgentType.CROSS_CHAIN_SWAP
-                        else:
-                            gmp_response.agent_type = AgentType.GMP_OPERATION
-                
-                return gmp_response
-            
-            # If it's a different format, convert it
-            return UnifiedResponse(
-                content={
-                    "message": str(gmp_response),
-                    "type": "gmp_response"
-                },
-                agent_type=AgentType.GMP_OPERATION,
-                status="success"
-            )
-            
-        except Exception as e:
-            logger.exception(f"Error converting GMP response: {e}")
-            return UnifiedResponse(
-                content={
-                    "message": "Cross-chain operation completed, but response formatting failed",
-                    "type": "gmp_response"
-                },
-                agent_type=AgentType.GMP_OPERATION,
-                status="success"
-            )
 
     async def _process_transaction_step_complete(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """
@@ -1949,63 +399,16 @@ Respond naturally as if you're having a conversation.
                     },
                     agent_type=AgentType.DEFAULT,
                     status="error",
-                    error="Failed to complete transaction step - no active flow found"
+                    error="Failed to complete transaction step"
                 )
 
             # Get the next step if available
             next_step = self.transaction_flow_service.get_next_step(wallet_address)
 
             if next_step:
-                # Debug logging
-                logger.info(f"Next step found: type={next_step.step_type.value}, to={next_step.to}, data={next_step.data[:20] if next_step.data else 'None'}")
-
-                # Check if this is a bridge step that needs to be generated
-                if next_step.step_type.value == "bridge" and next_step.to == "PLACEHOLDER":
-                    logger.info("Bridge step with placeholder detected, generating real transaction...")
-                    # Generate the actual bridge transaction
-                    bridge_context = next_step.metadata
-                    if bridge_context:
-                        try:
-                            # Generate bridge transaction using Axelar service (sync version)
-                            bridge_tx = self._generate_bridge_transaction_sync(
-                                wallet_address=wallet_address,
-                                bridge_context=bridge_context
-                            )
-                            if bridge_tx:
-                                # Update the step with actual transaction data
-                                next_step.to = bridge_tx["to"]
-                                next_step.data = bridge_tx["data"]
-                                next_step.value = bridge_tx.get("value", "0")
-                                next_step.gas_limit = bridge_tx.get("gas_limit", "")
-                                logger.info(f"Generated bridge transaction: to={bridge_tx['to'][:10]}..., data={bridge_tx['data'][:20]}...")
-                        except Exception as e:
-                            logger.error(f"Failed to generate bridge transaction: {e}")
-                            # Continue with placeholder data - will likely fail but better than crashing
-
-                # Check if this is a swap step that needs to be generated
-                elif next_step.step_type.value == "swap" and next_step.to == "PLACEHOLDER":
-                    logger.info("Swap step with placeholder detected, generating real transaction...")
-                    # Generate the actual swap transaction
-                    swap_context = next_step.metadata
-                    if swap_context:
-                        try:
-                            # Get the original quote from metadata
-                            quote = swap_context.get("quote")
-                            from_chain = swap_context.get("from_chain")
-
-                            if quote and from_chain:
-                                # Create transaction data from the stored quote
-                                swap_tx_data = self._create_transaction_data_from_quote(quote, from_chain)
-                                if swap_tx_data:
-                                    # Update the step with actual transaction data
-                                    next_step.to = swap_tx_data.to
-                                    next_step.data = swap_tx_data.data
-                                    next_step.value = swap_tx_data.value
-                                    next_step.gas_limit = swap_tx_data.gas_limit
-                                    logger.info(f"Generated swap transaction: to={swap_tx_data.to[:10]}..., data={swap_tx_data.data[:20]}...")
-                        except Exception as e:
-                            logger.error(f"Failed to generate swap transaction: {e}")
-                            # Continue with placeholder data - will likely fail but better than crashing
+                from app.models.unified_models import TransactionData
+                
+                logger.info(f"Next step found: type={next_step.step_type.value}")
 
                 # Create transaction data from the step
                 transaction_data = TransactionData(
@@ -2070,3 +473,19 @@ Respond naturally as if you're having a conversation.
                 status="error",
                 error=str(e)
             )
+
+    async def _process_unknown(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """Process unknown commands."""
+        return UnifiedResponse(
+            content={
+                "message": "I'm not sure how to help with that. Please try a specific command like 'swap', 'transfer', or 'bridge'.",
+                "type": "help",
+                "suggestions": [
+                    "Try 'swap 1 eth for usdc'",
+                    "Try 'transfer 0.1 eth to address'",
+                    "Try 'bridge 100 usdc to arbitrum'"
+                ]
+            },
+            agent_type=AgentType.DEFAULT,
+            status="success"
+        )
