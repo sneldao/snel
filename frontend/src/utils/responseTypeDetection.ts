@@ -12,6 +12,8 @@ import {
     isCrossChainSuccessContent,
     isPortfolioDisabledContent,
     isBridgePrivacyReadyContent,
+    isBridgeStatusContent,
+    isPostBridgeSuccessContent,
     getContentAxelarPowered,
     hasMessageProperty,
     hasBridgeKeywords,
@@ -32,6 +34,8 @@ export interface ResponseTypeChecks {
     isCrossChainSuccess: boolean;
     isPortfolioDisabled: boolean;
     isBridgePrivacyReady: boolean;
+    isBridgeStatus: boolean;
+    isPostBridgeSuccess: boolean;
 }
 
 interface DetectResponseTypesProps {
@@ -116,6 +120,10 @@ export const detectResponseTypes = ({
 
     const isBridgePrivacyReady = isBridgePrivacyReadyContent(content);
 
+    const isBridgeStatus = isBridgeStatusContent(content);
+
+    const isPostBridgeSuccess = isPostBridgeSuccessContent(content);
+
     return {
         isSwapConfirmation,
         isDCAConfirmation,
@@ -131,5 +139,7 @@ export const detectResponseTypes = ({
         isCrossChainSuccess,
         isPortfolioDisabled,
         isBridgePrivacyReady,
+        isBridgeStatus,
+        isPostBridgeSuccess,
     };
 };

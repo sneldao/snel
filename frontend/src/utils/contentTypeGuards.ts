@@ -15,7 +15,9 @@ import {
   BridgeReadyContent,
   SwapQuotesContent,
   DCAOrderCreatedContent,
-  BridgePrivacyReadyContent
+  BridgePrivacyReadyContent,
+  BridgeStatusContent,
+  PostBridgeSuccessContent
 } from '../types/responses';
 
 // Type guard functions
@@ -82,6 +84,14 @@ export const isDCAOrderCreatedContent = (content: ResponseContent): content is D
 
 export const isBridgePrivacyReadyContent = (content: ResponseContent): content is BridgePrivacyReadyContent => {
   return typeof content === 'object' && content !== null && 'type' in content && content.type === 'bridge_privacy_ready';
+};
+
+export const isBridgeStatusContent = (content: ResponseContent): content is BridgeStatusContent => {
+  return typeof content === 'object' && content !== null && 'type' in content && content.type === 'bridge_status';
+};
+
+export const isPostBridgeSuccessContent = (content: ResponseContent): content is PostBridgeSuccessContent => {
+  return typeof content === 'object' && content !== null && 'type' in content && content.type === 'post_bridge_success';
 };
 
 export const isObjectContent = (content: ResponseContent): content is Exclude<ResponseContent, string> => {

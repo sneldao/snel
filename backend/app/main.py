@@ -17,7 +17,7 @@ from app.core.dependencies import get_service_container
 from app.core.config_manager import config_manager
 
 # Import API routers
-from app.api.v1 import chat, swap, agno, health
+from app.api.v1 import chat, swap, agno, health, bridge
 from app.api.v1.websocket import router as websocket_router
 from app.protocols.registry import protocol_registry
 
@@ -88,6 +88,7 @@ register_error_handlers(app)
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(swap.router, prefix="/api/v1")  # Legacy support for direct swap access
+app.include_router(bridge.router, prefix="/api/v1")  # Bridge status tracking
 app.include_router(agno.router, prefix="/api/v1/agno")
 app.include_router(websocket_router, prefix="/api/v1/ws")
 

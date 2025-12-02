@@ -37,6 +37,7 @@ snel/
 - **[Architecture & Foundation](docs/ARCHITECTURE_FOUNDATION.md)** - Core architecture, foundation upgrades, and current status
 - **[GMP Integration](docs/GMP_INTEGRATION.md)** - General Message Passing integration guide and implementation
 - **[Chain Integrations & Deployment](docs/CHAIN_INTEGRATIONS_DEPLOYMENT.md)** - Blockchain integrations and deployment guides
+- **[Privacy Education Implementation](PRIVACY_EDUCATION_IMPLEMENTATION.md)** - Zcash privacy bridging, user education, and real-time status tracking
 
 ### Supported Swap Commands
 

@@ -19,6 +19,7 @@ SNEL (Smart, Natural, Efficient, Limitless) is an AI-powered cross-chain DeFi as
 - Cross-chain protocol integration
 - Smart amount conversion using real-time price data
 - Secure, non-custodial operations with 50+ wallet support
+- **Privacy Bridging**: Bridge assets to Zcash for enhanced transaction privacy
 
 ## Project Structure
 
@@ -60,6 +61,17 @@ snel/
 - Redis for caching and session management
 - Python libraries for blockchain integration
 
+## Core Principles
+
+- **ENHANCEMENT FIRST**: Always prioritize enhancing existing components over creating new ones
+- **AGGRESSIVE CONSOLIDATION**: Delete unnecessary code rather than deprecating
+- **PREVENT BLOAT**: Systematically audit and consolidate before adding new features
+- **DRY**: Single source of truth for all shared logic
+- **CLEAN**: Clear separation of concerns with explicit dependencies
+- **MODULAR**: Composable, testable, independent modules
+- **PERFORMANT**: Adaptive loading, caching, and resource optimization
+- **ORGANIZED**: Predictable file structure with domain-driven design
+
 ## Getting Started
 
 1. Clone the repository
@@ -69,3 +81,27 @@ snel/
 5. Start Redis server
 6. Launch backend and frontend services
 7. Access the application at http://localhost:3000
+
+## Privacy Implementation Status
+
+### Completed (Tier 1 - Essential)
+- ✅ Parser recognizes privacy queries naturally ("make my X private", "you can do stuff in private?")
+- ✅ AI classifier understands privacy features and provides guidance
+- ✅ System knowledge base includes Zcash integration details
+- ✅ Landing page highlights privacy features with shield icon
+- ✅ Help modal includes Privacy Guide tab with wallet recommendations
+- ✅ Backend response includes post-bridge guidance with wallet options
+- ✅ Frontend displays comprehensive privacy bridge guidance component
+- ✅ Single source of truth for privacy constants (wallets, FAQ, guidance)
+
+### In Progress (Tier 2 - Polish)
+- Contextual help popovers for privacy concepts
+- Wallet integration / iframe embedding
+- Step-by-step walkthrough modal
+
+### Planned (Tier 3 - Nice to Have)
+- Bridge status tracking with real-time updates
+- Post-bridge UX with next steps
+- Merchant directory integration
+
+See [PRIVACY_EDUCATION_IMPLEMENTATION.md](PRIVACY_EDUCATION_IMPLEMENTATION.md) for details.

@@ -231,6 +231,10 @@ class PrivacyBridgeProcessor(BaseProcessor):
             if not first_step:
                 raise BusinessLogicError("No transaction steps generated")
             
+            # Generate unique bridge ID for status tracking
+            import uuid
+            bridge_id = str(uuid.uuid4())
+
             transaction = TransactionData(
                 to=first_step.get("to"),
                 data=first_step.get("data"),
@@ -239,10 +243,17 @@ class PrivacyBridgeProcessor(BaseProcessor):
                 gas_limit=first_step.get("gas_limit", "500000")
             )
             
+            # Build comprehensive response with wallet guidance
             return self._create_success_response(
                 content={
-                    "message": f"Ready to bridge {amount} {token} to privacy pool",
+                    "message": f"Ready to bridge {amount} {token} to Zcash privacy pool\n\n"
+                              f"Your transaction details (addresses, amounts) will be hidden on the Zcash blockchain.\n\n"
+                              f"After bridging, you'll need a shielded-by-default wallet like:\n"
+                              f"• Zashi (mobile)\n"
+                              f"• Nighthawk (desktop)\n\n"
+                              f"We'll help you receive your private funds.",
                     "type": "bridge_privacy_ready",
+                    "bridge_id": bridge_id,
                     "amount": str(amount),
                     "token": token,
                     "from_chain": self._get_chain_name(from_chain),
@@ -251,7 +262,52 @@ class PrivacyBridgeProcessor(BaseProcessor):
                     "estimated_time": gmp_result.get("estimated_time", "5-10 minutes"),
                     "privacy_level": "High (Shielded)",
                     "requires_transaction": True,
-                    "steps": steps
+                    "steps": steps,
+                    "post_bridge_guidance": {
+                        "title": "After Bridging",
+                        "instructions": [
+                            {
+                                "step": 1,
+                                "title": "Confirm Transaction",
+                                "description": "Sign the bridge transaction in your connected wallet"
+                            },
+                            {
+                                "step": 2,
+                                "title": "Wait for Confirmation",
+                                "description": f"Bridge completes in approximately {gmp_result.get('estimated_time', '5-10 minutes')}"
+                            },
+                            {
+                                "step": 3,
+                                "title": "Get a Zcash Wallet",
+                                "description": "Download Zashi (mobile) or Nighthawk (desktop) - both are shielded by default"
+                            },
+                            {
+                                "step": 4,
+                                "title": "Receive Your Private Funds",
+                                "description": "Your bridged assets will appear automatically in your shielded address"
+                            }
+                        ],
+                        "recommended_wallets": [
+                            {
+                                "name": "Zashi",
+                                "type": "Mobile",
+                                "url": "https://zashi.app/",
+                                "reason": "Official Zcash mobile wallet, shielded by default"
+                            },
+                            {
+                                "name": "Nighthawk",
+                                "type": "Desktop",
+                                "url": "https://nighthawkwallet.com/",
+                                "reason": "Full desktop support, shielded by default"
+                            }
+                        ],
+                        "security_tips": [
+                            "Always use a wallet marked 'shielded by default'",
+                            "Save your recovery phrase securely",
+                            "Only enter your address in trusted applications",
+                            "Verify wallet URLs before downloading"
+                        ]
+                    }
                 },
                 agent_type=AgentType.BRIDGE_TO_PRIVACY,
                 transaction=transaction,
@@ -259,7 +315,8 @@ class PrivacyBridgeProcessor(BaseProcessor):
                 metadata={
                     "gmp_result": gmp_result,
                     "privacy_enabled": True,
-                    "axelar_powered": True
+                    "axelar_powered": True,
+                    "wallet_guidance_provided": True
                 }
             )
             
@@ -281,3 +338,68 @@ class PrivacyBridgeProcessor(BaseProcessor):
             137: "Polygon",
         }
         return chain_names.get(chain_id, f"Chain {chain_id}")
+    
+    def create_post_bridge_success_response(
+        self,
+        bridge_id: str,
+        amount: str,
+        token: str,
+        from_chain: str,
+        wallet_address: str,
+        estimated_arrival_time: str = "5-10 minutes"
+    ) -> UnifiedResponse:
+        """
+        Create post-bridge success response for display after bridge completes.
+        
+        Shows receiving address, action cards (Receive/Spend/Learn), and next steps.
+        """
+        return self._create_success_response(
+            content={
+                "message": f"Bridge complete! Your {amount} {token} is arriving in {estimated_arrival_time}",
+                "type": "post_bridge_success",
+                "bridge_id": bridge_id,
+                "amount": amount,
+                "token": token,
+                "from_chain": from_chain,
+                "to_chain": "Zcash",
+                "receiving_address": wallet_address,
+                "estimated_arrival_time": estimated_arrival_time,
+                "actions": [
+                    {
+                        "id": "receive",
+                        "title": "Receive Funds",
+                        "description": "Copy your address and import into your wallet",
+                        "icon": "wallet",
+                        "cta_text": "Get Address",
+                    },
+                    {
+                        "id": "spend",
+                        "title": "Spend Privately",
+                        "description": "Browse merchants accepting Zcash payments",
+                        "icon": "shopping",
+                        "cta_text": "View Merchants",
+                        "cta_url": "https://paywithz.cash/",
+                    },
+                    {
+                        "id": "learn",
+                        "title": "Learn More",
+                        "description": "Understand privacy and best practices",
+                        "icon": "book",
+                        "cta_text": "Read Guide",
+                        "cta_url": "https://z.cash/learn/",
+                    },
+                ],
+                "next_steps": [
+                    "Copy your receiving address (shown above)",
+                    "Open your Zcash wallet (Zashi or Nighthawk)",
+                    "Import the address or wait for automatic arrival",
+                    "Your funds will appear in your shielded balance",
+                ]
+            },
+            agent_type=AgentType.BRIDGE_TO_PRIVACY,
+            metadata={
+                "bridge_id": bridge_id,
+                "post_bridge_state": True,
+                "privacy_enabled": True,
+            }
+        )

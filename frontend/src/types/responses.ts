@@ -148,36 +148,94 @@ export interface DCAOrderCreatedContent {
 }
 
 export interface BridgePrivacyReadyContent {
-  type: 'bridge_privacy_ready';
-  message: string;
-  amount: string;
-  token: string;
-  from_chain: string;
-  to_chain: string;
-  protocol: string;
-  estimated_time: string;
-  privacy_level: string;
-  requires_transaction: boolean;
-  steps?: any[];
-}
+   type: 'bridge_privacy_ready';
+   message: string;
+   amount: string;
+   token: string;
+   from_chain: string;
+   to_chain: string;
+   protocol: string;
+   estimated_time: string;
+   privacy_level: string;
+   requires_transaction: boolean;
+   steps?: any[];
+   post_bridge_guidance?: {
+     title: string;
+     instructions: Array<{
+       step: number;
+       title: string;
+       description: string;
+     }>;
+     recommended_wallets: Array<{
+       name: string;
+       type: string;
+       url: string;
+       reason: string;
+     }>;
+     security_tips: string[];
+   };
+   bridge_id?: string;
+ }
+
+export interface BridgeStatusContent {
+   type: 'bridge_status';
+   bridge_id: string;
+   status: 'initiated' | 'source_confirmed' | 'in_transit' | 'destination_confirmed' | 'completed' | 'failed';
+   current_step: number;
+   total_steps: number;
+   steps: Array<{
+     step_number: number;
+     name: string;
+     status: 'pending' | 'in_progress' | 'completed' | 'failed';
+     description: string;
+     tx_hash?: string;
+     confirmed_at?: string;
+   }>;
+   source_tx_hash?: string;
+   destination_tx_hash?: string;
+   timestamp: string;
+   error?: string;
+ }
+
+ export interface PostBridgeSuccessContent {
+   type: 'post_bridge_success';
+   bridge_id: string;
+   amount: string;
+   token: string;
+   from_chain: string;
+   to_chain: string;
+   receiving_address: string;
+   estimated_arrival_time?: string;
+   actions: Array<{
+     id: 'receive' | 'spend' | 'learn';
+     title: string;
+     description: string;
+     icon: string;
+     cta_text: string;
+     cta_url?: string;
+   }>;
+   next_steps?: string[];
+ }
 
 export type ResponseContent =
-  | string
-  | BalanceContent
-  | SwapContent
-  | BridgeContent
-  | PortfolioContent
-  | ErrorContent
-  | TransactionContent
-  | TransferContent
-  | BalanceResultContent
-  | ProtocolResearchContent
-  | CrossChainSuccessContent
-  | PortfolioDisabledContent
-  | BridgeReadyContent
-  | SwapQuotesContent
-  | DCAOrderCreatedContent
-  | BridgePrivacyReadyContent;
+   | string
+   | BalanceContent
+   | SwapContent
+   | BridgeContent
+   | PortfolioContent
+   | ErrorContent
+   | TransactionContent
+   | TransferContent
+   | BalanceResultContent
+   | ProtocolResearchContent
+   | CrossChainSuccessContent
+   | PortfolioDisabledContent
+   | BridgeReadyContent
+   | SwapQuotesContent
+   | DCAOrderCreatedContent
+   | BridgePrivacyReadyContent
+   | BridgeStatusContent
+   | PostBridgeSuccessContent;
 
 // Supporting interfaces
 export interface TokenBalance {

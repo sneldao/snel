@@ -28,6 +28,7 @@ import {
   FaCoins,
   FaChartPie,
   FaSearch,
+  FaShieldAlt,
 } from "react-icons/fa";
 import {
   useAccount,
@@ -750,6 +751,36 @@ export default function MainApp(props: MainAppProps) {
                         textAlign="center"
                       >
                         Protocol Research
+                      </Text>
+                    </VStack>
+                  </SimpleGrid>
+
+                  {/* Privacy Features Section */}
+                  <SimpleGrid columns={1} spacing={4} maxW="400px" mt={4} pt={4} borderTopWidth="1px" borderTopColor="gray.200" width="100%">
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="linear-gradient(135deg, rgba(244, 183, 40, 0.05) 0%, rgba(244, 183, 40, 0.02) 100%)"
+                      border="1px solid"
+                      borderColor="rgba(244, 183, 40, 0.2)"
+                    >
+                      <Icon as={FaShieldAlt} color="yellow.600" boxSize={5} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="semibold"
+                        textAlign="center"
+                        color="gray.700"
+                      >
+                        Privacy Bridge to Zcash
+                      </Text>
+                      <Text
+                        fontSize="xs"
+                        textAlign="center"
+                        color="gray.500"
+                      >
+                        Bridge assets to privacy-enhanced transactions
                       </Text>
                     </VStack>
                   </SimpleGrid>

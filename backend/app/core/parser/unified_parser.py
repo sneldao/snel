@@ -54,7 +54,35 @@ class UnifiedParser:
     def _build_patterns(self) -> Dict[CommandType, List[Dict[str, Any]]]:
         """Build comprehensive pattern hierarchy with clear priorities."""
 
+        # Note: Order matters! More specific patterns (like BRIDGE_TO_PRIVACY) should come before generic ones (BRIDGE)
         return {
+            # Privacy bridges must be checked before generic bridges
+            CommandType.BRIDGE_TO_PRIVACY: [
+                {
+                    "pattern": re.compile(
+                        r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<dest_chain>zcash|privacy)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Bridge to Zcash/Privacy",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"make\s+(?:my\s+)?(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+private",
+                        re.IGNORECASE
+                    ),
+                    "description": "Make funds private intent",
+                    "priority": 2
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:private|privacy|private.*transaction|stuff.*private)",
+                        re.IGNORECASE
+                    ),
+                    "description": "General privacy inquiry",
+                    "priority": 3
+                }
+            ],
             CommandType.SWAP: [
                 {
                     "pattern": re.compile(
@@ -117,24 +145,6 @@ class UnifiedParser:
                     ),
                     "description": "Bridge with $ symbol and 'of' (token amount)",
                     "priority": 3
-                }
-            ],
-            CommandType.BRIDGE_TO_PRIVACY: [
-                {
-                    "pattern": re.compile(
-                        r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<dest_chain>zcash|privacy)",
-                        re.IGNORECASE
-                    ),
-                    "description": "Bridge to Zcash/Privacy",
-                    "priority": 1
-                },
-                {
-                    "pattern": re.compile(
-                        r"make\s+(?:my\s+)?(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+private",
-                        re.IGNORECASE
-                    ),
-                    "description": "Make funds private intent",
-                    "priority": 2
                 }
             ],
             CommandType.TRANSFER: [
@@ -273,11 +283,23 @@ class UnifiedParser:
     def _extract_bridge_to_privacy_details(self, match: re.Match) -> CommandDetails:
         """Extract bridge to privacy details."""
         groups = match.groupdict()
-        amount = self._parse_decimal(groups["amount"])
+        
+        # Handle case where amount/token are not present (general privacy inquiry)
+        amount = None
+        token = None
+        
+        if "amount" in groups and groups["amount"]:
+            try:
+                amount = self._parse_decimal(groups["amount"])
+            except (ValueError, KeyError):
+                pass
+        
+        if "token" in groups and groups["token"]:
+            token = groups["token"].upper()
         
         return CommandDetails(
-            amount=float(amount),
-            token_in=TokenInfo(symbol=groups["token"].upper()),
+            amount=float(amount) if amount else None,
+            token_in=TokenInfo(symbol=token) if token else None,
             destination_chain="Zcash",
             additional_params={"is_privacy": True}
         )

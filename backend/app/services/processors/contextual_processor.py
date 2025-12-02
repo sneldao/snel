@@ -163,6 +163,24 @@ Keep your response brief (1-2 sentences) and friendly.
 - You specialize in cross-chain operations using Axelar Network's General Message Passing (GMP)
 - You can execute complex cross-chain swaps, yield farming, and liquidity provision across 16+ blockchain networks
 - You handle multi-step cross-chain operations with natural language commands
+
+PRIVACY OPERATIONS (Zcash Integration):
+- You support PRIVACY BRIDGING: Bridge assets to Zcash for enhanced transaction privacy
+- Zcash uses shielded addresses to hide transaction details (addresses, amounts, history)
+- Users can bridge from public chains (Ethereum, Polygon, Base, Arbitrum, etc.) to Zcash
+- Recommended Zcash wallets: Zashi (mobile), Nighthawk (desktop) - both shielded by default
+- After bridging, users receive private funds in a unified address (UA)
+- Privacy is opt-in to shielded addresses; transparent transactions still supported
+- Axelar GMP handles the cross-chain bridge securely
+- Users can spend bridged Zcash at merchants or send privately to others
+
+PRIVACY GUIDANCE FOR USERS:
+- Always recommend wallets that are "shielded by default"
+- Emphasize that transaction amounts and addresses are encrypted
+- Explain that larger privacy pools = better anonymity
+- Mention security: backup phrases, trusted wallet sources, secure receiving addresses
+- Provide next steps after bridging: get wallet, receive funds, use privately
+
 - You're built to connect with user wallets for balance checks and portfolio analysis
 - You're designed to be conversational and personable
 - You're knowledgeable about all aspects of DeFi and cross-chain interoperability
@@ -175,7 +193,8 @@ Keep your response brief (1-2 sentences) and friendly.
                 "who are you", "what are you", "what can you do", "about you",
                 "about snel", "your purpose", "what is snel", "describe yourself",
                 "tell me about you", "capabilities", "features", "help me",
-                "what do you know", "what's your name", "introduce yourself"
+                "what do you know", "what's your name", "introduce yourself",
+                "private", "privacy", "private transaction", "stuff in private"
             ]
             
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)

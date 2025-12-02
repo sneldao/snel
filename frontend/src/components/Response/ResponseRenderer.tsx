@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Box, VStack } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text } from '@chakra-ui/react';
+import { CheckCircleIcon } from '@chakra-ui/icons';
 import { UnifiedConfirmation } from '../UnifiedConfirmation';
 import { TransactionHandler } from '../Transaction/TransactionHandler';
 import { MultiStepTransactionDisplay } from '../Transaction/MultiStepTransactionDisplay';
@@ -14,7 +15,10 @@ import { CrossChainResult } from '../CrossChain/CrossChainResult';
 import { PortfolioEnablePrompt } from '../Portfolio/PortfolioEnablePrompt';
 import { GMPTransactionCard } from '../GMP/GMPTransactionCard';
 import { EnhancedPortfolioSummary } from '../EnhancedPortfolioSummary';
-import type { ResponseContent, ResponseMetadata, TransactionData } from '../../types/responses';
+import { PrivacyBridgeGuidance } from '../Privacy/PrivacyBridgeGuidance';
+import { BridgeStatusTracker } from '../Bridge/BridgeStatusTracker';
+import { PostBridgeModal } from '../Bridge/PostBridgeModal';
+import type { ResponseContent, ResponseMetadata, TransactionData, BridgeStatusContent, PostBridgeSuccessContent } from '../../types/responses';
 import type { AgentType } from '../../utils/agentInfo';
 import type { ResponseTypeChecks } from '../../utils/responseTypeDetection';
 import {
@@ -23,6 +27,8 @@ import {
     getContentAnalysis,
     isStringContent,
     isBridgePrivacyReadyContent,
+    isBridgeStatusContent,
+    isPostBridgeSuccessContent,
 } from '../../utils/contentTypeGuards';
 import { useAccount } from 'wagmi';
 
@@ -56,6 +62,8 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     onActionClick,
 }) => {
     const { address } = useAccount();
+    const [isPostBridgeModalOpen, setIsPostBridgeModalOpen] = React.useState(false);
+
     const {
         isSwapConfirmation,
         isDCAConfirmation,
@@ -70,6 +78,13 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         isBridgePrivacyReady,
         isCrossChainSuccess,
     } = typeChecks;
+
+    // Auto-open post-bridge modal when success content arrives
+    React.useEffect(() => {
+        if (isPostBridgeSuccessContent(content)) {
+            setIsPostBridgeModalOpen(true);
+        }
+    }, [content]);
 
     // Swap Confirmation
     if (isSwapConfirmation) {
@@ -262,7 +277,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     // Privacy Bridge
     if (isBridgePrivacyReady && isBridgePrivacyReadyContent(content)) {
         return (
-            <Box mt={4} width="100%">
+            <VStack spacing={4} mt={4} width="100%">
                 <GMPTransactionCard
                     transaction={{
                         id: `privacy-${Date.now()}`,
@@ -293,7 +308,44 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                     onCancel={onCancel}
                     isExecuting={isExecuting}
                 />
-            </Box>
+                <PrivacyBridgeGuidance content={content} isCompact={false} />
+            </VStack>
+        );
+    }
+
+    // Bridge Status
+    if (isBridgeStatusContent(content)) {
+        return (
+            <BridgeStatusTracker
+                status={content as BridgeStatusContent}
+                isLoading={isExecuting}
+            />
+        );
+    }
+
+    // Post-Bridge Success
+    if (isPostBridgeSuccessContent(content)) {
+        return (
+            <>
+                <Box p={4} borderRadius="lg" bg="green.50" borderLeft="4px solid" borderColor="green.500">
+                    <HStack spacing={2}>
+                        <CheckCircleIcon color="green.500" w={5} h={5} />
+                        <VStack align="start" spacing={0}>
+                            <Text fontWeight="bold" color="green.700">
+                                {content.amount} {content.token} successfully bridged to {content.to_chain}
+                            </Text>
+                            <Text fontSize="sm" color="green.600">
+                                {content.estimated_arrival_time ? `Arriving in ${content.estimated_arrival_time}` : 'Processing'}
+                            </Text>
+                        </VStack>
+                    </HStack>
+                </Box>
+                <PostBridgeModal
+                    isOpen={isPostBridgeModalOpen}
+                    content={content as PostBridgeSuccessContent}
+                    onClose={() => setIsPostBridgeModalOpen(false)}
+                />
+            </>
         );
     }
 
