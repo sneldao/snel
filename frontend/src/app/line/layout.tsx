@@ -27,11 +27,19 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'SNEL - AI DeFi Assistant for LINE',
     description: 'Execute DeFi operations with natural language commands in LINE',
-    url: 'https://snel-app.netlify.app/line',
+    url: process.env.NEXT_PUBLIC_API_URL
+      ? `${process.env.NEXT_PUBLIC_API_URL}/line`
+      : (process.env.NODE_ENV === 'production'
+          ? 'https://api.snel.famile.xyz/line'
+          : 'http://localhost:3000/line'),
     siteName: 'SNEL',
     images: [
       {
-        url: 'https://snel-app.netlify.app/line-og-image.png',
+        url: process.env.NEXT_PUBLIC_API_URL
+          ? `${process.env.NEXT_PUBLIC_API_URL}/line-og-image.png`
+          : (process.env.NODE_ENV === 'production'
+              ? 'https://api.snel.famile.xyz/line-og-image.png'
+              : 'http://localhost:3000/line-og-image.png'),
         width: 1200,
         height: 630,
         alt: 'SNEL LINE Mini-dApp',

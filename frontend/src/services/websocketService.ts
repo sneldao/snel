@@ -21,17 +21,13 @@ export class WebSocketService {
 
   constructor() {
     // Get WebSocket URL using the same logic as ApiService
-    const isProduction = process.env.NODE_ENV === 'production';
-
-    if (isProduction) {
-      // In production, always use the Northflank backend URL
-      this.baseUrl = 'wss://p02--snel-web-app--wxd25gkpcp8m.code.run/api/v1/ws';
-    } else {
-      // In development, check for API URL or use localhost
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
-      this.baseUrl = `${wsUrl}/api/v1/ws`;
-    }
+    // Use the environment variable for WebSocket URL
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? 'https://api.snel.famile.xyz'  // Default production URL
+        : 'http://localhost:8000');      // Default development URL
+    const wsUrl = apiUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+    this.baseUrl = `${wsUrl}/api/v1/ws`;
 
     // Only log in development to reduce console noise in production
     if (process.env.NODE_ENV !== 'production') {

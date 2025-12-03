@@ -131,7 +131,7 @@ export const usePlatform = () => {
  * CLEAN: Separated URL concerns by platform
  */
 export const getPlatformURL = (path: string, platform: Platform = detectPlatform()): string => {
-  const baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://snel-app.netlify.app';
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://api.snel.famile.xyz';
   
   switch (platform) {
     case Platform.LINE:

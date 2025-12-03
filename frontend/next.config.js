@@ -41,15 +41,16 @@ const nextConfig = {
   },
   // For monorepo structure, we use rewrites instead of env variables
   async rewrites() {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     return process.env.NODE_ENV === "development"
       ? [
           {
             source: "/api/:path*",
-            destination: "http://localhost:8000/api/:path*",
+            destination: `${apiBaseUrl}/api/:path*`,
           },
           {
             source: "/debug/:path*",
-            destination: "http://localhost:8000/debug/:path*",
+            destination: `${apiBaseUrl}/debug/:path*`,
           },
         ]
       : [];

@@ -15,11 +15,12 @@ export class ApiService {
   private _portfolioService: PortfolioService | null = null;
 
   constructor() {
-    // Set the base URL based on environment
+    // Set the base URL based on environment variable
     this.baseUrl =
-      process.env.NODE_ENV === "production"
-        ? "https://p02--snel-web-app--wxd25gkpcp8m.code.run"
-        : "http://localhost:8000";
+      process.env.NEXT_PUBLIC_API_URL ||
+      (process.env.NODE_ENV === "production"
+        ? "https://api.snel.famile.xyz"  // Default production URL
+        : "http://localhost:8000");      // Default development URL
 
     // API prefix is now /api/v1 to match backend
     this.apiUrl = `${this.baseUrl}/api/v1`;

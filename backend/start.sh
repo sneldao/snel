@@ -100,9 +100,15 @@ if [ "$INSTALL_ONLY" = true ]; then
     exit 0
 fi
 
+# Allow port to be specified as command line argument, default to 8000 for backward compatibility
+PORT=${2:-8000}
+if [ "$1" == "--use-9001" ] || [ "$2" == "--use-9001" ]; then
+    PORT=9001
+fi
+
 # Start the server
-echo -e "${GREEN}Starting the server...${NC}"
-uvicorn app.main:app --reload --port 8000
+echo -e "${GREEN}Starting the server on port ${PORT}...${NC}"
+uvicorn app.main:app --reload --port $PORT
 
 # This line won't be reached during normal operation since uvicorn will keep running
 # But it's here for completeness

@@ -1,8 +1,9 @@
-// Force empty API_BASE in production, use env var only in development
+// Use the environment variable for API base URL
 const API_BASE =
-  process.env.NODE_ENV === "production"
-    ? ""
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production"
+    ? "https://api.snel.famile.xyz"  // Default production URL
+    : "http://localhost:8000");      // Default development URL
 
 // In a monorepo, we always use relative paths and let Next.js handle the routing
 export const API_URL = "/api";

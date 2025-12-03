@@ -86,11 +86,15 @@ LOG_LEVEL=INFO
 ### Running the Server
 
 ```bash
-# Development
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Development (uses start.sh script to manage virtual environment)
+./start.sh
 
-# Production
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Development on port 9001 (to match production server)
+./start.sh --use-9001
+
+# Direct uvicorn usage
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 9001  # Production equivalent
 ```
 
 ## 🔧 Key Features
