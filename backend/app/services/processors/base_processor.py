@@ -6,10 +6,11 @@ from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 
 from app.models.unified_models import (
-    UnifiedCommand, UnifiedResponse, AgentType, TransactionData
+    UnifiedCommand, UnifiedResponse, AgentType, TransactionData, CommandType
 )
 from app.core.exceptions import BusinessLogicError
 from app.services.utils.transaction_utils import transaction_utils
+from app.services.error_guidance_service import error_guidance_service, ErrorContext
 
 
 class BaseProcessor(ABC):
@@ -71,6 +72,31 @@ class BaseProcessor(ABC):
             agent_type=agent_type,
             status="error",
             error=error or message
+        )
+    
+    def _create_guided_error_response(
+        self,
+        command_type: CommandType,
+        agent_type: AgentType,
+        error_context: ErrorContext,
+        missing_params: Optional[list] = None,
+        additional_message: Optional[str] = None,
+        error: Optional[str] = None
+    ) -> UnifiedResponse:
+        """
+        Create an error response with contextual guidance.
+        Uses the centralized error guidance service for consistent messaging.
+        
+        This is the preferred method for generating error responses as it ensures
+        users always get helpful guidance, not just error messages.
+        """
+        return error_guidance_service.create_error_response(
+            command_type=command_type,
+            agent_type=agent_type,
+            error_context=error_context,
+            missing_params=missing_params,
+            additional_message=additional_message,
+            error=error
         )
     
     def _create_success_response(

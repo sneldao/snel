@@ -59,11 +59,44 @@ CoralEnvironment → SNELCoralMCPAdapter → SNELOrchestrator
 - **Service Health Monitoring**: Circuit breakers for external APIs
 - **Connection Pooling**: Reused HTTP connections
 
-#### Error Handling
+#### Error Handling & User Guidance
 - **Graceful Degradation**: Fallback to basic functionality
 - **Circuit Breakers**: Automatic service isolation
 - **Retry Logic**: Exponential backoff for transient failures
 - **Health Checks**: Continuous service monitoring
+- **Error Guidance Service**: Centralized, consistent error messages with actionable suggestions
+
+##### Error Guidance System
+SNEL implements a **centralized error guidance service** (`services/error_guidance_service.py`) that ensures users never face unhelpful errors. When commands fail:
+
+1. **Clear Error Message** - What went wrong
+2. **Actionable Guidance** - How to fix it
+3. **Contextual Examples** - Exact syntax to use
+
+**Error Types Covered:**
+- Missing parameters (amount, token, destination, chain)
+- Invalid inputs (amounts, addresses)
+- Insufficient balance
+- No liquidity available
+- External service failures
+- Wallet connection issues
+
+**Processors Using Error Guidance:**
+- BridgeProcessor - Cross-chain bridge errors
+- PrivacyBridgeProcessor - Privacy bridge to Zcash
+- SwapProcessor - Token swap errors
+- TransferProcessor - Token transfer validation
+- BalanceProcessor - Balance check failures
+
+**Example Response:**
+```
+User: "bridge 0.001 eth privately"
+Error: Missing destination information
+Response: "I need more information to bridge privately. Please provide: amount (how much to bridge)...
+Example: 'bridge 0.5 eth to zcash'"
+```
+
+All processors inherit `_create_guided_error_response()` method from BaseProcessor for consistent guidance.
 
 ### Security Model
 

@@ -476,15 +476,76 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             )
 
     async def _process_unknown(self, unified_command: UnifiedCommand) -> UnifiedResponse:
-        """Process unknown commands."""
+        """
+        Process unknown commands by providing helpful guidance.
+        This ensures users are never left without direction.
+        """
+        command_lower = unified_command.command.lower()
+        
+        # Provide contextual suggestions based on keywords in the command
+        suggestions = []
+        
+        # Check for bridge-related keywords and provide bridge guidance
+        if any(word in command_lower for word in ['bridge', 'private', 'zcash', 'privacy']):
+            suggestions = [
+                "Try 'bridge 0.5 eth from base to optimism' for a cross-chain bridge",
+                "Try 'bridge 1 usdc to zcash' to bridge to Zcash for privacy",
+                "Try 'what are privacy pools?' to learn about private transactions"
+            ]
+            return UnifiedResponse(
+                content={
+                    "message": "I can help with bridges and privacy! Please tell me:\n1. How much you want to bridge\n2. Which token\n3. Where you're bridging to (for cross-chain) or 'zcash' (for privacy)",
+                    "type": "help",
+                    "suggestions": suggestions
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+        
+        # Check for swap-related keywords
+        if any(word in command_lower for word in ['swap', 'exchange', 'trade']):
+            suggestions = [
+                "Try 'swap 1 eth for usdc'",
+                "Try 'swap 100 usdc for eth on arbitrum'",
+                "Try 'how much usdc for 1 eth?'"
+            ]
+            return UnifiedResponse(
+                content={
+                    "message": "I can help with swaps! Please tell me:\n1. How much you want to swap\n2. What token to swap from\n3. What token to swap to",
+                    "type": "help",
+                    "suggestions": suggestions
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+        
+        # Check for transfer-related keywords
+        if any(word in command_lower for word in ['transfer', 'send', 'move']):
+            suggestions = [
+                "Try 'transfer 0.1 eth to 0x123...'",
+                "Try 'send 100 usdc to vitalik.eth'",
+                "Try 'transfer 1 eth to my other address'"
+            ]
+            return UnifiedResponse(
+                content={
+                    "message": "I can help with transfers! Please tell me:\n1. How much you want to transfer\n2. What token\n3. Where to send it (address or ENS name)",
+                    "type": "help",
+                    "suggestions": suggestions
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success"
+            )
+        
+        # Default response for truly unknown commands
         return UnifiedResponse(
             content={
-                "message": "I'm not sure how to help with that. Please try a specific command like 'swap', 'transfer', or 'bridge'.",
+                "message": "I'm not sure how to help with that. I can assist with:\n• Swapping tokens\n• Transferring tokens\n• Bridging across chains\n• Checking balances\n• Privacy-preserving bridges\n\nWhat would you like to do?",
                 "type": "help",
                 "suggestions": [
                     "Try 'swap 1 eth for usdc'",
                     "Try 'transfer 0.1 eth to address'",
-                    "Try 'bridge 100 usdc to arbitrum'"
+                    "Try 'bridge 100 usdc from ethereum to arbitrum'",
+                    "Try 'bridge 1 eth to zcash' for private transactions"
                 ]
             },
             agent_type=AgentType.DEFAULT,

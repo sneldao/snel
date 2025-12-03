@@ -6,9 +6,10 @@ import logging
 from typing import Dict, Any, Optional
 
 from app.models.unified_models import (
-    UnifiedCommand, UnifiedResponse, AgentType, TransactionData
+    UnifiedCommand, UnifiedResponse, AgentType, TransactionData, CommandType
 )
 from app.core.exceptions import BusinessLogicError
+from app.services.error_guidance_service import ErrorContext
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,28 @@ class BridgeProcessor(BaseProcessor):
             from_chain = unified_command.chain_id
             to_chain = details.to_chain_id
             
-            if not all([token, amount, from_chain, to_chain]):
-                return self._create_error_response(
-                    "Missing required bridge parameters",
-                    AgentType.BRIDGE
+            # Check for missing parameters
+            missing_params = []
+            if not token:
+                missing_params.append("token")
+            if not amount:
+                missing_params.append("amount")
+            if not from_chain:
+                missing_params.append("source chain")
+            if not to_chain:
+                missing_params.append("destination chain")
+            
+            if missing_params:
+                # Use centralized error guidance for consistent messaging
+                error_context = ErrorContext.MISSING_AMOUNT if not amount else \
+                               ErrorContext.MISSING_TOKEN if not token else \
+                               ErrorContext.MISSING_DESTINATION if not to_chain else \
+                               ErrorContext.MISSING_CHAIN
+                return self._create_guided_error_response(
+                    command_type=CommandType.BRIDGE,
+                    agent_type=AgentType.BRIDGE,
+                    error_context=error_context,
+                    missing_params=missing_params
                 )
             
             # Check if this is a GMP-eligible operation
@@ -207,10 +226,25 @@ class PrivacyBridgeProcessor(BaseProcessor):
             amount = details.amount
             from_chain = unified_command.chain_id
             
-            if not all([token, amount, from_chain]):
-                return self._create_error_response(
-                    "Missing required parameters for privacy bridge",
-                    AgentType.BRIDGE_TO_PRIVACY
+            # Check for missing parameters
+            missing_params = []
+            if not token:
+                missing_params.append("token")
+            if not amount:
+                missing_params.append("amount")
+            if not from_chain:
+                missing_params.append("chain")
+            
+            if missing_params:
+                # Use centralized error guidance for consistent messaging
+                error_context = ErrorContext.MISSING_AMOUNT if not amount else \
+                               ErrorContext.MISSING_TOKEN if not token else \
+                               ErrorContext.MISSING_CHAIN
+                return self._create_guided_error_response(
+                    command_type=CommandType.BRIDGE_TO_PRIVACY,
+                    agent_type=AgentType.BRIDGE_TO_PRIVACY,
+                    error_context=error_context,
+                    missing_params=missing_params
                 )
             
             # Build privacy bridge transaction using GMP

@@ -7,9 +7,10 @@ from typing import Dict, Any, Optional
 from decimal import Decimal
 
 from app.models.unified_models import (
-    UnifiedCommand, UnifiedResponse, AgentType, TransactionData
+    UnifiedCommand, UnifiedResponse, AgentType, TransactionData, CommandType
 )
 from app.core.exceptions import BusinessLogicError, invalid_amount_error
+from app.services.error_guidance_service import ErrorContext
 from app.services.utils.transaction_utils import transaction_utils
 from .base_processor import BaseProcessor
 
@@ -38,10 +39,27 @@ class SwapProcessor(BaseProcessor):
             amount = details.amount
             chain_id = unified_command.chain_id
             
-            if not all([token_in, token_out, amount, chain_id]):
-                return self._create_error_response(
-                    "Missing required swap parameters",
-                    AgentType.SWAP
+            # Check for missing parameters
+            missing_params = []
+            if not token_in:
+                missing_params.append("token_in")
+            if not token_out:
+                missing_params.append("token_out")
+            if not amount:
+                missing_params.append("amount")
+            if not chain_id:
+                missing_params.append("chain")
+            
+            if missing_params:
+                # Use centralized error guidance for consistent messaging
+                error_context = ErrorContext.MISSING_AMOUNT if not amount else \
+                               ErrorContext.MISSING_TOKEN_PAIR if not (token_in and token_out) else \
+                               ErrorContext.MISSING_CHAIN
+                return self._create_guided_error_response(
+                    command_type=CommandType.SWAP,
+                    agent_type=AgentType.SWAP,
+                    error_context=error_context,
+                    missing_params=missing_params
                 )
             
             # Normalize tokens for DEX compatibility
