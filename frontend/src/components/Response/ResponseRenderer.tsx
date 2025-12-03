@@ -18,7 +18,6 @@ import { EnhancedPortfolioSummary } from '../EnhancedPortfolioSummary';
 import { PrivacyBridgeGuidance } from '../Privacy/PrivacyBridgeGuidance';
 import { BridgeStatusTracker } from '../Bridge/BridgeStatusTracker';
 import { PostBridgeModal } from '../Bridge/PostBridgeModal';
-import { ZcashAddressModal } from '../Privacy/ZcashAddressModal';
 import type { ResponseContent, ResponseMetadata, TransactionData, BridgeStatusContent, PostBridgeSuccessContent } from '../../types/responses';
 import type { AgentType } from '../../utils/agentInfo';
 import type { ResponseTypeChecks } from '../../utils/responseTypeDetection';
@@ -64,7 +63,6 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
 }) => {
     const { address } = useAccount();
     const [isPostBridgeModalOpen, setIsPostBridgeModalOpen] = React.useState(false);
-    const [isZcashAddressModalOpen, setIsZcashAddressModalOpen] = React.useState(false);
     const [zcashAddress, setZcashAddress] = React.useState<string>('');
 
     const {
@@ -280,58 +278,41 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     // Privacy Bridge
     if (isBridgePrivacyReady && isBridgePrivacyReadyContent(content)) {
         return (
-            <>
-                <VStack spacing={4} mt={4} width="100%">
-                    <GMPTransactionCard
-                        transaction={{
-                            id: `privacy-${Date.now()}`,
-                            type: 'bridge_to_privacy',
-                            sourceChain: content.from_chain,
-                            destChain: content.to_chain,
-                            status: 'pending',
-                            steps:
-                                content.steps?.map((step: any, idx: number) => ({
-                                    id: `step-${idx}`,
-                                    title: step.description || step.type,
-                                    description: step.description || '',
-                                    status: 'pending' as const,
-                                    estimatedTime: idx === 0 ? content.estimated_time : undefined,
-                                })) || [],
-                            createdAt: new Date(),
-                            metadata: {
-                                amount: content.amount,
-                                token: content.token,
-                                protocol: content.protocol,
-                            },
-                            updatedAt: new Date(),
-                            recipient: zcashAddress || address || '',
-                        }}
-                        variant="privacy"
-                        privacyLevel={content.privacy_level}
-                        onExecute={() => {
-                            if (!zcashAddress) {
-                                setIsZcashAddressModalOpen(true);
-                            } else {
-                                onExecute();
-                            }
-                        }}
-                        onCancel={onCancel}
-                        isExecuting={isExecuting}
-                    />
-                    <PrivacyBridgeGuidance content={content} isCompact={false} />
-                </VStack>
-                
-                <ZcashAddressModal
-                    isOpen={isZcashAddressModalOpen}
-                    onClose={() => setIsZcashAddressModalOpen(false)}
-                    onConfirm={(addr) => {
-                        setZcashAddress(addr);
-                        setIsZcashAddressModalOpen(false);
-                        onExecute();
+            <VStack spacing={4} mt={4} width="100%">
+                <GMPTransactionCard
+                    transaction={{
+                        id: `privacy-${Date.now()}`,
+                        type: 'bridge_to_privacy',
+                        sourceChain: content.from_chain,
+                        destChain: content.to_chain,
+                        status: 'pending',
+                        steps:
+                            content.steps?.map((step: any, idx: number) => ({
+                                id: `step-${idx}`,
+                                title: step.description || step.type,
+                                description: step.description || '',
+                                status: 'pending' as const,
+                                estimatedTime: idx === 0 ? content.estimated_time : undefined,
+                            })) || [],
+                        createdAt: new Date(),
+                        metadata: {
+                            amount: content.amount,
+                            token: content.token,
+                            protocol: content.protocol,
+                        },
+                        updatedAt: new Date(),
+                        recipient: zcashAddress || address || '',
                     }}
-                    isLoading={isExecuting}
+                    variant="privacy"
+                    privacyLevel={content.privacy_level}
+                    zcashAddress={zcashAddress}
+                    onZcashAddressChange={setZcashAddress}
+                    onExecute={onExecute}
+                    onCancel={onCancel}
+                    isExecuting={isExecuting}
                 />
-            </>
+                <PrivacyBridgeGuidance content={content} isCompact={false} />
+            </VStack>
         );
     }
 

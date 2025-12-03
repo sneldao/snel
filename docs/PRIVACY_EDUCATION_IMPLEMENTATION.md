@@ -656,3 +656,30 @@ Enhanced `@research` agent to reliably answer privacy-related queries by impleme
 - **DRY**: Single knowledge base source, shared with contextual processor
 - **MODULAR**: Clean fallback chain, independent methods
 - **PERFORMANT**: Instant knowledge base lookups, graceful degradation
+
+---
+
+## 5. **Zcash Address Collection Refactor** ✅ (Latest)
+**Files**: 
+- New: `frontend/src/components/Privacy/PrivacyAddressInput.tsx` (169 LOC)
+- Enhanced: `frontend/src/components/GMP/GMPTransactionCard.tsx`
+- Simplified: `frontend/src/components/Response/ResponseRenderer.tsx`
+- Deleted: `frontend/src/components/Privacy/ZcashAddressModal.tsx`
+
+### Change
+Moved from modal-based address collection to inline card integration:
+
+**Before**: Modal overlay interrupts chat flow → User enters address in modal → Modal closes → Transaction executes
+
+**After**: Transaction card shows address input inline → User enters address while viewing details → Executes from same screen
+
+### Implementation
+- `PrivacyAddressInput`: Reusable controlled component with address validation + wallet links
+- `GMPTransactionCard`: Conditionally renders address input for `variant="privacy"`
+- `ResponseRenderer`: Passes address state directly via props (eliminated modal state management)
+
+### Benefits
+- No modal interruption → Better UX
+- Full context visible → User sees transaction details while addressing
+- Reduced code complexity → -75 net LOC, -1 state variable, fewer render branches
+- Follows principles → ENHANCEMENT FIRST (enhanced card), AGGRESSIVE CONSOLIDATION (deleted modal), DRY (exported validation utility)

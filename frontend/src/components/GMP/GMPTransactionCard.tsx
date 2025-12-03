@@ -2,9 +2,11 @@
  * GMP Transaction Card Component
  * Beautiful, performant, and user-delightful transaction display
  * Optimized for clarity, accessibility, and visual appeal
+ * 
+ * Privacy variant (inline address input) integrated for seamless UX
  */
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import {
   Box,
   Card,
@@ -42,6 +44,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { GMPTransaction, GMPTransactionStep } from '../../contexts/GMPContext';
 import { formatDistanceToNow } from 'date-fns';
+import { PrivacyAddressInput, validateZcashAddress } from '../Privacy/PrivacyAddressInput';
 
 // Motion components for smooth animations
 const MotionBox = motion(Box);
@@ -56,6 +59,8 @@ interface GMPTransactionCardProps {
   compact?: boolean;
   variant?: 'default' | 'privacy';
   privacyLevel?: string;
+  zcashAddress?: string;
+  onZcashAddressChange?: (address: string) => void;
 }
 
 // Step status icon component
@@ -161,8 +166,13 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
   isExecuting = false,
   compact = false,
   variant = 'default',
-  privacyLevel
+  privacyLevel,
+  zcashAddress = '',
+  onZcashAddressChange
 }) => {
+  // Address validation for privacy variant
+  const [addressError, setAddressError] = useState('');
+  const isPrivacyAddressValid = zcashAddress ? validateZcashAddress(zcashAddress).isValid : false;
   // Theme colors (privacy variant uses yellow/gold theme)
   const isPrivacy = variant === 'privacy';
   const cardBg = useColorModeValue(
@@ -350,6 +360,24 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
             </HStack>
           )}
 
+          {/* Zcash Address Input (Privacy variant only) */}
+          {isPrivacy && onZcashAddressChange && (
+            <>
+              <Divider />
+              <PrivacyAddressInput
+                address={zcashAddress}
+                onAddressChange={(newAddress) => {
+                  onZcashAddressChange(newAddress);
+                  setAddressError('');
+                }}
+                error={addressError}
+                isLoading={isExecuting}
+                showWalletLinks={!compact}
+                compact={compact}
+              />
+            </>
+          )}
+
           {/* Action buttons */}
           <Divider />
           <HStack spacing={2} justify="space-between">
@@ -391,6 +419,7 @@ export const GMPTransactionCard: React.FC<GMPTransactionCardProps> = memo(({
                   isLoading={isExecuting}
                   loadingText={isPrivacy ? 'Bridging...' : 'Executing...'}
                   leftIcon={isPrivacy ? <FiLock /> : <FiZap />}
+                  isDisabled={isPrivacy && !isPrivacyAddressValid}
                 >
                   {isPrivacy ? 'Bridge to Privacy' : 'Execute'}
                 </Button>
