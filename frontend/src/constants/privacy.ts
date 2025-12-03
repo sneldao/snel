@@ -14,7 +14,7 @@ export const ZCASH_WALLETS = [
     type: 'mobile',
     shieldedByDefault: true,
     url: 'https://zashi.app/',
-    description: 'Official Zcash mobile wallet with shielded by default',
+    description: 'Official Zcash mobile wallet. Shielded by default, built by Electric Coin Co.',
     platforms: ['iOS', 'Android'] as const,
     badge: 'Recommended' as const,
   },
@@ -24,7 +24,7 @@ export const ZCASH_WALLETS = [
     type: 'desktop',
     shieldedByDefault: true,
     url: 'https://nighthawkwallet.com/',
-    description: 'Desktop wallet with full shielded support',
+    description: 'Open-source desktop wallet with full privacy support. Shielded by default.',
     platforms: ['Windows', 'macOS', 'Linux'] as const,
     badge: 'Recommended' as const,
   },
@@ -72,8 +72,8 @@ export const PRIVACY_CONCEPTS = {
   },
   UNIFIED_ADDRESS: {
     title: 'Unified Address (UA)',
-    description: 'A single modern address that can receive both shielded and transparent Zcash. Automatically routes to the right pool. Think of it like a universal adapter.',
-    tooltip: 'One address works across all Zcash pools. If your wallet supports autoshielding, funds arrive shielded by default.',
+    description: 'The modern Zcash address starting with "u". Works with all wallets and pools. Like a universal adapter that automatically provides privacy with supporting wallets.',
+    tooltip: 'One address works across all Zcash address types (transparent and shielded). If your wallet supports autoshielding, funds arrive private by default.',
     learnUrl: 'https://z.cash/learn/what-are-zcash-unified-addresses/',
     icon: '🔗',
   },
@@ -139,9 +139,10 @@ The bridge uses Axelar's secure cross-chain protocol. After bridging, you'll rec
 
   SECURITY_TIPS: [
     'Always use a wallet that is "shielded by default"',
-    'Use unified addresses (UA) for seamless shielded transactions',
+    'Use unified addresses (UA) - they work with all wallets automatically',
     'Enable encrypted memos for private notes on transactions',
-    'Backup your seed phrase securely',
+    'Avoid reusing the same address for different purposes to maintain anonymity',
+    'Backup your seed phrase securely and keep it offline',
     'Verify wallet URLs carefully to avoid phishing',
   ] as const,
 } as const;

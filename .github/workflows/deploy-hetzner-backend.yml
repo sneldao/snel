@@ -1,0 +1,81 @@
+name: Deploy Backend to Hetzner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'scripts/deploy-to-hetzner.sh'
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'sneldao' # Only run on pushes to the main repo, not forks
+    
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js (needed for some scripts)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Configure SSH key for Hetzner server access
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.HETZNER_SSH_PRIVATE_KEY }}
+
+    - name: Add Hetzner server to known hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H snel-bot >> ~/.ssh/known_hosts
+        # If snel-bot is not configured in SSH, we'll use the IP directly
+        ssh-keyscan -H 157.180.36.156 >> ~/.ssh/known_hosts
+
+    - name: Verify SSH connectivity
+      run: |
+        ssh -o ConnectTimeout=10 -o BatchMode=yes snel-bot 'echo "SSH connection successful"'
+
+    - name: Run deployment script
+      run: |
+        chmod +x scripts/deploy-to-hetzner.sh
+        ./scripts/deploy-to-hetzner.sh
+      env:
+        SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+
+    - name: Verify deployment
+      run: |
+        sleep 10  # Wait for service to fully start
+        
+        # Test the API to confirm it's responding
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.snel.famile.xyz/api/v1/health/)
+        if [ "$HTTP_CODE" -eq 200 ]; then
+          echo "✅ API is responding correctly (HTTP $HTTP_CODE)"
+        else
+          echo "❌ API is not responding correctly (HTTP $HTTP_CODE)"
+          exit 1
+        fi
+
+    - name: Create deployment status
+      uses: bobheadxi/deployments@v0.4.3
+      with:
+        step: finish
+        token: ${{ secrets.GITHUB_TOKEN }}
+        status: success
+      if: success()
+
+    - name: Report deployment failure
+      uses: bobheadxi/deployments@v0.4.3
+      if: failure()
+      with:
+        step: finish
+        token: ${{ secrets.GITHUB_TOKEN }}
+        status: failure

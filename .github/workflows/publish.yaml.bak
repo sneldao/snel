@@ -1,0 +1,27 @@
+name: Cleanup Deployments
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Display removal notice
+        run: |
+          echo "NOTICE: Northflank deployment has been removed."
+          echo "Deployments now happen via deploy-hetzner-backend.yml workflow."
+          echo "This workflow now serves as a reminder to avoid Northflank deployment remnants."
+          
+      - name: Check for old deployment references
+        run: |
+          echo "Checking for any remaining Northflank references in code..."
+          if grep -r "northflank" . --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.venv --exclude="*.md" --exclude-dir=backend/.venv; then
+            echo "⚠️  Found Northflank references in code - consider removing them"
+          else
+            echo "✅ No Northflank code references found"
+          fi

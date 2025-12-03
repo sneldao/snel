@@ -86,7 +86,7 @@ export const PrivacyAddressInput: React.FC<PrivacyAddressInputProps> = ({
 
   return (
     <VStack spacing={compact ? 3 : 4} align="stretch">
-      {/* Info Box */}
+      {/* Unified Address Explanation (Primary) */}
       {!compact && (
         <Box 
           p={3} 
@@ -97,14 +97,17 @@ export const PrivacyAddressInput: React.FC<PrivacyAddressInputProps> = ({
           borderLeft="3px solid"
           borderLeftColor="yellow.500"
         >
-          <HStack spacing={2} mb={1} align="start">
+          <HStack spacing={2} mb={2} align="start">
             <Icon as={FaInfo} color="yellow.600" mt={0.5} flexShrink={0} />
             <Text fontWeight="semibold" fontSize="sm" color={textColor}>
-              Unified addresses (u...) provide maximum privacy
+              Recommended: Unified Address (u...)
             </Text>
           </HStack>
           <Text fontSize="xs" color={mutedColor} lineHeight="1.5" ml={6}>
-            Your funds will arrive in a shielded address where transaction details remain hidden.
+            Works with all Zcash wallets. Automatically provides privacy. Think of it like a universal adapter for Zcash.
+          </Text>
+          <Text fontSize="xs" color={mutedColor} lineHeight="1.5" ml={6} mt={1}>
+            Your funds arrive encrypted where only you can see transaction details.
           </Text>
         </Box>
       )}
@@ -156,10 +159,10 @@ export const PrivacyAddressInput: React.FC<PrivacyAddressInputProps> = ({
       {/* Address Input */}
       <FormControl isInvalid={!!error}>
         <FormLabel fontSize="sm" fontWeight="semibold">
-          Zcash Address
+          Your Zcash Address
         </FormLabel>
         <Input
-          placeholder="u1... or t1... or t3..."
+          placeholder="u1... (recommended) or z... or t1... or t3..."
           value={address}
           onChange={(e) => handleAddressChange(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleConfirm()}
@@ -177,11 +180,11 @@ export const PrivacyAddressInput: React.FC<PrivacyAddressInputProps> = ({
           {error}
         </FormErrorMessage>
         <Text fontSize="xs" color={mutedColor} mt={1}>
-          Unified (u...) and Shielded (z...) addresses provide maximum privacy
+          Unified addresses (u...) work with all wallets and provide automatic privacy
         </Text>
       </FormControl>
 
-      {/* Address Format Help (only in non-compact mode) */}
+      {/* Address Format Help (Advanced) */}
       {!compact && (
         <Box 
           p={3} 
@@ -191,19 +194,22 @@ export const PrivacyAddressInput: React.FC<PrivacyAddressInputProps> = ({
           borderColor={borderColor}
         >
           <Text fontSize="xs" fontWeight="semibold" mb={2} color={textColor}>
-            Address Formats
+            Alternative Address Types
           </Text>
           <VStack align="start" spacing={1}>
             <Text fontSize="xs" color={mutedColor}>
-              <strong>u...</strong> Unified Address (recommended)
+              <strong>u...</strong> Unified Address (primary recommendation)
             </Text>
             <Text fontSize="xs" color={mutedColor}>
-              <strong>z...</strong> Shielded Address
+              <strong>z...</strong> Shielded Address (Sapling or legacy Sprout)
             </Text>
             <Text fontSize="xs" color={mutedColor}>
-              <strong>t1/t3...</strong> Transparent Address (less privacy)
+              <strong>t1/t3...</strong> Transparent Address (public, not private)
             </Text>
           </VStack>
+          <Text fontSize="xs" color={mutedColor} mt={2} fontStyle="italic">
+            Most wallets support unified addresses. Check your wallet&apos;s documentation if unsure.
+          </Text>
         </Box>
       )}
 

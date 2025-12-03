@@ -1,62 +1,18 @@
-name: CI
+name: Cleanup Notifications
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  test:
+  cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12
-
-      - name: Install dependencies
-        run: pip install poetry
-
-      - name: Install package
-        run: poetry install
-
-      - name: Run tests
-        run: poetry run pytest
-        env:
-          ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          QUICKNODE_ENDPOINT: fakekey
-
-  publish:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    needs: test
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: pip install build twine
-
-      - name: Build
-        run: python -m build
-
-      - name: Publish to pypi
-        if: github.ref == 'refs/heads/main'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Display cleanup notice
         run: |
-          twine upload --repository pypi dist/*
+          echo "NOTICE: Old Northflank deployment references have been removed."
+          echo "Deployments now happen via backend.yml and deploy-hetzner-backend.yml workflows."
+          echo "This workflow serves as a cleanup notification."

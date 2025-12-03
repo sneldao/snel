@@ -1,4 +1,4 @@
-name: Backend CI
+name: Backend CI/CD
 
 on:
   push:
@@ -18,10 +18,10 @@ jobs:
         working-directory: backend
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -34,3 +34,47 @@ jobs:
         run: pytest
         env:
           BRIAN_API_KEY: ${{ secrets.BRIAN_API_KEY }}
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js (needed for some scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Configure SSH key for Hetzner server access
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_PRIVATE_KEY }}
+
+      - name: Add Hetzner server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H 157.180.36.156 >> ~/.ssh/known_hosts
+
+      - name: Run deployment script
+        run: |
+          chmod +x scripts/deploy-to-hetzner.sh
+          ./scripts/deploy-to-hetzner.sh
+
+      - name: Verify deployment
+        run: |
+          sleep 10  # Wait for service to fully start
+          
+          # Test the API to confirm it's responding
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.snel.famile.xyz/api/v1/health/)
+          if [ "$HTTP_CODE" -eq 200 ]; then
+            echo "✅ API is responding correctly (HTTP $HTTP_CODE)"
+          else
+            echo "❌ API is not responding correctly (HTTP $HTTP_CODE)"
+            exit 1
+          fi
