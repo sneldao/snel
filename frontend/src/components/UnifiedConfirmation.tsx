@@ -136,6 +136,18 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
               : content.details?.destination}
           </Text>
         </HStack>
+        {/* Gas Optimization Hint */}
+        {(content as any)?.gas_optimization_hint && (
+          <Alert status="info" borderRadius="md" mt={2}>
+            <AlertIcon />
+            <Box flex="1">
+              <AlertTitle fontSize="sm">Gas Optimization Tip</AlertTitle>
+              <AlertDescription display="block" fontSize="xs">
+                {(content as any)?.gas_optimization_hint}
+              </AlertDescription>
+            </Box>
+          </Alert>
+        )}
       </VStack>
     );
   };

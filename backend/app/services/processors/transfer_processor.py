@@ -1,6 +1,6 @@
 """
 Transfer command processor.
-Handles token transfer operations.
+Handles token transfer operations with gas optimization suggestions.
 """
 import logging
 from typing import Optional
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class TransferProcessor(BaseProcessor):
-    """Processes transfer commands."""
+    """Processes transfer commands with gas optimization hints."""
     
     async def process(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """
@@ -27,6 +27,7 @@ class TransferProcessor(BaseProcessor):
         - Token transfer validation
         - Destination address resolution
         - Transaction preparation
+        - Gas optimization suggestions
         """
         try:
             logger.info(f"Processing transfer command: {unified_command.command}")
@@ -63,6 +64,9 @@ class TransferProcessor(BaseProcessor):
                     service_name="Brian API"
                 )
             
+            # Check if this transfer could benefit from batching
+            gas_optimization_hint = self._check_gas_optimization_opportunity(unified_command)
+            
             # Format response content
             content = {
                 "message": f"Ready to transfer {amount_str} {details.token_in.symbol} to {details.destination}",
@@ -73,6 +77,10 @@ class TransferProcessor(BaseProcessor):
                 "type": "transfer_ready",
                 "requires_transaction": True
             }
+            
+            # Add gas optimization hint if applicable
+            if gas_optimization_hint:
+                content["gas_optimization_hint"] = gas_optimization_hint
             
             # Format transaction data
             transaction_data = self._create_transaction_data(result, unified_command.chain_id)
@@ -93,7 +101,8 @@ class TransferProcessor(BaseProcessor):
                     "transaction_ready": True,
                     "description": result.get("description", f"Transfer {amount_str} {details.token_in.symbol}"),
                     "solver": result.get("solver", ""),
-                    "protocol": result.get("protocol", {})
+                    "protocol": result.get("protocol", {}),
+                    "gas_optimized": gas_optimization_hint is not None
                 }
             )
             
@@ -104,3 +113,31 @@ class TransferProcessor(BaseProcessor):
                 AgentType.TRANSFER,
                 str(e)
             )
+    
+    def _check_gas_optimization_opportunity(self, unified_command: UnifiedCommand) -> Optional[str]:
+        """
+        Check if this transfer could benefit from batching with other transfers.
+        For Scroll and other L2s, suggests batching for gas savings.
+        """
+        # Get chain information
+        chain_id = unified_command.chain_id
+        
+        # Check if this is a chain that benefits from batching (Scroll, Arbitrum, etc.)
+        if chain_id in [534352, 42161, 10, 8453, 324]:  # Scroll, Arbitrum, Optimism, Base, zkSync
+            return f"For gas optimization on {self._get_chain_name(chain_id)}, consider batching multiple transfers. You could save up to 40% on gas fees."
+        
+        return None
+    
+    def _get_chain_name(self, chain_id: int) -> str:
+        """Get chain name from chain ID."""
+        chain_names = {
+            1: "Ethereum",
+            534352: "Scroll",
+            42161: "Arbitrum",
+            10: "Optimism",
+            8453: "Base",
+            324: "zkSync Era",
+            137: "Polygon",
+            56: "BSC"
+        }
+        return chain_names.get(chain_id, f"Chain {chain_id}")

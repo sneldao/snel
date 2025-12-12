@@ -57,6 +57,8 @@ import {
 import { setupGlobalWalletErrorHandler } from "../utils/walletErrorHandler";
 import { useGMPIntegration } from "../hooks/useGMPIntegration";
 import { useWallet } from "../hooks/useWallet";
+import { analyzeCommandSequence, generateBatchingSuggestion } from "../utils/commandSequenceAnalyzer";
+import { parseCommand } from "../utils/commandParser";
 
 // Import types
 import {
@@ -525,17 +527,43 @@ export default function MainApp(props: MainAppProps) {
           }
 
           // Regular handling for non-portfolio commands
-          setResponses((prev) => [
-            ...prev,
-            {
-              ...response,
-              agentType: mappedAgentType, // Use the mapped value
-              awaitingConfirmation: mappedAwaitingConfirmation, // Use the mapped value
-              timestamp: new Date().toISOString(),
-              isCommand: false,
-              status: "success",
-            },
-          ]);
+          // Check for batching opportunities
+          const allResponses = [...prev, {
+            ...response,
+            agentType: mappedAgentType, // Use the mapped value
+            awaitingConfirmation: mappedAwaitingConfirmation, // Use the mapped value
+            timestamp: new Date().toISOString(),
+            isCommand: false,
+            status: "success",
+          }];
+          
+          // Check if we should suggest batching
+          const commandResponses = allResponses.filter(r => r.isCommand);
+          if (commandResponses.length >= 2) {
+            // Parse the last few commands to check for transfer patterns
+            const recentCommands = commandResponses.slice(-3).map(r => parseCommand(r.content as string));
+            const analysis = analyzeCommandSequence(recentCommands);
+            const suggestion = generateBatchingSuggestion(analysis);
+            
+            if (suggestion) {
+              // Add a suggestion response
+              const suggestionResponse = {
+                content: {
+                  message: suggestion,
+                  type: "suggestion",
+                  suggestionType: "batching"
+                },
+                timestamp: new Date().toISOString(),
+                isCommand: false,
+                status: "success",
+                agentType: "agno"
+              };
+              
+              return [...allResponses, suggestionResponse];
+            }
+          }
+          
+          return allResponses;
         }
       } catch (error) {
         console.error("Error processing command:", error);

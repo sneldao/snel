@@ -40,6 +40,7 @@ const DEFAULT_GAS_PRICES: Record<number, GasPrice> = {
   [ChainId.ARBITRUM]: { slow: 0.1, average: 0.25, fast: 0.5 },
   [ChainId.OPTIMISM]: { slow: 0.001, average: 0.005, fast: 0.01 },
   [ChainId.BASE]: { slow: 0.001, average: 0.005, fast: 0.01 },
+  [ChainId.SCROLL]: { slow: 0.001, average: 0.005, fast: 0.01 },
   [ChainId.AVALANCHE]: { slow: 25, average: 35, fast: 50 },
   [ChainId.BSC]: { slow: 3, average: 5, fast: 7 },
 };
@@ -54,6 +55,7 @@ const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>
     [ChainId.ARBITRUM]: 800000,
     [ChainId.OPTIMISM]: 250000,
     [ChainId.BASE]: 250000,
+    [ChainId.SCROLL]: 250000,
     [ChainId.AVALANCHE]: 250000,
     [ChainId.BSC]: 200000,
     default: 200000,
@@ -64,6 +66,7 @@ const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>
     [ChainId.ARBITRUM]: 1000000,
     [ChainId.OPTIMISM]: 350000,
     [ChainId.BASE]: 350000,
+    [ChainId.SCROLL]: 350000,
     [ChainId.AVALANCHE]: 350000,
     [ChainId.BSC]: 300000,
     default: 300000,
@@ -74,6 +77,7 @@ const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>
     [ChainId.ARBITRUM]: 100000,
     [ChainId.OPTIMISM]: 21000,
     [ChainId.BASE]: 21000,
+    [ChainId.SCROLL]: 21000,
     [ChainId.AVALANCHE]: 21000,
     [ChainId.BSC]: 21000,
     default: 21000,
@@ -117,6 +121,7 @@ const NATIVE_TOKEN_PRICES: Record<number, number> = {
   [ChainId.ARBITRUM]: 3500, // Uses ETH
   [ChainId.OPTIMISM]: 3500, // Uses ETH
   [ChainId.BASE]: 3500,     // Uses ETH
+  [ChainId.SCROLL]: 3500,   // Uses ETH
   [ChainId.AVALANCHE]: 30,
   [ChainId.BSC]: 300,
 };
@@ -128,6 +133,7 @@ const NATIVE_TOKEN_SYMBOLS: Record<number, string> = {
   [ChainId.ARBITRUM]: 'ETH',
   [ChainId.OPTIMISM]: 'ETH',
   [ChainId.BASE]: 'ETH',
+  [ChainId.SCROLL]: 'ETH',
   [ChainId.AVALANCHE]: 'AVAX',
   [ChainId.BSC]: 'BNB',
 };
@@ -145,6 +151,11 @@ const TIME_ESTIMATES: Record<string, Record<string, number>> = {
     fast: 15, // 15 seconds
   },
   [ChainId.ARBITRUM.toString()]: {
+    slow: 30, // 30 seconds
+    average: 15, // 15 seconds
+    fast: 5, // 5 seconds
+  },
+  [ChainId.SCROLL.toString()]: {
     slow: 30, // 30 seconds
     average: 15, // 15 seconds
     fast: 5, // 5 seconds
@@ -458,5 +469,64 @@ export async function getGasPriceTiers(chainId: number): Promise<{
       price: gasPrices.fast,
       time: getTimeEstimate(chainId, 'fast')
     }
+  };
+}
+
+/**
+ * Estimate potential gas savings from transaction batching
+ * @param transactionCount Number of transactions to batch
+ * @param chainId Chain ID
+ * @returns Estimated savings information
+ */
+export function estimateBatchingSavings(transactionCount: number, chainId: number): {
+  individualCost: string;
+  batchedCost: string;
+  savings: string;
+  savingsPercentage: number;
+} {
+  if (transactionCount <= 1) {
+    return {
+      individualCost: "0",
+      batchedCost: "0",
+      savings: "0",
+      savingsPercentage: 0
+    };
+  }
+
+  // Get base gas price for the chain
+  const baseGasPrices = DEFAULT_GAS_PRICES[chainId] || { slow: 30, average: 50, fast: 80 };
+  const gasPriceGwei = baseGasPrices.average;
+  
+  // Base transfer gas cost varies by chain type
+  let baseTransferGas = 21000;
+  
+  // L2 chains typically have much lower gas costs
+  if ([534352, 42161, 10, 8453, 324].includes(chainId)) { // Scroll, Arbitrum, Optimism, Base, zkSync
+    baseTransferGas = 5000; // Much lower on L2s
+  }
+  
+  // Individual transaction cost
+  const individualGas = BigInt(transactionCount * baseTransferGas);
+  const { nativeCost: individualCost } = calculateGasCost(Number(individualGas), gasPriceGwei, chainId);
+  
+  // Batched transaction cost (simplified model)
+  // First transaction pays full cost, subsequent ones pay reduced cost
+  const batchOverhead = 25000; // Overhead for batching contract
+  const reducedPerTx = 1000; // Reduced cost per additional transaction in batch on L2s
+  const batchedGas = batchOverhead + baseTransferGas + ((transactionCount - 1) * reducedPerTx);
+  const { nativeCost: batchedCost } = calculateGasCost(batchedGas, gasPriceGwei, chainId);
+  
+  // Calculate savings
+  const savingsNum = individualCost - batchedCost;
+  const savingsPercentage = individualCost > 0 ? (savingsNum / individualCost) * 100 : 0;
+  
+  // Get native token symbol
+  const nativeTokenSymbol = NATIVE_TOKEN_SYMBOLS[chainId] || 'ETH';
+  
+  return {
+    individualCost: `${individualCost.toFixed(6)} ${nativeTokenSymbol}`,
+    batchedCost: `${batchedCost.toFixed(6)} ${nativeTokenSymbol}`,
+    savings: `${savingsNum.toFixed(6)} ${nativeTokenSymbol}`,
+    savingsPercentage: Math.round(Math.min(savingsPercentage, 40)) // Cap at 40% for realistic estimate
   };
 }

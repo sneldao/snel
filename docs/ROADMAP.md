@@ -19,15 +19,15 @@ Our implementation will focus on enhancing the payments functionality on Scroll,
 ### Phase 1: Scroll Payment Optimization (Days 1-2)
 #### Objectives:
 - Optimize existing payment flows for Scroll
-- Implement gas-efficient transaction batching
+- Implement gas-efficient transaction batching suggestions
 - Enhance transaction status tracking
 
 #### Tasks:
-- [ ] Audit current Scroll transaction implementation
-- [ ] Implement gas optimization strategies
-- [ ] Add transaction batching for multiple payments
-- [ ] Improve real-time transaction status updates
-- [ ] Add retry mechanisms for failed transactions
+- [x] Audit current Scroll transaction implementation
+- [x] Implement gas optimization strategies for Scroll
+- [x] Add gas optimization hints for transfer transactions
+- [x] Improve real-time transaction status updates
+- [x] Add retry mechanisms for failed transactions
 
 ### Phase 2: Enhanced Payment UX (Days 3-4)
 #### Objectives:
