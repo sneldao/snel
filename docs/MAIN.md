@@ -1,13 +1,66 @@
-# 🚀 SNEL Deployment Guide
+# 🏗️ SNEL Architecture & Deployment Overview
 
-## Quick Start
+## Core Architecture
 
-### Web Application (Live)
+SNEL is a multi-platform DeFi orchestrator built with **ENHANCEMENT FIRST** principles, providing unified DeFi operations across web, mobile, and agent ecosystems.
+
+### Platform Support
+- **Web Application**: https://stable-snel.netlify.app/
+- **LINE Mini-dApp**: Mobile-optimized DeFi interface
+- **Coral Protocol Agent**: Multi-agent DeFi coordination
+- **REST API**: Direct integration capabilities
+
+### Core Components
+
+#### Multi-Platform Orchestrator
+```
+SNELOrchestrator
+├── Platform Detection (WEB_APP, CORAL_AGENT, LINE_MINI_DAPP, API)
+├── Service Pool (Brian, OpenAI, Web3Helper, Axelar)
+├── Request Deduplication & Caching
+└── Platform-Specific Response Formatting
+```
+
+#### DeFi Operations
+- **Token Swaps**: Multi-chain via Brian API + 0x Protocol
+- **Cross-Chain Bridging**: Axelar GMP + LayerZero integration
+- **Portfolio Analysis**: Web3 balance aggregation + AI insights
+- **Protocol Research**: AI-powered DeFi protocol analysis
+- **Natural Language Processing**: OpenAI-powered command interpretation
+
+#### Supported Networks (17+)
+- **Layer 1**: Ethereum, Avalanche, BSC
+- **Layer 2**: Base, Arbitrum, Optimism, Polygon
+- **Emerging**: zkSync, Scroll, Linea, Mantle, Blast, Mode, Taiko
+
+### Coral Protocol Integration
+
+#### MCP Adapter Architecture
+```
+CoralEnvironment → SNELCoralMCPAdapter → SNELOrchestrator
+├── SSE/Stdio Protocol Handling
+├── Tool Call Mapping (5 DeFi operations)
+├── Payment Integration (Crossmint)
+└── Health Monitoring & SLA
+```
+
+#### Agent Capabilities
+1. **execute_swap** - Multi-chain token swaps ($0.10-$0.20)
+2. **execute_bridge** - Cross-chain operations ($0.15-$0.30)
+3. **analyze_portfolio** - Portfolio analysis ($0.05)
+4. **research_protocol** - DeFi protocol research ($0.05)
+5. **interpret_command** - Natural language processing ($0.01)
+
+## Deployment Guide
+
+### Quick Start
+
+#### Web Application (Live)
 - **URL**: https://stable-snel.netlify.app/
 - **Status**: Production with real users
 - **Features**: Full DeFi operations, portfolio analysis, multi-chain support
 
-### Local Development
+#### Local Development
 ```bash
 # Backend
 cd backend
@@ -20,34 +73,34 @@ npm install
 npm run dev
 ```
 
-## Platform Deployments
+### Platform Deployments
 
-### 1. Web Application
+#### 1. Web Application
 
-#### Frontend (Netlify)
+##### Frontend (Netlify)
 ```bash
 # Build and deploy
 npm run build
 netlify deploy --prod --dir=.next
 ```
 
-#### Backend (Cloud)
+##### Backend (Cloud)
 ```bash
 # Docker deployment
 docker build -t snel-backend .
 docker run -p 8000:8000 snel-backend
 ```
 
-#### Environment Variables
+##### Environment Variables
 ```env
 OPENAI_API_KEY=your_openai_key
 BRIAN_API_KEY=your_brian_key
 REDIS_URL=redis://localhost:6379
 ```
 
-### 2. Coral Protocol Agent
+#### 2. Coral Protocol Agent
 
-#### Registration Process
+##### Registration Process
 1. **Email Registration**: hello@coralprotocol.org
 2. **Required Files**:
    - coral-agent.toml
@@ -55,13 +108,13 @@ REDIS_URL=redis://localhost:6379
    - Dockerfile.coral
    - wallet.toml (Crossmint config)
 
-#### Docker Build
+##### Docker Build
 ```bash
 cd backend/app/agents
 docker build -f Dockerfile.coral -t snel-coral-agent .
 ```
 
-#### Agent Configuration
+##### Agent Configuration
 ```toml
 [agent]
 name = "snel-defi-agent"
@@ -76,7 +129,7 @@ openai_api_key = { type = "string", required = true }
 brian_api_key = { type = "string", required = true }
 ```
 
-#### Deployment Commands
+##### Deployment Commands
 ```bash
 # Local testing (devmode)
 ./start_devmode.sh
@@ -85,9 +138,9 @@ brian_api_key = { type = "string", required = true }
 # (Handled by Coral Server orchestration)
 ```
 
-### 3. LINE Mini-dApp
+#### 3. LINE Mini-dApp
 
-#### LIFF Configuration
+##### LIFF Configuration
 ```javascript
 // LINE Front-end Framework setup
 liff.init({ liffId: 'your-liff-id' })
@@ -96,7 +149,7 @@ liff.init({ liffId: 'your-liff-id' })
   })
 ```
 
-#### Mobile Optimization
+##### Mobile Optimization
 - Touch-friendly interface
 - Reduced feature set for mobile
 - LINE Pay integration

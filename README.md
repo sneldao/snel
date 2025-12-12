@@ -26,18 +26,23 @@ snel/
 ├── frontend/          # Next.js application
 ├── backend/           # FastAPI application
 ├── docs/              # Documentation
-│   ├── ARCHITECTURE_FOUNDATION.md    # Core architecture & foundation
-│   ├── GMP_INTEGRATION.md            # GMP integration guide
-│   └── CHAIN_INTEGRATIONS_DEPLOYMENT.md  # Chain integrations & deployment
+│   ├── MAIN.md                 # Core architecture & deployment
+│   ├── PRIVACY.md              # Privacy features & Zcash integration
+│   ├── INTEGRATIONS.md         # LINE & WalletConnect integration
+│   └── ROADMAP.md              # Hackathon roadmap & implementation
 └── public/           # Static assets
 ```
 
 ### 📚 Documentation
 
-- **[Architecture & Foundation](docs/ARCHITECTURE_FOUNDATION.md)** - Core architecture, foundation upgrades, and current status
-- **[GMP Integration](docs/GMP_INTEGRATION.md)** - General Message Passing integration guide and implementation
-- **[Chain Integrations & Deployment](docs/CHAIN_INTEGRATIONS_DEPLOYMENT.md)** - Blockchain integrations and deployment guides
-- **[Privacy Education Implementation](PRIVACY_EDUCATION_IMPLEMENTATION.md)** - Zcash privacy bridging, user education, and real-time status tracking
+All project documentation has been consolidated into four main files in the [docs/](docs/) directory:
+
+- **[MAIN.md](docs/MAIN.md)** - Core architecture and deployment information
+- **[PRIVACY.md](docs/PRIVACY.md)** - Privacy features and Zcash integration
+- **[INTEGRATIONS.md](docs/INTEGRATIONS.md)** - LINE Mini-dApp and WalletConnect integration
+- **[ROADMAP.md](docs/ROADMAP.md)** - Hackathon roadmap and implementation plan
+
+See the [docs/README.md](docs/README.md) for a complete overview of the documentation structure.
 
 ### Supported Swap Commands
 
@@ -95,31 +100,11 @@ cd frontend && npm run dev
 
 ## 🛣️ Roadmap
 
-Our goal is to continuously improve SNEL. Here are some of our future plans:
+Our goal is to continuously improve SNEL. See our detailed [ROADMAP.md](docs/ROADMAP.md) for our hackathon plans and future development.
 
-### Phase 1: Foundation Refinement
+### Hackathon Focus: Payments Track
 
-- Centralized configuration management.
-- Standardized error handling.
-- Import structure cleanup.
-
-### Phase 2: Architecture Enhancement
-
-- Service layer restructuring.
-- Add database & caching layer.
-- Enhanced monitoring & observability.
-
-### Phase 3: Advanced Features
-
-- Event-driven architecture.
-- Background processing for long-running tasks.
-- API versioning.
-
-### Phase 4: Production Readiness
-
-- Security enhancements.
-- Performance optimization.
-- CI/CD pipeline improvements.
+We're currently focusing on enhancing the payments functionality on Scroll for the upcoming hackathon. See our complete implementation plan in [ROADMAP.md](docs/ROADMAP.md).
 
 ## 🤝 Contributing
 
