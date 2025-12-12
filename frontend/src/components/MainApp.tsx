@@ -43,12 +43,14 @@ import { ExternalLinkIcon, SettingsIcon, QuestionIcon } from "@chakra-ui/icons";
 import { ApiKeyModal } from "./ApiKeyModal";
 import { LogoModal } from "./LogoModal";
 import { HelpModal } from "./HelpModal";
+import { PaymentQuickActions } from "./PaymentQuickActions";
 import { fetchUserProfile } from "../services/profileService";
 import { SUPPORTED_CHAINS } from "../constants/chains";
 import { ApiService } from "../services/apiService";
 import { TransactionService } from "../services/transactionService";
 import { MultiStepTransactionService } from "../services/multiStepTransactionService";
 import { PortfolioService } from "../services/portfolioService";
+import { PaymentHistoryService } from "../services/paymentHistoryService";
 import { AdvancedSettings, AdvancedSettingsValues } from "./AdvancedSettings";
 import {
   withAsyncRecursionGuard,
@@ -158,6 +160,10 @@ export default function MainApp(props: MainAppProps) {
   const apiService = React.useMemo(() => new ApiService(), []);
   const portfolioService = React.useMemo(
     () => new PortfolioService(apiService),
+    [apiService]
+  );
+  const paymentHistoryService = React.useMemo(
+    () => new PaymentHistoryService(apiService),
     [apiService]
   );
   const transactionService = React.useMemo(
@@ -464,6 +470,162 @@ export default function MainApp(props: MainAppProps) {
                   : r
               )
             );
+          }
+        } else if (/payment history|recent transfers|transfer history/i.test(command.toLowerCase())) {
+          // Handle payment history command
+          try {
+            if (!address) {
+              throw new Error("Wallet not connected");
+            }
+            
+            const history = await paymentHistoryService.getPaymentHistory(address, chainId);
+            
+            const historyResponse = {
+              content: {
+                message: `Here's your recent payment history:`,
+                type: "payment_history",
+                history: history
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, historyResponse]);
+          } catch (error) {
+            console.error("Error fetching payment history:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to fetch payment history";
+            
+            const errorResponse = {
+              content: {
+                message: errorMessage,
+                type: "error"
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, errorResponse]);
+          }
+        } else if (/spending analytics|spending report/i.test(command.toLowerCase())) {
+          // Handle spending analytics command
+          try {
+            if (!address) {
+              throw new Error("Wallet not connected");
+            }
+            
+            const analytics = await paymentHistoryService.getSpendingAnalytics(address, chainId);
+            
+            const analyticsResponse = {
+              content: {
+                message: `Here's your spending analytics:`,
+                type: "spending_analytics",
+                analytics: analytics
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, analyticsResponse]);
+          } catch (error) {
+            console.error("Error fetching spending analytics:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to fetch spending analytics";
+            
+            const errorResponse = {
+              content: {
+                message: errorMessage,
+                type: "error"
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, errorResponse]);
+          }
+        } else if (/saved recipients|address book/i.test(command.toLowerCase())) {
+          // Handle recipients command
+          try {
+            if (!address) {
+              throw new Error("Wallet not connected");
+            }
+            
+            const recipients = await paymentHistoryService.getRecipients(address);
+            
+            const recipientsResponse = {
+              content: {
+                message: `Here are your saved recipients:`,
+                type: "recipients",
+                recipients: recipients
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, recipientsResponse]);
+          } catch (error) {
+            console.error("Error fetching recipients:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to fetch recipients";
+            
+            const errorResponse = {
+              content: {
+                message: errorMessage,
+                type: "error"
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, errorResponse]);
+          }
+        } else if (/payment templates|scheduled payments/i.test(command.toLowerCase())) {
+          // Handle payment templates command
+          try {
+            if (!address) {
+              throw new Error("Wallet not connected");
+            }
+            
+            const templates = await paymentHistoryService.getPaymentTemplates(address);
+            
+            const templatesResponse = {
+              content: {
+                message: `Here are your payment templates:`,
+                type: "payment_templates",
+                templates: templates
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, templatesResponse]);
+          } catch (error) {
+            console.error("Error fetching payment templates:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to fetch payment templates";
+            
+            const errorResponse = {
+              content: {
+                message: errorMessage,
+                type: "error"
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error" as const,
+              agentType: "payment" as const
+            };
+            
+            setResponses((prev) => [...prev, errorResponse]);
           }
         } else {
           // Regular command processing for non-portfolio commands
@@ -868,6 +1030,10 @@ export default function MainApp(props: MainAppProps) {
                 })}
                 <div ref={responsesEndRef} />
                 <VStack spacing={4} align="stretch">
+                  <PaymentQuickActions 
+                    onCommandSubmit={handleCommand}
+                    isVisible={isConnected && chainId !== undefined}
+                  />
                   <CommandInput
                     onSubmit={handleCommand}
                     isLoading={isLoading}

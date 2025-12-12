@@ -42,10 +42,12 @@ const EXAMPLE_COMMANDS = [
   "send 5 ETH to @papajams",
   "bridge 0.1 ETH from Scroll to Base",
   "analyze my portfolio",
+  "show my payment history",
+  "show my spending analytics",
+  "show my saved recipients",
+  "show my payment templates",
   "tell me about Aave",
   "what's my USDC balance?",
-  "show me my risk assessment",
-  "research Compound protocol",
 ];
 
 export const CommandInput = React.memo(

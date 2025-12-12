@@ -18,6 +18,7 @@ import { EnhancedPortfolioSummary } from '../EnhancedPortfolioSummary';
 import { PrivacyBridgeGuidance } from '../Privacy/PrivacyBridgeGuidance';
 import { BridgeStatusTracker } from '../Bridge/BridgeStatusTracker';
 import { PostBridgeModal } from '../Bridge/PostBridgeModal';
+import { PaymentHistoryResponse } from '../PaymentHistoryResponse';
 import type { ResponseContent, ResponseMetadata, TransactionData, BridgeStatusContent, PostBridgeSuccessContent } from '../../types/responses';
 import type { AgentType } from '../../utils/agentInfo';
 import type { ResponseTypeChecks } from '../../utils/responseTypeDetection';
@@ -379,6 +380,17 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 />
             </VStack>
         );
+    }
+
+    // Payment History Response
+    if (agentType === 'payment' && isObjectContent(content)) {
+        const paymentContent = content as any;
+        if (paymentContent.type === 'payment_history' || 
+            paymentContent.type === 'spending_analytics' || 
+            paymentContent.type === 'recipients' || 
+            paymentContent.type === 'payment_templates') {
+            return <PaymentHistoryResponse content={paymentContent} />;
+        }
     }
 
     // Default: return null (parent will handle default rendering)

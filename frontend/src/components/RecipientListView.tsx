@@ -1,0 +1,167 @@
+import * as React from "react";
+import {
+  Box,
+  Text,
+  VStack,
+  HStack,
+  Button,
+  Icon,
+  Badge,
+  Divider,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  useToast,
+} from "@chakra-ui/react";
+import { 
+  FaUser, 
+  FaEthereum, 
+  FaPlus, 
+  FaSearch,
+  FaHistory
+} from "react-icons/fa";
+import { Recipient } from "../services/paymentHistoryService";
+
+interface RecipientItemProps {
+  recipient: Recipient;
+  onSelect: (recipient: Recipient) => void;
+}
+
+const RecipientItem: React.FC<RecipientItemProps> = ({ recipient, onSelect }) => {
+  const getChainBadge = () => {
+    const chainNames: Record<number, string> = {
+      1: "Ethereum",
+      534352: "Scroll",
+      8453: "Base",
+      42161: "Arbitrum",
+      10: "Optimism"
+    };
+    
+    const chainName = chainNames[recipient.chainId || 1] || "Ethereum";
+    return (
+      <Badge colorScheme="purple" fontSize="xs">
+        {chainName}
+      </Badge>
+    );
+  };
+
+  return (
+    <Box 
+      p={3} 
+      borderWidth="1px" 
+      borderRadius="lg" 
+      _hover={{ bg: "gray.50", cursor: "pointer" }}
+      onClick={() => onSelect(recipient)}
+    >
+      <HStack justify="space-between">
+        <HStack spacing={3}>
+          <Icon as={FaUser} color="blue.500" />
+          <VStack align="flex-start" spacing={0}>
+            <Text fontWeight="bold">{recipient.name}</Text>
+            <Text fontSize="xs" color="gray.500" isTruncated maxW="150px">
+              {recipient.address}
+            </Text>
+          </VStack>
+        </HStack>
+        
+        <HStack spacing={2}>
+          {recipient.chainId && getChainBadge()}
+          {recipient.lastUsed && (
+            <Text fontSize="xs" color="gray.500">
+              {new Date(recipient.lastUsed).toLocaleDateString()}
+            </Text>
+          )}
+        </HStack>
+      </HStack>
+    </Box>
+  );
+};
+
+interface RecipientListViewProps {
+  recipients: Recipient[];
+  isLoading: boolean;
+  onAddRecipient: () => void;
+  onSelectRecipient: (recipient: Recipient) => void;
+}
+
+export const RecipientListView: React.FC<RecipientListViewProps> = ({ 
+  recipients, 
+  isLoading, 
+  onAddRecipient,
+  onSelectRecipient
+}) => {
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const toast = useToast();
+
+  const filteredRecipients = recipients.filter(recipient => 
+    recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    recipient.address.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (isLoading) {
+    return (
+      <Box textAlign="center" py={8}>
+        <Text>Loading recipients...</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <VStack spacing={4} align="stretch">
+      {/* Search and Add */}
+      <HStack spacing={2}>
+        <InputGroup flex={1}>
+          <InputLeftElement pointerEvents="none">
+            <Icon as={FaSearch} color="gray.300" />
+          </InputLeftElement>
+          <Input
+            placeholder="Search recipients..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </InputGroup>
+        <Button 
+          leftIcon={<Icon as={FaPlus} />} 
+          colorScheme="blue"
+          onClick={onAddRecipient}
+        >
+          Add
+        </Button>
+      </HStack>
+
+      {/* Recipients List */}
+      {filteredRecipients.length === 0 ? (
+        <Box textAlign="center" py={8}>
+          <Icon as={FaUser} boxSize={8} color="gray.300" mb={2} />
+          <Text color="gray.500" mb={2}>No recipients found</Text>
+          <Text fontSize="sm" color="gray.400">
+            {searchTerm ? "Try a different search term" : "Add your first recipient"}
+          </Text>
+        </Box>
+      ) : (
+        <VStack spacing={3} align="stretch">
+          {filteredRecipients.map((recipient) => (
+            <React.Fragment key={recipient.id}>
+              <RecipientItem 
+                recipient={recipient} 
+                onSelect={onSelectRecipient} 
+              />
+              <Divider />
+            </React.Fragment>
+          ))}
+        </VStack>
+      )}
+
+      {/* Stats */}
+      <HStack justify="space-between" fontSize="sm" color="gray.500">
+        <Text>
+          {recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}
+        </Text>
+        <Badge colorScheme="blue">
+          <Icon as={FaHistory} mr={1} />
+          Address Book
+        </Badge>
+      </HStack>
+    </VStack>
+  );
+};

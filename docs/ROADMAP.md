@@ -36,7 +36,7 @@ Our implementation will focus on enhancing the payments functionality on Scroll,
 - Add recipient management features
 
 #### Tasks:
-- [ ] Design mobile-optimized payment interface
+- [x] Design mobile-optimized payment interface
 - [ ] Implement payment history dashboard
 - [ ] Add spending analytics and categorization
 - [ ] Create recipient address book functionality
