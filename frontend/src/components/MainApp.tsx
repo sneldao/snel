@@ -51,6 +51,8 @@ import { TransactionService } from "../services/transactionService";
 import { MultiStepTransactionService } from "../services/multiStepTransactionService";
 import { PortfolioService } from "../services/portfolioService";
 import { PaymentHistoryService } from "../services/paymentHistoryService";
+import { AddRecipientModal } from "./AddRecipientModal";
+import { AddPaymentTemplateModal } from "./AddPaymentTemplateModal";
 import { AdvancedSettings, AdvancedSettingsValues } from "./AdvancedSettings";
 import {
   withAsyncRecursionGuard,
@@ -59,7 +61,10 @@ import {
 import { setupGlobalWalletErrorHandler } from "../utils/walletErrorHandler";
 import { useGMPIntegration } from "../hooks/useGMPIntegration";
 import { useWallet } from "../hooks/useWallet";
-import { analyzeCommandSequence, generateBatchingSuggestion } from "../utils/commandSequenceAnalyzer";
+import {
+  analyzeCommandSequence,
+  generateBatchingSuggestion,
+} from "../utils/commandSequenceAnalyzer";
 import { parseCommand } from "../utils/commandParser";
 
 // Import types
@@ -91,7 +96,7 @@ interface MainAppProps {
   };
   lineProfile?: LIFFProfile | null;
   isLineLoggedIn?: boolean;
-  
+
   // LINE-specific callbacks
   onLineLogin?: () => Promise<void>;
   onLineLogout?: () => Promise<void>;
@@ -121,7 +126,7 @@ export default function MainApp(props: MainAppProps) {
     onLineClose,
     onLineConnectWallet,
     onLineGetAddress,
-    onLineExecuteTransaction
+    onLineExecuteTransaction,
   } = props;
 
   // GMP Integration
@@ -191,6 +196,9 @@ export default function MainApp(props: MainAppProps) {
   const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isAddRecipientModalOpen, setIsAddRecipientModalOpen] = useState(false);
+  const [isAddPaymentTemplateModalOpen, setIsAddPaymentTemplateModalOpen] =
+    useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const responsesEndRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState<string>("");
@@ -311,7 +319,7 @@ export default function MainApp(props: MainAppProps) {
     scrollToBottom();
   }, [responses]);
 
-  const handlePortfolioAction = async (action: any) => {
+  const handleResponseAction = async (action: any) => {
     if (action.type === "retry") {
       setIsRetryingPortfolio(true);
       try {
@@ -360,6 +368,26 @@ export default function MainApp(props: MainAppProps) {
           handleCommand(lastUserMessage.content as string, true);
         }, 1000);
       }
+    } else if (action.type === "add_recipient") {
+      // Open the add recipient modal
+      setIsAddRecipientModalOpen(true);
+    } else if (action.type === "add_payment_template") {
+      // Open the add payment template modal
+      setIsAddPaymentTemplateModalOpen(true);
+    } else if (action.type === "select_recipient") {
+      // Handle recipient selection by pre-filling a send command
+      const recipient = action.recipient;
+      const sendCommand = `send [amount] ${recipient.name} (${recipient.address})`;
+
+      // Add the command to the input field
+      const timestamp = new Date().toISOString();
+      const commandResponse = {
+        content: sendCommand,
+        timestamp,
+        isCommand: true,
+        status: "success" as const,
+      };
+      setResponses((prev) => [...prev, commandResponse]);
     }
   };
 
@@ -471,160 +499,192 @@ export default function MainApp(props: MainAppProps) {
               )
             );
           }
-        } else if (/payment history|recent transfers|transfer history/i.test(command.toLowerCase())) {
+        } else if (
+          /payment history|recent transfers|transfer history/i.test(
+            command.toLowerCase()
+          )
+        ) {
           // Handle payment history command
           try {
             if (!address) {
               throw new Error("Wallet not connected");
             }
-            
-            const history = await paymentHistoryService.getPaymentHistory(address, chainId);
-            
-            const historyResponse = {
+
+            const history = await paymentHistoryService.getPaymentHistory(
+              address,
+              chainId
+            );
+
+            const historyResponse: Response = {
               content: {
                 message: `Here's your recent payment history:`,
                 type: "payment_history",
-                history: history
+                history: history,
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "success" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, historyResponse]);
           } catch (error) {
             console.error("Error fetching payment history:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to fetch payment history";
-            
-            const errorResponse = {
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch payment history";
+
+            const errorResponse: Response = {
               content: {
                 message: errorMessage,
-                type: "error"
+                type: "error",
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "error" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, errorResponse]);
           }
-        } else if (/spending analytics|spending report/i.test(command.toLowerCase())) {
+        } else if (
+          /spending analytics|spending report/i.test(command.toLowerCase())
+        ) {
           // Handle spending analytics command
           try {
             if (!address) {
               throw new Error("Wallet not connected");
             }
-            
-            const analytics = await paymentHistoryService.getSpendingAnalytics(address, chainId);
-            
-            const analyticsResponse = {
+
+            const analytics = await paymentHistoryService.getSpendingAnalytics(
+              address,
+              chainId
+            );
+
+            const analyticsResponse: Response = {
               content: {
                 message: `Here's your spending analytics:`,
                 type: "spending_analytics",
-                analytics: analytics
+                analytics: analytics,
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "success" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, analyticsResponse]);
           } catch (error) {
             console.error("Error fetching spending analytics:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to fetch spending analytics";
-            
-            const errorResponse = {
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch spending analytics";
+
+            const errorResponse: Response = {
               content: {
                 message: errorMessage,
-                type: "error"
+                type: "error",
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "error" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, errorResponse]);
           }
-        } else if (/saved recipients|address book/i.test(command.toLowerCase())) {
+        } else if (
+          /saved recipients|address book/i.test(command.toLowerCase())
+        ) {
           // Handle recipients command
           try {
             if (!address) {
               throw new Error("Wallet not connected");
             }
-            
-            const recipients = await paymentHistoryService.getRecipients(address);
-            
-            const recipientsResponse = {
+
+            const recipients = await paymentHistoryService.getRecipients(
+              address
+            );
+
+            const recipientsResponse: Response = {
               content: {
                 message: `Here are your saved recipients:`,
                 type: "recipients",
-                recipients: recipients
+                recipients: recipients,
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "success" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, recipientsResponse]);
           } catch (error) {
             console.error("Error fetching recipients:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to fetch recipients";
-            
-            const errorResponse = {
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch recipients";
+
+            const errorResponse: Response = {
               content: {
                 message: errorMessage,
-                type: "error"
+                type: "error",
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "error" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, errorResponse]);
           }
-        } else if (/payment templates|scheduled payments/i.test(command.toLowerCase())) {
+        } else if (
+          /payment templates|scheduled payments/i.test(command.toLowerCase())
+        ) {
           // Handle payment templates command
           try {
             if (!address) {
               throw new Error("Wallet not connected");
             }
-            
-            const templates = await paymentHistoryService.getPaymentTemplates(address);
-            
-            const templatesResponse = {
+
+            const templates = await paymentHistoryService.getPaymentTemplates(
+              address
+            );
+
+            const templatesResponse: Response = {
               content: {
                 message: `Here are your payment templates:`,
                 type: "payment_templates",
-                templates: templates
+                templates: templates,
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "success" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, templatesResponse]);
           } catch (error) {
             console.error("Error fetching payment templates:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to fetch payment templates";
-            
-            const errorResponse = {
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch payment templates";
+
+            const errorResponse: Response = {
               content: {
                 message: errorMessage,
-                type: "error"
+                type: "error",
               },
               timestamp: new Date().toISOString(),
               isCommand: false,
               status: "error" as const,
-              agentType: "payment" as const
+              agentType: "payment" as const,
             };
-            
+
             setResponses((prev) => [...prev, errorResponse]);
           }
         } else {
@@ -639,93 +699,56 @@ export default function MainApp(props: MainAppProps) {
             portfolioSettings // Pass portfolio settings
           );
 
-          // Debug logging for bridge and transfer commands
-          if (command.toLowerCase().includes("bridge")) {
-            console.log("Bridge command API response:", response);
-            console.log("Response agent_type:", response.agent_type);
-            console.log("Response agentType:", response.agentType);
-            console.log(
-              "Response awaiting_confirmation:",
-              response.awaiting_confirmation
-            );
-            console.log("Response transaction:", response.transaction);
-            console.log(
-              "Mapping result:",
-              response.agent_type || response.agentType
-            );
-          }
-
-          if (command.toLowerCase().includes("transfer")) {
-            console.log("Transfer command API response:", response);
-            console.log("Response agent_type:", response.agent_type);
-            console.log("Response agentType:", response.agentType);
-            console.log("Response transaction:", response.transaction);
-            console.log("Response content:", response.content);
-            console.log(
-              "Response awaiting_confirmation:",
-              response.awaiting_confirmation
-            );
-            console.log(
-              "Mapped agentType will be:",
-              response.agent_type || response.agentType
-            );
-          }
-
           // Ensure proper agentType and awaitingConfirmation mapping
           const mappedAgentType = response.agent_type || response.agentType;
           const mappedAwaitingConfirmation =
             response.awaiting_confirmation ?? response.awaitingConfirmation;
 
-          // Debug the mapping
-          if (command.toLowerCase().includes("bridge")) {
-            console.log("Final mapping:", {
-              original_agent_type: response.agent_type,
-              original_agentType: response.agentType,
-              mapped_agentType: mappedAgentType,
-              original_awaiting_confirmation: response.awaiting_confirmation,
-              original_awaitingConfirmation: response.awaitingConfirmation,
-              mapped_awaitingConfirmation: mappedAwaitingConfirmation,
-            });
-          }
-
           // Regular handling for non-portfolio commands
           // Check for batching opportunities
-          const allResponses = [...prev, {
-            ...response,
-            agentType: mappedAgentType, // Use the mapped value
-            awaitingConfirmation: mappedAwaitingConfirmation, // Use the mapped value
-            timestamp: new Date().toISOString(),
-            isCommand: false,
-            status: "success",
-          }];
-          
-          // Check if we should suggest batching
-          const commandResponses = allResponses.filter(r => r.isCommand);
-          if (commandResponses.length >= 2) {
-            // Parse the last few commands to check for transfer patterns
-            const recentCommands = commandResponses.slice(-3).map(r => parseCommand(r.content as string));
-            const analysis = analyzeCommandSequence(recentCommands);
-            const suggestion = generateBatchingSuggestion(analysis);
-            
-            if (suggestion) {
-              // Add a suggestion response
-              const suggestionResponse = {
-                content: {
-                  message: suggestion,
-                  type: "suggestion",
-                  suggestionType: "batching"
-                },
+          setResponses((prev) => {
+            const allResponses = [
+              ...prev,
+              {
+                ...response,
+                agentType: mappedAgentType, // Use the mapped value
+                awaitingConfirmation: mappedAwaitingConfirmation, // Use the mapped value
                 timestamp: new Date().toISOString(),
                 isCommand: false,
                 status: "success",
-                agentType: "agno"
-              };
-              
-              return [...allResponses, suggestionResponse];
+              },
+            ];
+
+            // Check if we should suggest batching
+            const commandResponses = allResponses.filter((r) => r.isCommand);
+            if (commandResponses.length >= 2) {
+              // Parse the last few commands to check for transfer patterns
+              const recentCommands = commandResponses
+                .slice(-3)
+                .map((r) => parseCommand(r.content as string));
+              const analysis = analyzeCommandSequence(recentCommands);
+              const suggestion = generateBatchingSuggestion(analysis);
+
+              if (suggestion) {
+                // Add a suggestion response
+                const suggestionResponse = {
+                  content: {
+                    message: suggestion,
+                    type: "suggestion",
+                    suggestionType: "batching",
+                  },
+                  timestamp: new Date().toISOString(),
+                  isCommand: false,
+                  status: "success",
+                  agentType: "agno",
+                };
+
+                return [...allResponses, suggestionResponse];
+              }
             }
-          }
-          
-          return allResponses;
+
+            return allResponses;
+          });
         }
       } catch (error) {
         console.error("Error processing command:", error);
@@ -741,6 +764,11 @@ export default function MainApp(props: MainAppProps) {
     },
     "handleCommand"
   );
+
+  // Wrapper function for components that expect (command: string) => Promise<void>
+  const handleCommandWrapper = async (command: string) => {
+    await handleCommand(command);
+  };
 
   // Reset any portfolio processing state when the component unmounts
   useEffect(() => {
@@ -946,7 +974,16 @@ export default function MainApp(props: MainAppProps) {
                   </SimpleGrid>
 
                   {/* Privacy Features Section */}
-                  <SimpleGrid columns={1} spacing={4} maxW="400px" mt={4} pt={4} borderTopWidth="1px" borderTopColor="gray.200" width="100%">
+                  <SimpleGrid
+                    columns={1}
+                    spacing={4}
+                    maxW="400px"
+                    mt={4}
+                    pt={4}
+                    borderTopWidth="1px"
+                    borderTopColor="gray.200"
+                    width="100%"
+                  >
                     <VStack
                       spacing={1}
                       align="center"
@@ -965,11 +1002,7 @@ export default function MainApp(props: MainAppProps) {
                       >
                         Privacy Bridge to Zcash
                       </Text>
-                      <Text
-                        fontSize="xs"
-                        textAlign="center"
-                        color="gray.500"
-                      >
+                      <Text fontSize="xs" textAlign="center" color="gray.500">
                         Bridge assets to privacy-enhanced transactions
                       </Text>
                     </VStack>
@@ -1023,19 +1056,19 @@ export default function MainApp(props: MainAppProps) {
                       agentType={response.agentType}
                       transaction={response.transaction}
                       awaitingConfirmation={response.awaitingConfirmation}
-                      onActionClick={handlePortfolioAction}
+                      onActionClick={handleResponseAction}
                       onExecuteTransaction={handleGMPTransaction}
                     />
                   );
                 })}
                 <div ref={responsesEndRef} />
                 <VStack spacing={4} align="stretch">
-                  <PaymentQuickActions 
+                  <PaymentQuickActions
                     onCommandSubmit={handleCommand}
                     isVisible={isConnected && chainId !== undefined}
                   />
                   <CommandInput
-                    onSubmit={handleCommand}
+                    onSubmit={handleCommandWrapper}
                     isLoading={isLoading}
                   />
                   <AdvancedSettings
@@ -1095,6 +1128,32 @@ export default function MainApp(props: MainAppProps) {
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
+      />
+      <AddRecipientModal
+        isOpen={isAddRecipientModalOpen}
+        onClose={() => setIsAddRecipientModalOpen(false)}
+        onSave={async (recipient) => {
+          if (!address) {
+            throw new Error("Wallet not connected");
+          }
+          await paymentHistoryService.saveRecipient(address, recipient);
+          // Refresh the recipient list by triggering a new command
+          handleCommand("show my saved recipients");
+        }}
+        chainId={chainId}
+      />
+      <AddPaymentTemplateModal
+        isOpen={isAddPaymentTemplateModalOpen}
+        onClose={() => setIsAddPaymentTemplateModalOpen(false)}
+        onSave={async (template) => {
+          if (!address) {
+            throw new Error("Wallet not connected");
+          }
+          await paymentHistoryService.createPaymentTemplate(address, template);
+          // Refresh the template list by triggering a new command
+          handleCommand("show my payment templates");
+        }}
+        chainId={chainId}
       />
     </Box>
   );

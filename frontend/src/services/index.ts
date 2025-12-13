@@ -6,7 +6,7 @@ export { axelarService } from './axelarService';
 // Transaction services - CONSOLIDATED
 // NEW: TransactionFlowService consolidates transactionService + multiStepTransactionService
 export { TransactionFlowService } from './transactionFlowService';
-export { TransactionBatchingService } from './transactionBatchingService';
+// export { TransactionBatchingService } from './transactionBatchingService'; // Service not implemented yet
 export type { TransactionStep, MultiStepTransactionResult } from './transactionFlowService';
 
 // Deprecated - use TransactionFlowService instead

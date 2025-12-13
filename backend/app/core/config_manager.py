@@ -472,11 +472,42 @@ class ConfigurationManager:
                 "lcd": "https://axelar-lcd.quickapi.com"
             },
             contract_addresses={
-                # Gateway contracts
-                1: {"gateway": "0x4F4495243837681061C4743b74B3eEdf548D56A5"},
-                42161: {"gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31"},
-                137: {"gateway": "0x6f015F16De9fC8791b234eF68D486d2bF203FBA8"},
-                8453: {"gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31"},
+                # Gateway contracts and Privacy Gateways
+                1: {
+                    "gateway": "0x4F4495243837681061C4743b74B3eEdf548D56A5",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0x0000000000000000000000000000000000000000" # Placeholder for mainnet
+                },
+                42161: {
+                    "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0xPrivacyGatewayArbitrum"
+                },
+                137: {
+                    "gateway": "0x6f015F16De9fC8791b234eF68D486d2bF203FBA8",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0xPrivacyGatewayPolygon"
+                },
+                8453: {
+                    "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0xPrivacyGatewayBase"
+                },
+                10: {
+                    "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0xPrivacyGatewayOptimism"
+                },
+                43114: {
+                    "gateway": "0x5029C0EFf6C34351a0CEc334542cDb22c7928f78",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0xPrivacyGatewayAvalanche"
+                },
+                56: {
+                    "gateway": "0x304acf330bbE08d1e512eefaa92F6a57871fD895",
+                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
+                    "privacy_gateway": "0xPrivacyGatewayBSC"
+                }
             },
             rate_limits={"requests_per_minute": 600}
         )

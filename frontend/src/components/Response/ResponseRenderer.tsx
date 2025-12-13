@@ -389,7 +389,23 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
             paymentContent.type === 'spending_analytics' || 
             paymentContent.type === 'recipients' || 
             paymentContent.type === 'payment_templates') {
-            return <PaymentHistoryResponse content={paymentContent} />;
+            return (
+                <PaymentHistoryResponse 
+                    content={paymentContent} 
+                    onAddRecipient={() => {
+                        // Trigger the add recipient modal
+                        if (onActionClick) {
+                            onActionClick({ type: 'add_recipient' });
+                        }
+                    }}
+                    onSelectRecipient={(recipient) => {
+                        // Handle recipient selection
+                        if (onActionClick) {
+                            onActionClick({ type: 'select_recipient', recipient });
+                        }
+                    }}
+                />
+            );
         }
     }
 

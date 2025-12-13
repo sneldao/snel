@@ -89,7 +89,7 @@ export class PaymentHistoryService {
     try {
       // For now, we'll simulate analytics data
       // In a real implementation, this would call a backend endpoint
-      return this.generateMockSpendingAnalytics(walletAddress, chainId, period);
+      return this.generateMockSpendingAnalytics(walletAddress, period, chainId);
     } catch (error) {
       console.error("Error fetching spending analytics:", error);
       throw new Error("Failed to fetch spending analytics");
@@ -193,7 +193,7 @@ export class PaymentHistoryService {
     });
   }
 
-  private generateMockSpendingAnalytics(walletAddress: string, chainId?: number, period: 'week' | 'month' | 'year'): SpendingAnalytics {
+  private generateMockSpendingAnalytics(walletAddress: string, period: 'week' | 'month' | 'year', chainId?: number): SpendingAnalytics {
     const categories = [
       { name: 'Payments', amount: '12.5', percentage: 45 },
       { name: 'Transfers', amount: '8.2', percentage: 30 },

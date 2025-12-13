@@ -15,9 +15,15 @@ interface PaymentHistoryResponseProps {
     recipients?: Recipient[];
     templates?: PaymentTemplate[];
   };
+  onAddRecipient?: () => void;
+  onSelectRecipient?: (recipient: Recipient) => void;
 }
 
-export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({ content }) => {
+export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({ 
+  content,
+  onAddRecipient,
+  onSelectRecipient
+}) => {
   const [isLoading, setIsLoading] = React.useState(false);
 
   if (content.type === "payment_history" && content.history) {
@@ -51,8 +57,8 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({ 
         <RecipientListView 
           recipients={content.recipients} 
           isLoading={isLoading}
-          onAddRecipient={() => {}}
-          onSelectRecipient={() => {}}
+          onAddRecipient={onAddRecipient || (() => {})}
+          onSelectRecipient={onSelectRecipient || (() => {})}
         />
       </Box>
     );
@@ -65,8 +71,23 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({ 
         <PaymentTemplateListView 
           templates={content.templates} 
           isLoading={isLoading}
-          onAddTemplate={() => {}}
-          onUseTemplate={() => {}}
+          onAddTemplate={() => {
+            // Trigger the add payment template modal
+            if (onAddRecipient) {
+              onAddRecipient();
+            }
+          }}
+          onUseTemplate={(template) => {
+            // Handle template usage by pre-filling a send command
+            if (onSelectRecipient) {
+              onSelectRecipient({
+                id: '',
+                name: template.name,
+                address: template.recipient,
+                chainId: template.chainId
+              });
+            }
+          }}
         />
       </Box>
     );

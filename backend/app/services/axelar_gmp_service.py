@@ -9,6 +9,8 @@ from decimal import Decimal
 import os
 import json
 from dataclasses import dataclass
+from eth_abi import encode as abi_encode
+from app.core.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -37,40 +39,30 @@ class AxelarGMPService:
     
     def __init__(self):
         """Initialize Axelar GMP service."""
-        # Axelar Gateway and Gas Service addresses
-        self.gateway_addresses = {
-            1: "0x4F4495243837681061C4743b74B3eEdf548D56A5",      # Ethereum
-            137: "0x6f015F16De9fC8791b234eF68D486d2bF203FBA8",    # Polygon
-            56: "0x304acf330bbE08d1e512eefaa92F6a57871fD895",     # BSC
-            43114: "0x5029C0EFf6C34351a0CEc334542cDb22c7928f78",  # Avalanche
-            42161: "0xe432150cce91c13a887f7D836923d5597adD8E31",  # Arbitrum
-            10: "0xe432150cce91c13a887f7D836923d5597adD8E31",     # Optimism
-            8453: "0xe432150cce91c13a887f7D836923d5597adD8E31",   # Base
-        }
-        
-        self.gas_service_addresses = {
-            1: "0x2d5d7d31F671F86C782533cc367F14109a082712",      # Ethereum
-            137: "0x2d5d7d31F671F86C782533cc367F14109a082712",    # Polygon
-            56: "0x2d5d7d31F671F86C782533cc367F14109a082712",     # BSC
-            43114: "0x2d5d7d31F671F86C782533cc367F14109a082712",  # Avalanche
-            42161: "0x2d5d7d31F671F86C782533cc367F14109a082712",  # Arbitrum
-            10: "0x2d5d7d31F671F86C782533cc367F14109a082712",     # Optimism
-            8453: "0x2d5d7d31F671F86C782533cc367F14109a082712",   # Base
-        }
-        
         # Environment configuration
         self.environment = os.getenv("AXELAR_ENVIRONMENT", "testnet")
         self.testnet_api = "https://api.testnet.axelar.dev"
         self.mainnet_api = "https://api.axelar.dev"
         self.base_url = self.mainnet_api if self.environment == "mainnet" else self.testnet_api
 
-    def get_gateway_address(self, chain_id: int) -> Optional[str]:
-        """Get Axelar Gateway contract address for a chain."""
-        return self.gateway_addresses.get(chain_id)
+    async def _get_contract_address(self, chain_id: int, contract_name: str) -> Optional[str]:
+        """Helper to get contract address from config."""
+        protocol_config = await config_manager.get_protocol("axelar")
+        if not protocol_config:
+            return None
+        return protocol_config.contract_addresses.get(chain_id, {}).get(contract_name)
 
-    def get_gas_service_address(self, chain_id: int) -> Optional[str]:
+    async def get_gateway_address(self, chain_id: int) -> Optional[str]:
+        """Get Axelar Gateway contract address for a chain."""
+        return await self._get_contract_address(chain_id, "gateway")
+
+    async def get_gas_service_address(self, chain_id: int) -> Optional[str]:
         """Get Axelar Gas Service contract address for a chain."""
-        return self.gas_service_addresses.get(chain_id)
+        return await self._get_contract_address(chain_id, "gas_service")
+
+    async def get_privacy_gateway_address(self, chain_id: int) -> Optional[str]:
+        """Get Privacy Gateway contract address for a chain."""
+        return await self._get_contract_address(chain_id, "privacy_gateway")
 
     async def estimate_gas_fee(
         self,
@@ -174,8 +166,8 @@ class AxelarGMPService:
                     "technical_details": f"Could not resolve chains: {params.source_chain} -> {params.dest_chain}"
                 }
 
-            gateway_address = self.get_gateway_address(source_chain_id)
-            gas_service_address = self.get_gas_service_address(source_chain_id)
+            gateway_address = await self.get_gateway_address(source_chain_id)
+            gas_service_address = await self.get_gas_service_address(source_chain_id)
             
             if not gateway_address or not gas_service_address:
                 return {
@@ -269,8 +261,8 @@ class AxelarGMPService:
             Transaction data for GMP call
         """
         try:
-            gateway_address = self.get_gateway_address(source_chain_id)
-            gas_service_address = self.get_gas_service_address(source_chain_id)
+            gateway_address = await self.get_gateway_address(source_chain_id)
+            gas_service_address = await self.get_gas_service_address(source_chain_id)
             
             if not gateway_address or not gas_service_address:
                 return {
@@ -347,8 +339,8 @@ class AxelarGMPService:
         """
         try:
             # 1. Resolve Addresses
-            gateway_address = self.get_gateway_address(source_chain_id)
-            gas_service_address = self.get_gas_service_address(source_chain_id)
+            gateway_address = await self.get_gateway_address(source_chain_id)
+            gas_service_address = await self.get_gas_service_address(source_chain_id)
             
             if not gateway_address or not gas_service_address:
                 return {
@@ -356,26 +348,36 @@ class AxelarGMPService:
                     "technical_details": f"Missing contract addresses for chain {source_chain_id}"
                 }
 
-            # 2. Define Destination (Simulated Zcash Gateway on Ethereum/Polygon for Hackathon)
-            # In a real scenario, this would be a specific contract on a chain that bridges to Zcash
-            # For the hackathon, we target a "PrivacyGateway" on a supported chain (e.g., Polygon)
-            destination_chain = "Polygon" 
-            destination_contract_address = "0xPrivacyGatewayAddressSimulated" 
+            # 2. Define Destination
+            # We target a "PrivacyGateway" on a supported chain (e.g., Polygon)
+            destination_chain = "Polygon"
+            destination_chain_id = 137
+            destination_contract_address = await self.get_privacy_gateway_address(destination_chain_id)
+            
+            if not destination_contract_address:
+                 return {
+                    "error": "Privacy Gateway not configured",
+                    "technical_details": f"Missing privacy gateway for destination chain {destination_chain}"
+                }
             
             # 3. Construct Payload
-            # The payload tells the destination contract what to do with the tokens
-            # Here: "Mint shielded ZEC to this Zcash address"
-            privacy_payload = {
-                "action": "mint_shielded",
-                "zcash_recipient": wallet_address, # Assuming user provided a Z-addr or we map it
-                "privacy_pool_id": "pool_v1"
-            }
-            payload_bytes = json.dumps(privacy_payload).encode().hex()
+            # ABI encode: (string zcash_recipient, string privacy_pool_id)
+            # This is the standard format expected by the PrivacyGateway contract
+            try:
+                payload_bytes = abi_encode(
+                    ['string', 'string'],
+                    [wallet_address, "pool_v1"]
+                ).hex()
+            except Exception as encode_error:
+                return {
+                    "error": "Failed to encode privacy payload",
+                    "technical_details": str(encode_error)
+                }
             
             # 4. Estimate Gas
             gas_estimate = await self.estimate_gas_fee(
                 source_chain_id, 
-                137, # Polygon ID as destination
+                destination_chain_id, 
                 700000 # Gas limit
             )
             
@@ -383,31 +385,30 @@ class AxelarGMPService:
                 return gas_estimate
 
             # 5. Build Transaction Steps
-            # Step A: Approve Token for Gateway
-            # Step B: Pay Gas
-            # Step C: callContractWithToken
-            
             steps = [
                 {
                     "type": "approve",
                     "description": f"Approve {amount} {token_symbol} for Axelar Gateway",
-                    "to": gateway_address, # In reality, token contract
-                    "data": "0x", # Placeholder for approve()
+                    "to": gateway_address,
+                    "data": "0x", # Placeholder - frontend should generate approve data
                     "value": "0"
                 },
                 {
                     "type": "pay_gas",
                     "description": "Pay gas for privacy bridge execution",
                     "to": gas_service_address,
-                    "data": "0x", # Placeholder for payNativeGasForContractCallWithToken()
+                    "data": "0x", # Placeholder - frontend should generate payNativeGas data
                     "value": gas_estimate["gas_fee"]
                 },
                 {
                     "type": "call_contract_with_token",
                     "description": f"Bridge {amount} {token_symbol} to Zcash Privacy Pool",
                     "to": gateway_address,
-                    "data": "0x", # Placeholder for callContractWithToken()
-                    "value": "0"
+                    "data": "0x", # Placeholder - frontend should generate callContractWithToken data
+                    "value": "0",
+                    "destination_chain": destination_chain,
+                    "destination_address": destination_contract_address,
+                    "payload": payload_bytes
                 }
             ]
 

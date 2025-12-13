@@ -217,6 +217,76 @@ export interface BridgeStatusContent {
    next_steps?: string[];
  }
 
+export interface PaymentHistoryContent {
+  type: 'payment_history';
+  message: string;
+  history: Array<{
+    id: string;
+    timestamp: string;
+    amount: string;
+    token: string;
+    recipient: string;
+    status: 'pending' | 'confirmed' | 'failed';
+    chainId: number;
+    transactionHash?: string;
+    gasUsed?: string;
+    category?: string;
+    explorerUrl?: string;
+  }>;
+}
+
+export interface SpendingAnalyticsContent {
+  type: 'spending_analytics';
+  message: string;
+  analytics: {
+    totalSpent: string;
+    period: 'week' | 'month' | 'year';
+    categories: Array<{
+      name: string;
+      amount: string;
+      percentage: number;
+    }>;
+    trend: 'increasing' | 'decreasing' | 'stable';
+    comparisonPeriod?: {
+      amount: string;
+      change: number;
+    };
+  };
+}
+
+export interface RecipientsContent {
+  type: 'recipients';
+  message: string;
+  recipients: Array<{
+    id: string;
+    name: string;
+    address: string;
+    chainId?: number;
+    category?: string;
+    usageCount?: number;
+    lastUsed?: string;
+  }>;
+}
+
+export interface PaymentTemplatesContent {
+  type: 'payment_templates';
+  message: string;
+  templates: Array<{
+    id: string;
+    name: string;
+    amount: string;
+    token: string;
+    recipient: string;
+    schedule?: {
+      frequency: 'daily' | 'weekly' | 'monthly';
+      dayOfWeek?: number;
+      dayOfMonth?: number;
+    };
+    chainId: number;
+    createdAt: string;
+  }>;
+}
+
 export type ResponseContent =
    | string
    | BalanceContent
@@ -235,7 +305,11 @@ export type ResponseContent =
    | DCAOrderCreatedContent
    | BridgePrivacyReadyContent
    | BridgeStatusContent
-   | PostBridgeSuccessContent;
+   | PostBridgeSuccessContent
+   | PaymentHistoryContent
+  | SpendingAnalyticsContent
+  | RecipientsContent
+  | PaymentTemplatesContent;
 
 // Supporting interfaces
 export interface TokenBalance {
@@ -309,7 +383,7 @@ export type Response = {
   awaitingConfirmation?: boolean;
   confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
-  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "transfer" | "agno" | "balance" | "protocol_research" | "portfolio" | "settings";
+  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "transfer" | "agno" | "balance" | "protocol_research" | "portfolio" | "settings" | "payment";
   metadata?: ResponseMetadata;
   requires_selection?: boolean;
   all_quotes?: SwapQuote[];

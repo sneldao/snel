@@ -20,7 +20,8 @@ export type AgentType =
   | "portfolio"
   | "balance"
   | "protocol_research"
-  | "settings";
+  | "settings"
+  | "payment";
 
 export const getAgentInfo = (agentType?: AgentType) => {
   switch (agentType) {
