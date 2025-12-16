@@ -57,6 +57,52 @@ class UnifiedParser:
         # Note: Order matters! More specific patterns (like BRIDGE_TO_PRIVACY) should come before generic ones (BRIDGE)
         return {
             # Privacy bridges must be checked before generic bridges
+            CommandType.SET_PRIVACY_DEFAULT: [
+                {
+                    "pattern": re.compile(
+                        r"set\s+(?:my\s+)?(?:default\s+)?privacy\s+(?:to\s+)?(?P<privacy_level>public|private|compliance)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Set default privacy level",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:make|set)\s+all\s+my\s+transactions\s+(?P<privacy_level>public|private|compliance)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Set global privacy preference",
+                    "priority": 2
+                }
+            ],
+            CommandType.OVERRIDE_PRIVACY: [
+                {
+                    "pattern": re.compile(
+                        r"(?:send|make|keep)\s+this\s+transaction\s+(?P<privacy_level>public|private|compliance)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Override privacy for specific transaction",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:use|with)\s+(?P<privacy_level>public|private|compliance)\s+(?:settlement|transaction|privacy)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Explicit privacy override",
+                    "priority": 2
+                }
+            ],
+            CommandType.X402_PRIVACY: [
+                {
+                    "pattern": re.compile(
+                        r"(?:send|bridge|transfer)\s+.*(?:via\s+x402|using\s+x402|x402\s+privacy)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Explicit x402 privacy request",
+                    "priority": 1
+                }
+            ],
             CommandType.BRIDGE_TO_PRIVACY: [
                 {
                     "pattern": re.compile(
