@@ -24,6 +24,7 @@ SNELOrchestrator
 #### DeFi Operations
 - **Token Swaps**: Multi-chain via Brian API + 0x Protocol
 - **Cross-Chain Bridging**: Axelar GMP + LayerZero integration
+- **Privacy Bridging**: Zcash integration for private transactions
 - **Portfolio Analysis**: Web3 balance aggregation + AI insights
 - **Protocol Research**: AI-powered DeFi protocol analysis
 - **Natural Language Processing**: OpenAI-powered command interpretation
@@ -31,6 +32,7 @@ SNELOrchestrator
 #### Supported Networks (17+)
 - **Layer 1**: Ethereum, Avalanche, BSC
 - **Layer 2**: Base, Arbitrum, Optimism, Polygon
+- **Privacy**: Zcash
 - **Emerging**: zkSync, Scroll, Linea, Mantle, Blast, Mode, Taiko
 
 ### Coral Protocol Integration
@@ -50,6 +52,148 @@ CoralEnvironment → SNELCoralMCPAdapter → SNELOrchestrator
 3. **analyze_portfolio** - Portfolio analysis ($0.05)
 4. **research_protocol** - DeFi protocol research ($0.05)
 5. **interpret_command** - Natural language processing ($0.01)
+
+## Cronos x402 Integration
+
+**Objective**: Extend existing privacy bridge to support Cronos x402 programmatic payments with hybrid privacy controls (default + override) using ENHANCEMENT FIRST principles.
+
+### Implementation Approach
+
+1. **User Preferences Extension**: Add privacy level to existing user preferences system
+2. **Context-Aware Privacy**: Enhance transaction analyzer with privacy context detection
+3. **Hybrid Privacy Router**: Extend transaction router with default privacy + override logic
+4. **x402 Privacy Bridge**: Enhance privacy bridge with x402 settlement support
+5. **Compliance Engine**: Add privacy compliance validation to existing validation system
+
+### System Architecture
+
+```
+Hybrid Privacy System (Multi-Chain)
+├── User Preferences (Extended)
+│   ├── global_default: "public"|"private"|"compliance"
+│   ├── chain_overrides: {ethereum: "private", scroll: "public", ...}
+│   ├── token_specific: {USDC: "compliance", ETH: "private", ...}
+│   └── context_rules: [amount_over_1000: "private", ...]
+│
+├── Chain Capability Matrix
+│   ├── x402_support: {ethereum: ✅, base: ✅, scroll: ❌, ...}
+│   ├── gmp_fallback: {ethereum: ✅, base: ✅, scroll: ✅, ...}
+│   ├── direct_zcash: {zcash: ✅}
+│   └── compliance_support: {ethereum: ✅, base: ✅, scroll: ❌, ...}
+│
+├── Chain-Aware Privacy Router
+│   ├── Route Selection Logic
+│   │   ├── Primary: x402 (if supported)
+│   │   ├── Fallback: GMP (if supported)
+│   │   └── Direct: Zcash (if applicable)
+│   ├── Performance Monitor
+│   │   ├── Latency tracking per chain
+│   │   ├── Success rate monitoring
+│   │   └── Automatic fallback on failure
+│   └── User Communication
+│       ├── Chain-specific privacy options
+│       ├── Fallback notifications
+│       └── Performance estimates
+│
+└── x402 Privacy Bridge (Enhanced)
+    ├── Privacy Pool Selection
+    ├── x402 Settlement Execution
+    ├── Compliance Record Generation
+    └── Status Tracking
+```
+
+### Multi-Chain Considerations
+
+**Chain-Specific Privacy Support:**
+
+| Chain     | x402 Support | GMP Fallback | Compliance | Notes |
+|-----------|--------------|--------------|------------|-------|
+| Ethereum  | ✅ Full      | ✅ Available | ✅ Full    | Primary x402 chain |
+| Base      | ✅ Full      | ✅ Available | ✅ Full    | Optimized for privacy |
+| Scroll    | ❌ None      | ✅ Available | ❌ None    | GMP fallback only |
+| Polygon   | ✅ Full      | ✅ Available | ✅ Full    | Mature integration |
+| Zcash     | ❌ N/A       | ❌ N/A       | ✅ Full    | Direct privacy |
+
+**Routing Strategy:**
+1. **Primary**: x402 privacy (when available)
+2. **Fallback**: GMP privacy bridge (when x402 unavailable)
+3. **Direct**: Zcash settlement (for Zcash transactions)
+
+### Implementation Plan
+
+**Phase 1: Core Integration (2-3 weeks)**
+```markdown
+1. Enhance User Preferences
+   - Add global_default privacy setting
+   - Implement chain_overrides support
+   - Extend existing preference storage
+
+2. Build Chain Capability Matrix
+   - Configure x402_support per chain
+   - Set up gmp_fallback routes
+   - Add compliance_support tracking
+
+3. Extend Privacy Router
+   - Add route selection logic
+   - Implement performance monitoring
+   - Create user communication system
+
+4. Test Core Flows
+   - Public transactions (unchanged)
+   - Private transactions (x402 chains)
+   - Fallback transactions (GMP chains)
+```
+
+**Phase 2: Multi-Chain Optimization (2 weeks)**
+```markdown
+1. Chain-Specific Testing
+   - Ethereum: x402 privacy validation
+   - Base: x402 privacy validation
+   - Scroll: GMP fallback validation
+   - Polygon: x402 privacy validation
+   - Zcash: Direct privacy validation
+
+2. Performance Optimization
+   - Cache chain capabilities
+   - Optimize route selection
+   - Batch privacy transactions
+
+3. Error Handling
+   - Add chain-specific error messages
+   - Implement fallback notifications
+   - Test error recovery paths
+```
+
+**Phase 3: Agent Integration (1-2 weeks)**
+```markdown
+1. Extend AI Context Analyzer
+   - Add privacy suggestion logic
+   - Implement chain-aware recommendations
+   - Test context detection
+
+2. Enhance Coral Agent
+   - Add privacy preference management
+   - Implement chain-specific privacy commands
+   - Test agentic privacy workflows
+
+3. Compliance Integration
+   - Add compliance validation
+   - Implement record generation
+   - Test compliance flows
+```
+
+### Key Principles
+
+- **ENHANCEMENT FIRST**: Extend existing components (user prefs, transaction analyzer, router, privacy bridge)
+- **DRY**: Reuse existing preference patterns and routing logic
+- **MODULAR**: Privacy components work together but remain independent
+- **PERFORMANT**: Privacy routing adds minimal overhead to transaction flow
+- **CLEAN**: Clear separation between privacy policy and execution
+- **AGGRESSIVE CONSOLIDATION**: Unify privacy logic in single system
+- **PREVENT BLOAT**: Minimal new code, maximum reuse
+- **BACKWARD COMPATIBLE**: All existing flows unchanged
+- **CHAIN-AWARE**: Optimal privacy method per chain
+- **PROGRESSIVE ENHANCEMENT**: Start with core, expand gradually
 
 ## Deployment Guide
 

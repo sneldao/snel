@@ -6,6 +6,8 @@ This document consolidates all privacy-related information for the Snel DeFi Ass
 
 ## Zcash Wallet Recommendations
 
+## Zcash Wallet Recommendations
+
 We recommend using wallets that are "shielded by default" to ensure maximum privacy:
 
 ### Mobile Wallets
@@ -80,10 +82,73 @@ When you bridge assets to Zcash through our platform:
 - Backup your seed phrase securely and keep it offline
 - Verify wallet URLs carefully to avoid phishing
 
+## Privacy Controls
+
+### Hybrid Privacy System (Multi-Chain)
+
+Snel offers a **hybrid privacy approach** that combines the best of command-based and toggle-based systems, with **chain-specific optimizations**:
+
+1. **Default Privacy Level**: Set your baseline privacy preference
+2. **Chain-Specific Overrides**: Different privacy settings per chain
+3. **Per-Transaction Override**: Adjust privacy for specific transactions
+4. **Context-Aware Suggestions**: AI recommends privacy based on transaction context and chain capabilities
+
+### Chain-Specific Privacy Capabilities
+
+**Not all chains support the same privacy features:**
+
+| Chain     | x402 Privacy | GMP Privacy | Compliance | Best For |
+|-----------|--------------|-------------|------------|----------|
+| Ethereum  | ✅ Fastest   | ✅ Available | ✅ Full    | General privacy |
+| Base      | ✅ Optimized | ✅ Available | ✅ Full    | Low-cost privacy |
+| Scroll    | ❌ None      | ✅ Slower    | ❌ None    | Basic privacy only |
+| Polygon   | ✅ Stable    | ✅ Available | ✅ Full    | Frequent transactions |
+| Zcash     | ❌ N/A       | ❌ N/A       | ✅ Full    | Maximum privacy |
+
+### Setting Your Default Privacy
+
+```markdown
+# Options:
+- Public (default): Regular transactions on public chains
+- Private: Automatic privacy via Zcash for all transactions  
+- Compliance: Private with transaction records for regulatory needs
+
+# Example:
+User: "Set my default privacy to private"
+System: "Default privacy set to private. All transactions will use privacy pool."
+```
+
+### Overriding Privacy for Specific Transactions
+
+```markdown
+# Override to public:
+User: "Send this transaction publicly"
+System: "Using public settlement for this transaction"
+
+# Override to private:
+User: "Make this transaction private"
+System: "Using privacy pool for this transaction"
+```
+
+### Context-Aware Privacy Suggestions
+
+```markdown
+# Large transaction:
+User: "Send $10,000"
+AI: "Large amount detected. Suggest private transaction? (Y/N)"
+
+# Charity donation:
+User: "Donate $1000 to charity"
+AI: "Charity transactions often public. Use public settlement? (Y/N)"
+```
+
 ## Privacy FAQ
 
-### What does it mean to "make assets private"?
-You move your assets to Zcash, a blockchain where transactions are hidden. Your addresses, amounts, and transaction history are encrypted and visible only to you.
+### How does the hybrid privacy system work?
+The system applies your default privacy setting to all transactions, but allows per-transaction overrides. AI agents analyze context and suggest optimal privacy levels.
+
+### Can I change my default privacy setting?
+Yes! Use commands like "set privacy to public/private/compliance" to change your default. This affects future transactions but not past ones.
 
 ### Do I lose access to my assets?
 No. Your assets move to Zcash and you receive them in a Zcash wallet (Zashi, Nighthawk, etc.). You maintain full control.
