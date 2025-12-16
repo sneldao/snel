@@ -12,6 +12,14 @@ class ChainType(Enum):
     SOLANA = "solana"
 
 @dataclass
+class PrivacyCapabilities:
+    """Privacy capabilities for a blockchain network."""
+    x402_support: bool = False  # Supports x402 programmatic privacy
+    gmp_privacy: bool = False   # Supports GMP-based privacy bridging
+    compliance_support: bool = False  # Supports compliance-ready privacy
+    direct_zcash: bool = False  # Supports direct Zcash transactions
+
+@dataclass
 class ChainInfo:
     """Information about a blockchain network."""
     id: int  # Chain ID
@@ -20,10 +28,13 @@ class ChainInfo:
     rpc_url: Optional[str] = None  # Default RPC URL if any
     explorer_url: Optional[str] = None  # Block explorer URL
     supported_protocols: Set[str] = None  # Set of supported protocols (0x, Brian, etc.)
+    privacy: PrivacyCapabilities = None  # Privacy capabilities
 
     def __post_init__(self):
         if self.supported_protocols is None:
             self.supported_protocols = set()
+        if self.privacy is None:
+            self.privacy = PrivacyCapabilities()
 
 # Define supported chains with their capabilities
 CHAINS: Dict[int, ChainInfo] = {
@@ -33,7 +44,12 @@ CHAINS: Dict[int, ChainInfo] = {
         name="Ethereum",
         type=ChainType.EVM,
         explorer_url="https://etherscan.io/tx/",
-        supported_protocols={"0x", "brian"}
+        supported_protocols={"0x", "brian"},
+        privacy=PrivacyCapabilities(
+            x402_support=True,     # Full x402 privacy support
+            gmp_privacy=True,      # GMP privacy fallback
+            compliance_support=True # Compliance-ready privacy
+        )
     ),
     56: ChainInfo(
         id=56,
@@ -56,7 +72,12 @@ CHAINS: Dict[int, ChainInfo] = {
         name="Base",
         type=ChainType.EVM,
         explorer_url="https://basescan.org/tx/",
-        supported_protocols={"0x", "brian"}
+        supported_protocols={"0x", "brian"},
+        privacy=PrivacyCapabilities(
+            x402_support=True,     # Full x402 privacy support
+            gmp_privacy=True,      # GMP privacy fallback
+            compliance_support=True # Compliance-ready privacy
+        )
     ),
     10: ChainInfo(
         id=10,
@@ -77,7 +98,12 @@ CHAINS: Dict[int, ChainInfo] = {
         name="Polygon",
         type=ChainType.EVM,
         explorer_url="https://polygonscan.com/tx/",
-        supported_protocols={"0x", "brian"}
+        supported_protocols={"0x", "brian"},
+        privacy=PrivacyCapabilities(
+            x402_support=True,     # Full x402 privacy support
+            gmp_privacy=True,      # GMP privacy fallback
+            compliance_support=True # Compliance-ready privacy
+        )
     ),
     59144: ChainInfo(
         id=59144,
@@ -91,7 +117,12 @@ CHAINS: Dict[int, ChainInfo] = {
         name="Scroll",
         type=ChainType.EVM,
         explorer_url="https://scrollscan.com/tx/",
-        supported_protocols={"0x", "brian"}
+        supported_protocols={"0x", "brian"},
+        privacy=PrivacyCapabilities(
+            x402_support=False,    # No x402 support (yet)
+            gmp_privacy=True,      # GMP privacy fallback only
+            compliance_support=False # No compliance support
+        )
     ),
     324: ChainInfo(
         id=324,
@@ -115,6 +146,21 @@ CHAINS: Dict[int, ChainInfo] = {
         supported_protocols={"brian"}
     ),
     
+    # Privacy Networks
+    1337: ChainInfo(
+        id=1337,
+        name="Zcash",
+        type=ChainType.EVM,
+        explorer_url="https://zcashblockexplorer.com/tx/",
+        supported_protocols=set(),  # No standard protocols, privacy-only
+        privacy=PrivacyCapabilities(
+            x402_support=False,    # No x402 (direct privacy only)
+            gmp_privacy=False,     # No GMP (direct privacy only)
+            compliance_support=True, # Full compliance support
+            direct_zcash=True      # Direct Zcash transactions
+        )
+    ),
+
     # Other Networks
     43114: ChainInfo(
         id=43114,
@@ -176,3 +222,20 @@ def get_chain_name(chain_id: int) -> str:
     """Get chain name by chain ID."""
     chain = CHAINS.get(chain_id)
     return chain.name if chain else f"Chain {chain_id}"
+
+def get_privacy_capabilities(chain_id: int) -> PrivacyCapabilities:
+    """Get privacy capabilities for a specific chain."""
+    chain = CHAINS.get(chain_id)
+    return chain.privacy if chain else PrivacyCapabilities()
+
+def is_x402_privacy_supported(chain_id: int) -> bool:
+    """Check if x402 privacy is supported on a chain."""
+    return get_privacy_capabilities(chain_id).x402_support
+
+def is_gmp_privacy_supported(chain_id: int) -> bool:
+    """Check if GMP privacy is supported on a chain."""
+    return get_privacy_capabilities(chain_id).gmp_privacy
+
+def is_compliance_supported(chain_id: int) -> bool:
+    """Check if compliance-ready privacy is supported on a chain."""
+    return get_privacy_capabilities(chain_id).compliance_support

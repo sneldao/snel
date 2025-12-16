@@ -21,6 +21,9 @@ class CommandType(Enum):
     CROSS_CHAIN_SWAP = "cross_chain_swap"  # Advanced cross-chain swaps
     TRANSACTION_STEP_COMPLETE = "transaction_step_complete"  # Multi-step transaction management
     BRIDGE_TO_PRIVACY = "bridge_to_privacy"  # Bridge to privacy chain (Zcash)
+    SET_PRIVACY_DEFAULT = "set_privacy_default"  # Set default privacy level
+    OVERRIDE_PRIVACY = "override_privacy"  # Override privacy for specific transaction
+    X402_PRIVACY = "x402_privacy"  # x402 programmatic privacy transaction
     UNKNOWN = "unknown"
 
 
@@ -30,6 +33,13 @@ class TransactionStatus(Enum):
     CONFIRMED = "confirmed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class PrivacyLevel(Enum):
+    """Privacy levels for transactions."""
+    PUBLIC = "public"
+    PRIVATE = "private"
+    COMPLIANCE = "compliance"
 
 
 class AgentType(Enum):
@@ -45,6 +55,14 @@ class AgentType(Enum):
     BRIDGE_TO_PRIVACY = "bridge_to_privacy"
     DEFAULT = "default"
     ERROR = "error"
+
+
+class ChainPrivacyRoute(BaseModel):
+    """Privacy route information for chain-aware privacy transactions."""
+    method: str = Field(..., description="Privacy method (x402_privacy, gmp_privacy, direct_zcash)")
+    privacy_level: PrivacyLevel = Field(..., description="Privacy level")
+    estimated_latency: str = Field(..., description="Estimated transaction latency")
+    capabilities: Dict[str, bool] = Field(..., description="Route capabilities")
 
 
 class TokenInfo(BaseModel):
