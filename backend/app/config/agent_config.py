@@ -79,6 +79,29 @@ class AgentConfig:
                 "make my 100 USDC private",
                 "send 0.5 ETH to privacy pool"
             ]
+        ),
+        "x402_privacy": AgentCapability(
+            name="x402 Privacy Transactions",
+            description="Execute privacy-preserving transactions using Cronos x402 programmatic payments",
+            supported_chains=[1, 8453, 137],  # Ethereum, Base, Polygon
+            required_protocols=["cronos_x402"],
+            examples=[
+                "send 1 ETH privately via x402",
+                "bridge 100 USDC to privacy using x402",
+                "make this transaction private with x402"
+            ]
+        ),
+        "privacy_management": AgentCapability(
+            name="Privacy Management",
+            description="Set default privacy preferences and override per-transaction privacy settings",
+            supported_chains=[1, 8453, 42161, 10, 137, 534352],  # All chains with privacy support
+            required_protocols=["preferences"],
+            examples=[
+                "set my default privacy to private",
+                "make all my transactions private",
+                "send this transaction publicly",
+                "use compliance mode for this transaction"
+            ]
         )
     }
     

@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
-from app.models.unified_models import CommandType, UnifiedResponse, AgentType
+from ..models.unified_models import CommandType, UnifiedResponse, AgentType
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,9 @@ class ErrorContext(Enum):
     EXTERNAL_SERVICE_ERROR = "external_service_error"
     WALLET_NOT_CONNECTED = "wallet_not_connected"
     GENERIC_FAILURE = "generic_failure"
+    PRIVACY_OPERATION_FAILED = "privacy_operation_failed"
+    PRIVACY_UNSUPPORTED = "privacy_unsupported"
+    X402_UNAVAILABLE = "x402_unavailable"
 
 
 class ErrorGuidanceService:
@@ -144,6 +147,68 @@ class ErrorGuidanceService:
                         "Contact support if the problem persists"
                     ]
                 },
+            },
+            CommandType.SET_PRIVACY_DEFAULT: {
+                ErrorContext.PRIVACY_UNSUPPORTED: {
+                    "message": "The requested privacy level is not supported on this chain.",
+                    "suggestions": [
+                        "Try a different privacy level",
+                        "Check chain capabilities with 'what privacy options are available'",
+                        "Switch to a chain with better privacy support"
+                    ]
+                },
+                ErrorContext.GENERIC_FAILURE: {
+                    "message": "Failed to set default privacy level.",
+                    "suggestions": [
+                        "Try again",
+                        "Check your wallet connection",
+                        "Use 'set privacy to public' as fallback"
+                    ]
+                }
+            },
+            CommandType.OVERRIDE_PRIVACY: {
+                ErrorContext.PRIVACY_UNSUPPORTED: {
+                    "message": "Cannot override to requested privacy level on this chain.",
+                    "suggestions": [
+                        "Try 'send this transaction publicly' instead",
+                        "Check available options with 'what privacy is available'",
+                        "Switch chains for better privacy support"
+                    ]
+                },
+                ErrorContext.GENERIC_FAILURE: {
+                    "message": "Failed to override privacy for this transaction.",
+                    "suggestions": [
+                        "Try the transaction without privacy override",
+                        "Check chain capabilities",
+                        "Contact support if needed"
+                    ]
+                }
+            },
+            CommandType.X402_PRIVACY: {
+                ErrorContext.X402_UNAVAILABLE: {
+                    "message": "x402 privacy is not available on this chain.",
+                    "suggestions": [
+                        "Try 'send privately' for GMP-based privacy",
+                        "Switch to Ethereum, Base, or Polygon for x402",
+                        "Use regular privacy if x402 not required"
+                    ]
+                },
+                ErrorContext.PRIVACY_UNSUPPORTED: {
+                    "message": "Privacy operations not supported on this chain.",
+                    "suggestions": [
+                        "Try a different chain (Ethereum, Base, Polygon)",
+                        "Use public transactions",
+                        "Check chain capabilities"
+                    ]
+                },
+                ErrorContext.GENERIC_FAILURE: {
+                    "message": "x402 privacy transaction failed.",
+                    "suggestions": [
+                        "Try again with GMP privacy",
+                        "Check wallet balance and connection",
+                        "Contact support for assistance"
+                    ]
+                }
             },
             CommandType.SWAP: {
                 ErrorContext.MISSING_AMOUNT: {

@@ -3,7 +3,7 @@ Processor registry for command routing.
 Maps command types to their respective processors.
 """
 from typing import Dict, Type
-from app.models.unified_models import CommandType
+from ..models.unified_models import CommandType
 from .base_processor import BaseProcessor
 from .swap_processor import SwapProcessor
 from .bridge_processor import BridgeProcessor, PrivacyBridgeProcessor
@@ -12,6 +12,7 @@ from .balance_processor import BalanceProcessor
 from .portfolio_processor import PortfolioProcessor
 from .contextual_processor import ContextualProcessor
 from .protocol_processor import ProtocolProcessor
+from .privacy_processor import PrivacyProcessor
 
 
 class ProcessorRegistry:
@@ -35,6 +36,11 @@ class ProcessorRegistry:
             CommandType.BRIDGE_TO_PRIVACY: PrivacyBridgeProcessor(**self.dependencies),
             CommandType.TRANSFER: TransferProcessor(**self.dependencies),
             CommandType.CROSS_CHAIN_SWAP: SwapProcessor(**self.dependencies),
+            
+            # Privacy processors
+            CommandType.SET_PRIVACY_DEFAULT: PrivacyProcessor(),
+            CommandType.OVERRIDE_PRIVACY: PrivacyProcessor(),
+            CommandType.X402_PRIVACY: PrivacyProcessor(),
             
             # Query processors
             CommandType.BALANCE: BalanceProcessor(**self.dependencies),

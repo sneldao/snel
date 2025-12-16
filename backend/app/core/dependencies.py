@@ -25,6 +25,7 @@ class ServiceContainer:
         self._brian_client: Optional[object] = None
         self._command_processor: Optional[object] = None
         self._redis_client: Optional[object] = None
+        self._privacy_service: Optional[object] = None
 
         # Validate required services can be initialized
         self._validate_service_requirements()
@@ -111,6 +112,24 @@ class ServiceContainer:
                     )
                 self._redis_client = None
         return self._redis_client
+
+    @property
+    def privacy_service(self):
+        """Get privacy service (lazy initialization)."""
+        if self._privacy_service is None:
+            try:
+                from app.services.privacy_service import PrivacyService
+                from app.core.config_manager import config_manager
+                
+                self._privacy_service = PrivacyService(config_manager)
+                logger.info("Privacy service initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize privacy service: {e}")
+                raise ConfigurationError(
+                    "Failed to initialize privacy service",
+                    suggestions=["Check chain privacy configurations"]
+                )
+        return self._privacy_service
     
     def get_exa_client(self):
         """Get Exa API client (on-demand initialization)."""
