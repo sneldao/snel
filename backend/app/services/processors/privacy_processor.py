@@ -5,12 +5,12 @@ Handles privacy-related commands including setting defaults, overrides, and x402
 import logging
 from typing import Dict, Any, Optional
 
-from ..models.models.unified_models import (
+from app.models.unified_models import (
     UnifiedCommand, UnifiedResponse, AgentType, TransactionData, CommandType, PrivacyLevel
 )
-from ..models.core.exceptions import BusinessLogicError
-from ..models.services.error_guidance_service import ErrorContext
-from ..models.services.privacy_service import PrivacyService
+from app.core.exceptions import BusinessLogicError
+from app.services.error_guidance_service import ErrorContext
+from app.services.privacy_service import PrivacyService
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)

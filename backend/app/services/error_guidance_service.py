@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
-from ..models.unified_models import CommandType, UnifiedResponse, AgentType
+from app.models.unified_models import CommandType, UnifiedResponse, AgentType
 
 logger = logging.getLogger(__name__)
 

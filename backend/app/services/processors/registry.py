@@ -3,7 +3,7 @@ Processor registry for command routing.
 Maps command types to their respective processors.
 """
 from typing import Dict, Type
-from ..models.unified_models import CommandType
+from ...models.unified_models import CommandType
 from .base_processor import BaseProcessor
 from .swap_processor import SwapProcessor
 from .bridge_processor import BridgeProcessor, PrivacyBridgeProcessor

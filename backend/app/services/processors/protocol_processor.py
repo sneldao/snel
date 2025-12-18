@@ -6,6 +6,7 @@ Follows ENHANCEMENT FIRST principle: uses existing contextual processor knowledg
 import logging
 import re
 import os
+from typing import Union
 from openai import AsyncOpenAI
 
 from app.models.unified_models import (
@@ -246,7 +247,7 @@ class ProtocolProcessor(BaseProcessor):
         
         return None
     
-    def _find_in_knowledge_base(self, protocol_name: str) -> dict | None:
+    def _find_in_knowledge_base(self, protocol_name: str) -> Union[dict, None]:
         """Find protocol in knowledge base. Case-insensitive with fuzzy matching."""
         protocol_lower = protocol_name.lower()
         
@@ -304,7 +305,7 @@ class ProtocolProcessor(BaseProcessor):
             }
         )
     
-    async def _create_ai_fallback_response(self, protocol_name: str, openai_key: str | None) -> UnifiedResponse:
+    async def _create_ai_fallback_response(self, protocol_name: str, openai_key: Union[str, None]) -> UnifiedResponse:
         """Create response using AI when Firecrawl fails and knowledge base is empty."""
         try:
             openai_key = openai_key or os.getenv("OPENAI_API_KEY")

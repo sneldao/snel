@@ -3,14 +3,14 @@ Privacy Service - Chain-aware privacy routing and management
 """
 from typing import Dict, Optional, List
 from decimal import Decimal
-from ..config.chains import (
+from app.config.chains import (
     get_privacy_capabilities,
     is_x402_privacy_supported,
     is_gmp_privacy_supported,
     is_compliance_supported
 )
-from ..models.unified_models import PrivacyLevel, ChainPrivacyRoute
-from ..core.config_manager import ConfigurationManager
+from app.models.unified_models import PrivacyLevel, ChainPrivacyRoute
+from app.core.config_manager import ConfigurationManager
 import logging
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ class PrivacyRoutingError(Exception):
 
 # Add PrivacyLevel enum if not already defined
 try:
-    from ..models.unified_models import PrivacyLevel
+    from app.models.unified_models import PrivacyLevel
 except ImportError:
     from enum import Enum
     
@@ -163,7 +163,7 @@ except ImportError:
 
 # Add ChainPrivacyRoute model if not already defined
 try:
-    from ..models.unified_models import ChainPrivacyRoute
+    from app.models.unified_models import ChainPrivacyRoute
 except ImportError:
     from typing import TypedDict
     
