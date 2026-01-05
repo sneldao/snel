@@ -180,6 +180,45 @@ export const COMMAND_TEMPLATES: CommandTemplate[] = [
     isAdvanced: true
   },
   
+  // MNEE Payment Commands
+  {
+    name: 'MNEE Payment',
+    template: 'pay $100 MNEE to merchant.eth',
+    description: 'Send MNEE stablecoin payment',
+    icon: 'dollar-sign',
+    category: 'transfer',
+    examples: ['pay $50 MNEE to supplier@commerce.com', 'send 200 MNEE to vendor.eth'],
+    popularity: 9
+  },
+  {
+    name: 'MNEE Payment with Reference',
+    template: 'pay $100 MNEE to merchant.eth for order #1234',
+    description: 'Send MNEE payment with invoice reference',
+    icon: 'dollar-sign',
+    category: 'transfer',
+    examples: ['pay $50 MNEE to supplier with invoice #5678', 'send 200 MNEE to vendor for contract ABC'],
+    popularity: 8
+  },
+  {
+    name: 'MNEE Commerce Payment',
+    template: 'MNEE payment to merchant.eth with memo "Product Purchase"',
+    description: 'Send MNEE payment with business memo',
+    icon: 'dollar-sign',
+    category: 'transfer',
+    examples: ['MNEE payment to supplier with memo "Monthly Subscription"', 'MNEE payment to vendor with memo "Service Fee"'],
+    popularity: 7
+  },
+  {
+    name: 'Cross-chain MNEE Payment',
+    template: 'send 100 MNEE to merchant.eth on Polygon',
+    description: 'Send MNEE payment to another chain',
+    icon: 'dollar-sign',
+    category: 'transfer',
+    examples: ['send 50 MNEE to supplier on Arbitrum', 'send 200 MNEE to vendor on Optimism'],
+    popularity: 6,
+    isAdvanced: true
+  },
+  
   // Portfolio Analysis Commands
   {
     name: 'Portfolio Overview',
@@ -492,6 +531,15 @@ export const COMMAND_TEMPLATES: CommandTemplate[] = [
     category: 'help',
     examples: ['what is SNEL', 'SNEL information'],
     popularity: 7
+  },
+  {
+    name: 'MNEE Stablecoin',
+    template: 'tell me about MNEE',
+    description: 'Learn about MNEE programmable money features',
+    icon: 'help-circle',
+    category: 'help',
+    examples: ['what is MNEE?', 'how to use MNEE for commerce', 'MNEE features'],
+    popularity: 8
   },
   
   // Advanced DeFi Commands

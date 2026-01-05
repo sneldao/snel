@@ -162,7 +162,7 @@ class TokenService:
             return self.memory_cache[f"token:{chain_id}:{identifier}"]
 
         # Check if it's a common token
-        if identifier in ["eth", "weth", "usdc", "usdt", "dai"]:
+        if identifier in ["eth", "weth", "usdc", "usdt", "dai", "mnee"]:
             token_info = await self._get_native_token_info(chain_id, identifier)
             if token_info:
                 await self._cache_token_info(chain_id, identifier, token_info)
@@ -270,6 +270,23 @@ class TokenService:
                     "verified": True,
                     "source": "token_list",
                     "decimals": 18
+                }
+            }
+        elif symbol == "mnee":
+            # MNEE addresses for common chains
+            mnee_addresses = {
+                1: "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+                42161: "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+                137: "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+            }
+            return {
+                "address": mnee_addresses.get(chain_id, ""),
+                "symbol": "MNEE",
+                "name": "MNEE Stablecoin",
+                "metadata": {
+                    "verified": True,
+                    "source": "token_list",
+                    "decimals": 6
                 }
             }
         return None

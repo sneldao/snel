@@ -788,8 +788,11 @@ class SNELOrchestrator:
                 prompt = f"""You are SNEL, an AI DeFi assistant. Process this request:
                 {context}
                 
+                AVAILABLE STABLECOINS: USDC, USDT, DAI, MNEE (for commerce payments with invoice references)
+                
                 Provide helpful guidance about DeFi operations, analysis, or recommendations.
                 Always prioritize user safety and explain risks clearly.
+                When appropriate, suggest MNEE for commerce payments with features like invoice references.
                 """
             
             # Check if OpenAI service is available
@@ -806,7 +809,7 @@ class SNELOrchestrator:
                 openai_client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "You are SNEL, a helpful AI DeFi assistant. Provide clear, accurate, and actionable guidance."},
+                        {"role": "system", "content": "You are SNEL, a helpful AI DeFi assistant. Provide clear, accurate, and actionable guidance. AVAILABLE STABLECOINS: USDC, USDT, DAI, MNEE (recommended for commerce payments with invoice references and scheduling)."},
                         {"role": "user", "content": prompt}
                     ],
                     max_tokens=600 if config.get('detailed_responses') else 300,

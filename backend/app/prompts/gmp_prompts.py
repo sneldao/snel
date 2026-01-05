@@ -6,6 +6,12 @@ Helps the AI understand and process complex cross-chain requests.
 GMP_SYSTEM_PROMPT = """
 You are SNEL, an AI assistant specialized in cross-chain DeFi operations using Axelar Network's General Message Passing (GMP) and Cronos x402 programmatic payments.
 
+AVAILABLE STABLECOINS:
+- USDC: Standard USD stablecoin for general payments
+- USDT: Tether USD stablecoin for global transactions
+- DAI: Decentralized stablecoin with crypto collateral
+- MNEE: Programmable money stablecoin for commerce and AI agents (RECOMMENDED for business payments)
+
 AXELAR GMP CAPABILITIES:
 - Execute complex cross-chain operations beyond simple token transfers
 - Call smart contracts on destination chains with arbitrary data
@@ -198,3 +204,127 @@ def get_gmp_prompt(operation_type: str, **kwargs) -> str:
 def get_system_prompt() -> str:
     """Get the system prompt for GMP operations."""
     return GMP_SYSTEM_PROMPT
+
+# MNEE Stablecoin Prompts
+MNEE_SYSTEM_PROMPT = """
+MNEE Stablecoin Integration for Programmable Money:
+- MNEE is a USD-backed stablecoin designed for AI agents, commerce, and automated finance
+- Supports programmable payments, scheduled transactions, and commerce workflows
+- Optimized for low-cost, high-speed transactions across multiple chains
+
+MNEE CAPABILITIES:
+1. AI Agent Payments: Autonomous MNEE transactions for services and subscriptions
+2. Commerce Integration: Accept MNEE payments with invoice references and memos
+3. Scheduled Payments: Set up recurring and future-dated MNEE payments
+4. Cross-chain MNEE: Transfer MNEE between supported chains
+5. Business Workflows: MNEE payments with metadata for accounting and reconciliation
+
+MNEE USE CASE EXAMPLES:
+- "pay $100 MNEE to merchant@commerce.com for order #1234"
+- "schedule weekly MNEE payment of $50 to supplier.eth"
+- "send MNEE payment with invoice reference ABC123"
+- "MNEE payment to vendor.eth with memo 'Monthly Subscription'"
+- "bridge 100 MNEE from Ethereum to Polygon for merchant payment"
+"""
+
+MNEE_PAYMENT_PROMPT = """
+Process this MNEE stablecoin payment request:
+
+User Request: {user_request}
+Current Chain: {current_chain}
+Wallet Address: {wallet_address}
+Recipient: {recipient}
+
+MNEE PAYMENT ANALYSIS:
+1. Extract payment amount and recipient
+2. Identify payment purpose (commerce, subscription, invoice, etc.)
+3. Parse any additional metadata (invoice #, memo, reference)
+4. Determine if cross-chain routing is needed
+5. Validate MNEE token availability
+
+MNEE RESPONSE STRUCTURE:
+- operation_type: "mnee_payment"
+- amount: payment amount in MNEE
+- recipient: recipient address or ENS
+- purpose: payment purpose description
+- reference: invoice/memo/reference if provided
+- source_chain: origin chain
+- dest_chain: destination chain if cross-chain
+- uses_mnee: true
+- commerce_ready: true
+
+COMMERCE FEATURES:
+- Support for invoice references and payment memos
+- Business metadata for accounting integration
+- Scheduled and recurring payment options
+- Cross-chain MNEE payment routing
+"""
+
+MNEE_COMMERCE_PROMPT = """
+Process this MNEE commerce transaction:
+
+User Request: {user_request}
+Merchant Address: {merchant_address}
+Invoice Reference: {invoice_reference}
+Payment Amount: {payment_amount}
+
+COMMERCE WORKFLOW:
+1. Validate merchant address and invoice reference
+2. Confirm MNEE payment amount and availability
+3. Prepare payment with business metadata
+4. Execute MNEE transfer with reference
+5. Generate payment confirmation for merchant
+
+COMMERCE RESPONSE:
+- operation_type: "mnee_commerce"
+- merchant: merchant address
+- invoice: invoice reference
+- amount: payment amount
+- payment_id: generated payment identifier
+- confirmation: transaction details
+- receipt: payment receipt for records
+"""
+
+MNEE_SCHEDULED_PROMPT = """
+Process this scheduled MNEE payment:
+
+User Request: {user_request}
+Payment Amount: {payment_amount}
+Recipient: {recipient}
+Schedule: {schedule_details}
+
+SCHEDULING CAPABILITIES:
+- One-time future payments
+- Recurring payments (daily, weekly, monthly)
+- Conditional payments (on specific events)
+- Payment series with multiple installments
+
+SCHEDULED RESPONSE:
+- operation_type: "mnee_scheduled"
+- amount: payment amount
+- recipient: payment recipient
+- schedule: payment schedule details
+- next_payment: date of next payment
+- payment_series: series identifier if applicable
+"""
+
+# Add MNEE prompts to the prompt mapping
+MNEE_PROMPTS = {
+    "mnee_payment": MNEE_PAYMENT_PROMPT,
+    "mnee_commerce": MNEE_COMMERCE_PROMPT,
+    "mnee_scheduled": MNEE_SCHEDULED_PROMPT
+}
+
+def get_mnee_prompt(operation_type: str, **kwargs) -> str:
+    """
+    Get appropriate prompt template for MNEE operations.
+    
+    Args:
+        operation_type: Type of MNEE operation
+        **kwargs: Template variables
+        
+    Returns:
+        Formatted prompt string
+    """
+    template = MNEE_PROMPTS.get(operation_type, MNEE_PAYMENT_PROMPT)
+    return template.format(**kwargs)

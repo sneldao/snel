@@ -72,6 +72,17 @@ export const POPULAR_TOKENS: Token[] = [
     isStablecoin: true
   },
   {
+    symbol: 'MNEE',
+    name: 'MNEE Stablecoin',
+    address: '0xMNEE000000000000000000000000000000000000', // Placeholder - replace with actual MNEE contract address
+    chainId: ChainId.ETHEREUM,
+    decimals: 6,
+    logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
+    coingeckoId: 'mnee', // Placeholder - replace with actual Coingecko ID if available
+    isPopular: true,
+    isStablecoin: true
+  },
+  {
     symbol: 'WBTC',
     name: 'Wrapped Bitcoin',
     address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
@@ -145,6 +156,17 @@ export const POPULAR_TOKENS: Token[] = [
     isStablecoin: true
   },
   {
+    symbol: 'MNEE',
+    name: 'MNEE Stablecoin (Polygon)',
+    address: '0xMNEE000000000000000000000000000000000000', // Placeholder - replace with actual MNEE contract address
+    chainId: ChainId.POLYGON,
+    decimals: 6,
+    logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
+    coingeckoId: 'mnee', // Placeholder - replace with actual Coingecko ID if available
+    isPopular: true,
+    isStablecoin: true
+  },
+  {
     symbol: 'USDT',
     name: 'Tether (Polygon)',
     address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
@@ -196,6 +218,17 @@ export const POPULAR_TOKENS: Token[] = [
     decimals: 6,
     logoURI: 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
     coingeckoId: 'usd-coin',
+    isPopular: true,
+    isStablecoin: true
+  },
+  {
+    symbol: 'MNEE',
+    name: 'MNEE Stablecoin (Arbitrum)',
+    address: '0xMNEE000000000000000000000000000000000000', // Placeholder - replace with actual MNEE contract address
+    chainId: ChainId.ARBITRUM,
+    decimals: 6,
+    logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
+    coingeckoId: 'mnee', // Placeholder - replace with actual Coingecko ID if available
     isPopular: true,
     isStablecoin: true
   },

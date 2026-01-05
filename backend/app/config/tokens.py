@@ -20,6 +20,13 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "decimals": 6,
             "verified": True
         },
+        "mnee": {
+            "address": "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+            "name": "MNEE Stablecoin",
+            "symbol": "MNEE",
+            "decimals": 6,
+            "verified": True
+        },
         "weth": {
             "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
             "name": "Wrapped Ether",
@@ -43,6 +50,13 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "decimals": 6,
             "verified": True
         },
+        "mnee": {
+            "address": "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+            "name": "MNEE Stablecoin",
+            "symbol": "MNEE",
+            "decimals": 6,
+            "verified": True
+        },
         "weth": {
             "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
             "name": "Wrapped Ether",
@@ -63,6 +77,13 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
             "name": "USD Coin",
             "symbol": "USDC",
+            "decimals": 6,
+            "verified": True
+        },
+        "mnee": {
+            "address": "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+            "name": "MNEE Stablecoin",
+            "symbol": "MNEE",
             "decimals": 6,
             "verified": True
         },
