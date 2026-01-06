@@ -5,7 +5,6 @@ from typing import Dict, List, Optional, Any
 import logging
 from app.models.token import TokenInfo, token_registry
 from app.services.token_service import token_service
-from .brian_adapter import BrianAdapter
 from .zerox_adapter import ZeroXAdapter
 from .axelar_adapter import AxelarAdapter
 from .uniswap_adapter import UniswapAdapter
@@ -40,12 +39,6 @@ class ProtocolRegistry:
             logger.info("Initialized 0x protocol adapter")
         except Exception as e:
             logger.error(f"Failed to initialize 0x protocol adapter: {e}")
-
-        try:
-            self.protocols["brian"] = BrianAdapter()
-            logger.info("Initialized Brian protocol adapter")
-        except Exception as e:
-            logger.error(f"Failed to initialize Brian protocol adapter: {e}")
 
         try:
             self.protocols["uniswap"] = UniswapAdapter()
@@ -190,7 +183,7 @@ class ProtocolRegistry:
             if axelar and axelar.is_supported(from_chain) and axelar.is_supported(to_chain):
                 protocols_to_try.append(("axelar", axelar))
         else:
-            # For same-chain, try 0x first (best rates), then Uniswap (reliable), then Brian
+            # For same-chain, try 0x first (best rates), then Uniswap (reliable)
             zerox = self.get_protocol("0x")
             if zerox and zerox.is_supported(from_chain):
                 protocols_to_try.append(("0x", zerox))
@@ -198,10 +191,6 @@ class ProtocolRegistry:
             uniswap = self.get_protocol("uniswap")
             if uniswap and uniswap.is_supported(from_chain):
                 protocols_to_try.append(("uniswap", uniswap))
-
-            brian = self.get_protocol("brian")
-            if brian and brian.is_supported(from_chain):
-                protocols_to_try.append(("brian", brian))
         
         # Try each protocol in order
         for protocol_name, protocol in protocols_to_try:

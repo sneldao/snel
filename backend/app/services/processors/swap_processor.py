@@ -126,7 +126,7 @@ class SwapProcessor(BaseProcessor):
             
             # Get swap quote from protocol registry
             quote = await self._get_best_swap_quote(
-                token_in, token_out, amount, chain_id
+                token_in, token_out, amount, chain_id, unified_command.wallet_address
             )
             
             if not quote:
@@ -217,30 +217,31 @@ class SwapProcessor(BaseProcessor):
             raise invalid_amount_error(f"Could not convert ${usd_amount} to {token_symbol}")
     
     async def _get_best_swap_quote(
-        self, token_in: str, token_out: str, amount: Decimal, chain_id: int
+        self, token_in: str, token_out: str, amount: Decimal, chain_id: int, wallet_address: str
     ) -> Optional[Dict[str, Any]]:
         """Get best swap quote from available protocols."""
         try:
-            # Try protocol registry first (supports multiple DEXs)
-            quote = await self.protocol_registry.get_swap_quote(
-                token_in=token_in,
-                token_out=token_out,
+            # Try protocol registry with correct method signature
+            # For same-chain swaps, from_chain == to_chain
+            quote = await self.protocol_registry.get_quote(
+                from_token=token_in,
+                to_token=token_out,
                 amount=str(amount),
-                chain_id=chain_id
+                from_chain=chain_id,
+                to_chain=chain_id,  # Same-chain swap
+                user_address=wallet_address
             )
             
-            if quote:
+            if quote and quote.get("success"):
                 return quote
             
-            # Fallback to Brian API
-            result = await self.brian_client.get_swap_quote(
-                token_in=token_in,
-                token_out=token_out,
-                amount=str(amount),
-                chain_id=chain_id
-            )
+            # If registry quote failed or returned None, log and return None
+            if not quote:
+                logger.warning(f"Protocol registry returned no quote for {token_in} -> {token_out} on chain {chain_id}")
+            else:
+                logger.warning(f"Protocol registry returned unsuccessful quote: {quote.get('error', 'unknown error')}")
             
-            return result
+            return None
             
         except Exception as e:
             logger.error(f"Failed to get swap quote: {e}")

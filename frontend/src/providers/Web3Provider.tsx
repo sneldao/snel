@@ -113,6 +113,16 @@ const createTransports = () => {
   return transports;
 };
 
+// Get the current app URL dynamically
+const getAppUrl = () => {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || "https://stable-snel.netlify.app";
+};
+
+const appUrl = getAppUrl();
+
 const config = createConfig(
   getDefaultConfig({
     // Your dApp's chains
@@ -128,8 +138,8 @@ const config = createConfig(
 
     // Optional App Info
     appDescription: "SNEL",
-    appUrl: "https://stable-snel.netlify.app",
-    appIcon: "https://stable-snel.netlify.app/icon.png",
+    appUrl: appUrl,
+    appIcon: `${appUrl}/icon.png`,
   })
 );
 
