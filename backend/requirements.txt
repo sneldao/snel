@@ -1,7 +1,7 @@
 # Core dependencies
 fastapi>=0.109.0
 uvicorn==0.27.0
-python-dotenv==1.0.0
+python-dotenv>=1.0.1
 pydantic>=2.5.3
 
 # Agent Framework
@@ -12,7 +12,7 @@ langchain-mcp-adapters==0.1.9
 
 # AI/ML
 openai>=1.40.0
-anthropic==0.19.0
+anthropic>=0.58.2
 
 # Web3
 web3==6.15.1
@@ -32,7 +32,7 @@ cachetools==5.3.2
 
 # SNEL dependencies
 sse-starlette==1.6.5
-agno==1.0.0
+# agno==1.0.0  # Causing bash execution errors
 browser-use==0.7.7
 duckduckgo-search==4.4.0
 yfinance==0.2.36
