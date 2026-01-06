@@ -7,6 +7,7 @@ import logging
 import re
 import os
 from typing import Union
+from difflib import SequenceMatcher
 from openai import AsyncOpenAI
 
 from app.models.unified_models import (
@@ -113,20 +114,46 @@ PROTOCOL_KNOWLEDGE_BASE = {
     },
     "mnee": {
         "official_name": "MNEE Stablecoin",
-        "type": "Stablecoin",
-        "summary": "MNEE is a stablecoin designed for efficient payments and commerce on the blockchain. It provides stable value for transactions while maintaining compatibility with existing DeFi protocols.",
+        "type": "Stablecoin for Commerce & Payments",
+        "summary": "MNEE is a programmable stablecoin designed for efficient commerce and payment transactions on the blockchain. It provides stable value pegged to fiat currency while enabling instant, low-cost transactions across multiple blockchains.",
         "key_features": [
-            "Stable value pegged to USD",
-            "Optimized for payment transactions",
-            "Low transaction fees",
-            "Multi-chain compatibility",
-            "DeFi protocol integration"
+            "Stable value pegged to USD - maintains price stability for transactions",
+            "Programmable payments - conditional execution of transactions",
+            "Optimized for commerce - built specifically for e-commerce and payment flows",
+            "Low transaction fees - efficient for frequent microtransactions",
+            "Multi-chain compatibility - works across multiple blockchain networks",
+            "DeFi protocol integration - compatible with existing DeFi ecosystems",
+            "Instant settlement - fast transaction finality for payment confirmations"
+        ],
+        "how_it_works": "MNEE enables merchants and users to conduct transactions on blockchain while maintaining price stability. Each MNEE token represents $1 USD, making it ideal for price prediction and budgeting. Transactions are verified across the blockchain network and settle instantly.",
+        "commerce_use_cases": [
+            "E-commerce payments - accept payments for online goods and services",
+            "Point-of-sale transactions - in-store payments with blockchain settlement",
+            "Subscription payments - recurring payment automation",
+            "Cross-border payments - send value internationally with minimal fees",
+            "Payment channels - micropayment support for digital content"
+        ],
+        "defi_integration": [
+            "Liquidity pools - provide trading pairs on DEXs",
+            "Yield farming - earn returns on idle MNEE holdings",
+            "Lending protocols - use MNEE as collateral or lending asset",
+            "Cross-chain bridges - transfer value between blockchains"
+        ],
+        "advantages": [
+            "Price stability eliminates volatility risk for merchants",
+            "Fast transactions enable real-time payment confirmation",
+            "Low fees reduce cost of commerce compared to traditional payment",
+            "Programmable - enable conditional payments and smart contracts",
+            "Transparent - all transactions visible on blockchain",
+            "Censorship-resistant - no middleman control over funds"
         ],
         "use_cases": [
-            "E-commerce payments",
-            "Cross-chain transfers",
-            "DeFi yield farming",
-            "Stable store of value"
+            "E-commerce payments - online shopping and digital goods",
+            "Cross-chain transfers - move value between different blockchains",
+            "DeFi yield farming - earn passive income on holdings",
+            "Stable store of value - hold funds without volatility risk",
+            "Payment aggregation - consolidate multiple payment methods",
+            "Merchant settlements - receive payments with instant finality"
         ]
     }
 }
@@ -219,10 +246,11 @@ class ProtocolProcessor(BaseProcessor):
     ) -> UnifiedResponse:
         """Handle depth queries (specific protocol research)."""
         try:
-            protocol_name = self.router.transform_query_for_tool(routing_decision)
-            logger.info(f"Handling depth query: {protocol_name}")
+            # Use extracted entity name for KB lookup, not transformed query
+            protocol_name = routing_decision.extracted_entity or self.router.transform_query_for_tool(routing_decision)
+            logger.info(f"Handling depth query: {protocol_name} (extracted: {routing_decision.extracted_entity})")
             
-            # Try knowledge base first
+            # Try knowledge base first with the extracted entity name
             knowledge_match = self._find_in_knowledge_base(protocol_name)
             if knowledge_match:
                 logger.info(f"Found '{protocol_name}' in knowledge base")
@@ -365,20 +393,31 @@ class ProtocolProcessor(BaseProcessor):
             )
     
     def _find_in_knowledge_base(self, protocol_name: str) -> Union[dict, None]:
-        """Find protocol in knowledge base. Case-insensitive with fuzzy matching."""
-        protocol_lower = protocol_name.lower()
+        """Find protocol in knowledge base. Case-insensitive with fuzzy matching (>80% similarity)."""
+        protocol_lower = protocol_name.lower().strip()
         
-        # Exact match
+        # Exact match (fastest path)
         if protocol_lower in PROTOCOL_KNOWLEDGE_BASE:
             return PROTOCOL_KNOWLEDGE_BASE[protocol_lower]
         
-        # Fuzzy match on protocol names
+        # Check for exact match on official names
         for key, info in PROTOCOL_KNOWLEDGE_BASE.items():
-            if protocol_lower == key or protocol_lower in [key] + info.get("aliases", []):
-                return info
-            # Partial match on official name
             if protocol_lower in info.get("official_name", "").lower():
                 return info
+        
+        # Fuzzy match: find best similarity across KB keys
+        best_match = None
+        best_score = 0.8  # Threshold: >80% similarity required
+        
+        for key in PROTOCOL_KNOWLEDGE_BASE.keys():
+            similarity = SequenceMatcher(None, protocol_lower, key).ratio()
+            if similarity > best_score:
+                best_score = similarity
+                best_match = key
+                logger.info(f"Fuzzy match: '{protocol_name}' matched '{key}' with {best_score:.1%} confidence")
+        
+        if best_match:
+            return PROTOCOL_KNOWLEDGE_BASE[best_match]
         
         return None
     

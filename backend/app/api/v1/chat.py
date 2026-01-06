@@ -124,14 +124,48 @@ async def process_command(
 async def ask_protocol_question(request: ProtocolQuestionRequest) -> ProtocolQuestionResponse:
     """Ask a follow-up question about a protocol using previously scraped content."""
     try:
-        from app.services.external.firecrawl_service import answer_protocol_question
-
-        result = await answer_protocol_question(
-            protocol_name=request.protocol_name,
-            question=request.question,
-            raw_content=request.raw_content,
-            openai_api_key=request.openai_api_key
-        )
+        # Validate inputs
+        if not request.protocol_name or not request.protocol_name.strip():
+            return ProtocolQuestionResponse(
+                success=False,
+                answer="",
+                error="Protocol name is required"
+            )
+        
+        if not request.question or not request.question.strip():
+            return ProtocolQuestionResponse(
+                success=False,
+                answer="",
+                error="Question cannot be empty"
+            )
+        
+        # Check if we have content to analyze
+        if not request.raw_content or len(request.raw_content.strip()) < 50:
+            logger.warning(f"Insufficient content for protocol '{request.protocol_name}' - falling back to web search")
+            # Fall back to web search if no raw content provided
+            from app.services.external.firecrawl_service import answer_protocol_question_with_client
+            from app.core.dependencies import get_service_container
+            from app.config.settings import get_settings
+            
+            container = get_service_container(get_settings())
+            firecrawl_client = container.get_firecrawl_client()
+            
+            result = await answer_protocol_question_with_client(
+                client=firecrawl_client,
+                protocol_name=request.protocol_name,
+                question=request.question,
+                openai_api_key=request.openai_api_key
+            )
+        else:
+            # Use provided content (knowledge base or scraped content)
+            from app.services.external.firecrawl_service import answer_protocol_question
+            
+            result = await answer_protocol_question(
+                protocol_name=request.protocol_name,
+                question=request.question,
+                raw_content=request.raw_content,
+                openai_api_key=request.openai_api_key
+            )
 
         return ProtocolQuestionResponse(
             success=result.get("success", False),

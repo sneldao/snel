@@ -119,6 +119,21 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
     if (!question.trim()) return;
     setIsAsking(true);
     try {
+      // For knowledge-base results, synthesize content from available fields
+      let contentToPass = rawContent;
+      if (!contentToPass && summary) {
+        // Create synthetic content from KB fields for knowledge base results
+        contentToPass = [
+          summary,
+          keyFeatures.length > 0 ? `Key Features: ${keyFeatures.join(", ")}` : "",
+          howItWorks ? `How It Works: ${howItWorks}` : "",
+          privacyExplanation ? `Privacy: ${privacyExplanation}` : "",
+          useCases.length > 0 ? `Use Cases: ${useCases.join(", ")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+      }
+
       const response = await fetch("/api/v1/chat/ask-protocol-question", {
         method: "POST",
         headers: {
@@ -127,10 +142,15 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
         body: JSON.stringify({
           protocol_name: protocolName,
           question: question.trim(),
-          raw_content: rawContent,
+          raw_content: contentToPass || "",
           openai_api_key: localStorage.getItem("openai_api_key") || "",
         }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const result = await response.json();
       if (result.success) {
         setQaHistory((prev) => [
@@ -151,9 +171,10 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
         });
       }
     } catch (error) {
+      console.error("Ask question error:", error);
       toast({
         title: "Error",
-        description: "Failed to ask question. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to ask question. Please try again.",
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -182,14 +203,7 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
            </HStack>
           <Divider my={2} />
 
-          {/* Summary */}
-          <Box>
-            <HStack mb={1}>
-              <Icon as={FaRegStickyNote} color={mutedColor} />
-              <Text fontWeight="bold">Summary</Text>
-            </HStack>
-            <Text fontSize="sm">{summary}</Text>
-          </Box>
+
 
           {/* Key Features */}
           {keyFeatures.length > 0 && (
@@ -282,11 +296,6 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
                 </Badge>
                 {analysisQuality && <Badge colorScheme="green">{analysisQuality}</Badge>}
               </Flex>
-              {summary && (
-                <Text fontSize="sm" color={mutedColor} fontWeight="normal">
-                  {summary}
-                </Text>
-              )}
             </VStack>
           </ModalHeader>
           <ModalCloseButton />
