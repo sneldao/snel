@@ -1,11 +1,11 @@
 """
 Protocol research service using Firecrawl API.
 Handles scraping, searching, and AI analysis of DeFi protocols.
+Note: AI analysis moved to app.services.analysis.ProtocolAnalyzer
 """
 import logging
 import os
 from typing import Dict, Any, Optional, List
-from openai import AsyncOpenAI
 
 from app.services.external.firecrawl_client import FirecrawlClient, FirecrawlError
 
@@ -107,89 +107,9 @@ async def get_protocol_details(
         }
 
 
-async def analyze_protocol_with_ai(
-    protocol_name: str,
-    raw_content: str,
-    source_url: str = "",
-    openai_api_key: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Analyze protocol content with AI to extract structured information.
-    
-    Args:
-        protocol_name: Name of the protocol
-        raw_content: Raw scraped content
-        source_url: URL where content was scraped from
-        openai_api_key: OpenAI API key
-        
-    Returns:
-        Dictionary with AI analysis results
-    """
-    if not raw_content or len(raw_content.strip()) < 100:
-        return {
-            "error": "Insufficient content for analysis",
-            "analysis_success": False,
-            "protocol_name": protocol_name,
-        }
-    
-    if not openai_api_key:
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-    
-    if not openai_api_key:
-        return {
-            "error": "OpenAI API key not configured",
-            "analysis_success": False,
-            "protocol_name": protocol_name,
-        }
-    
-    try:
-        client = AsyncOpenAI(api_key=openai_api_key)
-        
-        prompt = f"""
-You are a DeFi expert analyzing protocol documentation. Extract and summarize the following information about {protocol_name}:
-
-CONTENT:
-{raw_content[:3000]}
-
-Provide a structured analysis with:
-1. Protocol Type (DEX, Lending, Staking, etc.)
-2. Key Features (as a list)
-3. Security Status (Audited/Not Audited/Unknown)
-4. Financial Metrics (TVL, APY, etc. if available)
-5. Brief Summary (2-3 sentences)
-
-Keep the response concise and factual.
-"""
-        
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a DeFi expert. Provide accurate, structured analysis of blockchain protocols.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=500,
-            temperature=0.3,  # Low temperature for factual accuracy
-        )
-        
-        ai_summary = response.choices[0].message.content
-        
-        return {
-            "protocol_name": protocol_name,
-            "ai_summary": ai_summary,
-            "source_url": source_url,
-            "analysis_success": True,
-        }
-        
-    except Exception as e:
-        logger.error(f"AI analysis error for {protocol_name}: {e}")
-        return {
-            "error": f"Analysis failed: {str(e)}",
-            "analysis_success": False,
-            "protocol_name": protocol_name,
-        }
+# NOTE: analyze_protocol_with_ai() has been consolidated into ProtocolAnalyzer service
+# See: app/services/analysis/protocol_analyzer.py
+# This function is deprecated but kept for backward compatibility if needed elsewhere
 
 
 async def answer_protocol_question_with_client(

@@ -6,8 +6,7 @@ Follows ENHANCEMENT FIRST principle: uses existing contextual processor knowledg
 import logging
 import re
 import os
-from typing import Union
-from openai import AsyncOpenAI
+from typing import Optional, Tuple, Any
 
 from app.models.unified_models import (
     UnifiedCommand, UnifiedResponse, AgentType, CommandType
@@ -15,12 +14,13 @@ from app.models.unified_models import (
 from app.services.error_guidance_service import ErrorContext
 from app.services.external.firecrawl_service import (
     get_protocol_details,
-    analyze_protocol_with_ai,
-    answer_protocol_question,
 )
 from app.services.external.firecrawl_client import FirecrawlClient, FirecrawlError
 from app.services.research.router import ResearchRouter, Intent
+from app.services.research.research_logger import research_logger
 from app.services.knowledge_base import get_protocol_kb, ProtocolMetrics
+from app.services.analysis import ProtocolAnalyzer
+from app.services.protocol import ProtocolResponseBuilder
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -89,26 +89,40 @@ class ProtocolProcessor(BaseProcessor):
             logger.info(f"Handling concept query: {concept_name}")
             
             # Check knowledge base
-            kb = get_protocol_kb()
-            kb_result = kb.get(concept_name)
+            kb_result = await self._lookup_kb(concept_name)
             if kb_result:
                 matched_key, entry = kb_result
                 logger.info(f"Found '{concept_name}' in knowledge base as '{matched_key}'")
-                return self._create_response_from_knowledge(matched_key, entry)
+                content = ProtocolResponseBuilder.from_knowledge_base(matched_key, entry)
+                return self._create_success_response(
+                    content=content,
+                    agent_type=AgentType.PROTOCOL_RESEARCH,
+                    metadata={
+                        "source": "knowledge_base",
+                        "protocol": matched_key,
+                        "knowledge_base_match": True,
+                        "research_details": {
+                            "source": "snel_built_in_knowledge_base",
+                            "guaranteed_accuracy": True,
+                        }
+                    }
+                )
             
             # Fallback to AI for unknown concepts
             logger.info(f"Concept '{concept_name}' not in KB, using AI fallback")
-            return await self._create_ai_fallback_response(
+            return await self._handle_research_error(
                 concept_name,
-                unified_command.openai_api_key
+                unified_command.openai_api_key,
+                "concept"
             )
             
         except Exception as e:
             logger.error(f"Error handling concept query: {e}")
-            return self._create_error_response(
-                "Unable to answer that question",
-                AgentType.PROTOCOL_RESEARCH,
-                str(e)
+            return await self._handle_research_error(
+                routing_decision.original_query,
+                unified_command.openai_api_key,
+                "concept",
+                error=e
             )
     
     async def _handle_depth_query(
@@ -117,21 +131,98 @@ class ProtocolProcessor(BaseProcessor):
         unified_command: UnifiedCommand
     ) -> UnifiedResponse:
         """Handle depth queries (specific protocol research)."""
+        # Determine research mode: quick (KB + AI) or deep (KB + Firecrawl + AI)
+        research_mode = unified_command.research_mode or "quick"
+        logger.info(f"Protocol research mode: {research_mode}")
+        
+        # Start timer for duration tracking
+        start_time = research_logger.start_timer()
+        
         try:
             # Use extracted entity name for KB lookup, not transformed query
             protocol_name = routing_decision.extracted_entity or self.router.transform_query_for_tool(routing_decision)
-            logger.info(f"Handling depth query: {protocol_name} (extracted: {routing_decision.extracted_entity})")
+            logger.info(f"Handling depth query: {protocol_name} (mode: {research_mode}, extracted: {routing_decision.extracted_entity})")
             
-            # Try knowledge base first with the extracted entity name
-            kb = get_protocol_kb()
-            kb_result = kb.get(protocol_name)
+            # Try knowledge base first with the extracted entity name (both modes)
+            kb_result = await self._lookup_kb(protocol_name)
             if kb_result:
                 matched_key, entry = kb_result
                 logger.info(f"Found '{protocol_name}' in knowledge base as '{matched_key}'")
-                return self._create_response_from_knowledge(matched_key, entry)
+                metrics = self._get_protocol_metrics(matched_key)
+                content = ProtocolResponseBuilder.from_knowledge_base(matched_key, entry, metrics)
+                
+                # Log successful KB lookup
+                duration_ms = research_logger.calculate_duration_ms(start_time)
+                research_logger.log_research(
+                    protocol_name=matched_key,
+                    research_mode=research_mode,
+                    source="knowledge_base",
+                    duration_ms=duration_ms,
+                    user_id=unified_command.user_name,
+                    success=True,
+                )
+                
+                return self._create_success_response(
+                    content=content,
+                    agent_type=AgentType.PROTOCOL_RESEARCH,
+                    metadata={
+                        "source": "knowledge_base",
+                        "protocol": matched_key,
+                        "research_mode": research_mode,
+                        "knowledge_base_match": True,
+                        "research_details": {
+                            "source": "snel_built_in_knowledge_base",
+                            "guaranteed_accuracy": True,
+                            "duration_ms": duration_ms,
+                        }
+                    }
+                )
             
-            # Use Firecrawl for detailed research
-            logger.info(f"Attempting Firecrawl for {protocol_name}")
+            # Route based on research mode
+            if research_mode == "quick":
+                # Quick mode: KB failed, fall back to AI general knowledge
+                logger.info(f"Quick research: KB not found, using AI fallback for {protocol_name}")
+                return await self._handle_research_error(
+                    protocol_name,
+                    unified_command.openai_api_key,
+                    "quick",
+                    user_id=unified_command.user_name,
+                    start_time=start_time
+                )
+            else:
+                # Deep mode: Use Firecrawl for detailed research
+                return await self._handle_deep_research(
+                    protocol_name,
+                    unified_command.openai_api_key,
+                    user_id=unified_command.user_name,
+                    start_time=start_time
+                )
+                
+        except Exception as e:
+            logger.warning(f"Research query failed: {e}")
+            protocol_name = routing_decision.original_query
+            return await self._handle_research_error(
+                protocol_name,
+                unified_command.openai_api_key,
+                research_mode,
+                user_id=unified_command.user_name,
+                start_time=start_time,
+                error=e
+            )
+    
+    async def _handle_deep_research(
+        self,
+        protocol_name: str,
+        openai_key: Optional[str],
+        user_id: Optional[str] = None,
+        start_time: Optional[float] = None,
+    ) -> UnifiedResponse:
+        """
+        Perform deep research using Firecrawl Search+Scrape + AI analysis.
+        Only called when quick research (KB + AI) is insufficient.
+        """
+        try:
+            logger.info(f"Starting deep research for {protocol_name} via Firecrawl")
             from app.core.dependencies import get_service_container
             from app.config.settings import get_settings
             
@@ -145,29 +236,35 @@ class ProtocolProcessor(BaseProcessor):
             )
             
             if scrape_result.get("scraping_success", False):
-                # Analyze with AI
-                openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
+                # Analyze scraped content with AI
+                openai_key = openai_key or os.getenv("OPENAI_API_KEY")
                 logger.info(f"Starting AI analysis for {protocol_name}")
                 
-                ai_result = await analyze_protocol_with_ai(
+                analyzer = ProtocolAnalyzer(openai_key)
+                ai_result = await analyzer.analyze_scraped_content(
                     protocol_name=protocol_name,
                     raw_content=scrape_result.get("raw_content", ""),
                     source_url=scrape_result.get("source_url", ""),
-                    openai_api_key=openai_key,
                 )
                 
-                result = {**scrape_result, **ai_result}
+                content = ProtocolResponseBuilder.from_firecrawl(protocol_name, scrape_result, ai_result)
                 
-                content = {
-                    "message": f"Research complete for {protocol_name}",
-                    "type": "protocol_research_result",
-                    "protocol_name": protocol_name,
-                    "ai_summary": result.get("ai_summary", ""),
-                    "source_url": result.get("source_url", ""),
-                    "raw_content": result.get("raw_content", ""),
-                    "analysis_success": result.get("analysis_success", False),
-                    "requires_transaction": False,
-                }
+                # Calculate duration and cost
+                duration_ms = research_logger.calculate_duration_ms(start_time) if start_time else 0
+                source_urls = scrape_result.get("full_response", {}).get("urls", [])
+                firecrawl_cost = research_logger.calculate_firecrawl_cost(len(source_urls))
+                
+                # Log successful deep research
+                research_logger.log_research(
+                    protocol_name=protocol_name,
+                    research_mode="deep",
+                    source="firecrawl",
+                    duration_ms=duration_ms,
+                    user_id=user_id,
+                    firecrawl_cost=firecrawl_cost,
+                    source_urls=source_urls,
+                    success=True,
+                )
                 
                 return self._create_success_response(
                     content=content,
@@ -180,19 +277,24 @@ class ProtocolProcessor(BaseProcessor):
                         "research_details": {
                             "scraping_success": True,
                             "source": "firecrawl",
+                            "research_mode": "deep",
+                            "duration_ms": duration_ms,
+                            "firecrawl_cost": firecrawl_cost,
                         }
                     }
                 )
             else:
-                logger.warning(f"Firecrawl scraping failed for {protocol_name}")
-                raise FirecrawlError(scrape_result.get("error", "Unknown error"))
+                error_msg = scrape_result.get("error", "Firecrawl scraping failed")
+                logger.warning(f"Deep research failed for {protocol_name}: {error_msg}")
+                raise FirecrawlError(error_msg)
                 
-        except (FirecrawlError, Exception) as e:
-            logger.warning(f"Depth research failed: {e}, falling back to AI")
-            protocol_name = routing_decision.original_query
-            return await self._create_ai_fallback_response(
+        except FirecrawlError as e:
+            logger.warning(f"Deep research (Firecrawl) failed: {e}, falling back to AI")
+            return await self._handle_research_error(
                 protocol_name,
-                unified_command.openai_api_key
+                openai_key,
+                "deep",
+                error=e
             )
     
     async def _handle_discovery_query(
@@ -266,134 +368,146 @@ class ProtocolProcessor(BaseProcessor):
                 str(e)
             )
     
-    def _create_response_from_knowledge(self, protocol_name: str, entry) -> UnifiedResponse:
-        """Create response from built-in knowledge base using ProtocolEntry."""
+    async def _lookup_kb(self, protocol_name: str) -> Optional[Tuple[str, Any]]:
+        """
+        Look up protocol in knowledge base.
+        Single source of truth for KB queries.
+        
+        Args:
+            protocol_name: Name of the protocol to look up
+            
+        Returns:
+            Tuple of (matched_key, ProtocolEntry) or None if not found
+        """
         kb = get_protocol_kb()
-        
-        # Get metrics if available (dynamic data from Firecrawl cache)
-        metrics = kb.get_metrics(protocol_name)
-        
-        # Convert ProtocolEntry to response dict
-        content = {
-            "message": f"Here's what I know about {entry.official_name}:",
-            "type": "protocol_research_result",
-            "protocol_name": protocol_name,
-            "official_name": entry.official_name,
-            "ai_summary": entry.summary,
-            "protocol_type": entry.type,
-            "key_features": entry.key_features,
-            "analysis_quality": "high",
-            "source_url": entry.source_url or "",
-            "raw_content": "",
-            "analysis_success": True,
-            "content_length": 0,
-            "requires_transaction": False,
-            # Structured fields
-            "privacy_explanation": entry.privacy_explanation or "",
-            "technical_explanation": entry.technical_explanation or "",
-            "how_it_works": entry.how_it_works or "",
-            "recommended_wallets": entry.recommended_wallets,
-            "use_cases": entry.use_cases,
-            "from_knowledge_base": True,
-            # Relationships
-            "integrations_with": entry.integrations_with,
-            "bridges_to": entry.bridges_to,
-            "competes_with": entry.competes_with,
-        }
-        
-        # Add dynamic metrics if available
-        if metrics:
-            content["metrics"] = {
-                "tvl": metrics.tvl,
-                "volume_24h": metrics.volume_24h,
-                "market_cap": metrics.market_cap,
-                "apy_yield": metrics.apy_yield,
-                "fees": metrics.fees,
-                "last_updated": metrics.last_updated.isoformat() if metrics.last_updated else None,
-            }
-        
-        return self._create_success_response(
-            content=content,
-            agent_type=AgentType.PROTOCOL_RESEARCH,
-            metadata={
-                "source": "knowledge_base",
-                "protocol": protocol_name,
-                "knowledge_base_match": True,
-                "research_details": {
-                    "source": "snel_built_in_knowledge_base",
-                    "guaranteed_accuracy": True,
-                    "last_verified": entry.last_verified.isoformat() if entry.last_verified else None,
-                    "aliases": entry.aliases,
-                }
-            }
-        )
+        return kb.get(protocol_name)
     
-    async def _create_ai_fallback_response(self, protocol_name: str, openai_key: Union[str, None]) -> UnifiedResponse:
-        """Create response using AI when Firecrawl fails and knowledge base is empty."""
+    def _get_protocol_metrics(self, protocol_name: str) -> Optional[ProtocolMetrics]:
+        """
+        Get dynamic metrics for a protocol from KB.
+        
+        Args:
+            protocol_name: Name of the protocol
+            
+        Returns:
+            ProtocolMetrics or None if not available
+        """
+        kb = get_protocol_kb()
+        return kb.get_metrics(protocol_name)
+    
+    async def _handle_research_error(
+        self,
+        protocol_name: str,
+        openai_key: Optional[str],
+        query_type: str,
+        user_id: Optional[str] = None,
+        start_time: Optional[float] = None,
+        error: Optional[Exception] = None,
+    ) -> UnifiedResponse:
+        """
+        Centralized error handling for research queries.
+        Falls back to AI general knowledge when primary research fails.
+        
+        Args:
+            protocol_name: Name of the protocol
+            openai_key: Optional OpenAI API key
+            query_type: Type of query ('quick', 'deep', 'concept')
+            user_id: Optional user ID for logging
+            start_time: Optional start time for duration calculation
+            error: Optional exception that triggered the fallback
+            
+        Returns:
+            UnifiedResponse with AI fallback or error message
+        """
         try:
             openai_key = openai_key or os.getenv("OPENAI_API_KEY")
             if not openai_key:
+                # Log failed research
+                duration_ms = research_logger.calculate_duration_ms(start_time) if start_time else 0
+                research_logger.log_research(
+                    protocol_name=protocol_name,
+                    research_mode=query_type,
+                    source="ai_general",
+                    duration_ms=duration_ms,
+                    user_id=user_id,
+                    success=False,
+                    error_message="OpenAI API key not available",
+                )
+                
                 return self._create_error_response(
                     f"I couldn't find information about {protocol_name} and the research service is unavailable. Please try a different protocol or check the spelling.",
                     AgentType.PROTOCOL_RESEARCH,
                     "No OpenAI key available"
                 )
             
-            client = AsyncOpenAI(api_key=openai_key)
+            logger.info(f"Using AI fallback for {protocol_name} ({query_type} query)")
+            analyzer = ProtocolAnalyzer(openai_key)
+            ai_result = await analyzer.generate_fallback_summary(protocol_name)
             
-            # Use AI to provide general knowledge about the protocol
-            prompt = f"""
-You are SNEL, a DeFi expert. The user asked about {protocol_name}.
-Your web research failed, but you can still provide useful general knowledge about this protocol if you know about it.
-
-Provide a helpful response about {protocol_name} in this format:
-- Brief explanation (1-2 sentences)
-- Key features (as a list)
-- Type of protocol
-- How it relates to DeFi or privacy if applicable
-
-Keep it concise and accurate. If you don't have reliable information, say so clearly.
-"""
-            
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are SNEL, a knowledgeable DeFi assistant. Provide accurate information about blockchain protocols."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=500,
-                temperature=0.3  # Lower temperature for factual accuracy
-            )
-            
-            ai_response = response.choices[0].message.content
-            
-            content = {
-                "message": ai_response,
-                "type": "protocol_research_result",
-                "protocol_name": protocol_name,
-                "ai_summary": ai_response,
-                "analysis_quality": "medium",
-                "analysis_success": True,
-                "from_ai_fallback": True
-            }
-            
-            return self._create_success_response(
-                content=content,
-                agent_type=AgentType.PROTOCOL_RESEARCH,
-                metadata={
-                    "source": "ai_fallback",
-                    "protocol": protocol_name,
-                    "note": "Web research unavailable, using AI general knowledge"
-                }
-            )
+            if ai_result.get("analysis_success"):
+                content = ProtocolResponseBuilder.from_ai_fallback(protocol_name, ai_result)
+                
+                # Log successful AI fallback
+                duration_ms = research_logger.calculate_duration_ms(start_time) if start_time else 0
+                research_logger.log_research(
+                    protocol_name=protocol_name,
+                    research_mode=query_type,
+                    source="ai_general",
+                    duration_ms=duration_ms,
+                    user_id=user_id,
+                    success=True,
+                )
+                
+                return self._create_success_response(
+                    content=content,
+                    agent_type=AgentType.PROTOCOL_RESEARCH,
+                    metadata={
+                        "source": "ai_fallback",
+                        "protocol": protocol_name,
+                        "query_type": query_type,
+                        "duration_ms": duration_ms,
+                        "note": "Using AI general knowledge (KB and web research unavailable)"
+                    }
+                )
+            else:
+                error_msg = ai_result.get("error", "Unable to generate response")
+                logger.error(f"AI fallback failed for {protocol_name}: {error_msg}")
+                
+                # Log failed AI fallback
+                duration_ms = research_logger.calculate_duration_ms(start_time) if start_time else 0
+                research_logger.log_research(
+                    protocol_name=protocol_name,
+                    research_mode=query_type,
+                    source="ai_general",
+                    duration_ms=duration_ms,
+                    user_id=user_id,
+                    success=False,
+                    error_message=error_msg,
+                )
+                
+                return self._create_error_response(
+                    f"Unable to find information about {protocol_name}",
+                    AgentType.PROTOCOL_RESEARCH,
+                    error_msg
+                )
             
         except Exception as e:
-            logger.exception(f"AI fallback failed for {protocol_name}")
+            logger.exception(f"Error handling research fallback for {protocol_name}")
+            
+            # Log exception
+            duration_ms = research_logger.calculate_duration_ms(start_time) if start_time else 0
+            research_logger.log_research(
+                protocol_name=protocol_name,
+                research_mode=query_type,
+                source="ai_general",
+                duration_ms=duration_ms,
+                user_id=user_id,
+                success=False,
+                error_message=str(e),
+            )
+            
             return self._create_error_response(
-                f"AI fallback failed: {str(e)}",
+                f"Unable to answer questions about {protocol_name} at this time",
                 AgentType.PROTOCOL_RESEARCH,
                 str(e)
             )

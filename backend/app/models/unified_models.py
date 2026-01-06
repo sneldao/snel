@@ -113,6 +113,7 @@ class UnifiedCommand(BaseModel):
     user_name: Optional[str] = Field(default=None, description="User name")
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     details: Optional[CommandDetails] = Field(default=None, description="Parsed command details")
+    research_mode: Optional[str] = Field(default="quick", description="Research mode for protocol research (quick|deep)")
     
     @property
     def original_text(self) -> str:

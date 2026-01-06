@@ -224,11 +224,48 @@ class UnifiedParser:
             CommandType.PROTOCOL_RESEARCH: [
                 {
                     "pattern": re.compile(
+                        r"(?:quick|quick research):\s*(?:research|tell me about|what is|about|info on|explain)\s+(?P<protocol>\w+)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Quick research DeFi protocol",
+                    "research_mode": "quick",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:deep|deep research):\s*(?:research|tell me about|what is|about|info on|explain)\s+(?P<protocol>\w+)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Deep research DeFi protocol",
+                    "research_mode": "deep",
+                    "priority": 2
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:research|tell me about|what is|about|info on|explain)\s+(?P<protocol>\w+)\s+(?:quick|quick research)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Research DeFi protocol (quick mode suffix)",
+                    "research_mode": "quick",
+                    "priority": 3
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:research|tell me about|what is|about|info on|explain)\s+(?P<protocol>\w+)\s+(?:deep|deep research)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Research DeFi protocol (deep mode suffix)",
+                    "research_mode": "deep",
+                    "priority": 4
+                },
+                {
+                    "pattern": re.compile(
                         r"(?:research|tell me about|what is|about|info on|explain)\s+(?P<protocol>\w+)",
                         re.IGNORECASE
                     ),
-                    "description": "Research DeFi protocol",
-                    "priority": 1
+                    "description": "Research DeFi protocol (default quick)",
+                    "research_mode": "quick",
+                    "priority": 5
                 }
             ]
         }
@@ -267,23 +304,23 @@ class UnifiedParser:
         return result
 
     def _extract_details(self, command_type: CommandType, match: re.Match,
-                        pattern_info: Dict[str, Any]) -> CommandDetails:
-        """Extract command details based on command type."""
+                         pattern_info: Dict[str, Any]) -> CommandDetails:
+         """Extract command details based on command type."""
 
-        if command_type == CommandType.SWAP:
-            return self._extract_swap_details(match, pattern_info)
-        elif command_type == CommandType.BRIDGE:
-            return self._extract_bridge_details(match)
-        elif command_type == CommandType.TRANSFER:
-            return self._extract_transfer_details(match)
-        elif command_type == CommandType.BALANCE:
-            return self._extract_balance_details(match)
-        elif command_type == CommandType.PROTOCOL_RESEARCH:
-            return self._extract_research_details(match)
-        elif command_type == CommandType.BRIDGE_TO_PRIVACY:
-            return self._extract_bridge_to_privacy_details(match)
+         if command_type == CommandType.SWAP:
+             return self._extract_swap_details(match, pattern_info)
+         elif command_type == CommandType.BRIDGE:
+             return self._extract_bridge_details(match)
+         elif command_type == CommandType.TRANSFER:
+             return self._extract_transfer_details(match)
+         elif command_type == CommandType.BALANCE:
+             return self._extract_balance_details(match)
+         elif command_type == CommandType.PROTOCOL_RESEARCH:
+             return self._extract_research_details(match, pattern_info)
+         elif command_type == CommandType.BRIDGE_TO_PRIVACY:
+             return self._extract_bridge_to_privacy_details(match)
 
-        return CommandDetails()
+         return CommandDetails()
 
     def _extract_swap_details(self, match: re.Match, pattern_info: Dict[str, Any]) -> CommandDetails:
         """Extract swap details with intelligent amount parsing."""
@@ -383,13 +420,18 @@ class UnifiedParser:
             return CommandDetails(token_in=TokenInfo(symbol=token.upper()))
         return CommandDetails()
 
-    def _extract_research_details(self, match: re.Match) -> CommandDetails:
-        """Extract protocol research details."""
-        groups = match.groupdict()
-        return CommandDetails(
-            protocol=groups["protocol"],
-            additional_params={"research_type": "protocol"}
-        )
+    def _extract_research_details(self, match: re.Match, pattern_info: Dict[str, Any]) -> CommandDetails:
+         """Extract protocol research details including research mode."""
+         groups = match.groupdict()
+         research_mode = pattern_info.get("research_mode", "quick")  # Default to quick
+         
+         return CommandDetails(
+             protocol=groups["protocol"],
+             additional_params={
+                 "research_type": "protocol",
+                 "research_mode": research_mode
+             }
+         )
 
     def _parse_decimal(self, amount_str: str) -> Decimal:
         """Parse amount string to Decimal with validation."""
@@ -471,6 +513,11 @@ class UnifiedParser:
     ) -> UnifiedCommand:
         """Create unified command with consolidated parsing."""
         command_type, details = self.parse_command(command)
+        
+        # Extract research_mode if present in details
+        research_mode = "quick"  # Default
+        if details and details.additional_params:
+            research_mode = details.additional_params.get("research_mode", "quick")
 
         return UnifiedCommand(
             command=command,
@@ -479,7 +526,8 @@ class UnifiedParser:
             chain_id=chain_id,
             user_name=user_name,
             openai_api_key=openai_api_key,
-            details=details
+            details=details,
+            research_mode=research_mode
         )
 
     def clear_cache(self):
