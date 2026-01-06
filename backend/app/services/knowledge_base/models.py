@@ -1,5 +1,5 @@
 """Structured models for protocol knowledge base entries."""
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -71,7 +71,7 @@ class ProtocolEntry(BaseModel):
     source_url: Optional[str] = None
     
     # Domain-specific fields (extensible)
-    custom_fields: Dict[str, any] = Field(default_factory=dict)
+    custom_fields: Dict[str, Any] = Field(default_factory=dict)
     
     class Config:
         json_schema_extra = {
