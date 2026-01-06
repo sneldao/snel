@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   VStack,
@@ -13,7 +13,6 @@ import {
 } from '@chakra-ui/react';
 import { FaShieldAlt, FaGlobe, FaBalanceScale, FaInfoCircle } from 'react-icons/fa';
 import { useWallet } from '../../hooks/useWallet';
-import { useChain } from '../../hooks/useChain';
 
 /**
  * PrivacySettings - Component for managing privacy preferences
@@ -21,8 +20,7 @@ import { useChain } from '../../hooks/useChain';
  */
 
 const PrivacySettings = () => {
-  const { chainId, chainName } = useChain();
-  const { walletAddress } = useWallet();
+  const { chainId, chainName, address: walletAddress } = useWallet();
   
   // Privacy options based on chain capabilities
   const [privacyOptions, setPrivacyOptions] = useState([]);
@@ -30,7 +28,7 @@ const PrivacySettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   // Mock chain privacy capabilities (in production, fetch from backend)
-  const chainCapabilities = {
+  const chainCapabilities = useMemo(() => ({
     1: { // Ethereum
       x402: true,
       gmp: true,
@@ -51,7 +49,7 @@ const PrivacySettings = () => {
       gmp: true,
       compliance: false
     }
-  };
+  }), []);
   
   // Generate privacy options based on current chain
   useEffect(() => {
@@ -77,7 +75,7 @@ const PrivacySettings = () => {
     setPrivacyOptions(options);
     setIsLoading(false);
     
-  }, [chainId, chainCapabilities]);
+  }, [chainId]);
   
   const handleSetDefault = (level) => {
     setDefaultPrivacy(level);
