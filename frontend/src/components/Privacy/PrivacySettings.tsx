@@ -20,15 +20,28 @@ import { useWallet } from '../../hooks/useWallet';
  */
 
 const PrivacySettings = () => {
-  const { chainId, chainName, address: walletAddress } = useWallet();
-  
+  const { chainId, chainName } = useWallet();
+
+  interface ChainCapability {
+    x402: boolean;
+    gmp: boolean;
+    compliance: boolean;
+  }
+
+  interface PrivacyOption {
+    value: string;
+    label: string;
+    icon: any;
+    description: string;
+  }
+
   // Privacy options based on chain capabilities
-  const [privacyOptions, setPrivacyOptions] = useState([]);
+  const [privacyOptions, setPrivacyOptions] = useState<PrivacyOption[]>([]);
   const [defaultPrivacy, setDefaultPrivacy] = useState('public');
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Mock chain privacy capabilities (in production, fetch from backend)
-  const chainCapabilities = useMemo(() => ({
+  const chainCapabilities: Record<number, ChainCapability> = useMemo(() => ({
     1: { // Ethereum
       x402: true,
       gmp: true,
@@ -50,17 +63,17 @@ const PrivacySettings = () => {
       compliance: false
     }
   }), []);
-  
+
   // Generate privacy options based on current chain
   useEffect(() => {
     if (!chainId) return;
-    
+
     const capabilities = chainCapabilities[chainId] || { x402: false, gmp: false, compliance: false };
-    
+
     const options = [
       { value: 'public', label: 'Public Transactions', icon: FaGlobe, description: 'Standard transactions on public blockchain' }
     ];
-    
+
     if (capabilities.x402) {
       options.push(
         { value: 'private', label: 'Private via x402', icon: FaShieldAlt, description: 'Fast privacy using x402 programmatic payments' },
@@ -71,23 +84,23 @@ const PrivacySettings = () => {
         { value: 'private', label: 'Private via GMP', icon: FaShieldAlt, description: 'Privacy using GMP bridge (slower)' }
       );
     }
-    
+
     setPrivacyOptions(options);
     setIsLoading(false);
-    
-  }, [chainId]);
-  
-  const handleSetDefault = (level) => {
+
+  }, [chainId, chainCapabilities]);
+
+  const handleSetDefault = (level: string) => {
     setDefaultPrivacy(level);
     // In production, this would call backend API to save preference
     console.log(`Setting default privacy to: ${level}`);
   };
-  
+
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const textColor = useColorModeValue('gray.800', 'white');
   const mutedColor = useColorModeValue('gray.600', 'gray.400');
-  
+
   if (isLoading) {
     return (
       <Box p={4} borderWidth={1} borderRadius="lg" borderColor={borderColor} bg={bgColor}>
@@ -95,9 +108,9 @@ const PrivacySettings = () => {
       </Box>
     );
   }
-  
+
   const currentOption = privacyOptions.find(opt => opt.value === defaultPrivacy);
-  
+
   return (
     <Box
       p={4}
@@ -118,9 +131,9 @@ const PrivacySettings = () => {
             <Text fontSize="sm" color={mutedColor}>{chainName}</Text>
           )}
         </HStack>
-        
+
         <Divider />
-        
+
         {/* Current Setting */}
         <Box>
           <Text fontSize="sm" color={mutedColor} mb={2}>Current Default</Text>
@@ -134,7 +147,7 @@ const PrivacySettings = () => {
             </HStack>
           )}
         </Box>
-        
+
         {/* Privacy Options */}
         <Box>
           <Text fontSize="sm" color={mutedColor} mb={2}>Available Options</Text>
@@ -160,7 +173,7 @@ const PrivacySettings = () => {
             ))}
           </VStack>
         </Box>
-        
+
         {/* Chain Capabilities */}
         <Box>
           <Text fontSize="sm" color={mutedColor} mb={2}>Chain Capabilities</Text>
@@ -181,7 +194,7 @@ const PrivacySettings = () => {
             </VStack>
           )}
         </Box>
-        
+
         {/* Quick Actions */}
         <Box>
           <Text fontSize="sm" color={mutedColor} mb={2}>Quick Actions</Text>
