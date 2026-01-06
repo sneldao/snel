@@ -76,9 +76,11 @@ class SwapProcessor(BaseProcessor):
             )
             
             if not quote:
-                return self._create_error_response(
-                    f"No swap route found for {token_in} -> {token_out}",
-                    AgentType.SWAP
+                return self._create_guided_error_response(
+                    command_type=CommandType.SWAP,
+                    agent_type=AgentType.SWAP,
+                    error_context=ErrorContext.NO_LIQUIDITY,
+                    additional_message=f"No swap route found for {token_in} -> {token_out} on this chain."
                 )
             
             # Check if approval is needed
@@ -115,10 +117,12 @@ class SwapProcessor(BaseProcessor):
             
         except Exception as e:
             logger.exception(f"Error processing swap: {e}")
-            return self._create_error_response(
-                f"Swap processing failed: {str(e)}",
-                AgentType.SWAP,
-                str(e)
+            return self._create_guided_error_response(
+                command_type=CommandType.SWAP,
+                agent_type=AgentType.SWAP,
+                error_context=ErrorContext.GENERIC_FAILURE,
+                error=str(e),
+                additional_message=f"Swap processing failed: {str(e)}"
             )
     
     def _normalize_token_for_swap(self, token_symbol: str, chain_id: int) -> str:

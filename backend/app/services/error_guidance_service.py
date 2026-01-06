@@ -33,6 +33,10 @@ class ErrorContext(Enum):
     PRIVACY_OPERATION_FAILED = "privacy_operation_failed"
     PRIVACY_UNSUPPORTED = "privacy_unsupported"
     X402_UNAVAILABLE = "x402_unavailable"
+    PROTOCOL_NOT_FOUND = "protocol_not_found"
+    RESEARCH_SERVICE_ERROR = "research_service_error"
+    RESEARCH_REQUIRED = "research_required"
+    RESEARCH_HINT = "research_hint"
 
 
 class ErrorGuidanceService:
@@ -344,6 +348,64 @@ class ErrorGuidanceService:
                     ]
                 },
             },
+            CommandType.PROTOCOL_RESEARCH: {
+                ErrorContext.PROTOCOL_NOT_FOUND: {
+                    "message": "I couldn't find definitive on-chain or off-chain information about this protocol.",
+                    "suggestions": [
+                        "Search on Coingecko or CoinMarketCap for price and basic info",
+                        "Check the official documentation or Twitter/X for recent updates",
+                        "Try a more common name or ticker symbol",
+                        "Visit 'defillama.com' for deep protocol analytics"
+                    ]
+                },
+                ErrorContext.RESEARCH_SERVICE_ERROR: {
+                    "message": "The automated research service is currently experiencing high latency or connectivity issues.",
+                    "suggestions": [
+                        "Try searching directly on Google or DuckDuckGo",
+                        "Visit 'etherscan.io' or 'basescan.org' to check contract data manually",
+                        "Wait a few moments and try your request again",
+                        "Ask about a related well-known protocol for comparison"
+                    ]
+                },
+                ErrorContext.GENERIC_FAILURE: {
+                    "message": "Something went wrong while analyzing the protocol data.",
+                    "suggestions": [
+                        "Rephrase your question (e.g., 'research Zcash')",
+                        "Check the spelling of the protocol name",
+                        "Try searching in a web browser for the latest whitepaper",
+                        "Ask me to 'explain the concept of [topic]' instead"
+                    ]
+                }
+            },
+            CommandType.GENERAL: {
+                ErrorContext.RESEARCH_REQUIRED: {
+                    "message": "I don't have enough information to answer that accurately. You might want to do some external research.",
+                    "suggestions": [
+                        "Search on Google for 'how to use [topic]'",
+                        "Check documentation on 'docs.[protocol].org'",
+                        "Ask me to 'research [topic]' to see if I can find more info",
+                        "Check official Twitter/X for the latest status updates"
+                    ]
+                },
+                ErrorContext.GENERIC_FAILURE: {
+                    "message": "I encountered an unexpected issue while processing your request.",
+                    "suggestions": [
+                        "Try rephrasing your command",
+                        "Check your internet connection",
+                        "Try again in a few moments",
+                        "Search for the error message in a browser"
+                    ]
+                },
+                ErrorContext.RESEARCH_HINT: {
+                    "message": "I'm having trouble with that. Sometimes external research can help clarify things.",
+                    "suggestions": [
+                        "Search on Google/Brave for your specific query",
+                        "Check 'etherscan.io' or 'basescan.org' for transaction details",
+                        "Visit official documentation for the protocol in question",
+                        "Ask me for a broader topic (e.g. 'what is DeFi lending?')"
+                    ]
+                }
+            }
         }
 
     def get_guidance(

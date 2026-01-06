@@ -105,10 +105,16 @@ async def process_command(
     except Exception as e:
         # Handle unexpected exceptions
         logger.exception(f"Unexpected error processing command: {command.command}")
+        from app.services.error_guidance_service import error_guidance_service, ErrorContext
+        from app.models.unified_models import CommandType
+        
+        guidance = error_guidance_service.get_guidance(CommandType.GENERAL, ErrorContext.GENERIC_FAILURE)
+        
         return ChatResponse(
             content={
-                "message": "I encountered an unexpected error. Please try again.",
-                "type": "error"
+                "message": guidance["message"],
+                "type": "error",
+                "suggestions": guidance["suggestions"]
             },
             status="error",
             error=str(e)

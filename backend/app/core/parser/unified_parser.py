@@ -315,6 +315,7 @@ class UnifiedParser:
             amount=float(parsed_amount.value),
             token_in=TokenInfo(symbol=parsed_amount.token_symbol),
             token_out=TokenInfo(symbol=groups["token_out"].upper()),
+            is_usd_amount=(amount_type == AmountType.USD_AMOUNT),
             additional_params={
                 "parsed_amount": parsed_amount.to_dict(),
                 "amount_type": parsed_amount.amount_type.value,
@@ -326,12 +327,16 @@ class UnifiedParser:
         """Extract bridge details."""
         groups = match.groupdict()
         amount = self._parse_decimal(groups["amount"])
+        
+        # Check if it's a USD amount (bridge $1 of eth to ...)
+        is_usd = "$" in match.string or "usd" in match.string.lower() or "dollar" in match.string.lower()
 
         return CommandDetails(
             amount=float(amount),
             token_in=TokenInfo(symbol=groups["token"].upper()),
             source_chain=groups.get("source_chain"),
-            destination_chain=groups["dest_chain"]
+            destination_chain=groups["dest_chain"],
+            is_usd_amount=is_usd
         )
 
     def _extract_bridge_to_privacy_details(self, match: re.Match) -> CommandDetails:

@@ -480,23 +480,19 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         Process unknown commands by providing helpful guidance.
         This ensures users are never left without direction.
         """
+        from app.services.error_guidance_service import error_guidance_service, ErrorContext
+        from app.models.unified_models import CommandType
+        
         command_lower = unified_command.command.lower()
         
-        # Provide contextual suggestions based on keywords in the command
-        suggestions = []
-        
-        # Check for bridge-related keywords and provide bridge guidance
+        # Check for bridge-related keywords
         if any(word in command_lower for word in ['bridge', 'private', 'zcash', 'privacy']):
-            suggestions = [
-                "Try 'bridge 0.5 eth from base to optimism' for a cross-chain bridge",
-                "Try 'bridge 1 usdc to zcash' to bridge to Zcash for privacy",
-                "Try 'what are privacy pools?' to learn about private transactions"
-            ]
+            guidance = error_guidance_service.get_guidance(CommandType.BRIDGE, ErrorContext.MISSING_AMOUNT)
             return UnifiedResponse(
                 content={
-                    "message": "I can help with bridges and privacy! Please tell me:\n1. How much you want to bridge\n2. Which token\n3. Where you're bridging to (for cross-chain) or 'zcash' (for privacy)",
+                    "message": "I can help with bridges and privacy! " + guidance["message"],
                     "type": "help",
-                    "suggestions": suggestions
+                    "suggestions": guidance["suggestions"]
                 },
                 agent_type=AgentType.DEFAULT,
                 status="success"
@@ -504,16 +500,12 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         
         # Check for swap-related keywords
         if any(word in command_lower for word in ['swap', 'exchange', 'trade']):
-            suggestions = [
-                "Try 'swap 1 eth for usdc'",
-                "Try 'swap 100 usdc for eth on arbitrum'",
-                "Try 'how much usdc for 1 eth?'"
-            ]
+            guidance = error_guidance_service.get_guidance(CommandType.SWAP, ErrorContext.MISSING_TOKEN_PAIR)
             return UnifiedResponse(
                 content={
-                    "message": "I can help with swaps! Please tell me:\n1. How much you want to swap\n2. What token to swap from\n3. What token to swap to",
+                    "message": "I can help with swaps! " + guidance["message"],
                     "type": "help",
-                    "suggestions": suggestions
+                    "suggestions": guidance["suggestions"]
                 },
                 agent_type=AgentType.DEFAULT,
                 status="success"
@@ -521,31 +513,27 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         
         # Check for transfer-related keywords
         if any(word in command_lower for word in ['transfer', 'send', 'move']):
-            suggestions = [
-                "Try 'transfer 0.1 eth to 0x123...'",
-                "Try 'send 100 usdc to vitalik.eth'",
-                "Try 'transfer 1 eth to my other address'"
-            ]
+            guidance = error_guidance_service.get_guidance(CommandType.TRANSFER, ErrorContext.MISSING_DESTINATION)
             return UnifiedResponse(
                 content={
-                    "message": "I can help with transfers! Please tell me:\n1. How much you want to transfer\n2. What token\n3. Where to send it (address or ENS name)",
+                    "message": "I can help with transfers! " + guidance["message"],
                     "type": "help",
-                    "suggestions": suggestions
+                    "suggestions": guidance["suggestions"]
                 },
                 agent_type=AgentType.DEFAULT,
                 status="success"
             )
         
-        # Default response for truly unknown commands
+        # Default response for truly unknown commands - use Research Hint
+        guidance = error_guidance_service.get_guidance(CommandType.GENERAL, ErrorContext.RESEARCH_HINT)
         return UnifiedResponse(
             content={
-                "message": "I'm not sure how to help with that. I can assist with:\n• Swapping tokens\n• Transferring tokens\n• Bridging across chains\n• Checking balances\n• Privacy-preserving bridges\n\nWhat would you like to do?",
+                "message": "I'm not exactly sure how to handle that request. " + guidance["message"],
                 "type": "help",
-                "suggestions": [
+                "suggestions": guidance["suggestions"] + [
                     "Try 'swap 1 eth for usdc'",
-                    "Try 'transfer 0.1 eth to address'",
-                    "Try 'bridge 100 usdc from ethereum to arbitrum'",
-                    "Try 'bridge 1 eth to zcash' for private transactions"
+                    "Try 'bridge 1 eth to zcash'",
+                    "Try 'research Uniswap'"
                 ]
             },
             agent_type=AgentType.DEFAULT,

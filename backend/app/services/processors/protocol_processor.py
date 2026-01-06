@@ -241,11 +241,13 @@ class ProtocolProcessor(BaseProcessor):
         details = unified_command.details
         
         # Try to extract from details first
-        if details and details.token_in and details.token_in.symbol:
-            return details.token_in.symbol
-        
-        if details and hasattr(details, 'protocol_name'):
-            return details.protocol_name
+        if details:
+            if details.token_in and details.token_in.symbol:
+                return details.token_in.symbol
+            if hasattr(details, 'protocol') and details.protocol:
+                return details.protocol
+            if hasattr(details, 'protocol_name') and details.protocol_name:
+                return details.protocol_name
         
         # Extract from command text using regex
         command_lower = unified_command.command.lower()
@@ -387,8 +389,9 @@ Keep it concise and accurate. If you don't have reliable information, say so cle
             
         except Exception as e:
             logger.exception(f"AI fallback failed for {protocol_name}")
-            return self._create_error_response(
-                f"I couldn't find information about {protocol_name}. Please try a different protocol or rephrase your question.",
-                AgentType.PROTOCOL_RESEARCH,
-                str(e)
+            return self._create_guided_error_response(
+                command_type=CommandType.PROTOCOL_RESEARCH,
+                agent_type=AgentType.PROTOCOL_RESEARCH,
+                error_context=ErrorContext.PROTOCOL_NOT_FOUND if "couldn't find" in str(e).lower() else ErrorContext.RESEARCH_SERVICE_ERROR,
+                error=str(e)
             )
