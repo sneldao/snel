@@ -137,7 +137,14 @@ class SwapProcessor(BaseProcessor):
                     additional_message=f"No swap route found for {token_in} -> {token_out} on this chain."
                 )
             
-            # Check if approval is needed
+            # Check if approval is needed (0x returns allowanceIssues in metadata)
+            allowance_issues = quote.get("metadata", {}).get("allowanceIssues")
+            if allowance_issues:
+                return await self._create_approval_flow(
+                    unified_command, quote, details, amount
+                )
+            
+            # Also check explicit needs_approval flag (for other protocols)
             if quote.get("needs_approval"):
                 return await self._create_approval_flow(
                     unified_command, quote, details, amount
@@ -256,23 +263,36 @@ class SwapProcessor(BaseProcessor):
     ) -> UnifiedResponse:
         """Create a multi-step transaction flow with approval + swap."""
         try:
-            token_address = quote.get("token_in_address")
-            spender = quote.get("spender") or quote.get("to")
+            # Extract token address from metadata (where 0x puts it)
+            metadata = quote.get("metadata", {})
+            token_address = metadata.get("from_token", {}).get("address")
+            
+            # Get allowance target from 0x metadata
+            spender = metadata.get("allowanceTarget") or quote.get("spender") or quote.get("to")
             
             if not token_address or not spender:
+                logger.error(f"Missing approval parameters: token_address={token_address}, spender={spender}")
                 return self._create_error_response(
-                    "Missing approval parameters",
+                    "Missing approval parameters for token approval",
                     AgentType.SWAP
                 )
             
-            # Create approval transaction
+            # Convert amount to token units with proper decimals
+            decimals = metadata.get("from_token", {}).get("decimals", 18)
+            approval_amount = int(amount * (Decimal(10) ** decimals))
+            
+            # Create approval transaction using ERC20 approve
+            approval_data = self._encode_approval(spender, Decimal(approval_amount))
+            
             approval_tx = TransactionData(
                 to=token_address,
-                data=self._encode_approval(spender, amount),
+                data=approval_data,
                 value="0",
                 chain_id=unified_command.chain_id,
                 gas_limit="100000"
             )
+            
+            logger.info(f"Creating approval flow: token={token_address}, spender={spender}, amount={approval_amount}")
             
             return self._create_success_response(
                 content={
@@ -281,13 +301,23 @@ class SwapProcessor(BaseProcessor):
                     "flow_info": {
                         "current_step": 1,
                         "total_steps": 2,
-                        "step_type": "approval"
+                        "step_type": "approval",
+                        "details": {
+                            "token": details.token_in.symbol,
+                            "spender_contract": spender,
+                            "amount": str(amount)
+                        }
                     }
                 },
                 agent_type=AgentType.SWAP,
                 transaction=approval_tx,
                 awaiting_confirmation=True,
-                metadata={"quote": quote, "next_step": "swap"}
+                metadata={
+                    "quote": quote,
+                    "next_step": "swap",
+                    "approval_target": spender,
+                    "token_address": token_address
+                }
             )
             
         except Exception as e:
