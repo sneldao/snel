@@ -39,29 +39,6 @@ const nextConfig = {
 
     return config;
   },
-  turbopack: {
-    resolveAlias: {
-      fs: false,
-      net: false,
-      tls: false,
-      crypto: false,
-      stream: false,
-      assert: false,
-      http: false,
-      https: false,
-      os: false,
-      url: false,
-      zlib: false,
-      "sodium-native": false,
-      "require-addon": false,
-      "node-gyp-build": false,
-      bindings: false,
-      child_process: false,
-      worker_threads: false,
-      perf_hooks: false,
-      async_hooks: false,
-    },
-  },
   // For monorepo structure, we use rewrites instead of env variables
   async rewrites() {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
