@@ -4,9 +4,12 @@
 
 SNEL transforms complex DeFi operations into simple natural language commands. Execute swaps, bridge assets, and manage your portfolio across multiple blockchains with the power of AI - no more complex interfaces or manual protocol navigation.
 
-**Hackathon Track**: Payments Track - MNEE Stablecoin Integration
+**Hackathon Track**: AI and Agent Payments | Commerce and Creator Tools | Financial Automation
+**Submission**: MNEE Programmable Stablecoin Hackathon ([Devpost](https://mnee-eth.devpost.com/))
 
-**MNEE Integration**: SNEL supports MNEE (ERC-20 Programmable Stablecoin) for commerce payments with invoice references on Ethereum mainnet. Contract: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF`
+**MNEE Integration**: SNEL supports MNEE (ERC-20 Programmable Stablecoin) as a native currency for AI-driven payments and commerce.
+- **Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
+- **Use Case**: Programmable B2B payments, automated invoicing, and agent-to-agent settlement using natural language.
 
 ## ✨ Key Features
 
@@ -112,15 +115,16 @@ cd frontend && npm run dev
 
 ## 🏆 Hackathon Submission
 
-**Track**: Payments Track  
-**Focus**: MNEE Stablecoin Integration for Programmable Commerce  
+**Track**: AI and Agent Payments (Primary), Commerce and Creator Tools, Financial Automation  
+**Focus**: Autonomous Agent Payments & Programmable B2B Commerce  
 **Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
 
 SNEL integrates MNEE stablecoin as a native payment option, enabling:
-- Natural language MNEE payment commands
-- Invoice reference support for business transactions
-- Seamless USD to MNEE conversion
-- AI-powered commerce transaction routing
+- **Natural Language Payments**: Execute commands like `"pay $100 MNEE to merchant.eth for invoice #42"`
+- **Autonomous Agent Payments**: AI-to-AI settlement using programmable MNEE transfers
+- **Commerce & Invoicing**: Built-in support for invoice references and merchant metadata
+- **Treasury Automation**: AI-managed treasury operations using MNEE for stability
+- **Seamless Conversion**: Intelligent USD-to-MNEE price routing and conversion
 
 See our detailed [ROADMAP.md](docs/ROADMAP.md) for our hackathon plans and future development.
 

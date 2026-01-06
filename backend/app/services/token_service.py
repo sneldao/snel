@@ -276,8 +276,6 @@ class TokenService:
             # MNEE addresses for common chains
             mnee_addresses = {
                 1: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
-                42161: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
-                137: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
             }
             return {
                 "address": mnee_addresses.get(chain_id, ""),

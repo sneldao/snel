@@ -5,10 +5,10 @@ SNEL is a DeFi assistant that enables users to interact with their crypto portfo
 
 ## Hackathon Submission
 
-**Track**: Payments Track  
+**Tracks**: AI and Agent Payments | Commerce and Creator Tools | Financial Automation  
 **Token**: MNEE Stablecoin  
 **Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)  
-**Focus**: Natural language MNEE payments with invoice references for business transactions
+**Focus**: Autonomous agent-to-agent payments and programmable B2B commerce using natural language.
 
 ## Current Capabilities
 - Multi-chain support across 16+ networks (Ethereum, Arbitrum, Polygon, Base, Optimism, zkSync, Scroll, Linea, Mantle, Blast, Mode, Gnosis, Taiko, Avalanche, BSC)

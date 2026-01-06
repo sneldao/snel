@@ -155,17 +155,7 @@ export const POPULAR_TOKENS: Token[] = [
     isPopular: true,
     isStablecoin: true
   },
-  {
-    symbol: 'MNEE',
-    name: 'MNEE Stablecoin (Polygon)',
-    address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
-    chainId: ChainId.POLYGON,
-    decimals: 6,
-    logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
-    coingeckoId: 'mnee', // Placeholder - replace with actual Coingecko ID if available
-    isPopular: true,
-    isStablecoin: true
-  },
+
   {
     symbol: 'USDT',
     name: 'Tether (Polygon)',
@@ -221,17 +211,7 @@ export const POPULAR_TOKENS: Token[] = [
     isPopular: true,
     isStablecoin: true
   },
-  {
-    symbol: 'MNEE',
-    name: 'MNEE Stablecoin (Arbitrum)',
-    address: '0xMNEE000000000000000000000000000000000000', // Placeholder - replace with actual MNEE contract address
-    chainId: ChainId.ARBITRUM,
-    decimals: 6,
-    logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
-    coingeckoId: 'mnee', // Placeholder - replace with actual Coingecko ID if available
-    isPopular: true,
-    isStablecoin: true
-  },
+
   {
     symbol: 'ARB',
     name: 'Arbitrum',
