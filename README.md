@@ -4,10 +4,15 @@
 
 SNEL transforms complex DeFi operations into simple natural language commands. Execute swaps, bridge assets, and manage your portfolio across multiple blockchains with the power of AI - no more complex interfaces or manual protocol navigation.
 
+**Hackathon Track**: Payments Track - MNEE Stablecoin Integration
+
+**MNEE Integration**: SNEL supports MNEE (ERC-20 Programmable Stablecoin) for commerce payments with invoice references on Ethereum mainnet. Contract: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF`
+
 ## ✨ Key Features
 
-- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"` or `"swap $100 of USDC for ETH"`.
+- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"`, `"pay $100 MNEE to merchant for order #1234"`, or `"swap $100 of USDC for ETH"`.
 - **🌐 Multi-Chain Support**: Operates on 16+ networks including Ethereum, Polygon, Base, and Arbitrum.
+- **💳 MNEE Commerce Payments**: Native support for MNEE stablecoin with invoice references for business-to-business transactions.
 - **🔄 Advanced Transaction Handling**: Automatically handles multi-step processes like approvals and swaps with real-time status updates.
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
 - **🛡️ Privacy Bridging**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP.
@@ -44,12 +49,19 @@ All project documentation has been consolidated into four main files in the [doc
 
 See the [docs/README.md](docs/README.md) for a complete overview of the documentation structure.
 
-### Supported Swap Commands
+### Supported Commands
 
+**Token Swaps & Transfers**:
 - `swap 1 ETH for USDC` - Standard token amount swap
 - `swap $100 of USDC for ETH` - USD amount converted to token amount
 - `swap $50 worth of ETH for USDC` - USD amount converted to token amount
 - `swap 100 USDC to DAI on Polygon` - Cross-chain swap
+
+**MNEE Commerce Payments**:
+- `pay $100 MNEE to merchant for order #1234` - MNEE payment with invoice reference
+- `send 50 MNEE to 0x... for invoice INV-001` - Direct MNEE transfer with memo
+
+**Privacy & Bridging**:
 - `bridge 1 ETH to Zcash` - Privacy bridge via Axelar
 - `make my 100 USDC private` - Privacy-preserving cross-chain transfer
 
@@ -98,13 +110,19 @@ cd frontend && npm run dev
 
 **🎉 Access at:** http://localhost:3000
 
-## 🛣️ Roadmap
+## 🏆 Hackathon Submission
 
-Our goal is to continuously improve SNEL. See our detailed [ROADMAP.md](docs/ROADMAP.md) for our hackathon plans and future development.
+**Track**: Payments Track  
+**Focus**: MNEE Stablecoin Integration for Programmable Commerce  
+**Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
 
-### Hackathon Focus: Payments Track
+SNEL integrates MNEE stablecoin as a native payment option, enabling:
+- Natural language MNEE payment commands
+- Invoice reference support for business transactions
+- Seamless USD to MNEE conversion
+- AI-powered commerce transaction routing
 
-We're currently focusing on enhancing the payments functionality on Scroll for the upcoming hackathon. See our complete implementation plan in [ROADMAP.md](docs/ROADMAP.md).
+See our detailed [ROADMAP.md](docs/ROADMAP.md) for our hackathon plans and future development.
 
 ## 🤝 Contributing
 
@@ -118,4 +136,6 @@ We welcome contributions!
 
 ## 📄 License
 
-This project is licensed under the **MIT License**.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for full details.
+
+All third-party dependencies are licensed under permissive open-source licenses (MIT, Apache 2.0, ISC). See [package.json](package.json), [frontend/package.json](frontend/package.json) for dependency details.

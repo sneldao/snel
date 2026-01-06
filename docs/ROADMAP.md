@@ -1,18 +1,24 @@
 # Snel DeFi Assistant - Hackathon Roadmap
 
 ## Project Overview
-Snel is a DeFi assistant that enables users to interact with their crypto portfolios through natural language commands. The platform supports multiple blockchains including Scroll, and has existing LINE Mini-Dapp integration capabilities.
+SNEL is a DeFi assistant that enables users to interact with their crypto portfolios through natural language commands. The platform supports multiple blockchains and has integrated MNEE stablecoin support for programmable commerce payments.
 
-## Hackathon Focus: Payments Track
-Our implementation will focus on enhancing the payments functionality on Scroll, leveraging our existing Web3 infrastructure and mobile-first approach.
+## Hackathon Submission
+
+**Track**: Payments Track  
+**Token**: MNEE Stablecoin  
+**Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)  
+**Focus**: Natural language MNEE payments with invoice references for business transactions
 
 ## Current Capabilities
-- Multi-chain support including Scroll (already integrated)
-- Wallet connection and transaction management
-- Natural language processing for DeFi operations
+- Multi-chain support across 16+ networks (Ethereum, Arbitrum, Polygon, Base, Optimism, zkSync, Scroll, Linea, Mantle, Blast, Mode, Gnosis, Taiko, Avalanche, BSC)
+- MNEE stablecoin integration for commerce payments
+- Natural language processing for DeFi operations and payments
+- Wallet connection and transaction management (50+ wallet support)
 - LINE Mini-Dapp integration (mobile-first)
 - Privacy features with Zcash integration
 - Cross-chain bridging capabilities
+- Invoice reference support for business payments
 
 ## Implementation Plan
 
