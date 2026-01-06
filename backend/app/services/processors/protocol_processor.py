@@ -135,9 +135,9 @@ PROTOCOL_KNOWLEDGE_BASE = {
 class ProtocolProcessor(BaseProcessor):
     """Processes protocol research commands with intelligent routing."""
     
-    def __init__(self):
+    def __init__(self, **kwargs):
         """Initialize protocol processor with router."""
-        super().__init__()
+        super().__init__(**kwargs)
         self.router = ResearchRouter()
     
     async def process(self, unified_command: UnifiedCommand) -> UnifiedResponse:
