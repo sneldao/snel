@@ -199,10 +199,11 @@ async def answer_protocol_question_with_client(
     openai_api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Answer follow-up questions about a protocol.
+    Answer follow-up questions about a protocol using general knowledge.
+    Falls back to OpenAI without scraped content when insufficient context.
     
     Args:
-        client: FirecrawlClient instance
+        client: FirecrawlClient instance (not used, kept for compatibility)
         protocol_name: Name of the protocol
         question: User's question
         openai_api_key: OpenAI API key
@@ -221,37 +222,13 @@ async def answer_protocol_question_with_client(
         }
     
     try:
-        # Search for relevant content
-        query = f"{protocol_name} {question}"
-        results = await client.search_and_scrape(query, max_urls=2)
-        
-        if not results:
-            return {
-                "error": f"No information found for {protocol_name}",
-                "answer": f"I couldn't find enough information about {protocol_name} to answer that question.",
-                "success": False,
-            }
-        
-        content = results[0].get("markdown", "")
-        
-        if not content or len(content.strip()) < 50:
-            return {
-                "error": "Insufficient content",
-                "answer": "I don't have enough detailed information to answer that question.",
-                "success": False,
-            }
-        
         client_openai = AsyncOpenAI(api_key=openai_api_key)
         
-        prompt = f"""
-You are a DeFi expert. Answer this question about {protocol_name} based ONLY on the provided content.
-
-CONTENT:
-{content[:3000]}
+        prompt = f"""You are a DeFi expert. Answer this question about {protocol_name}:
 
 QUESTION: {question}
 
-Provide a clear, accurate answer (2-4 sentences). If the information isn't in the content, say so clearly.
+Provide a clear, accurate answer (2-4 sentences) based on your knowledge of DeFi and {protocol_name}.
 """
         
         response = await client_openai.chat.completions.create(
@@ -259,7 +236,7 @@ Provide a clear, accurate answer (2-4 sentences). If the information isn't in th
             messages=[
                 {
                     "role": "system",
-                    "content": f"You are a DeFi expert answering questions about {protocol_name}. Use only the provided content.",
+                    "content": f"You are a DeFi expert providing helpful information about {protocol_name}.",
                 },
                 {"role": "user", "content": prompt},
             ],
