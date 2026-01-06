@@ -54,6 +54,28 @@ export const formatErrorMessage = (errorContent: any): React.ReactNode => {
       );
     }
 
+    // Handle KB-enriched suggestions (look for "Did you mean" pattern)
+    if (errorContent.includes("Did you mean")) {
+      const parts = errorContent.split("Did you mean");
+      return (
+        <Box>
+          <Text mb={2}>{parts[0]?.trim()}</Text>
+          <Box
+            borderLeft="4px solid"
+            borderColor="yellow.500"
+            pl={3}
+            py={2}
+            bg="yellow.50"
+            borderRadius="sm"
+          >
+            <Text fontSize="sm" fontWeight="medium">
+              💡 {parts[1]?.trim()}
+            </Text>
+          </Box>
+        </Box>
+      );
+    }
+
     // Handle other specific error cases
     if (errorContent.includes("Slippage tolerance exceeded")) {
       return (
@@ -71,6 +93,57 @@ export const formatErrorMessage = (errorContent: any): React.ReactNode => {
 
   // If it's an object with detailed error information
   if (typeof errorContent === "object" && errorContent !== null) {
+    // Handle KB context from error guidance
+    if (errorContent.kb_match) {
+      return (
+        <Box>
+          <Text mb={2}>{errorContent.message}</Text>
+          <Box
+            borderLeft="4px solid"
+            borderColor="blue.500"
+            pl={3}
+            py={2}
+            bg="blue.50"
+            borderRadius="sm"
+            mb={3}
+          >
+            <Text fontWeight="medium" mb={1}>
+              {errorContent.kb_match.name}
+            </Text>
+            <Text fontSize="sm" mb={2}>
+              {errorContent.kb_match.summary}
+            </Text>
+            {errorContent.kb_match.available_chains && (
+              <Text fontSize="sm" color="blue.700">
+                Available on: {errorContent.kb_match.available_chains.join(", ")}
+              </Text>
+            )}
+            {errorContent.kb_match.integrations && (
+              <Text fontSize="sm" color="blue.700">
+                Works with: {errorContent.kb_match.integrations.join(", ")}
+              </Text>
+            )}
+          </Box>
+          {errorContent.next_steps && (
+            <Box>
+              <Text fontWeight="medium" mb={1}>
+                Next steps:
+              </Text>
+              <UnorderedList pl={4} spacing={1}>
+                {errorContent.next_steps.map(
+                  (step: string, idx: number) => (
+                    <ListItem key={idx} fontSize="sm">
+                      {step}
+                    </ListItem>
+                  )
+                )}
+              </UnorderedList>
+            </Box>
+          )}
+        </Box>
+      );
+    }
+
     if (errorContent.protocols_tried) {
       return (
         <Box>

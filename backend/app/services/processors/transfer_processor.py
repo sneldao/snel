@@ -6,11 +6,13 @@ import logging
 from typing import Optional
 
 from app.models.unified_models import (
-    UnifiedCommand, UnifiedResponse, AgentType
+    UnifiedCommand, UnifiedResponse, AgentType, CommandType
 )
 from app.core.exceptions import (
     command_parse_error, invalid_amount_error, ExternalServiceError
 )
+from app.services.error_guidance_service import ErrorContext
+from app.services.knowledge_base import get_protocol_kb
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,26 @@ class TransferProcessor(BaseProcessor):
             
             # Extract transfer details
             details = unified_command.details
-            if not details or not details.amount or not details.token_in or not details.destination:
+            
+            # Null-safety check: details must exist
+            if details is None:
+                return self._create_guided_error_response(
+                    command_type=CommandType.TRANSFER,
+                    agent_type=AgentType.TRANSFER,
+                    error_context=ErrorContext.MISSING_TOKEN,
+                    additional_message="Unable to parse transfer command. Please provide token, amount, and destination address."
+                )
+            
+            # Check for KB context if token is missing
+            if not details.token_in:
+                return self._create_guided_error_response(
+                    command_type=CommandType.TRANSFER,
+                    agent_type=AgentType.TRANSFER,
+                    error_context=ErrorContext.MISSING_TOKEN,
+                    additional_message="Which token would you like to transfer?"
+                )
+            
+            if not details.amount or not details.destination:
                 raise command_parse_error(
                     unified_command.command,
                     "transfer [amount] [token] to [address/ENS]"

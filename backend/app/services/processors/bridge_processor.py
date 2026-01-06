@@ -10,6 +10,7 @@ from app.models.unified_models import (
 )
 from app.core.exceptions import BusinessLogicError
 from app.services.error_guidance_service import ErrorContext
+from app.services.knowledge_base import get_protocol_kb
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -30,16 +31,40 @@ class BridgeProcessor(BaseProcessor):
         try:
             details = unified_command.details
             
+            # Null-safety check: details must exist
+            if details is None:
+                return self._create_guided_error_response(
+                    command_type=CommandType.BRIDGE,
+                    agent_type=AgentType.BRIDGE,
+                    error_context=ErrorContext.MISSING_TOKEN,
+                    additional_message="Unable to parse bridge command. Please provide token, amount, and destination chain."
+                )
+            
             # Extract bridge parameters
             token = details.token_in.symbol if details.token_in else None
             amount = details.amount
             from_chain = unified_command.chain_id
-            to_chain = details.to_chain_id
+            to_chain = details.destination_chain
             
-            # Check for missing parameters
+            # Check for missing parameters with KB-enriched suggestions
             missing_params = []
+            kb_suggestions = {}
+            
             if not token:
                 missing_params.append("token")
+            else:
+                # Try KB lookup for token to validate it exists
+                kb = get_protocol_kb()
+                kb_result = kb.get(token)
+                if kb_result:
+                    kb_key, kb_entry = kb_result
+                    kb_suggestions["token"] = {
+                        "official_name": kb_entry.official_name,
+                        "summary": kb_entry.summary,
+                        "bridges_to": kb_entry.bridges_to
+                    }
+                    logger.info(f"KB match for {token}: {kb_key}")
+            
             if not amount:
                 missing_params.append("amount")
             if not from_chain:
@@ -48,6 +73,13 @@ class BridgeProcessor(BaseProcessor):
                 missing_params.append("destination chain")
             
             if missing_params:
+                # Build KB-enriched error message if we have suggestions
+                additional_message = None
+                if kb_suggestions and "token" in kb_suggestions:
+                    info = kb_suggestions["token"]
+                    additional_message = f"Found '{info['official_name']}' in our knowledge base: {info['summary']}\n" \
+                                       f"Can bridge to: {', '.join(info['bridges_to'])}"
+                
                 # Use centralized error guidance for consistent messaging
                 error_context = ErrorContext.MISSING_AMOUNT if not amount else \
                                ErrorContext.MISSING_TOKEN if not token else \
@@ -57,7 +89,8 @@ class BridgeProcessor(BaseProcessor):
                     command_type=CommandType.BRIDGE,
                     agent_type=AgentType.BRIDGE,
                     error_context=error_context,
-                    missing_params=missing_params
+                    missing_params=missing_params,
+                    additional_message=additional_message
                 )
             
             # Check if this is a GMP-eligible operation

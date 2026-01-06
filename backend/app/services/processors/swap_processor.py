@@ -12,6 +12,7 @@ from app.models.unified_models import (
 from app.core.exceptions import BusinessLogicError, invalid_amount_error
 from app.services.error_guidance_service import ErrorContext
 from app.services.utils.transaction_utils import transaction_utils
+from app.services.knowledge_base import get_protocol_kb
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -33,24 +34,76 @@ class SwapProcessor(BaseProcessor):
         try:
             details = unified_command.details
             
+            # Null-safety check: details must exist
+            if details is None:
+                return self._create_guided_error_response(
+                    command_type=CommandType.SWAP,
+                    agent_type=AgentType.SWAP,
+                    error_context=ErrorContext.MISSING_TOKEN_PAIR,
+                    additional_message="Unable to parse swap command. Please provide tokens and amount."
+                )
+            
             # Extract swap parameters
             token_in = details.token_in.symbol if details.token_in else None
             token_out = details.token_out.symbol if details.token_out else None
             amount = details.amount
             chain_id = unified_command.chain_id
             
-            # Check for missing parameters
+            # Check for missing parameters with KB-enriched suggestions
             missing_params = []
+            kb_suggestions = {}
+            
             if not token_in:
                 missing_params.append("token_in")
+            else:
+                # Try KB lookup for token_in to validate it exists
+                kb = get_protocol_kb()
+                kb_result = kb.get(token_in)
+                if kb_result:
+                    kb_key, kb_entry = kb_result
+                    kb_suggestions["token_in"] = {
+                        "official_name": kb_entry.official_name,
+                        "summary": kb_entry.summary,
+                        "bridges_to": kb_entry.bridges_to,
+                        "integrations_with": kb_entry.integrations_with
+                    }
+                    logger.info(f"KB match for {token_in}: {kb_key}")
+            
             if not token_out:
                 missing_params.append("token_out")
+            else:
+                # Try KB lookup for token_out to validate it exists
+                kb = get_protocol_kb()
+                kb_result = kb.get(token_out)
+                if kb_result:
+                    kb_key, kb_entry = kb_result
+                    kb_suggestions["token_out"] = {
+                        "official_name": kb_entry.official_name,
+                        "summary": kb_entry.summary,
+                        "bridges_to": kb_entry.bridges_to,
+                        "integrations_with": kb_entry.integrations_with
+                    }
+                    logger.info(f"KB match for {token_out}: {kb_key}")
+            
             if not amount:
                 missing_params.append("amount")
             if not chain_id:
                 missing_params.append("chain")
             
             if missing_params:
+                # Build KB-enriched error message if we have suggestions
+                additional_message = None
+                if kb_suggestions and len(missing_params) == 1:
+                    # If only one token is missing, suggest the other one we found
+                    if "token_in" in kb_suggestions:
+                        info = kb_suggestions["token_in"]
+                        additional_message = f"Found '{info['official_name']}' in our knowledge base: {info['summary']}\n" \
+                                           f"Available on: {', '.join(info['bridges_to'])}. Works with: {', '.join(info['integrations_with'])}"
+                    elif "token_out" in kb_suggestions:
+                        info = kb_suggestions["token_out"]
+                        additional_message = f"Found '{info['official_name']}' in our knowledge base: {info['summary']}\n" \
+                                           f"Available on: {', '.join(info['bridges_to'])}. Works with: {', '.join(info['integrations_with'])}"
+                
                 # Use centralized error guidance for consistent messaging
                 error_context = ErrorContext.MISSING_AMOUNT if not amount else \
                                ErrorContext.MISSING_TOKEN_PAIR if not (token_in and token_out) else \
@@ -59,7 +112,8 @@ class SwapProcessor(BaseProcessor):
                     command_type=CommandType.SWAP,
                     agent_type=AgentType.SWAP,
                     error_context=error_context,
-                    missing_params=missing_params
+                    missing_params=missing_params,
+                    additional_message=additional_message
                 )
             
             # Normalize tokens for DEX compatibility
@@ -248,3 +302,39 @@ class SwapProcessor(BaseProcessor):
         Uses shared utility to ensure consistency across codebase.
         """
         return transaction_utils.encode_erc20_approval(spender, amount)
+    
+    def _enrich_error_with_kb_context(
+        self,
+        token_symbol: str,
+        base_message: str
+    ) -> str:
+        """
+        Enrich error message with knowledge base context.
+        When a token fails to resolve, check KB for similar tokens and provide suggestions.
+        
+        Args:
+            token_symbol: The token that failed to resolve
+            base_message: Base error message
+            
+        Returns:
+            Enriched error message with KB suggestions
+        """
+        try:
+            kb = get_protocol_kb()
+            kb_result = kb.get(token_symbol)
+            
+            if kb_result:
+                kb_key, kb_entry = kb_result
+                enriched = f"{base_message}\n\n" \
+                          f"💡 Did you mean '{kb_entry.official_name}'? {kb_entry.summary} " \
+                          f"Available on: {', '.join(kb_entry.bridges_to)}"
+                logger.info(f"Enriched error with KB match: {kb_key}")
+                return enriched
+            else:
+                # Track as miss for KB gap analysis
+                logger.info(f"KB miss tracked for token: {token_symbol}")
+                return base_message
+                
+        except Exception as e:
+            logger.error(f"Failed to enrich error with KB context: {e}")
+            return base_message
