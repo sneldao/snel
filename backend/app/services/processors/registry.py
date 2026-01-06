@@ -38,9 +38,9 @@ class ProcessorRegistry:
             CommandType.CROSS_CHAIN_SWAP: SwapProcessor(**self.dependencies),
             
             # Privacy processors
-            CommandType.SET_PRIVACY_DEFAULT: PrivacyProcessor(),
-            CommandType.OVERRIDE_PRIVACY: PrivacyProcessor(),
-            CommandType.X402_PRIVACY: PrivacyProcessor(),
+            CommandType.SET_PRIVACY_DEFAULT: PrivacyProcessor(**self.dependencies),
+            CommandType.OVERRIDE_PRIVACY: PrivacyProcessor(**self.dependencies),
+            CommandType.X402_PRIVACY: PrivacyProcessor(**self.dependencies),
             
             # Query processors
             CommandType.BALANCE: BalanceProcessor(**self.dependencies),
