@@ -279,6 +279,8 @@ class SwapProcessor(BaseProcessor):
             
             # Convert amount to token units with proper decimals
             decimals = metadata.get("from_token", {}).get("decimals", 18)
+            if not isinstance(amount, Decimal):
+                amount = Decimal(str(amount))
             approval_amount = int(amount * (Decimal(10) ** decimals))
             
             # Create approval transaction using ERC20 approve
