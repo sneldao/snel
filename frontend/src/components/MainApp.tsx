@@ -971,6 +971,28 @@ export default function MainApp(props: MainAppProps) {
                         Protocol Research
                       </Text>
                     </VStack>
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="linear-gradient(135deg, rgba(244, 183, 40, 0.05) 0%, rgba(244, 183, 40, 0.02) 100%)"
+                      border="1px solid"
+                      borderColor="rgba(244, 183, 40, 0.2)"
+                    >
+                      <Icon as={FaCoins} color="yellow.600" boxSize={5} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="semibold"
+                        textAlign="center"
+                        color="gray.700"
+                      >
+                        MNEE Commerce Payments
+                      </Text>
+                      <Text fontSize="xs" textAlign="center" color="gray.500">
+                        Programmable money with invoice references
+                      </Text>
+                    </VStack>
                   </SimpleGrid>
 
                   {/* Privacy Features Section */}
@@ -1012,6 +1034,10 @@ export default function MainApp(props: MainAppProps) {
                   <Text fontSize="xs" color="gray.500" textAlign="center">
                     Click ? above for specific commands <br />
                     Click ⚙️ above to configure API keys
+                  </Text>
+                  {/* MNEE Feature Hint */}
+                  <Text fontSize="xs" color="gray.500" textAlign="center" mt={2}>
+                    💰 Try MNEE: "pay $100 MNEE to merchant for order #1234"
                   </Text>
                 </VStack>
 
