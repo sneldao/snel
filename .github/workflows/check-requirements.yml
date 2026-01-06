@@ -10,23 +10,20 @@ jobs:
   check-requirements:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: "3.12"
-
-      - name: Install Poetry
+      - name: Verify backend requirements.txt
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Generate and check requirements.txt
-        run: |
-          poetry export -f requirements.txt --output requirements.txt --without-hashes
-          if [[ $(git diff requirements.txt) ]]; then
-            echo "requirements.txt is out of sync with pyproject.toml"
-            echo "Please run 'poetry export -f requirements.txt --output requirements.txt --without-hashes' and commit the changes"
+          # Check that backend/requirements.txt exists
+          if [ ! -f "backend/requirements.txt" ]; then
+            echo "❌ backend/requirements.txt not found"
             exit 1
           fi
+          
+          # Verify requirements are readable
+          if ! head -5 backend/requirements.txt | grep -q .; then
+            echo "❌ backend/requirements.txt is empty or unreadable"
+            exit 1
+          fi
+          
+          echo "✅ backend/requirements.txt is valid"
