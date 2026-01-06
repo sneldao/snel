@@ -1037,7 +1037,7 @@ export default function MainApp(props: MainAppProps) {
                   </Text>
                   {/* MNEE Feature Hint */}
                   <Text fontSize="xs" color="gray.500" textAlign="center" mt={2}>
-                    💰 Try MNEE: "pay $100 MNEE to merchant for order #1234"
+                    💰 Try MNEE: &quot;pay $100 MNEE to merchant for order #1234&quot;
                   </Text>
                 </VStack>
 

@@ -77,7 +77,7 @@ const PrivacySettings = () => {
     setPrivacyOptions(options);
     setIsLoading(false);
     
-  }, [chainId]);
+  }, [chainId, chainCapabilities]);
   
   const handleSetDefault = (level) => {
     setDefaultPrivacy(level);
