@@ -45,11 +45,16 @@ jobs:
         run: |
           sleep 10  # Wait for service to fully start
           
-          # Test the API to confirm it's responding
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.snel.famile.xyz/api/v1/health/)
+          # Test the API to confirm it's responding on port 9001
+          echo "Testing API on localhost:9001..."
+          HTTP_CODE=$(ssh snel-bot "curl -s -o /dev/null -w '%{http_code}' http://localhost:9001/")
           if [ "$HTTP_CODE" -eq 200 ]; then
-            echo "✅ API is responding correctly (HTTP $HTTP_CODE)"
+            echo "✅ API is responding correctly on localhost (HTTP $HTTP_CODE)"
           else
             echo "❌ API is not responding correctly (HTTP $HTTP_CODE)"
+            echo "Checking pm2 status..."
+            ssh snel-bot "pm2 list | grep snel-backend"
+            echo "Checking recent logs..."
+            ssh snel-bot "pm2 logs snel-backend --lines 30"
             exit 1
           fi

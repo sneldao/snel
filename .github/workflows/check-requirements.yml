@@ -20,9 +20,11 @@ jobs:
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
+          export PATH="$HOME/.local/bin:$PATH"
 
       - name: Generate and check requirements.txt
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           python scripts/generate_requirements.py
           if [[ $(git diff requirements.txt) ]]; then
             echo "requirements.txt is out of sync with pyproject.toml"

@@ -24,17 +24,21 @@ fi
 echo -e "${GREEN}Syncing backend files to Hetzner server...${NC}"
 
 # rsync command that excludes development files but preserves runtime configurations
-rsync -avz --delete \
+rsync -avz \
   --exclude='.git' \
   --exclude='.venv' \
+  --exclude='venv' \
   --exclude='__pycache__' \
   --exclude='*.pyc' \
   --exclude='*.pyo' \
   --exclude='*.pyd' \
   --exclude='.pytest_cache' \
-  --exclude='node_modules' \
-  --exclude='.next' \
+  --exclude='.DS_Store' \
+  --exclude='dump.rdb' \
   --exclude='*.log' \
+  --exclude='.env' \
+  --exclude='.env.example' \
+  --exclude='.env.coral' \
   --exclude='.env.local' \
   --exclude='.env.development' \
   --exclude='.env.production' \
@@ -47,7 +51,6 @@ rsync -avz --delete \
   --exclude='scripts/*' \
   --exclude='tests/*' \
   --exclude='test_*' \
-  --exclude='.*' \
   backend/ snel-bot:/opt/snel-backend/
 
 echo -e "${GREEN}Files synced successfully${NC}"
@@ -61,50 +64,69 @@ set -e
 # Navigate to the backend directory
 cd /opt/snel-backend
 
-# Backup existing virtual environment if it exists
-if [ -d ".venv" ]; then
-    echo "Backing up existing virtual environment..."
-    mv .venv .venv.backup.$(date +%Y%m%d_%H%M%S)
+# Check if .venv exists, if not create it
+if [ ! -d ".venv" ]; then
+    echo "Creating virtual environment (first time setup)..."
+    python3.11 -m venv .venv
+    source .venv/bin/activate
+    pip install --upgrade pip
+    echo "Installing dependencies..."
+    pip install -r requirements.txt
+else
+    echo "Using existing virtual environment..."
+    source .venv/bin/activate
 fi
 
-# Create new virtual environment
-echo "Creating new virtual environment..."
-python3 -m venv .venv
-source .venv/bin/activate
+# Check if .env exists (required for runtime)
+if [ ! -f ".env" ]; then
+    echo "❌ Error: .env file not found! Required for runtime configuration."
+    echo "Please ensure .env is properly configured on the server."
+    exit 1
+fi
 
-# Upgrade pip
-pip install --upgrade pip
+echo "✅ Environment configured"
 
-# Install dependencies
-echo "Installing dependencies..."
-pip install -r requirements.txt
-
-# Install any additional dependencies that might be missing
-pip install uvicorn fastapi python-dotenv redis
-
-# Kill the existing backend process gracefully
-echo "Shutting down existing backend service..."
-sudo pkill -f "uvicorn app.main:app" || true
-sleep 2
-
-# Restart the backend service
-echo "Starting the backend service..."
-nohup ./start.sh > snel_backend.log 2>&1 &
-
-# Verify the service is running
-sleep 5
-if pgrep -f "uvicorn app.main:app" > /dev/null; then
-    echo "✅ Backend service restarted successfully"
+# Restart using pm2 (manages service lifecycle)
+if command -v pm2 &> /dev/null; then
+    echo "Restarting backend service with pm2..."
+    pm2 restart snel-backend --wait-ready --listen-timeout 5000 --kill-timeout 10000
     
-    # Check if the service is responding
-    if curl -s http://localhost:9001/api/v1/health/ > /dev/null; then
-        echo "✅ Backend service is responding correctly"
+    # Verify the service is running
+    sleep 3
+    if pm2 list | grep -q "snel-backend.*online"; then
+        echo "✅ Backend service restarted successfully via pm2"
+        
+        # Check if the service is responding
+        sleep 2
+        if curl -s http://localhost:9001/ > /dev/null 2>&1; then
+            echo "✅ Backend service is responding correctly"
+        else
+            echo "⚠️  Backend service may have started but is not responding properly"
+            echo "Checking pm2 logs..."
+            pm2 logs snel-backend --lines 20
+        fi
     else
-        echo "⚠️  Backend service may have started but is not responding properly"
+        echo "❌ Failed to restart backend service with pm2"
+        pm2 logs snel-backend --lines 50
+        exit 1
     fi
 else
-    echo "❌ Failed to restart backend service"
-    exit 1
+    echo "⚠️  pm2 not found, attempting manual restart..."
+    
+    # Fallback: manual restart
+    pkill -f "uvicorn app.main:app" || true
+    sleep 2
+    
+    nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 9001 > snel_backend.log 2>&1 &
+    sleep 5
+    
+    if pgrep -f "uvicorn app.main:app" > /dev/null; then
+        echo "✅ Backend service restarted successfully"
+    else
+        echo "❌ Failed to restart backend service"
+        tail -20 snel_backend.log
+        exit 1
+    fi
 fi
 
 echo "Deployment completed successfully!"
