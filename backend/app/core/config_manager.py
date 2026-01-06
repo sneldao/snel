@@ -234,8 +234,11 @@ class ConfigurationManager:
         if not self._protocols:
             await self._load_protocols_from_file()
 
-        # Validate loaded configuration
-        await self._validate_configuration()
+        # Validate loaded configuration (run in background to avoid startup delays)
+        try:
+            asyncio.create_task(self._validate_configuration())
+        except Exception as e:
+            logger.warning(f"Failed to schedule validation: {e}")
 
         logger.info(f"Loaded {len(self._tokens)} tokens, {len(self._chains)} chains, {len(self._protocols)} protocols")
 
