@@ -140,11 +140,12 @@ class ServiceContainer:
             )
         
         try:
-            from app.services.external.exa_service import ExaClient
+            from app.services.external.exa_client import ExaClient
             return ExaClient(
                 api_key=self.settings.external_services.exa_api_key,
                 base_url=self.settings.external_services.exa_api_url,
-                timeout=self.settings.api.timeout
+                timeout=self.settings.api.timeout,
+                cache_client=self.redis_client,  # Use Redis for caching if available
             )
         except Exception as e:
             logger.error(f"Failed to initialize Exa client: {e}")
@@ -154,7 +155,7 @@ class ServiceContainer:
             )
     
     def get_firecrawl_client(self):
-        """Get Firecrawl API client (on-demand initialization)."""
+        """Get Firecrawl API client with optional caching (on-demand initialization)."""
         if not self.settings.external_services.firecrawl_api_key:
             raise ConfigurationError(
                 "Firecrawl API key not configured",
@@ -162,11 +163,12 @@ class ServiceContainer:
             )
         
         try:
-            from app.services.external.firecrawl_service import FirecrawlClient
+            from app.services.external.firecrawl_client import FirecrawlClient
             return FirecrawlClient(
                 api_key=self.settings.external_services.firecrawl_api_key,
                 base_url=self.settings.external_services.firecrawl_api_url,
-                timeout=self.settings.api.timeout
+                timeout=self.settings.api.timeout,
+                cache_client=self.redis_client,  # Use Redis for caching if available
             )
         except Exception as e:
             logger.error(f"Failed to initialize Firecrawl client: {e}")

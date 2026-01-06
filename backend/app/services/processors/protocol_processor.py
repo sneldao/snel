@@ -10,9 +10,16 @@ from typing import Union
 from openai import AsyncOpenAI
 
 from app.models.unified_models import (
-    UnifiedCommand, UnifiedResponse, AgentType
+    UnifiedCommand, UnifiedResponse, AgentType, CommandType
 )
-from app.services.external.firecrawl_service import get_protocol_details, analyze_protocol_with_ai
+from app.services.error_guidance_service import ErrorContext
+from app.services.external.firecrawl_service import (
+    get_protocol_details,
+    analyze_protocol_with_ai,
+    answer_protocol_question,
+)
+from app.services.external.firecrawl_client import FirecrawlClient, FirecrawlError
+from app.services.research.router import ResearchRouter, Intent
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -126,51 +133,117 @@ PROTOCOL_KNOWLEDGE_BASE = {
 
 
 class ProtocolProcessor(BaseProcessor):
-    """Processes protocol research commands."""
+    """Processes protocol research commands with intelligent routing."""
+    
+    def __init__(self):
+        """Initialize protocol processor with router."""
+        super().__init__()
+        self.router = ResearchRouter()
     
     async def process(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """
-        Process protocol research command.
+        Process protocol research command with intelligent routing.
         
-        Handles:
-        - Protocol information gathering (Firecrawl → built-in knowledge base fallback)
-        - AI-powered analysis
-        - Intelligent fallback for known protocols
+        Routes to appropriate tool based on intent:
+        - concept: Built-in knowledge base
+        - depth: Firecrawl deep research
+        - discovery: Exa opportunity finding
         
-        ENHANCEMENT FIRST: Uses built-in knowledge base when Firecrawl fails
+        ENHANCEMENT FIRST: Uses built-in knowledge base when available
         """
         try:
             logger.info(f"Processing protocol research: {unified_command.command}")
             
-            # Extract protocol name from command
-            protocol_name = self._extract_protocol_name(unified_command)
+            # Classify intent and get routing decision
+            routing_decision = self.router.classify_intent(unified_command.command)
+            self.router.log_routing_decision(routing_decision)
             
-            if not protocol_name:
+            # Route based on intent
+            if routing_decision.intent == "concept":
+                return await self._handle_concept_query(routing_decision, unified_command)
+            elif routing_decision.intent == "depth":
+                return await self._handle_depth_query(routing_decision, unified_command)
+            elif routing_decision.intent == "discovery":
+                return await self._handle_discovery_query(routing_decision, unified_command)
+            else:
+                # Fallback
                 return self._create_error_response(
-                    "Please specify a protocol to research. E.g., 'research Zcash' or 'tell me about privacy'",
+                    "Unable to understand your research request",
                     AgentType.PROTOCOL_RESEARCH,
-                    "No protocol specified"
+                    f"Unexpected intent: {routing_decision.intent}"
                 )
             
-            logger.info(f"Researching protocol: {protocol_name}")
+        except Exception as e:
+            logger.exception("Error processing protocol research")
+            return self._create_error_response(
+                "Protocol research service is temporarily unavailable",
+                AgentType.PROTOCOL_RESEARCH,
+                str(e)
+            )
+    
+    async def _handle_concept_query(
+        self,
+        routing_decision,
+        unified_command: UnifiedCommand
+    ) -> UnifiedResponse:
+        """Handle concept/educational queries (knowledge base first)."""
+        try:
+            concept_name = self.router.transform_query_for_tool(routing_decision)
+            logger.info(f"Handling concept query: {concept_name}")
             
-            # Check knowledge base first for privacy-related protocols
+            # Check knowledge base
+            knowledge_match = self._find_in_knowledge_base(concept_name)
+            if knowledge_match:
+                logger.info(f"Found '{concept_name}' in knowledge base")
+                return self._create_response_from_knowledge(concept_name, knowledge_match)
+            
+            # Fallback to AI for unknown concepts
+            logger.info(f"Concept '{concept_name}' not in KB, using AI fallback")
+            return await self._create_ai_fallback_response(
+                concept_name,
+                unified_command.openai_api_key
+            )
+            
+        except Exception as e:
+            logger.error(f"Error handling concept query: {e}")
+            return self._create_error_response(
+                "Unable to answer that question",
+                AgentType.PROTOCOL_RESEARCH,
+                str(e)
+            )
+    
+    async def _handle_depth_query(
+        self,
+        routing_decision,
+        unified_command: UnifiedCommand
+    ) -> UnifiedResponse:
+        """Handle depth queries (specific protocol research)."""
+        try:
+            protocol_name = self.router.transform_query_for_tool(routing_decision)
+            logger.info(f"Handling depth query: {protocol_name}")
+            
+            # Try knowledge base first
             knowledge_match = self._find_in_knowledge_base(protocol_name)
             if knowledge_match:
-                logger.info(f"Found {protocol_name} in knowledge base")
+                logger.info(f"Found '{protocol_name}' in knowledge base")
                 return self._create_response_from_knowledge(protocol_name, knowledge_match)
             
-            # Try Firecrawl for other protocols
-            logger.info(f"Attempting Firecrawl scrape for {protocol_name}")
+            # Use Firecrawl for detailed research
+            logger.info(f"Attempting Firecrawl for {protocol_name}")
+            from app.core.dependencies import get_service_container
+            from app.config.settings import get_settings
+            
+            container = get_service_container(get_settings())
+            firecrawl_client = container.get_firecrawl_client()
+            
             scrape_result = await get_protocol_details(
-                protocol_name=protocol_name,
-                max_content_length=2000,
-                timeout=15,
-                debug=True
+                firecrawl_client,
+                protocol_name,
+                use_llm_extraction=True,
             )
             
             if scrape_result.get("scraping_success", False):
-                # Analyze scraped content with AI
+                # Analyze with AI
                 openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
                 logger.info(f"Starting AI analysis for {protocol_name}")
                 
@@ -178,31 +251,20 @@ class ProtocolProcessor(BaseProcessor):
                     protocol_name=protocol_name,
                     raw_content=scrape_result.get("raw_content", ""),
                     source_url=scrape_result.get("source_url", ""),
-                    openai_api_key=openai_key
+                    openai_api_key=openai_key,
                 )
                 
-                # Combine results
-                result = {
-                    **scrape_result,
-                    **ai_result,
-                    "type": "protocol_research_result"
-                }
+                result = {**scrape_result, **ai_result}
                 
                 content = {
                     "message": f"Research complete for {protocol_name}",
                     "type": "protocol_research_result",
                     "protocol_name": protocol_name,
                     "ai_summary": result.get("ai_summary", ""),
-                    "protocol_type": result.get("protocol_type", "DeFi Protocol"),
-                    "key_features": result.get("key_features", []),
-                    "security_info": result.get("security_info", ""),
-                    "financial_metrics": result.get("financial_metrics", ""),
-                    "analysis_quality": result.get("analysis_quality", "medium"),
                     "source_url": result.get("source_url", ""),
                     "raw_content": result.get("raw_content", ""),
                     "analysis_success": result.get("analysis_success", False),
-                    "content_length": result.get("content_length", 0),
-                    "requires_transaction": False
+                    "requires_transaction": False,
                 }
                 
                 return self._create_success_response(
@@ -214,58 +276,93 @@ class ProtocolProcessor(BaseProcessor):
                             "command_type": "protocol_research"
                         },
                         "research_details": {
-                            "protocols_scraped": result.get("protocols_scraped", 1),
-                            "scraping_success": result.get("scraping_success", False),
-                            "source": result.get("source", "firecrawl")
+                            "scraping_success": True,
+                            "source": "firecrawl",
                         }
                     }
                 )
             else:
-                # Firecrawl failed - try fallback to general knowledge or AI explanation
-                logger.warning(f"Firecrawl failed for {protocol_name}, attempting AI fallback")
-                return await self._create_ai_fallback_response(
-                    protocol_name, 
-                    unified_command.openai_api_key
+                logger.warning(f"Firecrawl scraping failed for {protocol_name}")
+                raise FirecrawlError(scrape_result.get("error", "Unknown error"))
+                
+        except (FirecrawlError, Exception) as e:
+            logger.warning(f"Depth research failed: {e}, falling back to AI")
+            protocol_name = routing_decision.original_query
+            return await self._create_ai_fallback_response(
+                protocol_name,
+                unified_command.openai_api_key
+            )
+    
+    async def _handle_discovery_query(
+        self,
+        routing_decision,
+        unified_command: UnifiedCommand
+    ) -> UnifiedResponse:
+        """Handle discovery queries (opportunity finding with Exa)."""
+        try:
+            query = self.router.transform_query_for_tool(routing_decision)
+            logger.info(f"Handling discovery query: {query}")
+            
+            # Get Exa client with optional caching
+            from app.core.dependencies import get_service_container
+            from app.config.settings import get_settings
+            
+            container = get_service_container(get_settings())
+            exa_client = container.get_exa_client()
+            
+            # Use Exa for opportunity discovery
+            exa_result = await exa_client.search_opportunities(
+                query=query,
+                max_results=5,
+                cache=True,
+            )
+            
+            if exa_result.get("search_success", False) and exa_result.get("protocols"):
+                protocols = exa_result.get("protocols", [])
+                
+                content = {
+                    "message": f"Found {len(protocols)} DeFi opportunity/opportunities",
+                    "type": "discovery_result",
+                    "opportunities": protocols,
+                    "summary": {
+                        "count": exa_result.get("protocols_found", 0),
+                        "yield_opportunities": exa_result.get("yield_opportunities", 0),
+                        "best_apy": exa_result.get("best_apy_found", "Unknown"),
+                    },
+                    "requires_transaction": False,
+                }
+                
+                return self._create_success_response(
+                    content=content,
+                    agent_type=AgentType.PROTOCOL_RESEARCH,
+                    metadata={
+                        "parsed_command": {
+                            "query": routing_decision.original_query,
+                            "command_type": "opportunity_discovery"
+                        },
+                        "research_details": {
+                            "tool": "exa",
+                            "protocols_found": exa_result.get("protocols_found", 0),
+                            "yield_opportunities": exa_result.get("yield_opportunities", 0),
+                        }
+                    }
+                )
+            else:
+                error_msg = exa_result.get("error", "No protocols found")
+                logger.warning(f"Exa discovery failed: {error_msg}")
+                return self._create_error_response(
+                    f"Unable to find opportunities: {error_msg}",
+                    AgentType.PROTOCOL_RESEARCH,
+                    error_msg
                 )
             
         except Exception as e:
-            logger.exception("Error processing protocol research")
+            logger.error(f"Error handling discovery query: {e}")
             return self._create_error_response(
-                "Protocol research service is temporarily unavailable",
+                "Unable to search for opportunities",
                 AgentType.PROTOCOL_RESEARCH,
                 str(e)
             )
-    
-    def _extract_protocol_name(self, unified_command: UnifiedCommand) -> str:
-        """Extract protocol name from command."""
-        details = unified_command.details
-        
-        # Try to extract from details first
-        if details:
-            if details.token_in and details.token_in.symbol:
-                return details.token_in.symbol
-            if hasattr(details, 'protocol') and details.protocol:
-                return details.protocol
-            if hasattr(details, 'protocol_name') and details.protocol_name:
-                return details.protocol_name
-        
-        # Extract from command text using regex
-        command_lower = unified_command.command.lower()
-        patterns = [
-            r'research\s+(\w+)',
-            r'tell me about\s+(\w+)',
-            r'what is\s+(\w+)',
-            r'about\s+(\w+)',
-            r'info on\s+(\w+)',
-            r'explain\s+(\w+)'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, command_lower)
-            if match:
-                return match.group(1)
-        
-        return None
     
     def _find_in_knowledge_base(self, protocol_name: str) -> Union[dict, None]:
         """Find protocol in knowledge base. Case-insensitive with fuzzy matching."""
@@ -389,9 +486,8 @@ Keep it concise and accurate. If you don't have reliable information, say so cle
             
         except Exception as e:
             logger.exception(f"AI fallback failed for {protocol_name}")
-            return self._create_guided_error_response(
-                command_type=CommandType.PROTOCOL_RESEARCH,
-                agent_type=AgentType.PROTOCOL_RESEARCH,
-                error_context=ErrorContext.PROTOCOL_NOT_FOUND if "couldn't find" in str(e).lower() else ErrorContext.RESEARCH_SERVICE_ERROR,
-                error=str(e)
+            return self._create_error_response(
+                f"AI fallback failed: {str(e)}",
+                AgentType.PROTOCOL_RESEARCH,
+                str(e)
             )

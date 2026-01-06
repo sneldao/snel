@@ -506,10 +506,11 @@ async def analyze_defi_positions(wallet_address: str, chain_id: int = 1, force_r
         # Use Exa to find current DeFi protocols and opportunities
         try:
             from app.services.external.exa_service import discover_defi_protocols
-            # Search for current DeFi yield opportunities
+            # Search for current DeFi yield opportunities on the specified chain
             chain_name = {1: "Ethereum", 8453: "Base", 42161: "Arbitrum", 10: "Optimism", 137: "Polygon"}.get(chain_id, "Ethereum")
 
-            defi_data = await discover_defi_protocols(f"best DeFi yield farming opportunities {chain_name} 2024 stablecoin USDC")
+            # Use semantic discovery query optimized for Exa neural search
+            defi_data = await discover_defi_protocols(f"highest yield opportunities {chain_name}")
             
             if defi_data and "protocols" in defi_data:
                 for protocol in defi_data["protocols"]:
