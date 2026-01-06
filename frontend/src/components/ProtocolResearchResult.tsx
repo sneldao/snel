@@ -302,20 +302,8 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
 
           <ModalBody pb={6} maxH="70vh" overflowY="auto">
             <VStack spacing={4} align="stretch">
-              {/* AI Analysis Summary */}
-              {hasAnalysis && summary !== "No summary available" ? (
-                <Box p={4} bg={modalBgColor} borderRadius="md">
-                  <HStack spacing={2} mb={3}>
-                    <Icon as={FaCheckCircle} color="green.500" />
-                    <Text fontWeight="semibold" color={textColor}>
-                      AI Analysis Summary
-                    </Text>
-                  </HStack>
-                  <Text fontSize="sm" color={textColor} lineHeight="1.6">
-                    {summary}
-                  </Text>
-                </Box>
-              ) : (
+              {/* Analysis in Progress or Analysis Complete Badge */}
+              {!hasAnalysis || summary === "No summary available" ? (
                 <Box p={4} bg={modalBgColor} borderRadius="md" textAlign="center">
                   <HStack justify="center" spacing={2} mb={2}>
                     <Icon as={FaSearch} color={mutedColor} />
@@ -327,12 +315,29 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
                     We&apos;re gathering detailed information about {protocolName}. This may take a moment.
                   </Text>
                 </Box>
-              )}
-
-              <Divider />
+              ) : null}
 
               {/* Accordion for Details */}
               <Accordion allowToggle>
+                 {/* AI Analysis Summary - as first accordion item */}
+                 {hasAnalysis && summary !== "No summary available" && (
+                   <AccordionItem>
+                     <AccordionButton>
+                       <Box flex="1" textAlign="left">
+                         <HStack>
+                           <Icon as={FaCheckCircle} color="green.500" />
+                           <Text fontWeight="semibold">AI Analysis Summary</Text>
+                         </HStack>
+                       </Box>
+                       <AccordionIcon />
+                     </AccordionButton>
+                     <AccordionPanel pb={4}>
+                       <Text fontSize="sm" color={textColor} lineHeight="1.6">
+                         {summary}
+                       </Text>
+                     </AccordionPanel>
+                   </AccordionItem>
+                 )}
                  {/* Key Features */}
                  {keyFeatures.length > 0 && (
                    <AccordionItem>
