@@ -103,6 +103,24 @@ PROTOCOL_KNOWLEDGE_BASE = {
             "Multi-chain support - connects 16+ blockchain networks",
             "Standardized protocols - consistent interface across chains"
         ]
+    },
+    "mnee": {
+        "official_name": "MNEE Stablecoin",
+        "type": "Stablecoin",
+        "summary": "MNEE is a stablecoin designed for efficient payments and commerce on the blockchain. It provides stable value for transactions while maintaining compatibility with existing DeFi protocols.",
+        "key_features": [
+            "Stable value pegged to USD",
+            "Optimized for payment transactions",
+            "Low transaction fees",
+            "Multi-chain compatibility",
+            "DeFi protocol integration"
+        ],
+        "use_cases": [
+            "E-commerce payments",
+            "Cross-chain transfers",
+            "DeFi yield farming",
+            "Stable store of value"
+        ]
     }
 }
 

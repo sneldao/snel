@@ -100,6 +100,7 @@ class CommandDetails(BaseModel):
     source_chain: Optional[str] = Field(default=None, description="Source chain name")
     destination_chain: Optional[str] = Field(default=None, description="Destination chain name")
     protocol: Optional[str] = Field(default=None, description="Protocol name")
+    is_usd_amount: Optional[bool] = Field(default=False, description="Whether the amount is specified in USD")
     additional_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional parameters")
 
 
