@@ -74,7 +74,7 @@ export const POPULAR_TOKENS: Token[] = [
   {
     symbol: 'MNEE',
     name: 'MNEE Stablecoin',
-    address: '0xMNEE000000000000000000000000000000000000', // Placeholder - replace with actual MNEE contract address
+    address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
     chainId: ChainId.ETHEREUM,
     decimals: 6,
     logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
@@ -158,7 +158,7 @@ export const POPULAR_TOKENS: Token[] = [
   {
     symbol: 'MNEE',
     name: 'MNEE Stablecoin (Polygon)',
-    address: '0xMNEE000000000000000000000000000000000000', // Placeholder - replace with actual MNEE contract address
+    address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
     chainId: ChainId.POLYGON,
     decimals: 6,
     logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo

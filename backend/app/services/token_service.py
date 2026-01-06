@@ -275,9 +275,9 @@ class TokenService:
         elif symbol == "mnee":
             # MNEE addresses for common chains
             mnee_addresses = {
-                1: "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
-                42161: "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
-                137: "0xMNEE000000000000000000000000000000000000",  # Placeholder - replace with actual MNEE contract address
+                1: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
+                42161: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
+                137: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
             }
             return {
                 "address": mnee_addresses.get(chain_id, ""),
