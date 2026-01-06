@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'scripts/deploy-to-hetzner.sh'
+      - '.github/workflows/deploy-hetzner-backend.yml'
   workflow_dispatch: # Allows manual trigger
 
 jobs:

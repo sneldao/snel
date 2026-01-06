@@ -20,14 +20,13 @@ jobs:
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
-          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Generate and check requirements.txt
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
-          python scripts/generate_requirements.py
+          poetry export -f requirements.txt --output requirements.txt --without-hashes
           if [[ $(git diff requirements.txt) ]]; then
             echo "requirements.txt is out of sync with pyproject.toml"
-            echo "Please run 'python scripts/generate_requirements.py' and commit the changes"
+            echo "Please run 'poetry export -f requirements.txt --output requirements.txt --without-hashes' and commit the changes"
             exit 1
           fi
