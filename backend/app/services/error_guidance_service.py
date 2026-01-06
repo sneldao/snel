@@ -376,35 +376,6 @@ class ErrorGuidanceService:
                         "Ask me to 'explain the concept of [topic]' instead"
                     ]
                 }
-            },
-            CommandType.GENERAL: {
-                ErrorContext.RESEARCH_REQUIRED: {
-                    "message": "I don't have enough information to answer that accurately. You might want to do some external research.",
-                    "suggestions": [
-                        "Search on Google for 'how to use [topic]'",
-                        "Check documentation on 'docs.[protocol].org'",
-                        "Ask me to 'research [topic]' to see if I can find more info",
-                        "Check official Twitter/X for the latest status updates"
-                    ]
-                },
-                ErrorContext.GENERIC_FAILURE: {
-                    "message": "I encountered an unexpected issue while processing your request.",
-                    "suggestions": [
-                        "Try rephrasing your command",
-                        "Check your internet connection",
-                        "Try again in a few moments",
-                        "Search for the error message in a browser"
-                    ]
-                },
-                ErrorContext.RESEARCH_HINT: {
-                    "message": "I'm having trouble with that. Sometimes external research can help clarify things.",
-                    "suggestions": [
-                        "Search on Google/Brave for your specific query",
-                        "Check 'etherscan.io' or 'basescan.org' for transaction details",
-                        "Visit official documentation for the protocol in question",
-                        "Ask me for a broader topic (e.g. 'what is DeFi lending?')"
-                    ]
-                }
             }
         }
 
