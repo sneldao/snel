@@ -219,10 +219,11 @@ class ProtocolProcessor(BaseProcessor):
             logger.info(f"Handling concept query: {concept_name}")
             
             # Check knowledge base
-            knowledge_match = self._find_in_knowledge_base(concept_name)
-            if knowledge_match:
-                logger.info(f"Found '{concept_name}' in knowledge base")
-                return self._create_response_from_knowledge(concept_name, knowledge_match)
+            kb_result = self._find_in_knowledge_base(concept_name)
+            if kb_result:
+                matched_key, knowledge_match = kb_result
+                logger.info(f"Found '{concept_name}' in knowledge base as '{matched_key}'")
+                return self._create_response_from_knowledge(matched_key, knowledge_match)
             
             # Fallback to AI for unknown concepts
             logger.info(f"Concept '{concept_name}' not in KB, using AI fallback")
@@ -251,10 +252,12 @@ class ProtocolProcessor(BaseProcessor):
             logger.info(f"Handling depth query: {protocol_name} (extracted: {routing_decision.extracted_entity})")
             
             # Try knowledge base first with the extracted entity name
-            knowledge_match = self._find_in_knowledge_base(protocol_name)
-            if knowledge_match:
-                logger.info(f"Found '{protocol_name}' in knowledge base")
-                return self._create_response_from_knowledge(protocol_name, knowledge_match)
+            kb_result = self._find_in_knowledge_base(protocol_name)
+            if kb_result:
+                # kb_result is (matched_key, knowledge_dict) tuple
+                matched_key, knowledge_match = kb_result
+                logger.info(f"Found '{protocol_name}' in knowledge base as '{matched_key}'")
+                return self._create_response_from_knowledge(matched_key, knowledge_match)
             
             # Use Firecrawl for detailed research
             logger.info(f"Attempting Firecrawl for {protocol_name}")
@@ -392,18 +395,24 @@ class ProtocolProcessor(BaseProcessor):
                 str(e)
             )
     
-    def _find_in_knowledge_base(self, protocol_name: str) -> Union[dict, None]:
-        """Find protocol in knowledge base. Case-insensitive with fuzzy matching (>80% similarity)."""
+    def _find_in_knowledge_base(self, protocol_name: str) -> Union[tuple, None]:
+        """
+        Find protocol in knowledge base. Case-insensitive with fuzzy matching (>80% similarity).
+        
+        Returns:
+            Tuple of (matched_key, knowledge_dict) or None if not found.
+            The matched_key is the canonical name to use in responses (corrects misspellings).
+        """
         protocol_lower = protocol_name.lower().strip()
         
         # Exact match (fastest path)
         if protocol_lower in PROTOCOL_KNOWLEDGE_BASE:
-            return PROTOCOL_KNOWLEDGE_BASE[protocol_lower]
+            return (protocol_lower, PROTOCOL_KNOWLEDGE_BASE[protocol_lower])
         
         # Check for exact match on official names
         for key, info in PROTOCOL_KNOWLEDGE_BASE.items():
             if protocol_lower in info.get("official_name", "").lower():
-                return info
+                return (key, info)
         
         # Fuzzy match: find best similarity across KB keys
         best_match = None
@@ -417,7 +426,7 @@ class ProtocolProcessor(BaseProcessor):
                 logger.info(f"Fuzzy match: '{protocol_name}' matched '{key}' with {best_score:.1%} confidence")
         
         if best_match:
-            return PROTOCOL_KNOWLEDGE_BASE[best_match]
+            return (best_match, PROTOCOL_KNOWLEDGE_BASE[best_match])
         
         return None
     
