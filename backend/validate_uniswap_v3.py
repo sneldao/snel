@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Dict, Any, List
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class UniswapV3Validator:
@@ -200,15 +200,14 @@ class UniswapV3Validator:
             
             # Test failure recording
             adapter._record_failure(test_url)
-            from app.protocols.uniswap_adapter import _RPC_STATE
-            state = _RPC_STATE.get(test_url, {})
+            state = adapter._rpc_state.get(test_url, {})
             assert state.get("failures", 0) > 0, "Should record failures"
             
             # Test circuit breaker
             for _ in range(5):  # Trigger circuit breaker
                 adapter._record_failure(test_url)
             
-            state = _RPC_STATE.get(test_url, {})
+            state = adapter._rpc_state.get(test_url, {})
             assert state.get("circuit_open") == True, "Circuit should be open after failures"
             
             self.test_results.append({

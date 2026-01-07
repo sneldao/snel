@@ -62,6 +62,16 @@ async def process_swap_command(
             content = content.model_dump()
         elif hasattr(content, '__dict__'):
             content = content.__dict__
+        
+        # Serialize transaction if present
+        transaction_data = None
+        if unified_response.transaction:
+            if hasattr(unified_response.transaction, 'model_dump'):
+                transaction_data = unified_response.transaction.model_dump(by_alias=True)
+            elif hasattr(unified_response.transaction, '__dict__'):
+                transaction_data = unified_response.transaction.__dict__
+            else:
+                transaction_data = unified_response.transaction
             
         # Return in legacy format expected by frontend
         return {
@@ -71,7 +81,8 @@ async def process_swap_command(
             "agent_type": str(unified_response.agent_type),
             "status": unified_response.status,
             "error": unified_response.error,
-            "awaiting_confirmation": unified_response.awaiting_confirmation
+            "awaiting_confirmation": unified_response.awaiting_confirmation,
+            "transaction": transaction_data
         }
         
     except Exception as e:

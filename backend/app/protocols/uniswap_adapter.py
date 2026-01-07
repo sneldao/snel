@@ -23,7 +23,15 @@ _COOLDOWN_SECONDS = 30
 logger = logging.getLogger(__name__)
 
 class UniswapAdapter:
-    """Uniswap V3 protocol adapter."""
+    """
+    Uniswap V3 protocol adapter.
+    
+    NOTE: This adapter uses direct on-chain Quoter contract calls rather than the Uniswap API.
+    This means it only works for pairs where a V3 pool actually exists on-chain.
+    For pairs without V3 liquidity, use 0x API or other aggregators instead.
+    
+    Supported fee tiers: 0.01%, 0.05%, 0.30%, 1.00%
+    """
 
     # Uniswap V3 Router addresses by chain (kept for backward-compat; primary is config_manager)
     ROUTER_ADDRESSES = {
@@ -314,55 +322,78 @@ class UniswapAdapter:
             return fee_tiers
 
     async def _get_single_fee_quote(self, token_in: str, token_out: str, fee: int, amount_in: int, quoter: str, rpc_urls: List[str]) -> Dict[str, Any]:
-        """Get quote for a single fee tier."""
+        """Get quote for a single fee tier, supporting both QuoterV1 and QuoterV2."""
         try:
-            selector = function_signature_to_4byte_selector(
-                "quoteExactInputSingle(address,address,uint24,uint256,uint160)"
-            ).hex()
-            
-            encoded = abi_encode([
-                "address", "address", "uint24", "uint256", "uint160"
-            ], [token_in, token_out, fee, amount_in, 0]).hex()
-            data = "0x" + selector + encoded
+            # Prepare data for both Quoter versions
+            # QuoterV2: quoteExactInputSingle((address,address,uint256,uint24,uint160))
+            from eth_utils import to_checksum_address
+            v2_selector = "c6a04351"
+            v2_params = (to_checksum_address(token_in), to_checksum_address(token_out), amount_in, fee, 0)
+            v2_data = "0x" + v2_selector + abi_encode(["(address,address,uint256,uint24,uint160)"], [v2_params]).hex()
+
+            # QuoterV1: quoteExactInputSingle(address,address,uint24,uint256,uint160)
+            v1_selector = "f7729d43"
+            v1_data = "0x" + v1_selector + abi_encode(["address", "address", "uint24", "uint256", "uint160"], [token_in, token_out, fee, amount_in, 0]).hex()
             
             logger.debug(f"Querying Quoter {quoter} for {token_in[:6]}.../{token_out[:6]}... fee={fee} amount={amount_in}")
             
             # Try all RPCs for failover
             for rpc_url in rpc_urls:
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "eth_call",
-                    "params": [{"to": quoter, "data": data}, "latest"]
-                }
-                try:
-                    result = await self._rpc_call(rpc_url, payload)
-                    logger.debug(f"RPC {rpc_url} returned: {result[:50] if result else 'None'}...")
-                    
-                    if result and result != "0x":
-                        # QuoterV2 returns tuple: amountOut(uint256), sqrtPriceX96After(uint160), initializedTicksCrossed(int24), gasEstimate(uint32)
-                        try:
-                            decoded = decode_abi(
-                                ["uint256", "uint160", "int24", "uint32"],
-                                bytes.fromhex(result[2:])
-                            )
-                            amount_out_wei, sqrt_price_x96_after, ticks_crossed, gas_estimate = decoded
+                # Try V2 first as it's more modern and provides gas estimates
+                for call_data, version in [(v2_data, "V2"), (v1_data, "V1")]:
+                    payload = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_call",
+                        "params": [{"to": quoter, "data": call_data}, "latest"]
+                    }
+                    try:
+                        result = await self._rpc_call(rpc_url, payload)
+                        if not result or result == "0x":
+                            logger.debug(f"RPC {rpc_url} {version} returned empty result")
+                            continue
                             
-                            logger.info(f"Fee tier {fee}: Got output {amount_out_wei} tokens (gas: {gas_estimate})")
-                            
-                            if amount_out_wei > 0:
+                        logger.debug(f"RPC {rpc_url} {version} returned result: {result}")
+                        
+                        if version == "V2":
+                            # QuoterV2 returns tuple: amountOut(uint256), sqrtPriceX96After(uint160), initializedTicksCrossed(uint32), gasEstimate(uint256)
+                            try:
+                                # Try standard V2 decoding
+                                decoded = decode_abi(
+                                    ["uint256", "uint160", "uint32", "uint256"],
+                                    bytes.fromhex(result[2:])
+                                )
+                                amount_out_wei, sqrt_price_x96_after, ticks_crossed, gas_estimate = decoded
+                                logger.info(f"Fee tier {fee} (V2): Got output {amount_out_wei} tokens (gas: {gas_estimate})")
                                 return {
                                     "amount_out_wei": amount_out_wei,
                                     "sqrt_price_x96_after": sqrt_price_x96_after,
                                     "ticks_crossed": ticks_crossed,
-                                    "gas_estimate": gas_estimate,
+                                    "gas_estimate": int(gas_estimate),
                                 }
-                        except Exception as decode_err:
-                            logger.warning(f"Failed to decode result for fee {fee}: {decode_err}")
-                            continue
-                except Exception as rpc_err:
-                    logger.debug(f"RPC {rpc_url} failed: {rpc_err}")
-                    continue
+                            except Exception as decode_err:
+                                logger.debug(f"V2 decode failed: {decode_err}, trying V1 fallback")
+                                # Fallback: some QuoterV2 might return different types or just amountOut
+                                try:
+                                    amount_out_wei = decode_abi(["uint256"], bytes.fromhex(result[2:66]))[0]
+                                    if amount_out_wei > 0:
+                                        return {"amount_out_wei": amount_out_wei, "gas_estimate": 200000}
+                                except:
+                                    continue
+                                continue
+                        else:
+                            # QuoterV1 returns uint256 amountOut
+                            decoded = decode_abi(["uint256"], bytes.fromhex(result[2:]))
+                            amount_out_wei = decoded[0]
+                            logger.info(f"Fee tier {fee} (V1): Got output {amount_out_wei} tokens")
+                            return {
+                                "amount_out_wei": amount_out_wei,
+                                "gas_estimate": 200000, # Default for V1
+                            }
+                    except Exception as rpc_err:
+                        revert_reason = self._extract_revert_reason(rpc_err)
+                        logger.debug(f"RPC {rpc_url} {version} call failed: {revert_reason or str(rpc_err)}")
+                        continue
             
             logger.warning(f"No valid quote for fee {fee}: {token_in[:6]}.../{token_out[:6]}...")
             return {"amount_out_wei": 0}
@@ -372,24 +403,33 @@ class UniswapAdapter:
             return {"amount_out_wei": 0}
 
     def _extract_revert_reason(self, error: Exception) -> Optional[str]:
-        """Extract revert reason from RPC error."""
+        """Extract revert reason from RPC error with support for various formats."""
         try:
+            err_str = str(error)
+            # Check for common revert patterns in string
+            if "execution reverted" in err_str:
+                if ":" in err_str:
+                    return err_str.split(":", 1)[1].strip()
+                return "execution reverted"
+            
+            # Check dictionary-style errors (common in httpx/json-rpc)
             if hasattr(error, "args") and len(error.args) > 0:
-                err_msg = error.args[0]
-                if isinstance(err_msg, dict) and "data" in err_msg:
-                    data_hex = err_msg["data"]
-                    if isinstance(data_hex, str) and len(data_hex) > 10:
-                        try:
-                            # Revert reason is ABI-encoded string after function selector
-                            decoded = decode_abi(["string"], bytes.fromhex(data_hex[10:]))
-                            return decoded[0]
-                        except Exception:
-                            return data_hex
-                elif isinstance(err_msg, str):
-                    return err_msg
-            return None
+                err_data = error.args[0]
+                if isinstance(err_data, dict):
+                    if "message" in err_data:
+                        return err_data["message"]
+                    if "data" in err_data:
+                        data = err_data["data"]
+                        if isinstance(data, str) and data.startswith("0x08c379a0"): # Error(string)
+                            try:
+                                decoded = decode_abi(["string"], bytes.fromhex(data[10:]))
+                                return decoded[0]
+                            except:
+                                return data
+                        return str(data)
+            return err_str
         except Exception:
-            return None
+            return str(error)
 
     async def get_quote(
         self,
@@ -411,30 +451,30 @@ class UniswapAdapter:
             if to_chain_id is not None and to_chain_id != chain_id:
                 raise ValueError("Uniswap only supports same-chain swaps")
 
-            # Resolve from/to token addresses via config manager (single source of truth)
-            from app.core.config_manager import config_manager
-            from ..core.errors import ProtocolError
-            token_from_cfg = await config_manager.get_token_by_symbol(from_token.symbol)
-            token_to_cfg = await config_manager.get_token_by_symbol(to_token.symbol)
-            if not token_from_cfg or not token_to_cfg:
-                raise ProtocolError(
-                    message="Token config missing",
-                    protocol="uniswap",
-                    user_message=f"Unsupported token(s): {from_token.symbol}/{to_token.symbol}",
-                )
-            from_address = token_from_cfg.addresses.get(chain_id)
-            to_address = token_to_cfg.addresses.get(chain_id)
+            # Use passed TokenInfo directly (already resolved by Registry)
+            from_address = from_token.addresses.get(chain_id)
+            to_address = to_token.addresses.get(chain_id)
+            
             if not from_address or not to_address:
+                # Try fallback to config_manager if addresses missing
+                from app.core.config_manager import config_manager
+                from_address = from_address or await config_manager.get_token_address(from_token.id, chain_id)
+                to_address = to_address or await config_manager.get_token_address(to_token.id, chain_id)
+
+            if not from_address or not to_address:
+                from ..core.errors import ProtocolError
                 raise ProtocolError(
-                    message="Token not available on this chain",
+                    message="Token addresses missing for this chain",
                     protocol="uniswap",
-                    user_message=f"Tokens not supported on chain {chain_id}",
+                    user_message=f"Uniswap does not support {from_token.symbol} or {to_token.symbol} on chain {chain_id}",
                 )
 
             # Resolve protocol and chain config
+            from app.core.config_manager import config_manager
             uni_cfg = await config_manager.get_protocol("uniswap")
             chain_cfg = await config_manager.get_chain(chain_id)
             if not uni_cfg or not chain_cfg or not chain_cfg.rpc_urls:
+                from ..core.errors import ProtocolError
                 raise ProtocolError(
                     message="Missing Uniswap or chain configuration",
                     protocol="uniswap",
@@ -444,18 +484,19 @@ class UniswapAdapter:
             quoter = contracts.get("quoter")
             router = contracts.get("router")
             if not quoter or not router:
+                from ..core.errors import ProtocolError
                 raise ProtocolError(
                     message="Uniswap contracts missing",
                     protocol="uniswap",
                     user_message="Uniswap not available on this chain"
                 )
 
-            # Amount to wei using actual decimals from config
-            decimals = token_from_cfg.decimals
+            # Amount to wei using actual decimals
+            decimals = from_token.decimals
             amount_wei = int(Decimal(amount) * (Decimal(10) ** decimals))
             
-            logger.info(f"Uniswap quote: {from_token_id} ({from_address}) -> {to_token_id} ({to_address})")
-            logger.info(f"Amount: {amount} {from_token_id} = {amount_wei} wei")
+            logger.info(f"Uniswap quote: {from_token.symbol} ({from_address}) -> {to_token.symbol} ({to_address})")
+            logger.info(f"Amount: {amount} {from_token.symbol} = {amount_wei} wei")
             logger.info(f"Quoter: {quoter}, Router: {router}")
 
             # JSON-RPC clients (failover)
@@ -508,10 +549,13 @@ class UniswapAdapter:
                             best["fee"] = fee
 
             if not best:
+                logger.warning(f"No liquidity found in Uniswap V3 pools for {from_token.id}/{to_token.id}. "
+                              f"This may indicate the pool doesn't exist or has insufficient liquidity. "
+                              f"Token addresses: {from_address} -> {to_address}")
                 raise ProtocolError(
-                    message="No valid quote from Uniswap Quoter",
+                    message="No valid quote from Uniswap V3 Quoter",
                     protocol="uniswap",
-                    user_message="Unable to fetch quote right now. Please try again."
+                    user_message="Uniswap pool unavailable for this pair. Trying alternative sources..."
                 )
 
             data = {
