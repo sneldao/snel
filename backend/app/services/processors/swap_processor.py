@@ -349,13 +349,13 @@ class SwapProcessor(BaseProcessor):
                             "to": approval_tx.to,
                             "data": approval_tx.data,
                             "value": approval_tx.value,
-                            "gasLimit": approval_tx.gas_limit or "100000",
+                            "gasLimit": approval_tx.gasLimit or "100000",
                         },
                         {
                             "to": swap_tx_data.to,
                             "data": swap_tx_data.data,
                             "value": swap_tx_data.value,
-                            "gasLimit": swap_tx_data.gas_limit or "500000",
+                            "gasLimit": swap_tx_data.gasLimit or "500000",
                         }
                     ]
                     
