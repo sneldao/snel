@@ -337,6 +337,43 @@ class SwapProcessor(BaseProcessor):
             
             logger.info(f"Creating approval flow: token={token_address}, spender={spender}, amount={approval_amount}")
             
+            # Register the multi-step flow with the transaction flow service
+            # This allows the frontend to retrieve the next step after approval completion
+            if self.transaction_flow_service:
+                try:
+                    # Create steps for the approval flow: [approval, swap]
+                    swap_tx_data = self._create_transaction_data(quote, unified_command.chain_id)
+                    
+                    steps_data = [
+                        {
+                            "to": approval_tx.to,
+                            "data": approval_tx.data,
+                            "value": approval_tx.value,
+                            "gasLimit": approval_tx.gas_limit or "100000",
+                        },
+                        {
+                            "to": swap_tx_data.to,
+                            "data": swap_tx_data.data,
+                            "value": swap_tx_data.value,
+                            "gasLimit": swap_tx_data.gas_limit or "500000",
+                        }
+                    ]
+                    
+                    self.transaction_flow_service.create_flow(
+                        wallet_address=unified_command.wallet_address,
+                        chain_id=unified_command.chain_id,
+                        operation_type="swap",
+                        steps_data=steps_data,
+                        metadata={
+                            "quote": quote,
+                            "approval_target": spender,
+                            "token_address": token_address
+                        }
+                    )
+                    logger.info(f"Multi-step swap flow registered for {unified_command.wallet_address}")
+                except Exception as e:
+                    logger.error(f"Failed to register transaction flow: {e}")
+            
             return self._create_success_response(
                 content={
                     "message": f"Approval required for {details.token_in.symbol}",

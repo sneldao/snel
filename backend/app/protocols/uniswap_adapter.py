@@ -519,14 +519,16 @@ class UniswapAdapter:
 
             # V3 Concentrated Liquidity Optimization: Order fee tiers by liquidity
             fee_tiers = await self._optimize_fee_tier_selection(from_address, to_address, chain_id, rpc_urls)
+            # Try fee tiers and pick the best one
+            fee_tiers = [100, 500, 3000, 10000]
+            quotes = []
             best = None
             
-            # Enhanced quoting with parallel processing for better performance
-            quote_tasks = []
-            for fee in fee_tiers:
-                task = self._get_single_fee_quote(from_address, to_address, fee, amount_wei, quoter, rpc_urls)
-                quote_tasks.append((fee, task))
-            
+            # Prepare tasks for parallel execution
+            quote_tasks = [
+                (fee, self._get_single_fee_quote(from_address, to_address, fee, amount_wei, quoter, rpc_urls))
+                for fee in fee_tiers
+            ]
             # Process quotes in parallel for better performance
             try:
                 results = await asyncio.gather(*[task for _, task in quote_tasks], return_exceptions=True)
@@ -534,29 +536,36 @@ class UniswapAdapter:
                 for i, result in enumerate(results):
                     fee = quote_tasks[i][0]
                     if isinstance(result, dict) and result.get("amount_out_wei", 0) > 0:
-                        if not best or result["amount_out_wei"] > best["amount_out_wei"]:
-                            best = result
-                            best["fee"] = fee
+                        result["fee"] = fee
+                        quotes.append(result)
                             
             except Exception as e:
                 logger.debug(f"Parallel quoting failed, falling back to sequential: {e}")
                 # Fallback to sequential processing
                 for fee in fee_tiers:
                     result = await self._get_single_fee_quote(from_address, to_address, fee, amount_wei, quoter, rpc_urls)
-                    if result.get("amount_out_wei", 0) > 0:
-                        if not best or result["amount_out_wei"] > best["amount_out_wei"]:
-                            best = result
-                            best["fee"] = fee
+                    if isinstance(result, dict):
+                        result["fee"] = fee
+                        quotes.append(result)
 
-            if not best:
-                logger.warning(f"No liquidity found in Uniswap V3 pools for {from_token.id}/{to_token.id}. "
-                              f"This may indicate the pool doesn't exist or has insufficient liquidity. "
-                              f"Token addresses: {from_address} -> {to_address}")
+            # Filter out failures
+            valid_quotes = [q for q in quotes if q.get("amount_out_wei", 0) > 0]
+            if not valid_quotes:
+                logger.warning(f"No liquidity found in Uniswap V3 pools for {from_token.symbol}/{to_token.symbol}. This may indicate the pool doesn't exist or has insufficient liquidity. Token addresses: {from_address} -> {to_address}")
                 raise ProtocolError(
                     message="No valid quote from Uniswap V3 Quoter",
                     protocol="uniswap",
                     user_message="Uniswap pool unavailable for this pair. Trying alternative sources..."
                 )
+
+            # Pick the best output
+            best = max(valid_quotes, key=lambda x: x["amount_out_wei"])
+
+            # Standardized fields for high-level services
+            # Convert wei back to decimal for display
+            to_amount_dec = Decimal(best["amount_out_wei"]) / (Decimal(10) ** to_token.decimals)
+            from_amount_dec = amount
+            rate = float(to_amount_dec / from_amount_dec) if from_amount_dec > 0 else 0.0
 
             data = {
                 "success": True,
@@ -565,11 +574,17 @@ class UniswapAdapter:
                 "quoter_address": quoter,
                 "from_address": from_address,
                 "to_address": to_address,
+                "from_amount": str(from_amount_dec),
+                "to_amount": str(to_amount_dec),
+                "sellAmount": str(amount_wei),
+                "buyAmount": str(best["amount_out_wei"]),
                 "amount_in_wei": amount_wei,
                 "amount_out_wei": best["amount_out_wei"],
+                "rate": rate,
                 "selected_fee": best["fee"],
                 "chain_id": chain_id,
                 "wallet_address": wallet_address,
+                "estimatedGas": str(best.get("gas_estimate", 200000)),
                 "estimated_gas": str(best.get("gas_estimate", 200000)),
                 # Diagnostic fields
                 "sqrt_price_x96_after": best.get("sqrt_price_x96_after"),

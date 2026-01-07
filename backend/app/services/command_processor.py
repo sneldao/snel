@@ -74,7 +74,8 @@ class CommandProcessor:
             settings=settings,
             protocol_registry=self.protocol_registry,
             gmp_service=self.gmp_service,
-            price_service=price_service
+            price_service=price_service,
+            transaction_flow_service=transaction_flow_service
         )
 
     @staticmethod

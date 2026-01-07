@@ -18,7 +18,7 @@ from .privacy_processor import PrivacyProcessor
 class ProcessorRegistry:
     """Registry for mapping command types to processors."""
     
-    def __init__(self, brian_client=None, settings=None, protocol_registry=None, gmp_service=None, price_service=None):
+    def __init__(self, brian_client=None, settings=None, protocol_registry=None, gmp_service=None, price_service=None, transaction_flow_service=None):
         """Initialize registry with shared dependencies."""
         # Note: brian_client param kept for backward compatibility but not used
         self.dependencies = {
@@ -26,6 +26,7 @@ class ProcessorRegistry:
             'protocol_registry': protocol_registry,
             'gmp_service': gmp_service,
             'price_service': price_service,
+            'transaction_flow_service': transaction_flow_service,
         }
         
         # Initialize processors
