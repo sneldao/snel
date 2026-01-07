@@ -37,6 +37,14 @@ class PaymentActionSchedule(BaseModel):
     )
 
 
+class PaymentRecipient(BaseModel):
+    """Recipient for batch payment with amount or percentage split."""
+    address: str = Field(description="Recipient wallet address")
+    amount: Optional[str] = Field(default=None, description="Fixed amount to send")
+    percentage: Optional[float] = Field(default=None, description="Percentage of total to send (0-100)")
+    label: Optional[str] = Field(default=None, description="Human-readable label (e.g., 'Creator A')")
+
+
 class PaymentAction(BaseModel):
     """Unified model for all user payment actions."""
     id: str = Field(description="Unique action ID")
@@ -47,10 +55,16 @@ class PaymentAction(BaseModel):
     action_type: PaymentActionType = Field(description="Type of action")
     
     # Payment details
-    recipient_address: str = Field(description="Recipient wallet address")
+    recipient_address: Optional[str] = Field(default=None, description="Recipient wallet address (single payment)")
     amount: str = Field(description="Amount to send")
     token: str = Field(description="Token symbol (ETH, USDC, MNEE, etc.)")
     chain_id: int = Field(description="Chain ID for transaction")
+    
+    # Batch payment support
+    recipients: Optional[List[PaymentRecipient]] = Field(
+        default=None,
+        description="Multiple recipients for batch payments with splits"
+    )
     
     # Optional: Recurring configuration
     schedule: Optional[PaymentActionSchedule] = Field(
@@ -94,13 +108,14 @@ class CreatePaymentActionRequest(BaseModel):
     """Request to create a new payment action."""
     name: str
     action_type: PaymentActionType
-    recipient_address: str
+    recipient_address: Optional[str] = None
     amount: str
     token: str
     chain_id: int
     schedule: Optional[PaymentActionSchedule] = None
     triggers: Optional[List[str]] = None
     is_pinned: bool = False
+    recipients: Optional[List[PaymentRecipient]] = None
     metadata: Optional[Dict[str, Any]] = None
 
 

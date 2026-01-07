@@ -45,6 +45,8 @@ interface ResponseRendererProps {
     isExecuting: boolean;
     onExecute: () => void;
     onCancel: () => void;
+    onDone?: () => void;
+    onRetry?: () => void;
     onActionClick?: (action: any) => void;
 }
 
@@ -60,6 +62,8 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     isExecuting,
     onExecute,
     onCancel,
+    onDone,
+    onRetry,
     onActionClick,
 }) => {
     const { address } = useAccount();
@@ -98,6 +102,8 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 multiStepState={multiStepState}
                 chainId={chainId}
                 textColor={textColor}
+                onDone={onDone}
+                onRetry={onRetry}
             />
         );
     }

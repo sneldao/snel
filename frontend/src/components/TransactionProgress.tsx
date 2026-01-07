@@ -4,6 +4,7 @@ import {
   VStack,
   HStack,
   Text,
+  Button,
   Progress,
   Badge,
   Icon,
@@ -36,6 +37,7 @@ interface TransactionProgressProps {
   isComplete: boolean;
   error?: string;
   onRetry?: () => void;
+  onDone?: () => void;
 }
 
 const getStepDescription = (stepType: string, step: number): string => {
@@ -85,15 +87,15 @@ export const TransactionProgress: React.FC<TransactionProgressProps> = ({
   isComplete,
   error,
   onRetry,
+  onDone,
 }) => {
   const bgColor = useColorModeValue("white", "gray.800");
   const borderColor = useColorModeValue("gray.200", "gray.600");
 
   const getBlockExplorerLink = (hash: string): string => {
-    return `${
-      BLOCK_EXPLORERS[chainId as keyof typeof BLOCK_EXPLORERS] ||
+    return `${BLOCK_EXPLORERS[chainId as keyof typeof BLOCK_EXPLORERS] ||
       BLOCK_EXPLORERS[8453]
-    }${hash}`;
+      }${hash}`;
   };
 
   const progressPercentage = (currentStep / totalSteps) * 100;
@@ -156,7 +158,7 @@ export const TransactionProgress: React.FC<TransactionProgressProps> = ({
                       {step.status}
                     </Badge>
                   </HStack>
-                  
+
                   {step.hash && (
                     <Link
                       href={getBlockExplorerLink(step.hash)}
@@ -170,7 +172,7 @@ export const TransactionProgress: React.FC<TransactionProgressProps> = ({
                       View transaction <Icon as={ExternalLinkIcon} />
                     </Link>
                   )}
-                  
+
                   {step.error && (
                     <Text fontSize="xs" color="red.500">
                       {step.error}
@@ -178,7 +180,7 @@ export const TransactionProgress: React.FC<TransactionProgressProps> = ({
                   )}
                 </VStack>
               </HStack>
-              
+
               {index < steps.length - 1 && (
                 <Divider mt={2} opacity={0.3} />
               )}
@@ -186,28 +188,64 @@ export const TransactionProgress: React.FC<TransactionProgressProps> = ({
           ))}
         </VStack>
 
-        {/* Error Alert */}
-        {error && (
-          <Alert status="error" borderRadius="md">
-            <AlertIcon />
-            <Box>
-              <AlertTitle fontSize="sm">Transaction Failed</AlertTitle>
-              <AlertDescription fontSize="xs">{error}</AlertDescription>
-            </Box>
+        {/* Success Message */}
+        {isComplete && !error && (
+          <Alert
+            status="success"
+            variant="subtle"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            textAlign="center"
+            borderRadius="md"
+            py={6}
+          >
+            <AlertIcon boxSize="40px" mr={0} />
+            <AlertTitle mt={4} mb={1} fontSize="lg">
+              Transaction Successful!
+            </AlertTitle>
+            <AlertDescription maxWidth="sm">
+              All steps have been executed successfully. Your assets have been updated.
+            </AlertDescription>
+            {onDone && (
+              <Button
+                mt={4}
+                colorScheme="green"
+                size="sm"
+                onClick={onDone}
+                width="full"
+              >
+                Close Progress
+              </Button>
+            )}
           </Alert>
         )}
 
-        {/* Success Message */}
-        {isComplete && !error && (
-          <Alert status="success" borderRadius="md">
-            <AlertIcon />
-            <Box>
-              <AlertTitle fontSize="sm">Transaction Complete!</AlertTitle>
-              <AlertDescription fontSize="xs">
-                All steps have been executed successfully.
-              </AlertDescription>
-            </Box>
-          </Alert>
+        {/* Action Buttons for Failure */}
+        {error && (
+          <HStack spacing={3} w="full">
+            {onRetry && (
+              <Button
+                colorScheme="red"
+                flex={1}
+                size="sm"
+                onClick={onRetry}
+                leftIcon={<WarningIcon />}
+              >
+                Retry Transaction
+              </Button>
+            )}
+            {onDone && (
+              <Button
+                variant="outline"
+                flex={1}
+                size="sm"
+                onClick={onDone}
+              >
+                Close
+              </Button>
+            )}
+          </HStack>
         )}
 
         {/* Helpful Information */}

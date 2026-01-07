@@ -17,8 +17,9 @@ from app.core.dependencies import get_service_container
 from app.core.config_manager import config_manager
 
 # Import API routers
-from app.api.v1 import chat, swap, agno, health, bridge
+from app.api.v1 import chat, swap, agno, health, bridge, keeper
 from app.api.v1.websocket import router as websocket_router
+from app.api import webhooks
 from app.protocols.registry import protocol_registry
 
 # Configure logging
@@ -91,6 +92,8 @@ app.include_router(swap.router, prefix="/api/v1")  # Legacy support for direct s
 app.include_router(bridge.router, prefix="/api/v1")  # Bridge status tracking
 app.include_router(agno.router, prefix="/api/v1/agno")
 app.include_router(websocket_router, prefix="/api/v1/ws")
+app.include_router(keeper.router)  # Keeper job endpoints
+app.include_router(webhooks.router)  # Webhook endpoints for AI agents
 
 @app.get("/")
 async def root():

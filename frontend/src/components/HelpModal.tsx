@@ -39,6 +39,7 @@ import {
   FaSearch,
   FaShieldAlt,
   FaExternalLinkAlt,
+  FaClock,
 } from "react-icons/fa";
 import { BsArrowLeftRight } from "react-icons/bs";
 import Image from "next/image";
@@ -159,6 +160,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           <Tabs onChange={setSelectedTab} variant="enclosed">
             <TabList mb="1em">
               <Tab>Commands</Tab>
+              <Tab>Payment Actions</Tab>
               <Tab>Privacy Guide</Tab>
             </TabList>
 
@@ -191,6 +193,128 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                     </Box>
                   ))}
                 </SimpleGrid>
+              </TabPanel>
+
+              {/* Payment Actions Tab */}
+              <TabPanel>
+                <VStack spacing={4} align="stretch">
+                  {/* What are Payment Actions */}
+                  <Box>
+                    <Heading size="sm" mb={2} color={headingColor}>
+                      What are Payment Actions?
+                    </Heading>
+                    <Text fontSize="sm" color={textColor}>
+                      Create reusable payment shortcuts and automate recurring payments. Once set up, execute payments with a single command or click.
+                    </Text>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Key Features */}
+                  <Box>
+                    <Heading size="sm" mb={2} color={headingColor}>
+                      Key Features
+                    </Heading>
+                    <VStack spacing={2} align="stretch">
+                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
+                        <Flex align="start" mb={1}>
+                          <Icon as={FaWallet} mr={2} color="blue.500" boxSize={4} mt="2px" />
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="xs" fontWeight="semibold" color={headingColor}>
+                              Quick Actions
+                            </Text>
+                            <Text fontSize="xs" color={textColor}>
+                              Pin up to 5 frequent payments as buttons for instant access.
+                            </Text>
+                          </VStack>
+                        </Flex>
+                      </Box>
+                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
+                        <Flex align="start" mb={1}>
+                          <Icon as={FaClock} mr={2} color="green.500" boxSize={4} mt="2px" />
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="xs" fontWeight="semibold" color={headingColor}>
+                              Recurring Payments
+                            </Text>
+                            <Text fontSize="xs" color={textColor}>
+                              Set up daily, weekly, or monthly automatic payments.
+                            </Text>
+                          </VStack>
+                        </Flex>
+                      </Box>
+                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
+                        <Flex align="start">
+                          <Icon as={FaSearch} mr={2} color="purple.500" boxSize={4} mt="2px" />
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="xs" fontWeight="semibold" color={headingColor}>
+                              Smart Suggestions
+                            </Text>
+                            <Text fontSize="xs" color={textColor}>
+                              Receive suggestions for due payments based on your habits.
+                            </Text>
+                          </VStack>
+                        </Flex>
+                      </Box>
+                    </VStack>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Example Commands */}
+                  <Box>
+                    <Heading size="sm" mb={2} color={headingColor}>
+                      Example Commands
+                    </Heading>
+                    <VStack spacing={2} align="stretch">
+                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
+                        <Text fontSize="xs" fontWeight="semibold" color={headingColor} mb={1}>
+                          Create
+                        </Text>
+                        <List spacing={1} pl={4} fontSize="xs">
+                          <ListItem color={textColor}>
+                            <Text as="span" fontFamily="mono">
+                              &quot;create payment action&quot;
+                            </Text>
+                          </ListItem>
+                        </List>
+                      </Box>
+                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
+                        <Text fontSize="xs" fontWeight="semibold" color={headingColor} mb={1}>
+                          Execute
+                        </Text>
+                        <List spacing={1} pl={4} fontSize="xs">
+                          <ListItem color={textColor}>
+                            <Text as="span" fontFamily="mono">
+                              &quot;use action rent&quot;
+                            </Text>
+                          </ListItem>
+                          <ListItem color={textColor}>
+                            <Text as="span" fontFamily="mono">
+                              &quot;coffee&quot;
+                            </Text>
+                          </ListItem>
+                        </List>
+                      </Box>
+                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
+                        <Text fontSize="xs" fontWeight="semibold" color={headingColor} mb={1}>
+                          Manage
+                        </Text>
+                        <List spacing={1} pl={4} fontSize="xs">
+                          <ListItem color={textColor}>
+                            <Text as="span" fontFamily="mono">
+                              &quot;show my payment actions&quot;
+                            </Text>
+                          </ListItem>
+                          <ListItem color={textColor}>
+                            <Text as="span" fontFamily="mono">
+                              &quot;delete action coffee&quot;
+                            </Text>
+                          </ListItem>
+                        </List>
+                      </Box>
+                    </VStack>
+                  </Box>
+                </VStack>
               </TabPanel>
 
               {/* Privacy Guide Tab */}

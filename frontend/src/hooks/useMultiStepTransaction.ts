@@ -213,11 +213,25 @@ export const useMultiStepTransaction = ({
         [transactionService, address, chainId, apiService, toast, agentType, transactionData]
     );
 
+    const reset = useCallback(() => {
+        setMultiStepState(null);
+        setIsExecuting(false);
+        setUserRejected(false);
+    }, []);
+
+    const retry = useCallback(() => {
+        if (transactionData) {
+            handleMultiStepTransaction(transactionData);
+        }
+    }, [handleMultiStepTransaction, transactionData]);
+
     return {
         isExecuting,
         userRejected,
         multiStepState,
         handleMultiStepTransaction,
         setUserRejected,
+        reset,
+        retry,
     };
 };

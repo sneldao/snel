@@ -114,6 +114,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         multiStepState,
         handleMultiStepTransaction,
         setUserRejected,
+        reset,
+        retry,
     } = useMultiStepTransaction({
         transactionService,
         address,
@@ -322,6 +324,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                                     }
                                 }}
                                 onCancel={handleCancel}
+                                onDone={reset}
+                                onRetry={retry}
                                 onActionClick={handleActionClick}
                             />
 

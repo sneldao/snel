@@ -127,6 +127,10 @@ User: "validate action coffee"
 
 **Complete**: Trigger matching, suggestion engine, and recurring scheduler
 
+### Phase 5: AI Agent Webhooks & Batch Payments ✅
+
+**Complete**: Programmatic payment execution for AI agents and batch/split payments
+
 **Architecture**: Three specialized services for NLP and automation
 
 **New Files**:
@@ -184,6 +188,100 @@ User: "create a daily reminder for coffee"
 - Suggestions by time: context-aware
 - Scheduler: daily, weekly, monthly payments
 - Due/upcoming detection and forecasting
+
+### Phase 5: AI Agent Webhooks & Batch Payments
+
+**Complete**: Webhook endpoints for AI agents + batch payments with revenue splits + automatic keeper job
+
+**Architecture**: Three webhook endpoints + batch split calculation + recurring execution scheduler
+
+**New Features**:
+
+1. **AI Agent Payment Webhooks**:
+   ```
+   POST /api/webhooks/execute-action
+   - Agent triggers payment programmatically
+   - HMAC signature validation (production-ready)
+   - Execution tracking with request IDs
+   
+   Example: AI agent pays for data
+   Agent → Webhook → Execute action → MNEE transfer → Ticket returned
+   ```
+
+2. **Batch Payments with Splits**:
+   ```
+   POST /api/webhooks/execute-batch
+   - Multiple recipients in single call
+   - Percentage-based distribution (60%, 40%)
+   - Or fixed amounts (10, 20, 30)
+   - Audit trail for all splits
+   
+   Example: Creator platform pays 3 creators
+   100 MNEE → Split to 3 wallets → Each gets their share
+   ```
+
+3. **Automatic Recurring Execution**:
+   ```
+   Keeper Job (scheduler service)
+   - Runs hourly/daily/on-demand
+   - Finds all due recurring payments
+   - Executes automatically
+   - Tracks execution history
+   
+   Example: Monthly subscriptions auto-execute on schedule
+   ```
+
+**New Files**:
+- `backend/app/domains/payment_actions/webhooks.py` - Webhook models, signature validation
+- `backend/app/services/webhook_service.py` - Event processing, batch split logic
+- `backend/app/api/webhooks.py` - 3 webhook endpoints (execute-action, execute-batch, create-action)
+- `backend/app/domains/payment_actions/keeper.py` - Recurring payment scheduler
+- `backend/app/api/v1/keeper.py` - Keeper job management endpoints
+- `scripts/run_keeper.py` - CLI runner for keeper (hourly, daily, etc.)
+
+**Enhanced Files**:
+- `backend/app/domains/payment_actions/models.py` - Added `PaymentRecipient` + batch support
+- `backend/app/domains/payment_actions/storage.py` - Added `list_wallets()` method to all backends
+- `backend/app/domains/payment_actions/service.py` - Added `get_all_wallets()` for keeper
+- `backend/app/main.py` - Registered webhook + keeper routers
+
+**New Commands** (via Webhook):
+```
+# Execute existing action
+POST /api/webhooks/execute-action
+{"action_id": "rent", "wallet_address": "0x...", "override_amount": "100"}
+
+# Batch payout
+POST /api/webhooks/execute-batch
+{
+  "recipients": [
+    {"address": "0xA...", "percentage": 60},
+    {"address": "0xB...", "percentage": 40}
+  ]
+}
+
+# Create action via API
+POST /api/webhooks/create-action
+{"name": "Monthly rent", "amount": "500", ...}
+
+# Manual keeper trigger
+POST /api/v1/keeper/run-check
+
+# Scheduled keeper
+python scripts/run_keeper.py --scheduler hourly
+```
+
+**Test Cases**:
+- Webhook signature verification (HMAC-SHA256)
+- Batch split calculation (percentages → amounts)
+- Recurring due detection (daily/weekly/monthly)
+- Execution history tracking
+- Error handling + retry logic
+
+**Hackathon Focus**:
+- ✅ AI & Agent Payments: Webhooks enable autonomous agent transactions
+- ✅ Commerce & Creator Tools: Batch splits solve creator payout distribution
+- ✅ Programmable Finance: Keeper job automates subscription execution
 
 ---
 

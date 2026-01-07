@@ -13,6 +13,8 @@ interface MultiStepTransactionDisplayProps {
   } | null;
   chainId: number;
   textColor: string;
+  onDone?: () => void;
+  onRetry?: () => void;
 }
 
 export const MultiStepTransactionDisplay: React.FC<MultiStepTransactionDisplayProps> = ({
@@ -20,6 +22,8 @@ export const MultiStepTransactionDisplay: React.FC<MultiStepTransactionDisplayPr
   multiStepState,
   chainId,
   textColor,
+  onDone,
+  onRetry,
 }) => {
   // Determine the display message: current step's description, or original content message
   const displayMessage = React.useMemo(() => {
@@ -50,6 +54,8 @@ export const MultiStepTransactionDisplay: React.FC<MultiStepTransactionDisplayPr
           chainId={chainId}
           isComplete={multiStepState.isComplete}
           error={multiStepState.error}
+          onDone={onDone}
+          onRetry={onRetry}
         />
       )}
     </Box>

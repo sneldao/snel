@@ -153,6 +153,10 @@ class PaymentActionService:
     ) -> List[PaymentAction]:
         """Export all user actions (for backup/migration)."""
         return await self.get_actions(wallet_address)
+    
+    async def get_all_wallets(self) -> List[str]:
+        """Get all wallets that have payment actions (for keeper jobs)."""
+        return await self._backend.list_wallets()
 
 
 # Singleton instance

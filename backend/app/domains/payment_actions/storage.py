@@ -39,6 +39,11 @@ class BaseStorageBackend(ABC):
     async def delete_all(self, wallet_address: str) -> int:
         """Delete all actions for a user (cleanup)."""
         pass
+    
+    @abstractmethod
+    async def list_wallets(self) -> List[str]:
+        """List all wallets that have payment actions."""
+        pass
 
 
 class InMemoryStorageBackend(BaseStorageBackend):
@@ -82,6 +87,10 @@ class InMemoryStorageBackend(BaseStorageBackend):
             del self._store[wallet_address]
             return count
         return 0
+    
+    async def list_wallets(self) -> List[str]:
+        """List all wallets that have payment actions."""
+        return list(self._store.keys())
 
 
 class RedisStorageBackend(BaseStorageBackend):
@@ -164,6 +173,21 @@ class RedisStorageBackend(BaseStorageBackend):
         
         await self.redis.delete(index_key)
         return count
+    
+    async def list_wallets(self) -> List[str]:
+        """List all wallets that have payment actions."""
+        # Scan for all keys matching pattern payment_actions:{wallet}:index
+        pattern = f"{self._prefix}:*:index"
+        wallets = set()
+        
+        async for key in self.redis.scan_iter(match=pattern):
+            # Extract wallet address from key pattern payment_actions:{wallet}:index
+            key_str = key.decode() if isinstance(key, bytes) else key
+            parts = key_str.split(":")
+            if len(parts) == 3:
+                wallets.add(parts[1])
+        
+        return list(wallets)
 
 
 class PostgreSQLStorageBackend(BaseStorageBackend):
@@ -205,4 +229,9 @@ class PostgreSQLStorageBackend(BaseStorageBackend):
     async def delete_all(self, wallet_address: str) -> int:
         """Delete all actions for a user."""
         # TODO: DELETE FROM payment_actions WHERE wallet_address = ?
+        raise NotImplementedError("PostgreSQL backend requires ORM setup")
+    
+    async def list_wallets(self) -> List[str]:
+        """List all wallets that have payment actions."""
+        # TODO: SELECT DISTINCT wallet_address FROM payment_actions
         raise NotImplementedError("PostgreSQL backend requires ORM setup")
