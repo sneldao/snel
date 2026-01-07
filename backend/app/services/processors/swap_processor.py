@@ -145,6 +145,9 @@ class SwapProcessor(BaseProcessor):
                     additional_message=f"Failed to validate tokens: {str(e)}"
                 )
             
+            # Track original token_in to determine if approval is needed
+            original_token_in = token_in
+            
             # Normalize tokens for DEX compatibility
             token_in = self._normalize_token_for_swap(token_in, chain_id)
             token_out = self._normalize_token_for_swap(token_out, chain_id)
@@ -168,7 +171,11 @@ class SwapProcessor(BaseProcessor):
             
             # Normalize approval detection across protocols
             # 0x returns allowanceIssues, Uniswap uses needs_approval flag
+            # IMPORTANT: Always require approval for ERC20 tokens (safety check)
+            # because 0x's allowanceHolder endpoint may not always detect it correctly
+            is_native_token = original_token_in.upper() in ["ETH", "MATIC", "BNB", "AVAX"]
             needs_approval = (
+                (not is_native_token) or  # Always require approval for non-native tokens
                 quote.get("metadata", {}).get("allowanceIssues") or 
                 quote.get("needs_approval") or 
                 quote.get("requires_approval")

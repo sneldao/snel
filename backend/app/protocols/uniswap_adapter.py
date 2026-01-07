@@ -12,6 +12,7 @@ from eth_abi import decode as decode_abi, encode as abi_encode
 from eth_utils import function_signature_to_4byte_selector, to_checksum_address
 
 from app.models.token import TokenInfo
+from app.core.errors import ProtocolError
 from .permit2_handler import Permit2Handler, Permit2Data
 
 # Rate limiting and circuit breaker constants
@@ -328,19 +329,32 @@ class UniswapAdapter:
             # QuoterV2: quoteExactInputSingle((address,address,uint256,uint24,uint160))
             from eth_utils import to_checksum_address
             v2_selector = "c6a04351"
+            
+            # Use 0 for sqrtPriceLimitX96 initially, as many QuoterV2 handle it as "no limit"
             v2_params = (to_checksum_address(token_in), to_checksum_address(token_out), amount_in, fee, 0)
             v2_data = "0x" + v2_selector + abi_encode(["(address,address,uint256,uint24,uint160)"], [v2_params]).hex()
 
             # QuoterV1: quoteExactInputSingle(address,address,uint24,uint256,uint160)
             v1_selector = "f7729d43"
-            v1_data = "0x" + v1_selector + abi_encode(["address", "address", "uint24", "uint256", "uint160"], [token_in, token_out, fee, amount_in, 0]).hex()
+            v1_data = "0x" + v1_selector + abi_encode(["address", "address", "uint24", "uint256", "uint160"], [to_checksum_address(token_in), to_checksum_address(token_out), fee, amount_in, 0]).hex()
             
+            # Alternative V2 params with explicit limits just in case 0 is rejected
+            # For exactInput: Sell tokenIn (zeroForOne if tokenIn < tokenOut)
+            # If zeroForOne: price decreases => MIN_SQRT_RATIO + 1
+            # If not zeroForOne: price increases => MAX_SQRT_RATIO - 1
+            is_zero_for_one = int(token_in, 16) < int(token_out, 16)
+            min_sqrt_ratio = 4295128739 + 1
+            max_sqrt_ratio = 1461446703485210103287273052203988822378723970342 - 1
+            alt_limit = min_sqrt_ratio if is_zero_for_one else max_sqrt_ratio
+            v2_params_alt = (to_checksum_address(token_in), to_checksum_address(token_out), amount_in, fee, alt_limit)
+            v2_data_alt = "0x" + v2_selector + abi_encode(["(address,address,uint256,uint24,uint160)"], [v2_params_alt]).hex()
+
             logger.debug(f"Querying Quoter {quoter} for {token_in[:6]}.../{token_out[:6]}... fee={fee} amount={amount_in}")
             
             # Try all RPCs for failover
             for rpc_url in rpc_urls:
-                # Try V2 first as it's more modern and provides gas estimates
-                for call_data, version in [(v2_data, "V2"), (v1_data, "V1")]:
+                # Try V2 (no limit), then V2 (alt limit), then V1
+                for call_data, version in [(v2_data, "V2"), (v2_data_alt, "V2Alt"), (v1_data, "V1")]:
                     payload = {
                         "jsonrpc": "2.0",
                         "id": 1,
@@ -462,7 +476,6 @@ class UniswapAdapter:
                 to_address = to_address or await config_manager.get_token_address(to_token.id, chain_id)
 
             if not from_address or not to_address:
-                from ..core.errors import ProtocolError
                 raise ProtocolError(
                     message="Token addresses missing for this chain",
                     protocol="uniswap",
@@ -474,7 +487,6 @@ class UniswapAdapter:
             uni_cfg = await config_manager.get_protocol("uniswap")
             chain_cfg = await config_manager.get_chain(chain_id)
             if not uni_cfg or not chain_cfg or not chain_cfg.rpc_urls:
-                from ..core.errors import ProtocolError
                 raise ProtocolError(
                     message="Missing Uniswap or chain configuration",
                     protocol="uniswap",
@@ -484,7 +496,6 @@ class UniswapAdapter:
             quoter = contracts.get("quoter")
             router = contracts.get("router")
             if not quoter or not router:
-                from ..core.errors import ProtocolError
                 raise ProtocolError(
                     message="Uniswap contracts missing",
                     protocol="uniswap",
