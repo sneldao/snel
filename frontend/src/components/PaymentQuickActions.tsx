@@ -42,31 +42,31 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   const quickActions = [
     {
       icon: FaPaperPlane,
-      label: "Send Payment",
+      label: "Send",
       command: "send ",
       color: "blue",
     },
     {
       icon: FaHistory,
-      label: "Payment History",
+      label: "History",
       command: "show my payment history",
       color: "green",
     },
     {
       icon: FaChartBar,
-      label: "Spending Analytics",
+      label: "Analytics",
       command: "show my spending analytics",
       color: "purple",
     },
     {
       icon: FaClock,
-      label: "Scheduled Payments",
+      label: "Scheduled",
       command: "show my scheduled payments",
       color: "orange",
     },
     {
       icon: FaAddressBook,
-      label: "Saved Recipients",
+      label: "Recipients",
       command: "show my saved recipients",
       color: "teal",
     },
