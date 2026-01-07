@@ -234,9 +234,8 @@ export default function MainApp(props: MainAppProps) {
     const welcomeMessage: ResponseType = {
       content: isConnected
         ? chainId && chainId in SUPPORTED_CHAINS
-          ? `Good morning! How can I help you with crypto today? You're connected to ${
-              SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
-            }.`
+          ? `Good morning! How can I help you with crypto today? You're connected to ${SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
+          }.`
           : "Please switch to a supported network to continue."
         : "Good morning! Please connect your wallet to get started.",
       timestamp: new Date().toISOString(),
@@ -248,8 +247,8 @@ export default function MainApp(props: MainAppProps) {
       prev.length === 0
         ? [welcomeMessage]
         : prev[0].isCommand
-        ? [welcomeMessage, ...prev]
-        : prev.map((r, i) => (i === 0 ? welcomeMessage : r))
+          ? [welcomeMessage, ...prev]
+          : prev.map((r, i) => (i === 0 ? welcomeMessage : r))
     );
   }, [isConnected, chainId]);
 
@@ -466,12 +465,12 @@ export default function MainApp(props: MainAppProps) {
               prev.map((r) =>
                 r.status === "processing" && r.agentType === "agno"
                   ? {
-                      ...response,
-                      agentType: response.agent_type || response.agentType, // Map agent_type to agentType
-                      timestamp: new Date().toISOString(),
-                      isCommand: false,
-                      status: "success" as const,
-                    }
+                    ...response,
+                    agentType: response.agent_type || response.agentType, // Map agent_type to agentType
+                    timestamp: new Date().toISOString(),
+                    isCommand: false,
+                    status: "success" as const,
+                  }
                   : r
               )
             );
@@ -486,15 +485,15 @@ export default function MainApp(props: MainAppProps) {
               prev.map((r) =>
                 r.status === "processing" && r.agentType === "agno"
                   ? {
-                      content: {
-                        message: errorMessage,
-                        type: "error",
-                      },
-                      timestamp: new Date().toISOString(),
-                      isCommand: false,
-                      status: "error" as const,
-                      agentType: "agno" as const,
-                    }
+                    content: {
+                      message: errorMessage,
+                      type: "error",
+                    },
+                    timestamp: new Date().toISOString(),
+                    isCommand: false,
+                    status: "error" as const,
+                    agentType: "agno" as const,
+                  }
                   : r
               )
             );
@@ -971,33 +970,11 @@ export default function MainApp(props: MainAppProps) {
                         Protocol Research
                       </Text>
                     </VStack>
-                    <VStack
-                      spacing={1}
-                      align="center"
-                      p={3}
-                      borderRadius="md"
-                      bg="linear-gradient(135deg, rgba(244, 183, 40, 0.05) 0%, rgba(244, 183, 40, 0.02) 100%)"
-                      border="1px solid"
-                      borderColor="rgba(244, 183, 40, 0.2)"
-                    >
-                      <Icon as={FaCoins} color="yellow.600" boxSize={5} />
-                      <Text
-                        fontSize="xs"
-                        fontWeight="semibold"
-                        textAlign="center"
-                        color="gray.700"
-                      >
-                        MNEE Commerce Payments
-                      </Text>
-                      <Text fontSize="xs" textAlign="center" color="gray.500">
-                        Programmable money with invoice references
-                      </Text>
-                    </VStack>
                   </SimpleGrid>
 
-                  {/* Privacy Features Section */}
+                  {/* Premium & Privacy Features */}
                   <SimpleGrid
-                    columns={1}
+                    columns={2}
                     spacing={4}
                     maxW="400px"
                     mt={4}
@@ -1015,6 +992,29 @@ export default function MainApp(props: MainAppProps) {
                       border="1px solid"
                       borderColor="rgba(244, 183, 40, 0.2)"
                     >
+                      <Icon as={FaCoins} color="yellow.600" boxSize={5} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="semibold"
+                        textAlign="center"
+                        color="gray.700"
+                      >
+                        MNEE Commerce
+                      </Text>
+                      <Text fontSize="2xs" textAlign="center" color="gray.500">
+                        Invoices & Payments
+                      </Text>
+                    </VStack>
+
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="linear-gradient(135deg, rgba(244, 183, 40, 0.05) 0%, rgba(244, 183, 40, 0.02) 100%)"
+                      border="1px solid"
+                      borderColor="rgba(244, 183, 40, 0.2)"
+                    >
                       <Icon as={FaShieldAlt} color="yellow.600" boxSize={5} />
                       <Text
                         fontSize="xs"
@@ -1022,10 +1022,10 @@ export default function MainApp(props: MainAppProps) {
                         textAlign="center"
                         color="gray.700"
                       >
-                        Privacy Bridge to Zcash
+                        Privacy Bridge
                       </Text>
-                      <Text fontSize="xs" textAlign="center" color="gray.500">
-                        Bridge assets to privacy-enhanced transactions
+                      <Text fontSize="2xs" textAlign="center" color="gray.500">
+                        Asset Shielding
                       </Text>
                     </VStack>
                   </SimpleGrid>
@@ -1035,10 +1035,15 @@ export default function MainApp(props: MainAppProps) {
                     Click ? above for specific commands <br />
                     Click ⚙️ above to configure API keys
                   </Text>
-                  {/* MNEE Feature Hint */}
-                  <Text fontSize="xs" color="gray.500" textAlign="center" mt={2}>
-                    💰 Try MNEE: &quot;pay $100 MNEE to merchant for order #1234&quot;
-                  </Text>
+                  {/* Features Hint */}
+                  <HStack spacing={4} justify="center" mt={2}>
+                    <Text fontSize="2xs" color="gray.500" textAlign="center">
+                      💰 Try MNEE: &quot;pay $100 MNEE to merchant...&quot;
+                    </Text>
+                    <Text fontSize="2xs" color="gray.500" textAlign="center">
+                      🛡️ Try Privacy: &quot;bridge 1 ETH to Zcash&quot;
+                    </Text>
+                  </HStack>
                 </VStack>
 
                 {/* Connect Wallet Button */}
@@ -1064,8 +1069,8 @@ export default function MainApp(props: MainAppProps) {
                       hasTransaction: !!response.transaction,
                       contentMessage:
                         typeof response.content === "object" &&
-                        "message" in response.content &&
-                        typeof response.content.message === "string"
+                          "message" in response.content &&
+                          typeof response.content.message === "string"
                           ? response.content.message
                           : null,
                     });
