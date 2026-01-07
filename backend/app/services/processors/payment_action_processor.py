@@ -11,14 +11,17 @@ from app.domains.payment_actions.models import (
 from app.domains.payment_actions.service import get_payment_action_service
 from app.domains.payment_actions.executor import get_payment_executor
 
+from .base_processor import BaseProcessor
+
 logger = logging.getLogger(__name__)
 
 
-class PaymentActionProcessor:
+class PaymentActionProcessor(BaseProcessor):
     """Process chat commands for payment action CRUD operations and execution."""
     
-    def __init__(self):
-        """Initialize processor."""
+    def __init__(self, settings, protocol_registry, gmp_service, price_service, transaction_flow_service=None, **kwargs):
+        """Initialize processor with shared dependencies."""
+        super().__init__(settings, protocol_registry, gmp_service, price_service, transaction_flow_service, **kwargs)
         self.service = None
         self.executor = None
     
