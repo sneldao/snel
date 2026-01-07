@@ -325,6 +325,8 @@ class UniswapAdapter:
             ], [token_in, token_out, fee, amount_in, 0]).hex()
             data = "0x" + selector + encoded
             
+            logger.debug(f"Querying Quoter {quoter} for {token_in[:6]}.../{token_out[:6]}... fee={fee} amount={amount_in}")
+            
             # Try all RPCs for failover
             for rpc_url in rpc_urls:
                 payload = {
@@ -335,28 +337,38 @@ class UniswapAdapter:
                 }
                 try:
                     result = await self._rpc_call(rpc_url, payload)
+                    logger.debug(f"RPC {rpc_url} returned: {result[:50] if result else 'None'}...")
+                    
                     if result and result != "0x":
                         # QuoterV2 returns tuple: amountOut(uint256), sqrtPriceX96After(uint160), initializedTicksCrossed(int24), gasEstimate(uint32)
-                        decoded = decode_abi(
-                            ["uint256", "uint160", "int24", "uint32"],
-                            bytes.fromhex(result[2:])
-                        )
-                        amount_out_wei, sqrt_price_x96_after, ticks_crossed, gas_estimate = decoded
-                        
-                        if amount_out_wei > 0:
-                            return {
-                                "amount_out_wei": amount_out_wei,
-                                "sqrt_price_x96_after": sqrt_price_x96_after,
-                                "ticks_crossed": ticks_crossed,
-                                "gas_estimate": gas_estimate,
-                            }
-                except Exception:
+                        try:
+                            decoded = decode_abi(
+                                ["uint256", "uint160", "int24", "uint32"],
+                                bytes.fromhex(result[2:])
+                            )
+                            amount_out_wei, sqrt_price_x96_after, ticks_crossed, gas_estimate = decoded
+                            
+                            logger.info(f"Fee tier {fee}: Got output {amount_out_wei} tokens (gas: {gas_estimate})")
+                            
+                            if amount_out_wei > 0:
+                                return {
+                                    "amount_out_wei": amount_out_wei,
+                                    "sqrt_price_x96_after": sqrt_price_x96_after,
+                                    "ticks_crossed": ticks_crossed,
+                                    "gas_estimate": gas_estimate,
+                                }
+                        except Exception as decode_err:
+                            logger.warning(f"Failed to decode result for fee {fee}: {decode_err}")
+                            continue
+                except Exception as rpc_err:
+                    logger.debug(f"RPC {rpc_url} failed: {rpc_err}")
                     continue
             
+            logger.warning(f"No valid quote for fee {fee}: {token_in[:6]}.../{token_out[:6]}...")
             return {"amount_out_wei": 0}
             
         except Exception as e:
-            logger.debug(f"Single fee quote failed for fee {fee}: {e}")
+            logger.error(f"Single fee quote failed for fee {fee}: {e}", exc_info=True)
             return {"amount_out_wei": 0}
 
     def _extract_revert_reason(self, error: Exception) -> Optional[str]:
@@ -441,9 +453,14 @@ class UniswapAdapter:
             # Amount to wei using actual decimals from config
             decimals = token_from_cfg.decimals
             amount_wei = int(Decimal(amount) * (Decimal(10) ** decimals))
+            
+            logger.info(f"Uniswap quote: {from_token_id} ({from_address}) -> {to_token_id} ({to_address})")
+            logger.info(f"Amount: {amount} {from_token_id} = {amount_wei} wei")
+            logger.info(f"Quoter: {quoter}, Router: {router}")
 
             # JSON-RPC clients (failover)
             rpc_urls = list(chain_cfg.rpc_urls)
+            logger.debug(f"Using RPC URLs: {rpc_urls}")
             client = await self._get_client()
 
             # Prepare call data for QuoterV2.quoteExactInputSingle(address,address,uint24,uint256,uint160)
