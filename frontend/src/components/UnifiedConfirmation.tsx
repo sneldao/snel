@@ -196,14 +196,14 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
 
   const renderSwapDetails = () => {
     // Extract values from content object (directly from backend) or fallback to details
-    const amount = (content as any)?.amount || content.details?.amount || "0";
+    const amount = (content as any)?.amount || (content as any)?.details?.amount || "0";
     const tokenIn =
       (content as any)?.token_in ||
-      content.details?.token_in ||
-      content.details?.token ||
+      (content as any)?.details?.token_in ||
+      (content as any)?.details?.token ||
       "ETH";
     const tokenOut =
-      (content as any)?.token_out || content.details?.token_out || "USDC";
+      (content as any)?.token_out || (content as any)?.details?.token_out || "USDC";
 
     // Format amount to avoid scientific notation
     const formatAmount = (amt: string | number) => {

@@ -160,6 +160,16 @@ async def complete_transaction_step(
         elif hasattr(content, '__dict__'):
             content = content.__dict__
 
+        # Serialize transaction if present
+        transaction_data = None
+        if unified_response.transaction:
+            if hasattr(unified_response.transaction, 'model_dump'):
+                transaction_data = unified_response.transaction.model_dump(by_alias=True)
+            elif hasattr(unified_response.transaction, '__dict__'):
+                transaction_data = unified_response.transaction.__dict__
+            else:
+                transaction_data = unified_response.transaction
+        
         # Return in legacy format expected by frontend
         return {
             "success": unified_response.status == "success",
@@ -168,6 +178,7 @@ async def complete_transaction_step(
             "agent_type": str(unified_response.agent_type),
             "status": unified_response.status,
             "error": unified_response.error,
+            "transaction": transaction_data,
             "has_next_step": content.get("has_next_step", False) if isinstance(content, dict) else False
         }
 

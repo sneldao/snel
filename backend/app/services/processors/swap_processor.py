@@ -186,6 +186,9 @@ class SwapProcessor(BaseProcessor):
                 content={
                     "message": f"Ready to swap {amount} {token_in} for {token_out}",
                     "type": "swap_ready",
+                    "amount": str(amount),
+                    "token_in": token_in,
+                    "token_out": token_out,
                     "details": {
                         "token_in": token_in,
                         "token_out": token_out,
@@ -329,6 +332,9 @@ class SwapProcessor(BaseProcessor):
                 content={
                     "message": f"Approval required for {details.token_in.symbol}",
                     "type": "swap_approval",
+                    "amount": str(amount),
+                    "token_in": details.token_in.symbol,
+                    "token_out": details.token_out.symbol,
                     "flow_info": {
                         "current_step": 1,
                         "total_steps": 2,
