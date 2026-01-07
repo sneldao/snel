@@ -376,17 +376,21 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 
             # Extract step completion data from command details
             step_data = unified_command.details
+            logger.info(f"Transaction step complete - raw details: {step_data}")
             if not step_data:
                 raise ValidationError("Missing transaction step completion data")
 
             # Ensure step_data is a dict (it might be a CommandDetails object)
             if hasattr(step_data, 'model_dump'):
                 step_data = step_data.model_dump()
+                logger.info(f"Transaction step complete - model_dump: {step_data}")
             elif hasattr(step_data, '__dict__'):
                 step_data = step_data.__dict__
+                logger.info(f"Transaction step complete - __dict__: {step_data}")
             elif not isinstance(step_data, dict):
                 # Fallback for unexpected types
                 step_data = dict(step_data) if step_data else {}
+                logger.info(f"Transaction step complete - fallback: {step_data}")
 
             wallet_address = step_data.get('wallet_address') or unified_command.wallet_address
             chain_id = step_data.get('chain_id') or unified_command.chain_id

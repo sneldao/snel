@@ -24,6 +24,7 @@ class CommandType(Enum):
     SET_PRIVACY_DEFAULT = "set_privacy_default"  # Set default privacy level
     OVERRIDE_PRIVACY = "override_privacy"  # Override privacy for specific transaction
     X402_PRIVACY = "x402_privacy"  # x402 programmatic privacy transaction
+    PAYMENT_ACTION = "payment_action"  # User payment action management (create/update/delete)
     UNKNOWN = "unknown"
 
 
@@ -93,6 +94,9 @@ class TransactionData(BaseModel):
 
 class CommandDetails(BaseModel):
     """Parsed command details."""
+    class Config:
+        extra = "allow"
+        
     amount: Optional[float] = Field(default=None, description="Transaction amount")
     token_in: Optional[TokenInfo] = Field(default=None, description="Input token")
     token_out: Optional[TokenInfo] = Field(default=None, description="Output token")
