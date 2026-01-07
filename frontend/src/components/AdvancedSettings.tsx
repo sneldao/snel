@@ -43,7 +43,7 @@ interface AdvancedSettingsProps {
 
 export interface AdvancedSettingsValues {
   selectedChain?: number;
-  protocol: "axelar" | "brian" | "0x" | "auto";
+  protocol: "axelar" | "0x" | "auto";
   slippageTolerance: number;
   gasPrice?: number;
   enableMEVProtection: boolean;
@@ -218,7 +218,6 @@ export const AdvancedSettings: React.FC<AdvancedSettingsProps> = ({
               >
                 <option value="auto">Auto (Recommended)</option>
                 <option value="axelar">Axelar Network (Cross-chain)</option>
-                <option value="brian">Brian AI (DeFi Intelligence)</option>
                 <option value="0x">0x Protocol (DEX Aggregation)</option>
               </Select>
               <Text fontSize="xs" color="gray.500" mt={1}>

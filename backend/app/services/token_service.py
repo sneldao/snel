@@ -284,7 +284,7 @@ class TokenService:
                 "metadata": {
                     "verified": True,
                     "source": "token_list",
-                    "decimals": 6
+                    "decimals": 5
                 }
             }
         return None
@@ -387,58 +387,56 @@ class TokenService:
                 print(f"Redis cache error: {e}")
 
     async def get_chain_name(self, chain_id: int) -> str:
-        """Get the name of a chain from its ID."""
-        chain_names = {
-            1: "Ethereum",
-            42161: "Arbitrum One",
-            137: "Polygon",
-            10: "Optimism",
-            56: "BNB Chain",
-            43114: "Avalanche",
-            8453: "Base",
-            534352: "Scroll",
-            324: "zkSync Era",
-            59144: "Linea",
-            5000: "Mantle",
-            81457: "Blast",
-            100: "Gnosis",
-            7777777: "Zora",
-            424: "PGN",
-            167004: "Taiko",
-            204: "opBNB",
-            1101: "Polygon zkEVM",
-            2222: "Kava",
-            1284: "Moonbeam",
-            1285: "Moonriver",
-            42220: "Celo",
-            250: "Fantom",
-            25: "Cronos",
-            1313161554: "Aurora",
-            1088: "Metis",
-            288: "Boba",
-            106: "Velas",
-            128: "Huobi ECO Chain",
-            66: "OKXChain",
-            1666600000: "Harmony",
-            2001: "Milkomeda",
-            2002: "Algrand",
-            2222: "Kava",
-            42262: "Oasis",
-            43114: "Avalanche",
-            592: "Astar",
-            1030: "Conflux",
-            1234: "Step",
-            1399: "Polygon zkEVM Testnet",
-            80001: "Mumbai",
-            421613: "Arbitrum Goerli",
-            5: "Goerli",
-            11155111: "Sepolia",
-            84531: "Base Goerli",
-            534351: "Scroll Sepolia",
-            167005: "Taiko Jolnir",
-            167006: "Taiko Katla"
-        }
-        return chain_names.get(chain_id, f"Chain {chain_id}")
+         """Get the name of a chain from its ID."""
+         chain_names = {
+             1: "Ethereum",
+             42161: "Arbitrum One",
+             137: "Polygon",
+             10: "Optimism",
+             56: "BNB Chain",
+             8453: "Base",
+             534352: "Scroll",
+             324: "zkSync Era",
+             59144: "Linea",
+             5000: "Mantle",
+             81457: "Blast",
+             100: "Gnosis",
+             7777777: "Zora",
+             424: "PGN",
+             167004: "Taiko",
+             204: "opBNB",
+             1101: "Polygon zkEVM",
+             2222: "Kava",
+             1284: "Moonbeam",
+             1285: "Moonriver",
+             42220: "Celo",
+             250: "Fantom",
+             25: "Cronos",
+             1313161554: "Aurora",
+             1088: "Metis",
+             288: "Boba",
+             106: "Velas",
+             128: "Huobi ECO Chain",
+             66: "OKXChain",
+             1666600000: "Harmony",
+             2001: "Milkomeda",
+             2002: "Algrand",
+             42262: "Oasis",
+             43114: "Avalanche",
+             592: "Astar",
+             1030: "Conflux",
+             1234: "Step",
+             1399: "Polygon zkEVM Testnet",
+             80001: "Mumbai",
+             421613: "Arbitrum Goerli",
+             5: "Goerli",
+             11155111: "Sepolia",
+             84531: "Base Goerli",
+             534351: "Scroll Sepolia",
+             167005: "Taiko Jolnir",
+             167006: "Taiko Katla",
+         }
+         return chain_names.get(chain_id, f"Chain {chain_id}")
 
 # Global instance
 token_service = TokenService()

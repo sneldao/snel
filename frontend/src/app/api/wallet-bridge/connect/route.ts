@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         connection_id,
         wallet_address,
-        signature: signature || "placeholder", // Make signature optional
+        signature: signature || "", // Empty signature if not provided, backend validates
         message: message || "",
       }),
     });

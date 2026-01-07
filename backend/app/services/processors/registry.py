@@ -20,8 +20,8 @@ class ProcessorRegistry:
     
     def __init__(self, brian_client, settings, protocol_registry, gmp_service, price_service):
         """Initialize registry with shared dependencies."""
+        # Note: brian_client param kept for backward compatibility but not used
         self.dependencies = {
-            'brian_client': brian_client,
             'settings': settings,
             'protocol_registry': protocol_registry,
             'gmp_service': gmp_service,

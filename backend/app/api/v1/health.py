@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from app.core.dependencies import (
     get_service_container, 
-    check_brian_service, 
     check_redis_service,
     ServiceContainer
 )
@@ -31,7 +30,7 @@ class HealthResponse(BaseModel):
 
 @router.get("/", response_model=HealthResponse)
 async def health_check(
-    service: str = Query("", description="Specific service to check (portfolio, brian, redis)"),
+    service: str = Query("", description="Specific service to check (portfolio, redis)"),
     container: ServiceContainer = Depends(get_service_container),
     settings: Settings = Depends(get_settings)
 ) -> HealthResponse:
@@ -65,7 +64,7 @@ async def health_check(
         response.services = services_status
         
         # Overall status based on critical services
-        critical_services = ["brian"]  # Redis is optional in development
+        critical_services = []  # Redis is optional in development
         if settings.is_production:
             critical_services.append("redis")
         
@@ -91,13 +90,7 @@ async def readiness_check(
     Returns 200 if the service is ready to accept traffic.
     """
     try:
-        # Check critical services
-        brian_ok = await check_brian_service(container)
-        
-        if not brian_ok:
-            return {"ready": False, "reason": "Brian API not available"}
-        
-        # In production, also check Redis
+        # In production, check Redis availability
         if settings.is_production:
             redis_ok = await check_redis_service(container)
             if not redis_ok:
@@ -140,9 +133,6 @@ async def _check_specific_service(service_name: str, container: ServiceContainer
             except Exception:
                 return False
         
-        elif service_name == "brian":
-            return await check_brian_service(container)
-        
         elif service_name == "redis":
             return await check_redis_service(container)
         
@@ -174,7 +164,6 @@ async def _check_all_services(container: ServiceContainer) -> Dict[str, bool]:
     services = {}
     
     # Core services
-    services["brian"] = await check_brian_service(container)
     services["redis"] = await check_redis_service(container)
     
     # Optional services (don't fail if not configured)

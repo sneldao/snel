@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 # Common token addresses by chain
 COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
-    1: {  # Ethereum Mainnet
+    1: {  # Ethereum Mainnet - MNEE is multi-chain
         "eth": {
             "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
             "name": "Ethereum",
@@ -24,8 +24,14 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "address": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
             "name": "MNEE Stablecoin",
             "symbol": "MNEE",
-            "decimals": 6,
-            "verified": True
+            "decimals": 5,  # Consistent across chains
+            "verified": True,
+            "metadata": {
+                "protocol": "ERC-20",
+                "network": "Ethereum",
+                "description": "MNEE on Ethereum - multi-chain USD-backed stablecoin",
+                "primary_network": "1Sat Ordinals"
+            }
         },
         "weth": {
             "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
@@ -33,6 +39,22 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "symbol": "WETH",
             "decimals": 18,
             "verified": True
+        }
+    },
+    236: {  # 1Sat Ordinals - Chain ID for MNEE's primary network
+        "mnee": {
+            "address": "1SAT_ORDINALS",  # 1Sat Ordinals protocol
+            "name": "MNEE Stablecoin",
+            "symbol": "MNEE",
+            "decimals": 5,  # 1 MNEE = 100,000 atomic units = 10^5
+            "verified": True,
+            "metadata": {
+                "protocol": "1Sat Ordinals",
+                "network": "1Sat Ordinals",
+                "description": "Fast, USD-backed stablecoin on 1Sat Ordinals protocol",
+                "features": ["instant_transactions", "gasless_ux", "near_zero_fees"],
+                "collateral": "1:1 USD backed by U.S. Treasury bills and cash equivalents"
+            }
         }
     },
     42161: {  # Arbitrum One
@@ -47,13 +69,6 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "address": "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8",
             "name": "USD Coin",
             "symbol": "USDC",
-            "decimals": 6,
-            "verified": True
-        },
-        "mnee": {
-            "address": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
-            "name": "MNEE Stablecoin",
-            "symbol": "MNEE",
             "decimals": 6,
             "verified": True
         },
@@ -77,13 +92,6 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
             "name": "USD Coin",
             "symbol": "USDC",
-            "decimals": 6,
-            "verified": True
-        },
-        "mnee": {
-            "address": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
-            "name": "MNEE Stablecoin",
-            "symbol": "MNEE",
             "decimals": 6,
             "verified": True
         },
@@ -126,5 +134,6 @@ def get_chain_name(chain_id: int) -> str:
         43114: "Avalanche",
         8453: "Base",
         534352: "Scroll",
+        236: "1Sat Ordinals",  # 1Sat Ordinals network for MNEE
     }
     return chain_names.get(chain_id, f"Chain {chain_id}") 

@@ -4,6 +4,7 @@ Swap service implementation using multiple protocol aggregators.
 from typing import Dict, Any, Optional
 from decimal import Decimal
 import logging
+import asyncio
 from app.protocols.registry import protocol_registry
 
 # Configure logging
@@ -49,34 +50,6 @@ class SwapService:
             logger.info(f"From token info: {from_token}")
             logger.info(f"To token info: {to_token}")
 
-            # For Brian protocol, create minimal token objects if resolution fails
-            # Brian handles token resolution internally
-            if not from_token and protocol_id == "brian":
-                logger.info(f"Creating minimal token object for Brian: {from_token_id}")
-                from app.models.token import TokenInfo
-                from_token = TokenInfo(
-                    id=from_token_id.lower(),
-                    name=from_token_id.upper(),
-                    symbol=from_token_id.upper(),
-                    decimals=18,
-                    type="unknown",
-                    verified=False,
-                    addresses={}
-                )
-
-            if not to_token and protocol_id == "brian":
-                logger.info(f"Creating minimal token object for Brian: {to_token_id}")
-                from app.models.token import TokenInfo
-                to_token = TokenInfo(
-                    id=to_token_id.lower(),
-                    name=to_token_id.upper(),
-                    symbol=to_token_id.upper(),
-                    decimals=18,
-                    type="unknown",
-                    verified=False,
-                    addresses={}
-                )
-
             if not from_token:
                 logger.error(f"From token info not found: {from_token_id} on chain {chain_id}")
                 return {
@@ -107,10 +80,6 @@ class SwapService:
                         logger.info(f"Using specified protocol: {protocol_id}")
                         tried_protocols.append(protocol_id)
 
-                        # Brian protocol handles token resolution internally
-                        if protocol_id == "brian":
-                            logger.info("Using specified Brian protocol - skipping token validation")
-
                         protocol_quote = await protocol.get_quote(
                             from_token=from_token,
                             to_token=to_token,
@@ -125,7 +94,7 @@ class SwapService:
                         protocol_errors[protocol_id] = error_msg
                         # Continue to auto-select protocol
 
-            # Get supported protocols and try them in preferred order
+            # Get supported protocols and try them in parallel
             supported_protocols = self.registry.get_supported_protocols(chain_id)
             if not supported_protocols:
                 logger.error(f"No protocols support chain {chain_id}")
@@ -136,69 +105,99 @@ class SwapService:
                     "suggestion": "Try using a different blockchain network."
                 }
 
-            # Try each protocol until one works
-            error_details = []
-            for protocol in supported_protocols:
+            # Validate token support upfront (same for all protocols)
+            if not from_token.is_supported_on_chain(chain_id):
+                error_msg = f"Token {from_token.symbol} is not supported on chain {chain_id}"
+                logger.error(error_msg)
+                return {
+                    "error": error_msg,
+                    "technical_details": error_msg,
+                    "protocols_tried": tried_protocols,
+                    "suggestion": "Please try a different token pair or network."
+                }
+
+            if not to_token.is_supported_on_chain(chain_id):
+                error_msg = f"Token {to_token.symbol} is not supported on chain {chain_id}"
+                logger.error(error_msg)
+                return {
+                    "error": error_msg,
+                    "technical_details": error_msg,
+                    "protocols_tried": tried_protocols,
+                    "suggestion": "Please try a different token pair or network."
+                }
+
+            from_address = from_token.get_address(chain_id)
+            to_address = to_token.get_address(chain_id)
+
+            if not from_address or not to_address:
+                error_msg = f"Missing token address for {from_token.symbol} or {to_token.symbol} on chain {chain_id}"
+                logger.error(error_msg)
+                return {
+                    "error": error_msg,
+                    "technical_details": error_msg,
+                    "protocols_tried": tried_protocols,
+                    "suggestion": "Token configuration error. Please contact support."
+                }
+
+            # Try protocols in parallel, preferring 0x if available
+            protocols_to_try = [p for p in supported_protocols if p.protocol_id not in tried_protocols]
+            
+            # Prioritize 0x first, then others
+            prioritized = []
+            for protocol in protocols_to_try:
+                if protocol.protocol_id == "0x":
+                    prioritized.insert(0, protocol)
+                else:
+                    prioritized.append(protocol)
+            
+            async def try_protocol(protocol) -> tuple[str, Optional[Dict]]:
+                """Try single protocol and return (protocol_id, quote_or_error)."""
                 protocol_id = protocol.protocol_id
-                if protocol_id not in tried_protocols:
-                    tried_protocols.append(protocol_id)
-                    try:
-                        logger.info(f"Trying protocol: {protocol_id}")
-
-                        # Brian protocol handles token resolution internally
-                        if protocol_id == "brian":
-                            logger.info("Using Brian protocol - skipping token validation")
-                            protocol_quote = await protocol.get_quote(
-                                from_token=from_token,
-                                to_token=to_token,
-                                amount=amount,
-                                chain_id=chain_id,
-                                wallet_address=wallet_address
-                            )
-                            logger.info(f"Successfully got quote from {protocol_id}")
-                            return self._format_quote_response(protocol_quote, chain_id)
-
-                        # For other protocols, check token support
-                        if not from_token.is_supported_on_chain(chain_id):
-                            error_msg = f"Token {from_token.symbol} is not supported on chain {chain_id}"
-                            protocol_errors[protocol_id] = error_msg
-                            error_details.append(f"{protocol_id} error: {error_msg}")
-                            logger.error(error_msg)
-                            continue
-
-                        if not to_token.is_supported_on_chain(chain_id):
-                            error_msg = f"Token {to_token.symbol} is not supported on chain {chain_id}"
-                            protocol_errors[protocol_id] = error_msg
-                            error_details.append(f"{protocol_id} error: {error_msg}")
-                            logger.error(error_msg)
-                            continue
-
-                        # Get token addresses
-                        from_address = from_token.get_address(chain_id)
-                        to_address = to_token.get_address(chain_id)
-
-                        if not from_address or not to_address:
-                            error_msg = f"Missing token address for {from_token.symbol} or {to_token.symbol} on chain {chain_id}"
-                            protocol_errors[protocol_id] = error_msg
-                            error_details.append(f"{protocol_id} error: {error_msg}")
-                            logger.error(error_msg)
-                            continue
-
-                        # Try to get quote
-                        protocol_quote = await protocol.get_quote(
+                tried_protocols.append(protocol_id)
+                try:
+                    logger.info(f"Trying protocol: {protocol_id}")
+                    
+                    protocol_quote = await asyncio.wait_for(
+                        protocol.get_quote(
                             from_token=from_token,
                             to_token=to_token,
                             amount=amount,
                             chain_id=chain_id,
                             wallet_address=wallet_address
-                        )
+                        ),
+                        timeout=30.0  # Per-protocol timeout
+                    )
+                    
+                    if protocol_quote and protocol_quote.get("success"):
                         logger.info(f"Successfully got quote from {protocol_id}")
-                        return self._format_quote_response(protocol_quote, chain_id)
-                    except Exception as e:
-                        error_msg = str(e)
-                        protocol_errors[protocol_id] = error_msg
-                        error_details.append(f"{protocol_id} error: {error_msg}")
-                        logger.error(f"{protocol_id} error: {error_msg}")
+                        return (protocol_id, protocol_quote)
+                    else:
+                        error = protocol_quote.get("error", "Unknown error") if protocol_quote else "No response"
+                        logger.error(f"{protocol_id} returned unsuccessful quote: {error}")
+                        protocol_errors[protocol_id] = error
+                        return (protocol_id, None)
+                        
+                except asyncio.TimeoutError:
+                    error_msg = f"Request timeout"
+                    protocol_errors[protocol_id] = error_msg
+                    logger.error(f"{protocol_id} error: {error_msg}")
+                    return (protocol_id, None)
+                except Exception as e:
+                    error_msg = str(e)
+                    protocol_errors[protocol_id] = error_msg
+                    logger.error(f"{protocol_id} error: {error_msg}")
+                    return (protocol_id, None)
+            
+            # Try up to 2 protocols in parallel for faster response
+            batch_size = min(2, len(prioritized))
+            for i in range(0, len(prioritized), batch_size):
+                batch = prioritized[i:i+batch_size]
+                results = await asyncio.gather(*[try_protocol(p) for p in batch])
+                
+                # Return first successful result
+                for protocol_id, quote in results:
+                    if quote is not None:
+                        return self._format_quote_response(quote, chain_id)
 
             # If we get here, all protocols failed
             # Generate a user-friendly suggestion based on common error patterns
@@ -210,6 +209,8 @@ class SwapService:
             elif any("slippage" in err.lower() for err in protocol_errors.values()):
                 suggestion = "High price impact detected. Try reducing the amount or try again when market conditions improve."
 
+            error_details = [f"{pid}: {err}" for pid, err in protocol_errors.items()]
+            
             return {
                 "error": "Unable to find a valid swap route for these tokens.",
                 "technical_details": " | ".join(error_details),
@@ -271,7 +272,7 @@ class SwapService:
         if not quote.get("success", False):
             return quote
 
-        # Protocol adapters (like Brian) already format responses properly
+        # Protocol adapters already format responses properly
         # Just add chain_id if missing
         formatted_quote = quote.copy()
         if "chain_id" not in formatted_quote:

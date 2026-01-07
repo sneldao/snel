@@ -21,7 +21,7 @@ def test_token_configuration():
     assert mnee_config is not None, "MNEE config should exist"
     assert mnee_config['symbol'] == 'MNEE', "Symbol should be MNEE"
     assert mnee_config['name'] == 'MNEE Stablecoin', "Name should be correct"
-    assert mnee_config['metadata']['decimals'] == 6, "Decimals should be 6"
+    assert mnee_config['metadata']['decimals'] == 5, "Decimals should be 5 (1 MNEE = 100,000 atomic units)"
     
     print("✅ Token configuration working correctly")
     return True

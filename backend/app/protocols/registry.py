@@ -9,6 +9,7 @@ from .zerox_adapter import ZeroXAdapter
 from .axelar_adapter import AxelarAdapter
 from .uniswap_adapter import UniswapAdapter
 from .circle_cctp_adapter import CircleCCTPAdapter
+from .mnee_adapter import MNEEAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,10 @@ class ProtocolRegistry:
     def _initialize_protocols(self):
         """Initialize supported protocols."""
         try:
-            self.protocols["axelar"] = AxelarAdapter()
-            logger.info("Initialized Axelar protocol adapter")
+            self.protocols["mnee"] = MNEEAdapter()
+            logger.info("Initialized MNEE protocol adapter")
         except Exception as e:
-            logger.error(f"Failed to initialize Axelar protocol adapter: {e}")
+            logger.error(f"Failed to initialize MNEE protocol adapter: {e}")
 
         try:
             self.protocols["0x"] = ZeroXAdapter()
@@ -45,6 +46,12 @@ class ProtocolRegistry:
             logger.info("Initialized Uniswap protocol adapter")
         except Exception as e:
             logger.error(f"Failed to initialize Uniswap protocol adapter: {e}")
+
+        try:
+            self.protocols["axelar"] = AxelarAdapter()
+            logger.info("Initialized Axelar protocol adapter")
+        except Exception as e:
+            logger.error(f"Failed to initialize Axelar protocol adapter: {e}")
 
         try:
             self.protocols["cctp_v2"] = CircleCCTPAdapter()
@@ -71,15 +78,14 @@ class ProtocolRegistry:
             if axelar and axelar.is_supported(chain_id):
                 return axelar
 
-        # For same-chain operations, prefer Brian if available
-        brian = self.get_protocol("brian")
-        if brian and brian.is_supported(chain_id):
-            return brian
-
-        # Fall back to 0x for other chains
+        # For same-chain operations, prefer 0x (best rates), then Uniswap (reliable)
         zerox = self.get_protocol("0x")
         if zerox and zerox.is_supported(chain_id):
             return zerox
+
+        uniswap = self.get_protocol("uniswap")
+        if uniswap and uniswap.is_supported(chain_id):
+            return uniswap
 
         # No supported protocols
         return None
@@ -183,6 +189,12 @@ class ProtocolRegistry:
             if axelar and axelar.is_supported(from_chain) and axelar.is_supported(to_chain):
                 protocols_to_try.append(("axelar", axelar))
         else:
+            # For same-chain, check if MNEE is involved and prioritize MNEE adapter
+            if from_chain == 236:  # Bitcoin SV
+                mnee_adapter = self.get_protocol("mnee")
+                if mnee_adapter and mnee_adapter.is_supported(from_chain):
+                    protocols_to_try.append(("mnee", mnee_adapter))
+            
             # For same-chain, try 0x first (best rates), then Uniswap (reliable)
             zerox = self.get_protocol("0x")
             if zerox and zerox.is_supported(from_chain):

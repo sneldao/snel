@@ -46,31 +46,23 @@ class BalanceProcessor(BaseProcessor):
             if token:
                 logger.info(f"Specific token requested: {token}")
             
-            # Call Brian API for balance check
-            result = await self.brian_client.get_balance(
+            # Get balances via TokenQueryService (consolidates Web3 operations)
+            from app.services.token_query_service import token_query_service
+            
+            balances = await token_query_service.get_balances(
                 wallet_address=unified_command.wallet_address,
-                chain_id=unified_command.chain_id,
-                token=token
+                chain_id=unified_command.chain_id
             )
             
-            if "error" in result:
-                return self._create_error_response(
-                    result.get("message", "Unable to check balance"),
-                    AgentType.BALANCE,
-                    result.get("message", "Balance check failed")
-                )
-            
             # Format successful balance response
-            balance_data = result.get("balance_data", {})
-            
             content = {
-                "message": f"Balance check complete for {chain_name}",
-                "type": "balance_result",
-                "chain": chain_name,
-                "address": unified_command.wallet_address,
-                "token": token or "All tokens",
-                "balance_data": balance_data,
-                "requires_transaction": False
+            "message": f"Balance check complete for {chain_name}",
+            "type": "balance_result",
+            "chain": chain_name,
+            "address": unified_command.wallet_address,
+            "native_balance": balances.get("native_balance"),
+            "token_balances": balances.get("token_balances"),
+            "requires_transaction": False
             }
             
             return self._create_success_response(

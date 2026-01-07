@@ -4,6 +4,7 @@ Uniswap V3 protocol adapter with concentrated liquidity optimization and permit2
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from decimal import Decimal
+import hashlib
 import httpx
 import time
 import asyncio
@@ -18,9 +19,6 @@ _RATE_LIMIT_WINDOW = 1.0  # seconds
 _MAX_REQUESTS_PER_WINDOW = 10
 _FAILURE_THRESHOLD = 5
 _COOLDOWN_SECONDS = 30
-
-# RPC state tracking
-_RPC_STATE: Dict[str, Dict[str, Any]] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +56,10 @@ class UniswapAdapter:
         # V3 concentrated liquidity optimization
         self._pool_cache: Dict[str, Dict[str, Any]] = {}
         self._pool_ttl_seconds: int = 300  # 5 minutes for pool data
+        # Instance-level RPC state tracking (thread-safe per instance)
+        self._rpc_state: Dict[str, Dict[str, Any]] = {}
+        # Request deduplication to avoid parallel identical requests
+        self._pending_requests: Dict[str, asyncio.Task] = {}
 
     @property
     def protocol_id(self) -> str:
@@ -84,7 +86,7 @@ class UniswapAdapter:
 
     async def _apply_rate_limit(self, rpc_url: str):
         """Enforce simple rate limiting per RPC URL."""
-        state = _RPC_STATE.setdefault(rpc_url, {"timestamps": [], "failures": 0, "circuit_open": False, "circuit_opened_at": 0})
+        state = self._rpc_state.setdefault(rpc_url, {"timestamps": [], "failures": 0, "circuit_open": False, "circuit_opened_at": 0})
         now = time.time()
         # Remove timestamps outside the window
         state["timestamps"] = [t for t in state["timestamps"] if now - t < _RATE_LIMIT_WINDOW]
@@ -96,7 +98,7 @@ class UniswapAdapter:
 
     def _record_failure(self, rpc_url: str):
         """Record a failure and open circuit if threshold exceeded."""
-        state = _RPC_STATE.setdefault(rpc_url, {"timestamps": [], "failures": 0, "circuit_open": False, "circuit_opened_at": 0})
+        state = self._rpc_state.setdefault(rpc_url, {"timestamps": [], "failures": 0, "circuit_open": False, "circuit_opened_at": 0})
         state["failures"] += 1
         if state["failures"] >= _FAILURE_THRESHOLD:
             state["circuit_open"] = True
@@ -104,23 +106,23 @@ class UniswapAdapter:
 
     def _reset_circuit(self, rpc_url: str):
         """Reset circuit after cooldown."""
-        state = _RPC_STATE.get(rpc_url)
+        state = self._rpc_state.get(rpc_url)
         if state and state["circuit_open"]:
             if time.time() - state["circuit_opened_at"] >= _COOLDOWN_SECONDS:
                 state["circuit_open"] = False
                 state["failures"] = 0
 
-    async def _rpc_call(self, rpc_url: str, payload: Dict[str, Any]) -> Any:
+    async def _rpc_call(self, rpc_url: str, payload: Dict[str, Any], timeout: float = 15.0) -> Any:
         """Perform RPC call with rate limiting and circuit breaker."""
         self._reset_circuit(rpc_url)
-        state = _RPC_STATE.get(rpc_url, {})
+        state = self._rpc_state.get(rpc_url, {})
         if state.get("circuit_open"):
             raise RuntimeError(f"Circuit open for RPC {rpc_url}")
 
         await self._apply_rate_limit(rpc_url)
         client = await self._get_client()
         try:
-            resp = await client.post(rpc_url, json=payload, timeout=15.0)
+            resp = await client.post(rpc_url, json=payload, timeout=timeout)
             resp.raise_for_status()
             result = resp.json()
             if "error" in result:
@@ -130,6 +132,9 @@ class UniswapAdapter:
             if state:
                 state["failures"] = 0
             return result.get("result")
+        except asyncio.TimeoutError:
+            self._record_failure(rpc_url)
+            raise RuntimeError(f"RPC call timeout after {timeout}s")
         except Exception as e:
             self._record_failure(rpc_url)
             raise e
@@ -264,37 +269,45 @@ class UniswapAdapter:
             return None
 
     async def _optimize_fee_tier_selection(self, token0: str, token1: str, chain_id: int, rpc_urls: List[str]) -> List[int]:
-        """Optimize fee tier selection based on pool liquidity for concentrated liquidity."""
-        fee_tiers = [500, 3000, 10000]  # Standard fee tiers
+        """Optimize fee tier selection based on pool liquidity for concentrated liquidity.
         
-        # Get liquidity data for all fee tiers in parallel
-        tasks = []
-        for fee in fee_tiers:
-            task = self._get_pool_liquidity(token0, token1, fee, chain_id, rpc_urls)
-            tasks.append(task)
+        Queries fee tiers in order of expected liquidity with early exit once a tier
+        with sufficient liquidity is found (avoids querying less common tiers).
+        """
+        fee_tiers = [3000, 10000, 500]  # Start with most common, try less common only if needed
+        optimized_tiers = []
         
         try:
-            pool_data_list = await asyncio.gather(*tasks, return_exceptions=True)
+            # Early exit strategy: if a tier has good liquidity, prefer it
+            min_liquidity_threshold = int(1e18)  # Configurable threshold
             
-            # Sort fee tiers by liquidity (highest first)
-            tier_liquidity = []
-            for i, pool_data in enumerate(pool_data_list):
-                if isinstance(pool_data, dict) and pool_data.get("liquidity"):
-                    tier_liquidity.append((fee_tiers[i], pool_data["liquidity"]))
+            for fee in fee_tiers:
+                try:
+                    pool_data = await asyncio.wait_for(
+                        self._get_pool_liquidity(token0, token1, fee, chain_id, rpc_urls),
+                        timeout=5.0
+                    )
+                    if isinstance(pool_data, dict) and pool_data.get("liquidity"):
+                        optimized_tiers.append((fee, pool_data["liquidity"]))
+                        # Early exit if liquidity is sufficient
+                        if pool_data["liquidity"] >= min_liquidity_threshold:
+                            break
+                except asyncio.TimeoutError:
+                    logger.debug(f"Fee tier {fee} query timeout, skipping")
+                except Exception as e:
+                    logger.debug(f"Fee tier {fee} query failed: {e}")
             
             # Sort by liquidity descending
-            tier_liquidity.sort(key=lambda x: x[1], reverse=True)
+            optimized_tiers.sort(key=lambda x: x[1], reverse=True)
+            result = [tier[0] for tier in optimized_tiers]
             
-            # Return fee tiers ordered by liquidity
-            optimized_tiers = [tier[0] for tier in tier_liquidity]
-            
-            # Add any missing tiers at the end
+            # Add missing tiers at end
             for fee in fee_tiers:
-                if fee not in optimized_tiers:
-                    optimized_tiers.append(fee)
+                if fee not in result:
+                    result.append(fee)
             
-            logger.debug(f"Optimized fee tier order for {token0}/{token1}: {optimized_tiers}")
-            return optimized_tiers
+            logger.debug(f"Optimized fee tier order for {token0}/{token1}: {result}")
+            return result
             
         except Exception as e:
             logger.debug(f"Fee tier optimization failed, using default order: {e}")
@@ -640,10 +653,10 @@ class UniswapAdapter:
             gas_limit = None
             simulation_success = False
             
-            # Try gas estimation across all available RPCs
-            for rpc_url in chain_cfg.rpc_urls:
+            # Prepare estimation tasks for all RPCs in parallel
+            async def try_gas_estimation(rpc_url: str) -> Optional[int]:
+                """Try gas estimation on single RPC."""
                 try:
-                    # First attempt: eth_estimateGas
                     estimate_payload = {
                         "jsonrpc": "2.0",
                         "id": 1,
@@ -658,44 +671,52 @@ class UniswapAdapter:
                         ]
                     }
                     
-                    gas_estimate = await self._rpc_call(rpc_url, estimate_payload)
+                    gas_estimate = await self._rpc_call(rpc_url, estimate_payload, timeout=10.0)
                     if gas_estimate:
-                        gas_limit = int(gas_estimate, 16)
-                        simulation_success = True
-                        logger.debug(f"Gas estimation successful via {rpc_url}: {gas_limit}")
-                        break
-                        
+                        return int(gas_estimate, 16)
                 except Exception as e:
                     logger.debug(f"Gas estimation failed on {rpc_url}: {e}")
-                    # Fallback to simulation via eth_call
-                    try:
-                        call_payload = {
-                            "jsonrpc": "2.0",
-                            "id": 1,
-                            "method": "eth_call",
-                            "params": [
-                                {
-                                    "to": quote["router_address"],
-                                    "data": data,
-                                    "from": recipient,
-                                    "value": "0x0"
-                                },
-                                "latest"
-                            ]
-                        }
-                        
-                        result = await self._rpc_call(rpc_url, call_payload)
-                        # If we get here without exception, the call succeeded
-                        gas_limit = int(quote.get("estimated_gas", "200000"))
+                
+                # Fallback: try eth_call simulation
+                try:
+                    call_payload = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_call",
+                        "params": [
+                            {
+                                "to": quote["router_address"],
+                                "data": data,
+                                "from": recipient,
+                                "value": "0x0"
+                            },
+                            "latest"
+                        ]
+                    }
+                    
+                    await self._rpc_call(rpc_url, call_payload, timeout=10.0)
+                    # Simulation succeeded, return default estimate
+                    return int(quote.get("estimated_gas", "200000"))
+                    
+                except Exception as sim_err:
+                    revert_reason = self._extract_revert_reason(sim_err)
+                    logger.debug(f"Simulation failed on {rpc_url}: {revert_reason or str(sim_err)}")
+                
+                return None
+            
+            # Try all RPCs in parallel, return first successful result
+            if chain_cfg.rpc_urls:
+                results = await asyncio.gather(
+                    *[try_gas_estimation(rpc) for rpc in chain_cfg.rpc_urls],
+                    return_exceptions=False
+                )
+                # Use first successful result
+                for result in results:
+                    if result is not None:
+                        gas_limit = result
                         simulation_success = True
-                        logger.debug(f"Transaction simulation successful via {rpc_url}")
+                        logger.debug(f"Gas estimation successful: {gas_limit}")
                         break
-                        
-                    except Exception as sim_err:
-                        # Extract revert reason for better error reporting
-                        revert_reason = self._extract_revert_reason(sim_err)
-                        logger.debug(f"Transaction simulation failed on {rpc_url}: {revert_reason or str(sim_err)}")
-                        continue
             
             # If all RPCs failed, return detailed error
             if not simulation_success:

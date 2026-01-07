@@ -15,32 +15,13 @@ logger = logging.getLogger(__name__)
 PORTFOLIO_CACHE = {}
 CACHE_TTL = 300  # Cache time-to-live in seconds (5 minutes)
 
-# Try to import Web3 - not required but enables enhanced portfolio features
-try:
-    from web3 import Web3
-    WEB3_AVAILABLE = True
-except ImportError:
-    logger.warning("Web3 not available. Some portfolio features will be limited.")
-    WEB3_AVAILABLE = False
-    class Web3:
-        """Mock Web3 class for environments without web3 installed."""
-        class HTTPProvider:
-            def __init__(self, url):
-                self.url = url
-
-        @staticmethod
-        def from_wei(value, unit):
-            """Mock from_wei function"""
-            if unit == 'ether':
-                return value / 10**18
-            elif unit == 'gwei':
-                return value / 10**9
-            return value
+from app.services.token_query_service import token_query_service
 
 class Web3Helper:
     def __init__(self, supported_chains: Dict[int, str], max_api_calls: int = 40):
         self.supported_chains = supported_chains
-        self.web3_instances = {}
+        # Reuse Web3 instances from singleton TokenQueryService (DRY & Performance)
+        self.web3_instances = token_query_service.web3_instances
         self.max_api_calls = max_api_calls
         self.current_api_calls = 0
 
@@ -67,12 +48,6 @@ class Web3Helper:
             43114: "avalanche-mainnet",
             56: "bsc-mainnet"
         }
-
-        # Initialize Web3 instances for each chain
-        for chain_id, chain_name in supported_chains.items():
-            rpc_url = os.getenv(f"{chain_name.upper()}_RPC_URL")
-            if rpc_url:
-                self.web3_instances[chain_id] = Web3(Web3.HTTPProvider(rpc_url))
 
     async def get_token_balances_alchemy(self, wallet_address: str, chain_id: int) -> List[Dict]:
         """Get token balances using Alchemy API with timeout."""

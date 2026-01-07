@@ -82,18 +82,6 @@ class SNELOrchestrator:
         # Initialize Web3Helper (doesn't require API key)
         self._service_pool['web3_helper'] = Web3Helper(self._settings.chains.supported_chains)
         
-        # Initialize Brian client if API key available
-        if os.getenv("BRIAN_API_KEY"):
-            try:
-                from services.brian.client import BrianClient
-                self._service_pool['brian'] = BrianClient()
-            except Exception as e:
-                logger.warning(f"Brian client initialization failed: {e}")
-                self._service_pool['brian'] = None
-        else:
-            logger.warning("Brian API key not found - swap/bridge features will be limited")
-            self._service_pool['brian'] = None
-        
         # Initialize Axelar service
         try:
             from services.axelar_service import AxelarService

@@ -16,18 +16,16 @@ from app.services.error_guidance_service import error_guidance_service, ErrorCon
 class BaseProcessor(ABC):
     """Base class for all command processors."""
     
-    def __init__(self, brian_client, settings, protocol_registry, gmp_service, price_service):
+    def __init__(self, settings, protocol_registry, gmp_service, price_service):
         """
         Initialize base processor with shared dependencies.
         
         Args:
-            brian_client: Brian API client
             settings: Application settings
             protocol_registry: Protocol registry for cross-chain operations
             gmp_service: Axelar GMP service
             price_service: Price service for USD conversions
         """
-        self.brian_client = brian_client
         self.settings = settings
         self.protocol_registry = protocol_registry
         self.gmp_service = gmp_service

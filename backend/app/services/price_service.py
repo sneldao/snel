@@ -51,6 +51,8 @@ class PriceService:
             "GNO": "gnosis",
             "OMG": "omisego",
             "ZIL": "zilliqa",
+            # MNEE - Real USD-backed stablecoin powered by 1Sat Ordinals and Ethereum
+            "MNEE": "mnee",  # Will fallback to USDC if not found on CoinGecko
         }
         
     async def _get_client(self) -> httpx.AsyncClient:
@@ -95,6 +97,10 @@ class PriceService:
             
             if response.status_code != 200:
                 logger.error(f"CoinGecko API error: {response.status_code} - {response.text}")
+                # Special fallback for MNEE - use USDC price as it's USD-backed
+                if token_symbol.upper() == "MNEE":
+                    logger.info("Falling back to USDC price for MNEE")
+                    return await self.get_token_price("USDC", currency)
                 return None
                 
             data = response.json()
@@ -104,10 +110,18 @@ class PriceService:
                 return Decimal(str(price))
             else:
                 logger.warning(f"Price not found for {token_symbol} in {currency}")
+                # Special fallback for MNEE - use USDC price as it's USD-backed
+                if token_symbol.upper() == "MNEE":
+                    logger.info("Falling back to USDC price for MNEE")
+                    return await self.get_token_price("USDC", currency)
                 return None
                 
         except Exception as e:
             logger.error(f"Error fetching price for {token_symbol}: {str(e)}")
+            # Special fallback for MNEE - use USDC price as it's USD-backed
+            if token_symbol.upper() == "MNEE":
+                logger.info("Falling back to USDC price for MNEE due to error")
+                return await self.get_token_price("USDC", currency)
             return None
             
     async def convert_usd_to_token_amount(self, usd_amount: Decimal, token_symbol: str) -> Optional[Decimal]:

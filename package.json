@@ -19,9 +19,15 @@
     "test": "npm run test --workspace=frontend && npm run test --workspace=backend",
     "lint": "npm run lint --workspace=frontend"
   },
+  "overrides": {
+    "zod-validation-error": {
+      "zod": "4.3.5"
+    }
+  },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "zod": "4.3.5"
   },
   "engines": {
     "node": ">=18.0.0",

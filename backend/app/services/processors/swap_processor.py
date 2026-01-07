@@ -116,6 +116,35 @@ class SwapProcessor(BaseProcessor):
                     additional_message=additional_message
                 )
             
+            # Validate tokens before normalization (fail fast on invalid tokens)
+            try:
+                from_token_resolved = await self.protocol_registry.resolve_token(chain_id, token_in)
+                to_token_resolved = await self.protocol_registry.resolve_token(chain_id, token_out)
+                
+                if not from_token_resolved:
+                    return self._create_guided_error_response(
+                        command_type=CommandType.SWAP,
+                        agent_type=AgentType.SWAP,
+                        error_context=ErrorContext.MISSING_TOKEN_PAIR,
+                        additional_message=f"Token '{token_in}' not found on chain {chain_id}"
+                    )
+                
+                if not to_token_resolved:
+                    return self._create_guided_error_response(
+                        command_type=CommandType.SWAP,
+                        agent_type=AgentType.SWAP,
+                        error_context=ErrorContext.MISSING_TOKEN_PAIR,
+                        additional_message=f"Token '{token_out}' not found on chain {chain_id}"
+                    )
+            except Exception as e:
+                logger.error(f"Token validation failed: {e}")
+                return self._create_guided_error_response(
+                    command_type=CommandType.SWAP,
+                    agent_type=AgentType.SWAP,
+                    error_context=ErrorContext.MISSING_TOKEN_PAIR,
+                    additional_message=f"Failed to validate tokens: {str(e)}"
+                )
+            
             # Normalize tokens for DEX compatibility
             token_in = self._normalize_token_for_swap(token_in, chain_id)
             token_out = self._normalize_token_for_swap(token_out, chain_id)
@@ -137,15 +166,15 @@ class SwapProcessor(BaseProcessor):
                     additional_message=f"No swap route found for {token_in} -> {token_out} on this chain."
                 )
             
-            # Check if approval is needed (0x returns allowanceIssues in metadata)
-            allowance_issues = quote.get("metadata", {}).get("allowanceIssues")
-            if allowance_issues:
-                return await self._create_approval_flow(
-                    unified_command, quote, details, amount
-                )
+            # Normalize approval detection across protocols
+            # 0x returns allowanceIssues, Uniswap uses needs_approval flag
+            needs_approval = (
+                quote.get("metadata", {}).get("allowanceIssues") or 
+                quote.get("needs_approval") or 
+                quote.get("requires_approval")
+            )
             
-            # Also check explicit needs_approval flag (for other protocols)
-            if quote.get("needs_approval"):
+            if needs_approval:
                 return await self._create_approval_flow(
                     unified_command, quote, details, amount
                 )

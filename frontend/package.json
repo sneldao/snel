@@ -41,14 +41,16 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
-  "eslintConfig": {
-    "extends": [
-      "next/core-web-vitals"
-    ]
+
+  "overrides": {
+    "zod-validation-error": {
+      "zod": "4.3.5"
+    }
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^2.1.4",
     "@types/d3-color": "^3.1.3",
     "@types/d3-ease": "^3.0.2",
     "@types/d3-shape": "^3.1.7",
@@ -63,6 +65,7 @@
     "@typescript-eslint/parser": "^7.1.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.1.1",
-    "typescript": "5.9"
+    "typescript": "5.9",
+    "zod": "^4.3.5"
   }
 }

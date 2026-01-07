@@ -4,12 +4,13 @@ Handles token transfer operations with gas optimization suggestions.
 """
 import logging
 from typing import Optional
+from decimal import Decimal
 
 from app.models.unified_models import (
     UnifiedCommand, UnifiedResponse, AgentType, CommandType
 )
 from app.core.exceptions import (
-    command_parse_error, invalid_amount_error, ExternalServiceError
+    command_parse_error, invalid_amount_error, ExternalServiceError, BusinessLogicError
 )
 from app.services.error_guidance_service import ErrorContext
 from app.services.knowledge_base import get_protocol_kb
@@ -70,20 +71,28 @@ class TransferProcessor(BaseProcessor):
             
             logger.info(f"Attempting transfer: {amount_str} {details.token_in.symbol} to {details.destination}")
             
-            # Call Brian API for transfer transaction
-            result = await self.brian_client.get_transfer_transaction(
-                token=details.token_in.symbol,
-                amount=amount_str,
+            # Build ERC20 transfer transaction via TokenQueryService (consolidates Web3)
+            from app.services.token_query_service import token_query_service
+            
+            # Validate transfer parameters
+            is_valid, error_msg = token_query_service.validate_transfer(
+                wallet_address=unified_command.wallet_address,
+                token_address=details.token_in.get_address(unified_command.chain_id),
                 to_address=details.destination,
-                chain_id=unified_command.chain_id,
-                wallet_address=unified_command.wallet_address
+                amount=Decimal(str(details.amount))
             )
             
-            if "error" in result:
-                raise ExternalServiceError(
-                    message=result.get("message", "Transfer preparation failed"),
-                    service_name="Brian API"
-                )
+            if not is_valid:
+                raise BusinessLogicError(error_msg)
+            
+            # Build transfer transaction
+            result = token_query_service.build_transfer_transaction(
+                token_address=details.token_in.get_address(unified_command.chain_id),
+                to_address=details.destination,
+                amount=Decimal(str(details.amount)),
+                decimals=details.token_in.decimals,
+                chain_id=unified_command.chain_id
+            )
             
             # Check if this transfer could benefit from batching
             gas_optimization_hint = self._check_gas_optimization_opportunity(unified_command)

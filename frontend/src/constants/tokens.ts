@@ -76,9 +76,9 @@ export const POPULAR_TOKENS: Token[] = [
     name: 'MNEE Stablecoin',
     address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
     chainId: ChainId.ETHEREUM,
-    decimals: 6,
-    logoURI: 'https://mnee.io/logo.png', // Placeholder - replace with actual MNEE logo
-    coingeckoId: 'mnee', // Placeholder - replace with actual Coingecko ID if available
+    decimals: 5,
+    logoURI: 'https://assets.mnee.xyz/logo.svg', // MNEE stablecoin logo
+    coingeckoId: 'mnee-stablecoin', // MNEE Coingecko ID
     isPopular: true,
     isStablecoin: true
   },

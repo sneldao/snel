@@ -130,6 +130,32 @@ class TokenRegistry:
             }
         ))
 
+        # MNEE - Multi-chain USD-backed stablecoin
+        self.register_token(TokenInfo(
+            id="mnee",
+            name="MNEE Stablecoin",
+            symbol="MNEE",
+            decimals=5,
+            type=TokenType.ERC20,  # ERC20 on Ethereum, native protocol on 1Sat Ordinals
+            verified=True,
+            addresses={
+                # 1Sat Ordinals (primary network)
+                236: "1SAT_ORDINALS",
+                # Ethereum (multi-chain support)
+                1: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
+            },
+            metadata={
+                "primary_network": "1Sat Ordinals",
+                "protocol": "1Sat Ordinals / ERC-20",
+                "description": "Fast, USD-backed stablecoin on 1Sat Ordinals protocol",
+                "features": ["instant_transactions", "gasless_ux", "near_zero_fees", "multi_chain"],
+                "collateral": "1:1 USD backed by U.S. Treasury bills and cash equivalents",
+                "regulation": "Regulated in Antigua with full AML/KYC compliance",
+                "sdk": "@mnee/ts-sdk",
+                "github": "https://github.com/mnee-xyz/mnee"
+            }
+        ))
+
     def register_token(self, token: TokenInfo):
         """Register a token in the registry."""
         self.tokens[token.id] = token

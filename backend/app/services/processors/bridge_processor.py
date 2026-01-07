@@ -199,47 +199,12 @@ class BridgeProcessor(BaseProcessor):
         from_chain: int,
         to_chain: int
     ) -> UnifiedResponse:
-        """Process bridge using standard protocols (Brian API)."""
-        try:
-            # Use Brian API for bridge
-            result = await self.brian_client.get_bridge_quote(
-                token=token,
-                amount=str(amount),
-                from_chain=from_chain,
-                to_chain=to_chain,
-                wallet_address=unified_command.wallet_address
-            )
-            
-            if not result or not result.get("success"):
-                raise BusinessLogicError("No bridge route found")
-            
-            transaction = self._create_transaction_data(result, from_chain)
-            
-            return self._create_success_response(
-                content={
-                    "message": f"Ready to bridge {amount} {token}",
-                    "type": "bridge_ready",
-                    "details": {
-                        "token": token,
-                        "amount": str(amount),
-                        "from_chain": from_chain,
-                        "to_chain": to_chain,
-                        "protocol": result.get("protocol", "Brian"),
-                        "estimated_time": result.get("estimated_time", "10-20 minutes")
-                    }
-                },
-                agent_type=AgentType.BRIDGE,
-                transaction=transaction,
-                awaiting_confirmation=True,
-                metadata={"bridge_result": result}
-            )
-            
-        except Exception as e:
-            logger.exception(f"Standard bridge failed: {e}")
-            return self._create_error_response(
-                f"Bridge failed: {str(e)}",
-                AgentType.BRIDGE
-            )
+        """Process bridge using GMP (Axelar)."""
+        # Brian API has been removed. Bridge feature delegates to GMP/Axelar
+        # which is handled in the main bridge processing flow
+        return await self.process_bridge(
+            unified_command, token, amount, from_chain, to_chain
+        )
 
 
 class PrivacyBridgeProcessor(BaseProcessor):
