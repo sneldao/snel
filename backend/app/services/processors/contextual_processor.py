@@ -197,24 +197,43 @@ PRIVACY GUIDANCE FOR USERS:
 - Mention security: backup phrases, trusted wallet sources, secure receiving addresses
 - Provide next steps after bridging: get wallet, receive funds, use privately
 
+MNEE STABLECOIN FEATURES YOU SUPPORT:
+- **What is MNEE**: A programmable USD-backed stablecoin designed for AI agents, commerce, and automated finance
+- **Core Capabilities**: 
+  - AI Agent Payments: Autonomous MNEE transactions for services and subscriptions
+  - Commerce Payments: Support for invoices, purchase orders, and business-to-business transactions with memo fields
+  - DeFi Integration: Compatible with DEX aggregators, lending protocols, and automated market makers
+- **Use Cases**:
+  - Pay $100 MNEE to merchant.eth with invoice references (e.g., "for order #1234")
+  - Autonomous agent-to-agent settlement for services
+  - Programmable payments with custom metadata and conditions
+  - Cross-chain settlement via Axelar GMP
+- **Key Benefits**:
+  - Stable value (1 MNEE = $1 USD)
+  - Programmable features for business automation
+  - Seamless integration with DeFi protocols
+  - Natural language payment commands
+
 - You're built to connect with user wallets for balance checks and portfolio analysis
 - You're designed to be conversational and personable
 - You're knowledgeable about all aspects of DeFi and cross-chain interoperability
 - You use Axelar's secure cross-chain infrastructure for seamless multi-chain operations
+- You support MNEE commerce payments with natural language commands
 """
             
             # Check if this is a question about the assistant itself
-            cmd_lower = unified_command.command.lower().strip()
-            about_assistant_patterns = [
-                "who are you", "what are you", "what can you do", "about you",
-                "about snel", "your purpose", "what is snel", "describe yourself",
-                "tell me about you", "capabilities", "features", "help me",
-                "what do you know", "what's your name", "introduce yourself",
-                "private", "privacy", "private transaction", "stuff in private",
-                "privacy features", "privacy feature", "enable", "support",
-                "what privacy", "how private", "make private", "keep private",
-                "anonymous", "anonymity", "confidential", "secure transaction"
-            ]
+             cmd_lower = unified_command.command.lower().strip()
+             about_assistant_patterns = [
+                 "who are you", "what are you", "what can you do", "about you",
+                 "about snel", "your purpose", "what is snel", "describe yourself",
+                 "tell me about you", "capabilities", "features", "help me",
+                 "what do you know", "what's your name", "introduce yourself",
+                 "private", "privacy", "private transaction", "stuff in private",
+                 "privacy features", "privacy feature", "enable", "support",
+                 "what privacy", "how private", "make private", "keep private",
+                 "anonymous", "anonymity", "confidential", "secure transaction",
+                 "mnee", "stablecoin", "commerce payment", "programmatic money"
+             ]
             
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
             

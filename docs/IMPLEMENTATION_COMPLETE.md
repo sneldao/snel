@@ -1,6 +1,123 @@
 # Implementation Status & Changelog
 
-## Latest: Swap Service Critical Fixes (Jan 7, 2026)
+## Latest: Bot Query Routing & Natural Language Support (Jan 7, 2026)
+
+### Issues Addressed
+
+**1. Natural Language Queries Returning Generic Errors**
+- **Problem**: User query "talk me through using mnee please" → Generic error "I'm not exactly sure how to handle that request"
+- **Root Cause**: Regex parser only matched specific keywords ("what is", "tell me about", "research", "explain"), missing common variations
+- **Impact**: Users couldn't ask about features in natural language; degraded UX for discovery
+- **Status**: ✅ FIXED
+
+**2. AI Classifier Fallback Missing**
+- **Problem**: When regex parser fails and AI classifier unavailable (no API key), system returned error instead of graceful fallback
+- **Root Cause**: No intermediate fallback between failed AI classification and error guidance
+- **Impact**: System less resilient when API keys unavailable or API rate-limited
+- **Status**: ✅ FIXED
+
+**3. MNEE Knowledge Not Integrated into Query Handling**
+- **Problem**: MNEE in knowledge base but not recognized by contextual processor patterns
+- **Root Cause**: ContextualProcessor only had generic patterns, not token-specific ones
+- **Impact**: MNEE queries didn't leverage built-in knowledge
+- **Status**: ✅ FIXED
+
+### Files Modified
+- `backend/app/core/parser/unified_parser.py` (added CONTEXTUAL_QUESTION patterns with early priority)
+- `backend/app/services/command_processor.py` (added fallback to CONTEXTUAL_QUESTION when AI fails)
+- `backend/app/services/processors/contextual_processor.py` (enhanced patterns + added MNEE facts)
+
+### Query Routing Architecture (Updated)
+
+**Before:**
+```
+Regex Parser (structured commands only)
+    ↓ UNKNOWN
+AI Classifier (if API key available)
+    ↓ UNKNOWN or fails
+Error Guidance → Generic error response
+```
+
+**After:**
+```
+Regex Parser (structured + natural language)
+    ├→ "talk me through mnee" → CONTEXTUAL_QUESTION pattern match
+    ├→ "swap 1 eth for usdc" → SWAP pattern match
+    ↓ UNKNOWN or natural language variations
+AI Classifier (if API key available)
+    ├→ Successfully classified
+    ↓ Fails or no API key
+Graceful Fallback → CONTEXTUAL_QUESTION
+    → ContextualProcessor with knowledge base
+```
+
+### Natural Language Pattern Additions
+
+Added flexible patterns to catch variations:
+```python
+CommandType.CONTEXTUAL_QUESTION: [
+    # Catches: talk, tell, teach, explain, help, guide, how, show, walk, describe
+    # With optional "me", "through", "about"
+    {
+        "pattern": r"(?:talk|tell|teach|explain|help|guide|how|show|walk|describe)\s+(?:me\s+)?(?:through|about)?",
+        "priority": 1
+    },
+    # Catches: can you help, could you help, how do i, show me, teach me
+    {
+        "pattern": r"(?:can you help|could you help|how do i|how can i|show me|teach me)\s+",
+        "priority": 2
+    }
+]
+```
+
+**Now Successfully Handles:**
+- "talk me through using mnee"
+- "how do i use mnee"
+- "can you help me with mnee"
+- "show me how mnee works"
+- "teach me about mnee"
+- "explain mnee to me"
+
+### MNEE Knowledge Enhancement
+
+Enhanced ContextualProcessor to recognize and respond to MNEE queries:
+
+**Pattern Recognition:**
+```python
+about_assistant_patterns = [
+    # ... existing patterns ...
+    "mnee", "stablecoin", "commerce payment", "programmatic money"
+]
+```
+
+**Knowledge Facts:**
+```
+MNEE STABLECOIN FEATURES YOU SUPPORT:
+- What is MNEE: A programmable USD-backed stablecoin for AI agents, commerce, and automated finance
+- Core Capabilities: AI Agent Payments, Commerce Payments, DeFi Integration
+- Use Cases: Invoice-referenced payments, autonomous settlement, programmable transactions
+```
+
+### Environment Verification
+
+✅ Production server (`snel-bot`) confirmed with all required API keys:
+- OPENAI_API_KEY (set - enables AI classification fallback)
+- BRIAN_API_KEY (set)
+- FIRECRAWL_API_KEY (set)
+- EXA_API_KEY (set)
+- ZEROX_API_KEY (set)
+
+### Backward Compatibility
+
+✅ All changes are non-breaking:
+- New patterns added early but don't interfere with existing command detection
+- Regex parser priority unchanged (specific commands still matched first)
+- Existing processors continue to function identically
+- Fallback path only activates for previously-erroring queries
+
+---
+
+## Previous: Swap Service Critical Fixes (Jan 7, 2026)
 
 ### Issues Fixed
 

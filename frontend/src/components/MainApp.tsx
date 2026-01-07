@@ -223,6 +223,7 @@ export default function MainApp(props: MainAppProps) {
         : false,
     cacheEnabled: true,
   }));
+  const [showLandingScreen, setShowLandingScreen] = useState<boolean>(false);
 
   // Setup global error handlers on mount
   useEffect(() => {
@@ -851,13 +852,34 @@ export default function MainApp(props: MainAppProps) {
                 >
                   <Icon as={SettingsIcon} />
                 </Button>
+                {isConnected && (
+                  !showLandingScreen ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowLandingScreen(true)}
+                      title="Go to Home"
+                    >
+                      <Icon as={FaWallet} /> {/* Using wallet icon as a home-like icon */}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowLandingScreen(false)}
+                      title="Back to Chat"
+                    >
+                      <Icon as={FaChartPie} /> {/* Using chart icon to go back to chat */}
+                    </Button>
+                  )
+                )}
                 <WalletButton />
               </HStack>
             </Flex>
           </Box>
 
           <Box flex={1}>
-            {!isConnected ? (
+            {(!isConnected || showLandingScreen) ? (
               <VStack spacing={6} align="center" justify="center" py={8}>
                 {/* Logo */}
                 <Box position="relative" width="60px" height="60px">
@@ -1044,13 +1066,11 @@ export default function MainApp(props: MainAppProps) {
                       🛡️ Try Privacy: &quot;bridge 1 ETH to Zcash&quot;
                     </Text>
                   </HStack>
-                </VStack>
 
-                {/* Connect Wallet Button */}
-                <WalletButton />
-              </VStack>
-            ) : (
-              <VStack spacing={4} align="stretch">
+                </VStack>
+                </VStack>
+                ) : (
+                <VStack spacing={4} align="stretch">
                 {responses.map((response, index) => {
                   // Debug what's being passed to CommandResponse
                   if (
@@ -1142,8 +1162,8 @@ export default function MainApp(props: MainAppProps) {
                     </HStack>
                   </Box>
                 </VStack>
-              </VStack>
-            )}
+                </VStack>
+                )}
           </Box>
         </VStack>
       </Container>

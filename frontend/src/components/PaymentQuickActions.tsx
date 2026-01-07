@@ -76,16 +76,21 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
 
   return (
     <>
-      <Box 
-        bg="gray.50" 
-        borderRadius="lg" 
+      <Box
+        bg="gray.50"
+        borderRadius="lg"
         p={3}
         mb={4}
       >
         <Text fontSize="sm" fontWeight="bold" mb={2} color="gray.700">
           Payment Actions
         </Text>
-        <HStack spacing={2} wrap="wrap">
+        <Box
+          display="flex"
+          flexDirection={{ base: "column", md: "row" }}
+          flexWrap={{ base: "nowrap", md: "wrap" }}
+          gap={2}
+        >
           {quickActions.map((action, index) => (
             <Button
               key={index}
@@ -94,14 +99,14 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
               colorScheme={action.color}
               variant="outline"
               onClick={() => handleQuickAction(action.command)}
-              flex="1"
-              minW="120px"
+              flex={{ base: "1 1 auto", md: "1" }}
+              minW={{ base: "auto", md: "120px" }}
               justifyContent="flex-start"
             >
               <Text fontSize="xs">{action.label}</Text>
             </Button>
           ))}
-        </HStack>
+        </Box>
       </Box>
 
       {/* Full Payment Dashboard Modal */}

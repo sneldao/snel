@@ -56,6 +56,25 @@ class UnifiedParser:
 
         # Note: Order matters! More specific patterns (like BRIDGE_TO_PRIVACY) should come before generic ones (BRIDGE)
         return {
+            # Contextual questions should come early to catch natural language queries
+            CommandType.CONTEXTUAL_QUESTION: [
+                {
+                    "pattern": re.compile(
+                        r"(?:talk|tell|teach|explain|help|guide|how|show|walk|describe)\s+(?:me\s+)?(?:through|about)?",
+                        re.IGNORECASE
+                    ),
+                    "description": "Natural language guide/explanation request",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:can you help|could you help|how do i|how can i|show me|teach me)\s+",
+                        re.IGNORECASE
+                    ),
+                    "description": "Help/how-to request",
+                    "priority": 2
+                }
+            ],
             # Privacy bridges must be checked before generic bridges
             CommandType.SET_PRIVACY_DEFAULT: [
                 {
@@ -319,6 +338,9 @@ class UnifiedParser:
              return self._extract_research_details(match, pattern_info)
          elif command_type == CommandType.BRIDGE_TO_PRIVACY:
              return self._extract_bridge_to_privacy_details(match)
+         elif command_type == CommandType.CONTEXTUAL_QUESTION:
+             # For contextual questions, no structured details needed
+             return CommandDetails()
 
          return CommandDetails()
 

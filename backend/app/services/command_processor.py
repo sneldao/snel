@@ -192,6 +192,11 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
                 if ai_classification != CommandType.UNKNOWN:
                     unified_command.command_type = ai_classification
                     logger.info(f"AI reclassified command as {ai_classification}")
+                else:
+                    # If AI classification fails/unavailable, default to CONTEXTUAL_QUESTION
+                    # to allow the ContextualProcessor to handle it with knowledge base fallbacks
+                    logger.info("AI classification unavailable or failed, defaulting to CONTEXTUAL_QUESTION")
+                    unified_command.command_type = CommandType.CONTEXTUAL_QUESTION
 
             # Validate wallet connection for transaction commands
             if unified_command.command_type in [
