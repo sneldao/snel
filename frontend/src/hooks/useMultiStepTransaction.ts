@@ -99,7 +99,7 @@ export const useMultiStepTransaction = ({
                             ? '/api/v1/chat/complete-bridge-step'
                             : '/api/v1/swap/complete-step';
 
-                    const nextStepResponse = await fetch(endpoint, {
+                    const response = await fetch(endpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -108,7 +108,15 @@ export const useMultiStepTransaction = ({
                             tx_hash: result.hash as string,
                             success: true,
                         }),
-                    }).then((res) => res.json());
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Server error response:', errorText);
+                        throw new Error(`Server returned ${response.status}: ${errorText.substring(0, 100)}`);
+                    }
+
+                    const nextStepResponse = await response.json();
 
                     if (nextStepResponse.success && nextStepResponse.has_next_step) {
                         const nextTxData = nextStepResponse.content;
