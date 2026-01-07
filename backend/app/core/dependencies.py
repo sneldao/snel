@@ -32,29 +32,15 @@ class ServiceContainer:
     
     def _validate_service_requirements(self):
         """Validate that required external services are properly configured."""
-        if self.settings.is_production:
-            if not self.settings.external_services.brian_api_key:
-                raise ConfigurationError(
-                    "Brian API key is required in production",
-                    setting_name="BRIAN_API_KEY"
-                )
+        # Brian API has been discontinued
+        pass
     
     @property
     def brian_client(self):
-        """Get Brian API client (lazy initialization)."""
-        if self._brian_client is None:
-            try:
-                from app.services.brian.client import brian_client
-                # Use the existing global brian_client instance
-                self._brian_client = brian_client
-                logger.info("Brian client initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize Brian client: {e}")
-                raise ConfigurationError(
-                    "Failed to initialize Brian API client",
-                    suggestions=["Check BRIAN_API_KEY configuration"]
-                )
-        return self._brian_client
+        """Get Brian API client (deprecated - returns None)."""
+        # Brian API has been discontinued
+        logger.warning("Brian API client requested but service is discontinued")
+        return None
     
     @property
     def command_processor(self):

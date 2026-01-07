@@ -38,16 +38,17 @@ class CommandProcessor:
     - Response formatting
     """
     
-    def __init__(self, brian_client, settings: Settings, transaction_flow_service=None):
+    def __init__(self, brian_client=None, settings: Settings = None, transaction_flow_service=None):
         """
         Initialize command processor with dependencies.
 
         Args:
-            brian_client: Brian API client instance
+            brian_client: Brian API client instance (deprecated, ignored)
             settings: Application settings
             transaction_flow_service: Transaction flow service for multi-step transactions
         """
-        self.brian_client = brian_client
+        # Brian API has been discontinued - parameter kept for backward compatibility
+        self.brian_client = None
         self.settings = settings
         self.transaction_flow_service = transaction_flow_service
         

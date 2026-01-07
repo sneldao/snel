@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 class PrivacyProcessor(BaseProcessor):
     """Processes privacy-related commands."""
     
-    def __init__(self, brian_client, settings, protocol_registry, gmp_service, price_service):
+    def __init__(self, brian_client=None, settings=None, protocol_registry=None, gmp_service=None, price_service=None):
         """Initialize privacy processor with shared dependencies."""
-        super().__init__(brian_client, settings, protocol_registry, gmp_service, price_service)
+        super().__init__(settings, protocol_registry, gmp_service, price_service)
         self.privacy_service = PrivacyService(None)
     
     async def process(self, unified_command: UnifiedCommand) -> UnifiedResponse:
