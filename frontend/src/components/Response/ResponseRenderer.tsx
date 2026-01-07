@@ -94,6 +94,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
             <UnifiedConfirmation
                 agentType="swap"
                 content={{
+                    ...(isObjectContent(content) ? content : {}),
                     message: getContentMessage(content) || 'Ready to execute swap',
                     type: 'swap_confirmation',
                     details: isObjectContent(content) ? (content as any).details || {} : {},
@@ -113,6 +114,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
             <UnifiedConfirmation
                 agentType="swap"
                 content={{
+                    ...(isObjectContent(content) ? content : {}),
                     message: getContentMessage(content) || 'Ready to set up DCA',
                     type: 'dca_confirmation',
                     details: isObjectContent(content) ? (content as any).details || {} : {},
@@ -385,13 +387,13 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     // Payment History Response
     if (agentType === 'payment' && isObjectContent(content)) {
         const paymentContent = content as any;
-        if (paymentContent.type === 'payment_history' || 
-            paymentContent.type === 'spending_analytics' || 
-            paymentContent.type === 'recipients' || 
+        if (paymentContent.type === 'payment_history' ||
+            paymentContent.type === 'spending_analytics' ||
+            paymentContent.type === 'recipients' ||
             paymentContent.type === 'payment_templates') {
             return (
-                <PaymentHistoryResponse 
-                    content={paymentContent} 
+                <PaymentHistoryResponse
+                    content={paymentContent}
                     onAddRecipient={() => {
                         // Trigger the add recipient modal
                         if (onActionClick) {

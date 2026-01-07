@@ -16,7 +16,7 @@ function parseEthToWei(value: string | number | undefined): bigint {
   }
 
   const valueStr = String(value);
-  
+
   // If it's already an integer string (no decimal point), convert directly
   if (!valueStr.includes('.')) {
     try {
@@ -40,7 +40,7 @@ function parseEthToWei(value: string | number | undefined): bigint {
     const [integerPart, decimalPart = ''] = valueStr.split('.');
     const paddedDecimal = decimalPart.padEnd(18, '0').slice(0, 18);
     const weiString = (integerPart || '0') + paddedDecimal;
-    
+
     return BigInt(weiString);
   } catch (error) {
     console.warn(`Failed to parse ETH value "${valueStr}", defaulting to 0:`, error);
@@ -53,151 +53,151 @@ export class TransactionService {
     private walletClient: WalletClient,
     private publicClient: PublicClient,
     private chainId: number
-  ) {}
+  ) { }
 
   getBlockExplorerLink(hash: string): string {
-    return `${
-      BLOCK_EXPLORERS[this.chainId as keyof typeof BLOCK_EXPLORERS] ||
+    return `${BLOCK_EXPLORERS[this.chainId as keyof typeof BLOCK_EXPLORERS] ||
       BLOCK_EXPLORERS[8453]
-    }${hash}`;
+      }${hash}`;
   }
 
   async executeTransaction(txData: TransactionData) {
     return safeWalletOperation(async () => {
       return withAsyncRecursionGuard(async () => {
-    if (!this.walletClient) {
-      throw new Error("Wallet not connected");
-    }
+        if (!this.walletClient) {
+          throw new Error("Wallet not connected");
+        }
 
-    // Debug logging for transaction data
-    console.log("Original transaction data:", JSON.stringify(txData, null, 2));
+        // Debug logging for transaction data
+        console.log("Original transaction data:", JSON.stringify(txData, null, 2));
 
-    // Create an abort controller to handle cancellations
-    const abortController = new AbortController();
+        // Create an abort controller to handle cancellations
+        const abortController = new AbortController();
 
-    // Validate transaction data exists
-    if (!txData || typeof txData !== 'object') {
-      throw new Error("Invalid transaction data: transaction data is missing or invalid");
-    }
+        // Validate transaction data exists
+        if (!txData || typeof txData !== 'object') {
+          throw new Error("Invalid transaction data: transaction data is missing or invalid");
+        }
 
-    // Check if the transaction data contains an error
-    if ("error" in txData && txData.error) {
-      throw new Error(txData.error);
-    }
+        // Check if the transaction data contains an error
+        if ("error" in txData && txData.error) {
+          throw new Error(txData.error);
+        }
 
-    // Validate required transaction fields
-    if (!txData.to || !txData.data) {
-      const errorMsg = `Invalid transaction data: missing required fields (to: ${txData.to}, data: ${txData.data})`;
-      console.error("Invalid transaction data:", txData);
-      throw new Error(errorMsg);
-    }
+        // Validate required transaction fields
+        if (!txData.to || !txData.data) {
+          const errorMsg = `Invalid transaction data: missing required fields (to: ${txData.to}, data: ${txData.data})`;
+          console.error("Invalid transaction data:", txData);
+          throw new Error(errorMsg);
+        }
 
-    try {
-      // Get the account address
-      const [account] = await this.walletClient.getAddresses();
-      if (!account) {
-        throw new Error("No account available");
-      }
+        try {
+          // Get the account address
+          const [account] = await this.walletClient.getAddresses();
+          if (!account) {
+            throw new Error("No account available");
+          }
 
-      // Format transaction parameters - handle both gasLimit and gas_limit
-      const gas = txData.gas_limit || "300000";
+          // Format transaction parameters - handle both gasLimit and gas_limit
+          // Pydantic models often use camelCase while legacy code might use snake_case
+          const gas = txData.gasLimit || txData.gas_limit || "300000";
 
-      // Format transaction parameters
-      const transaction = {
-        account,
-        chain: null,
-        to: txData.to as `0x${string}`,
-        data: txData.data as `0x${string}`,
-        value: parseEthToWei(txData.value),
-        chainId: txData.chain_id || this.chainId,
-        gas: BigInt(gas),
-      };
+          // Format transaction parameters
+          const transaction = {
+            account,
+            chain: null,
+            to: txData.to as `0x${string}`,
+            data: txData.data as `0x${string}`,
+            value: parseEthToWei(txData.value),
+            chainId: txData.chain_id || this.chainId,
+            gas: BigInt(gas),
+          };
 
-      // Ensure proper formatting
-      if (transaction.value < BigInt(0)) {
-        transaction.value = BigInt(0);
-      }
-      if (!transaction.to.startsWith("0x")) {
-        transaction.to = `0x${transaction.to}` as `0x${string}`;
-      }
-      if (!transaction.data.startsWith("0x")) {
-        transaction.data = `0x${transaction.data}` as `0x${string}`;
-      }
+          // Ensure proper formatting
+          if (transaction.value < BigInt(0)) {
+            transaction.value = BigInt(0);
+          }
+          if (!transaction.to.startsWith("0x")) {
+            transaction.to = `0x${transaction.to}` as `0x${string}`;
+          }
+          if (!transaction.data.startsWith("0x")) {
+            transaction.data = `0x${transaction.data}` as `0x${string}`;
+          }
 
-      // Debug logging for formatted transaction
-      console.log(
-        "Formatted transaction:",
-        JSON.stringify(
-          {
-            ...transaction,
-            value: transaction.value.toString(),
-            gas: transaction.gas.toString(),
-            account: transaction.account,
-          },
-          null,
-          2
-        )
-      );
+          // Debug logging for formatted transaction
+          console.log(
+            "Formatted transaction:",
+            JSON.stringify(
+              {
+                ...transaction,
+                value: transaction.value.toString(),
+                gas: transaction.gas.toString(),
+                account: transaction.account,
+              },
+              null,
+              2
+            )
+          );
 
-      // Verify chain ID
-      if (transaction.chainId !== this.chainId) {
-        console.warn(
-          `Transaction chain ID (${transaction.chainId}) doesn't match current chain (${this.chainId}). Updating to current chain.`
-        );
-        transaction.chainId = this.chainId;
-      }
+          // Verify chain ID
+          if (transaction.chainId !== this.chainId) {
+            console.warn(
+              `Transaction chain ID (${transaction.chainId}) doesn't match current chain (${this.chainId}). Updating to current chain.`
+            );
+            transaction.chainId = this.chainId;
+          }
 
-      // Send transaction with immediate cancellation detection
-      console.log("Sending transaction...");
+          // Send transaction with immediate cancellation detection
+          console.log("Sending transaction...");
 
-      // Wrap in a promise that can be cancelled immediately
-      const sendTransactionPromise = this.walletClient.sendTransaction(transaction);
+          // Wrap in a promise that can be cancelled immediately
+          const sendTransactionPromise = this.walletClient.sendTransaction(transaction);
 
-      // Race the transaction against the abort signal and timeout
-      const hash = await Promise.race([
-        sendTransactionPromise,
-        new Promise((_, reject) => {
-          abortController.signal.addEventListener('abort', () => {
-            reject(new Error('Transaction cancelled by user'));
+          // Race the transaction against the abort signal and timeout
+          const hash = await Promise.race([
+            sendTransactionPromise,
+            new Promise((_, reject) => {
+              abortController.signal.addEventListener('abort', () => {
+                reject(new Error('Transaction cancelled by user'));
+              });
+            }),
+            // Add a timeout to prevent hanging on user rejection
+            new Promise((_, reject) => {
+              setTimeout(() => {
+                reject(new Error('Transaction timeout - please try again'));
+              }, 60000); // 60 second timeout (increased for user consideration time)
+            })
+          ]);
+
+          console.log("Transaction sent with hash:", hash);
+
+          // Wait for receipt
+          console.log("Waiting for transaction receipt...");
+          const receipt = await this.publicClient.waitForTransactionReceipt({
+            hash: hash as `0x${string}`,
           });
-        }),
-        // Add a timeout to prevent hanging on user rejection
-        new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('Transaction timeout - please try again'));
-          }, 60000); // 60 second timeout (increased for user consideration time)
-        })
-      ]);
 
-      console.log("Transaction sent with hash:", hash);
+          if (!receipt) {
+            throw new Error("Failed to get transaction receipt");
+          }
 
-      // Wait for receipt
-      console.log("Waiting for transaction receipt...");
-      const receipt = await this.publicClient.waitForTransactionReceipt({
-        hash: hash as `0x${string}`,
-      });
+          console.log("Transaction receipt received:", receipt);
+          return {
+            hash,
+            receipt,
+            success: Boolean(receipt.status),
+          };
+        } catch (error) {
+          console.error("Transaction error:", error);
 
-      if (!receipt) {
-        throw new Error("Failed to get transaction receipt");
-      }
+          // If it's a user rejection, immediately abort to prevent retries
+          if (error instanceof Error && this.isUserRejection(error)) {
+            abortController.abort();
+            console.log("User rejected transaction - aborting to prevent retries");
+          }
 
-      console.log("Transaction receipt received:", receipt);
-      return {
-        hash,
-        receipt,
-        success: Boolean(receipt.status),
-      };
-    } catch (error) {
-      console.error("Transaction error:", error);
-
-      // If it's a user rejection, immediately abort to prevent retries
-      if (error instanceof Error && this.isUserRejection(error)) {
-        abortController.abort();
-        console.log("User rejected transaction - aborting to prevent retries");
-      }
-
-      throw this.formatTransactionError(error);
-    }
+          throw this.formatTransactionError(error);
+        }
       }, `executeTransaction_${this.chainId}`)();
     }, `executeTransaction_${this.chainId}`);
   }

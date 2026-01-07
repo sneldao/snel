@@ -32,7 +32,7 @@ export const TransactionHandler: React.FC<TransactionHandlerProps> = ({
     if (typeof content === "object" && content.message) {
       return content.message;
     }
-    
+
     switch (agentType) {
       case "swap": return "Ready to execute swap transaction";
       case "brian": return "Ready to execute transaction";
@@ -101,6 +101,7 @@ export const TransactionHandler: React.FC<TransactionHandlerProps> = ({
     <UnifiedConfirmation
       agentType={agentType as any}
       content={{
+        ...(typeof content === "object" ? content : {}),
         message: getTransactionMessage(),
         type: getTransactionType(),
         details: getTransactionDetails(),

@@ -313,7 +313,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                                 chainId={chainId}
                                 textColor={textColor}
                                 isExecuting={isExecuting}
-                                onExecute={handleExecuteTransaction}
+                                onExecute={() => {
+                                    if (typeof content === 'object' && content !== null &&
+                                        ((content as any).flow_info || (content as any).type === 'swap_approval' || (content as any).type === 'multi_step_transaction')) {
+                                        handleMultiStepTransaction(content);
+                                    } else {
+                                        handleExecuteTransaction();
+                                    }
+                                }}
                                 onCancel={handleCancel}
                                 onActionClick={handleActionClick}
                             />
