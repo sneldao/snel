@@ -16,7 +16,7 @@ from app.services.error_guidance_service import error_guidance_service, ErrorCon
 class BaseProcessor(ABC):
     """Base class for all command processors."""
     
-    def __init__(self, settings, protocol_registry, gmp_service, price_service, transaction_flow_service=None):
+    def __init__(self, settings, protocol_registry, gmp_service, price_service, transaction_flow_service=None, **kwargs):
         """
         Initialize base processor with shared dependencies.
         
@@ -25,7 +25,8 @@ class BaseProcessor(ABC):
             protocol_registry: Protocol registry for cross-chain operations
             gmp_service: Axelar GMP service
             price_service: Price service for USD conversions
-            transaction_flow_service: Service for managing multi-step transaction flows
+            transaction_flow_service: Service for managing multi-step transaction flows (optional)
+            **kwargs: Additional arguments (for compatibility with subclasses)
         """
         self.settings = settings
         self.protocol_registry = protocol_registry

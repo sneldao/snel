@@ -520,7 +520,6 @@ class UniswapAdapter:
             # V3 Concentrated Liquidity Optimization: Order fee tiers by liquidity
             fee_tiers = await self._optimize_fee_tier_selection(from_address, to_address, chain_id, rpc_urls)
             # Try fee tiers and pick the best one
-            fee_tiers = [100, 500, 3000, 10000]
             quotes = []
             best = None
             
