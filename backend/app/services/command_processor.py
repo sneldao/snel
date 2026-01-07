@@ -379,6 +379,15 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             if not step_data:
                 raise ValidationError("Missing transaction step completion data")
 
+            # Ensure step_data is a dict (it might be a CommandDetails object)
+            if hasattr(step_data, 'model_dump'):
+                step_data = step_data.model_dump()
+            elif hasattr(step_data, '__dict__'):
+                step_data = step_data.__dict__
+            elif not isinstance(step_data, dict):
+                # Fallback for unexpected types
+                step_data = dict(step_data) if step_data else {}
+
             wallet_address = step_data.get('wallet_address') or unified_command.wallet_address
             chain_id = step_data.get('chain_id') or unified_command.chain_id
             tx_hash = step_data.get('tx_hash')

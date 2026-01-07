@@ -101,6 +101,11 @@ class CommandDetails(BaseModel):
     destination_chain: Optional[str] = Field(default=None, description="Destination chain name")
     protocol: Optional[str] = Field(default=None, description="Protocol name")
     is_usd_amount: Optional[bool] = Field(default=False, description="Whether the amount is specified in USD")
+    # Multi-step/Transaction completion fields
+    wallet_address: Optional[str] = Field(default=None, description="Wallet address")
+    tx_hash: Optional[str] = Field(default=None, description="Transaction hash")
+    chain_id: Optional[int] = Field(default=None, description="Chain ID")
+    success: Optional[bool] = Field(default=True, description="Transaction success status")
     additional_params: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional parameters")
 
 
