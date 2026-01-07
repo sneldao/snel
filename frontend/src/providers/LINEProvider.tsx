@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * LINE Provider
  * ENHANCEMENT: Extends existing provider pattern for LINE platform
@@ -10,8 +12,6 @@ declare global {
     liff: any; // We'll use 'any' for now to avoid complex LIFF SDK typings
   }
 }
-
-'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { usePlatform } from '../utils/platformDetection';
@@ -48,12 +48,12 @@ interface LINEContextValue extends LIFFState {
   logout: () => Promise<void>;
   shareMessage: (message: string) => Promise<void>;
   closeWindow: () => void;
-  
+
   // Wallet functions (compatible with existing Web3 patterns)
   connectWallet: () => Promise<void>;
   getWalletAddress: () => Promise<string | null>;
   signMessage: (message: string) => Promise<string>;
-  
+
   // DeFi integration (reuses existing service layer)
   executeTransaction: (txData: any) => Promise<string>;
   getBalance: (address: string, token?: string) => Promise<string>;
@@ -67,7 +67,7 @@ const LINEContext = createContext<LINEContextValue | null>(null);
  */
 export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { isLINE } = usePlatform();
-  
+
   const [state, setState] = useState<LIFFState>({
     isInitialized: false,
     isLoggedIn: false,
@@ -100,15 +100,15 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           // Initialize LIFF with proper error handling
-          await window.liff.init({ 
+          await window.liff.init({
             liffId,
             // SECURITY: Ensure testMode is enabled during development
             withLoginOnExternalBrowser: true
           });
-          
+
           const isLoggedIn = window.liff.isLoggedIn();
           const isInClient = window.liff.isInClient();
-          
+
           let profile = null;
           let context = null;
           let accessToken = null;
@@ -135,7 +135,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } catch (error) {
         console.error('LIFF initialization failed:', error);
-        
+
         // ENHANCEMENT: Detailed error handling for different failure scenarios
         let errorMessage = 'LIFF initialization failed';
         if (error instanceof Error) {
@@ -149,7 +149,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             errorMessage = error.message;
           }
         }
-        
+
         setState(prev => ({
           ...prev,
           isInitialized: true,
@@ -167,7 +167,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const login = async () => {
     if (!window.liff) throw new Error('LIFF not initialized');
-    
+
     if (!window.liff.isLoggedIn()) {
       window.liff.login();
     }
@@ -178,7 +178,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const logout = async () => {
     if (!window.liff) throw new Error('LIFF not initialized');
-    
+
     if (window.liff.isLoggedIn()) {
       window.liff.logout();
       setState(prev => ({
@@ -196,7 +196,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const shareMessage = async (message: string) => {
     if (!window.liff) throw new Error('LIFF not initialized');
-    
+
     if (window.liff.isApiAvailable('shareTargetPicker')) {
       await window.liff.shareTargetPicker([
         {
@@ -241,7 +241,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Use existing ConnectKit modal for wallet connection in LINE environment
       // This leverages the already configured WalletConnect setup
       const { useModal } = await import('connectkit');
-      
+
       // Create a temporary component to access the modal
       const openWalletModal = () => {
         // Since we can't use hooks directly here, we'll trigger the modal through DOM events
@@ -254,7 +254,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const tempDiv = document.createElement('div');
           tempDiv.style.display = 'none';
           document.body.appendChild(tempDiv);
-          
+
           // Import and render ConnectKit button temporarily
           import('connectkit').then(({ ConnectKitButton }) => {
             // This will be handled by the existing Web3Provider setup
@@ -264,13 +264,13 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
 
       openWalletModal();
-      
+
       console.log('Bitget Wallet connection initiated through LINE Mini-dApp', {
         projectId: walletConnectProjectId,
         userId: state.profile?.userId,
         domain: window.location.host,
       });
-      
+
     } catch (error) {
       console.error('LINE wallet connection failed:', error);
       throw error;
@@ -284,19 +284,19 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       // Use existing wagmi setup to get account
       const { useAccount } = await import('wagmi');
-      
+
       // Since we can't use hooks directly in this context, we'll access the account differently
       // Check if there's a connected wallet in the existing Web3Provider context
       if (typeof window !== 'undefined' && (window as any).ethereum) {
-        const accounts = await (window as any).ethereum.request({ 
-          method: 'eth_accounts' 
+        const accounts = await (window as any).ethereum.request({
+          method: 'eth_accounts'
         });
-        
+
         if (accounts && accounts.length > 0) {
           return accounts[0];
         }
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to get wallet address:', error);
@@ -311,25 +311,25 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       // Use the existing ethereum provider for signing
       if (typeof window !== 'undefined' && (window as any).ethereum) {
-        const accounts = await (window as any).ethereum.request({ 
-          method: 'eth_accounts' 
+        const accounts = await (window as any).ethereum.request({
+          method: 'eth_accounts'
         });
-        
+
         if (!accounts || accounts.length === 0) {
           throw new Error('No wallet connected');
         }
-        
+
         const signature = await (window as any).ethereum.request({
           method: 'personal_sign',
           params: [message, accounts[0]],
         });
-        
+
         console.log('Message signed through LINE wallet integration', {
           message,
           signature: signature.slice(0, 10) + '...', // Log partial signature for security
           userId: state.profile?.userId,
         });
-        
+
         return signature;
       } else {
         throw new Error('No ethereum provider available');
@@ -353,7 +353,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // SECURITY: Ensure testMode is enabled during development
       const { getLINETestMode } = await import('../utils/platformDetection');
       const testMode = getLINETestMode();
-      
+
       // Get connected wallet for transaction execution
       const walletAddress = await getWalletAddress();
       if (!walletAddress) {
@@ -369,7 +369,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         walletAddress,
         timestamp: new Date().toISOString(),
       };
-      
+
       console.log('LINE transaction execution', {
         testMode,
         walletAddress: walletAddress.slice(0, 6) + '...', // Partial address for security
@@ -404,7 +404,7 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         throw new Error('No ethereum provider available for transaction');
       }
-      
+
       return hash;
     } catch (error) {
       console.error('LINE transaction failed:', error);
@@ -421,25 +421,25 @@ export const LINEProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Use existing API service for balance queries
       const { ApiService } = await import('../services/apiService');
       const apiService = new ApiService();
-      
+
       // Reuse existing balance endpoint with LINE context
       const balanceData = await apiService.post('/api/v1/chat/process-command', {
         command: `get balance for ${address}${token ? ` ${token}` : ''}`,
         platform: 'line',
         userId: state.profile?.userId,
       });
-      
+
       console.log('LINE balance query executed', {
         address: address.slice(0, 6) + '...',
         token,
         userId: state.profile?.userId,
       });
-      
+
       // Extract balance from response
       if (balanceData?.content?.balance) {
         return balanceData.content.balance;
       }
-      
+
       return '0';
     } catch (error) {
       console.error('LINE balance query failed:', error);
