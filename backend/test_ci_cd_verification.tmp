@@ -1,6 +1,0 @@
-# Temporary test file to verify CI/CD pipeline is working
-# This file will be deleted after CI/CD verification
-
-This file was created to test the CI/CD pipeline on $(date).
-
-If you can see this file on the Hetzner server, the deployment is working!

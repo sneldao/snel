@@ -43,6 +43,10 @@ class DatabaseSettings:
     redis_db: int = field(default_factory=lambda: int(os.getenv("REDIS_DB", "0")))
     redis_max_connections: int = field(default_factory=lambda: int(os.getenv("REDIS_MAX_CONNECTIONS", "10")))
     
+    # Payment actions storage backend
+    payment_actions_backend: str = field(default_factory=lambda: os.getenv("PAYMENT_ACTIONS_BACKEND", "redis"))
+    # Options: "memory" (dev), "redis" (default), "postgresql" (production)
+    
     # Cache TTL settings (in seconds)
     cache_ttl_short: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_SHORT", "60")))      # 1 minute
     cache_ttl_medium: int = field(default_factory=lambda: int(os.getenv("CACHE_TTL_MEDIUM", "300")))   # 5 minutes

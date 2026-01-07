@@ -13,6 +13,7 @@ from .portfolio_processor import PortfolioProcessor
 from .contextual_processor import ContextualProcessor
 from .protocol_processor import ProtocolProcessor
 from .privacy_processor import PrivacyProcessor
+from .payment_action_processor import PaymentActionProcessor
 
 
 class ProcessorRegistry:
@@ -42,6 +43,9 @@ class ProcessorRegistry:
             CommandType.SET_PRIVACY_DEFAULT: PrivacyProcessor(**self.dependencies),
             CommandType.OVERRIDE_PRIVACY: PrivacyProcessor(**self.dependencies),
             CommandType.X402_PRIVACY: PrivacyProcessor(**self.dependencies),
+            
+            # Payment action processors
+            CommandType.PAYMENT_ACTION: PaymentActionProcessor(**self.dependencies),
             
             # Query processors
             CommandType.BALANCE: BalanceProcessor(**self.dependencies),

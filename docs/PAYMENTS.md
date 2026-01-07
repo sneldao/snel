@@ -1,5 +1,90 @@
 # Payments & Transactions
 
+## Payment Actions System (Phase 1)
+
+User-customizable payment actions with guided chat-based creation and personalization.
+
+### Architecture
+
+**Unified Data Model**: Single `PaymentAction` replaces templates, recipients, and shortcuts.
+- `actionType`: send | recurring | template | shortcut
+- `isPinned`: Show in quick action buttons (max 5)
+- `usageCount`, `lastUsed`: Track usage patterns
+- `schedule`: Optional recurring configuration
+
+**Storage**:
+- **Frontend**: localStorage (`snel_payment_actions_{walletAddress}`)
+- **Backend**: In-memory service (PaymentActionService), ready for Redis/DB upgrade
+
+### User Flow
+
+1. **Create**: "create payment action" → 7-step guided chat flow
+2. **Display**: Pinned actions appear as quick buttons (max 5)
+3. **Execute**: Click action or say "use action {name}"
+4. **Manage**: "show my payment actions", "update {action}", "delete {action}"
+
+### For Developers
+
+**Create Action**:
+```typescript
+const action = await service.createPaymentAction(walletAddress, {
+  name: "Weekly Rent",
+  actionType: "recurring",
+  recipientAddress: "0x742d...",
+  amount: "1.5",
+  token: "ETH",
+  chainId: 1,
+  schedule: { frequency: "weekly", dayOfWeek: 1 },
+  isPinned: true,
+});
+```
+
+**Get Quick Actions**:
+```typescript
+const quickActions = await service.getQuickActions(walletAddress);
+// Returns max 5 pinned actions, sorted by usage
+```
+
+**Files**:
+- Backend: `backend/app/domains/payment_actions/{models,service}.py`
+- Backend: `backend/app/services/processors/payment_action_processor.py`
+- Frontend: `frontend/src/services/paymentHistoryService.ts`
+- Frontend: `frontend/src/components/PaymentActionFlow.tsx` (creation flow)
+- Enhanced: `frontend/src/components/PaymentQuickActions.tsx` (dynamic buttons)
+
+### Phase 2: Persistent Storage ✅
+
+**Complete**: Backend persistent storage with pluggable backends
+
+**Architecture**: Storage abstraction layer with three backends:
+1. **InMemoryStorageBackend** - Development, single-instance testing
+2. **RedisStorageBackend** - Default production, distributed, fast
+3. **PostgreSQLStorageBackend** - Fallback (ORM setup pending)
+
+**New Files**:
+- `backend/app/domains/payment_actions/storage.py` - Abstract backend interface + implementations
+- `backend/app/domains/payment_actions/backend_factory.py` - Backend initialization from config
+
+**Enhanced Files**:
+- `backend/app/domains/payment_actions/service.py` - Pluggable backend support
+- `backend/app/config/settings.py` - Backend selection via `PAYMENT_ACTIONS_BACKEND` env var
+
+**Configuration**:
+```env
+PAYMENT_ACTIONS_BACKEND=redis    # "memory" | "redis" | "postgresql"
+REDIS_URL=redis://localhost:6379
+```
+
+**Testing**: All tests passing (in-memory, multiple actions, usage tracking)
+
+### Phase 3 (Next)
+
+- Real payment execution (wire to MNEE API)
+- Natural language triggers ("coffee" → auto-pay)
+- Smart suggestions based on usage patterns
+
+---
+
 ## MNEE Integration
 
 ### MNEE Protocol Overview

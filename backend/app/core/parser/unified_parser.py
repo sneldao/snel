@@ -230,6 +230,48 @@ class UnifiedParser:
                     "priority": 1
                 }
             ],
+            CommandType.PAYMENT_ACTION: [
+                {
+                    "pattern": re.compile(
+                        r"(?:create|new|make)\s+(?:a\s+)?(?:payment\s+)?(?:action|template|shortcut)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Create a new payment action",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:show|list|view)\s+(?:my\s+)?(?:payment\s+)?(?:actions|templates|shortcuts)",
+                        re.IGNORECASE
+                    ),
+                    "description": "List user's payment actions",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:update|edit|modify)\s+(?:payment\s+)?(?:action|template|shortcut)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Update a payment action",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:delete|remove)\s+(?:payment\s+)?(?:action|template|shortcut)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Delete a payment action",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"quick\s+actions",
+                        re.IGNORECASE
+                    ),
+                    "description": "Get quick actions",
+                    "priority": 1
+                }
+            ],
             CommandType.BALANCE: [
                 {
                     "pattern": re.compile(

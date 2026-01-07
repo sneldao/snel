@@ -1,6 +1,0 @@
-# Test file to trigger the CI/CD pipeline
-
-This file was created solely to trigger the GitHub Actions workflow.
-The CI/CD pipeline should deploy the backend changes to Hetzner.
-
-Date created: $(date)
