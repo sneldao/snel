@@ -21,12 +21,26 @@ export const MultiStepTransactionDisplay: React.FC<MultiStepTransactionDisplayPr
   chainId,
   textColor,
 }) => {
+  // Determine the display message: current step's description, or original content message
+  const displayMessage = React.useMemo(() => {
+    if (multiStepState && multiStepState.steps && multiStepState.steps.length > 0) {
+      // Find the currently executing or pending step to show its description
+      const currentStepObj = multiStepState.steps.find(s => s.step === multiStepState.currentStep) ||
+        multiStepState.steps[multiStepState.steps.length - 1];
+      if (currentStepObj && currentStepObj.description) {
+        return currentStepObj.description;
+      }
+    }
+
+    return typeof content === "object" && content.message
+      ? content.message
+      : "Executing multi-step transaction...";
+  }, [multiStepState, content]);
+
   return (
     <Box>
-      <Text color={textColor} mb={3}>
-        {typeof content === "object" && content.message
-          ? content.message
-          : "Executing multi-step transaction..."}
+      <Text color={textColor} mb={3} fontWeight="medium">
+        {displayMessage}
       </Text>
       {multiStepState && (
         <TransactionProgress

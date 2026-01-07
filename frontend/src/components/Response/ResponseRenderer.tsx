@@ -88,6 +88,20 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         }
     }, [content]);
 
+    // Multi-Step Transaction / Progress View
+    // If we have multi-step state, it means a flow has started or is in progress.
+    // We should show the progress display to give the user feedback on the current step.
+    if (multiStepState || isMultiStepTransaction) {
+        return (
+            <MultiStepTransactionDisplay
+                content={content}
+                multiStepState={multiStepState}
+                chainId={chainId}
+                textColor={textColor}
+            />
+        );
+    }
+
     // Swap Confirmation
     if (isSwapConfirmation) {
         return (
@@ -124,18 +138,6 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 onExecute={onExecute}
                 onCancel={onCancel}
                 isLoading={isExecuting}
-            />
-        );
-    }
-
-    // Multi-Step Transaction
-    if (isMultiStepTransaction) {
-        return (
-            <MultiStepTransactionDisplay
-                content={content}
-                multiStepState={multiStepState}
-                chainId={chainId}
-                textColor={textColor}
             />
         );
     }
