@@ -171,15 +171,17 @@ class SwapProcessor(BaseProcessor):
             
             # Normalize approval detection across protocols
             # 0x returns allowanceIssues, Uniswap uses needs_approval flag
-            # IMPORTANT: Always require approval for ERC20 tokens (safety check)
-            # because 0x's allowanceHolder endpoint may not always detect it correctly
-            is_native_token = original_token_in.upper() in ["ETH", "MATIC", "BNB", "AVAX"]
-            needs_approval = (
-                (not is_native_token) or  # Always require approval for non-native tokens
+            # IMPORTANT: For wrapped/ERC20 tokens, always require approval as a safety check
+            # because 0x's allowanceHolder endpoint may not always detect when approval is needed
+            # Check the NORMALIZED token_in (e.g., WETH, not ETH) since that's what we're actually swapping
+            is_wrapped_token = token_in.upper() in ["WETH", "WMATIC", "WBNB", "WAVAX", "USDC", "USDT", "DAI"]
+            protocol_says_approval_needed = (
                 quote.get("metadata", {}).get("allowanceIssues") or 
                 quote.get("needs_approval") or 
                 quote.get("requires_approval")
             )
+            # For ERC20/wrapped tokens, always require approval to be safe
+            needs_approval = is_wrapped_token or protocol_says_approval_needed
             
             if needs_approval:
                 return await self._create_approval_flow(
