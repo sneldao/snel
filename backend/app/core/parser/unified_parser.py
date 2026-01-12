@@ -149,11 +149,35 @@ class UnifiedParser:
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:setup|create)\s+(?:hourly|weekly|monthly|daily)?\s*(?:recurring\s+)?(?:payment|payments)\s+of\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
+                        r"(?:setup|create)\s+(?:(?:recurring|hourly|weekly|monthly|daily)\s+)+(?:payment|payments)\s+(?:of\s+)?(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
                         re.IGNORECASE
                     ),
-                    "description": "Recurring payment setup",
+                    "description": "Recurring payment setup (format: payment of X TOKEN)",
                     "priority": 4
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:setup|create)\s+(?:recurring\s+)?(?:hourly|weekly|monthly|daily)\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})\s+(?:payment|payments)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Recurring payment setup (format: X TOKEN payment)",
+                    "priority": 3
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:setup|create)\s+(?:recurring\s+)?(?:payment|payments)\s+(?:of\s+)?(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
+                        re.IGNORECASE
+                    ),
+                    "description": "Recurring payment setup (flexible format)",
+                    "priority": 2
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:setup|create)\s+(?:recurring\s+)?(?:hourly|weekly|monthly|daily)?\s*(?:payment|payments)",
+                        re.IGNORECASE
+                    ),
+                    "description": "General payment setup (no amount specified)",
+                    "priority": 8
                 },
                 {
                     "pattern": re.compile(
@@ -447,6 +471,8 @@ class UnifiedParser:
              return self._extract_research_details(match, pattern_info)
          elif command_type == CommandType.BRIDGE_TO_PRIVACY:
              return self._extract_bridge_to_privacy_details(match)
+         elif command_type == CommandType.X402_PAYMENT:
+             return self._extract_x402_payment_details(match)
          elif command_type == CommandType.CONTEXTUAL_QUESTION:
              # For contextual questions, no structured details needed
              return CommandDetails()
@@ -529,6 +555,30 @@ class UnifiedParser:
             token_in=TokenInfo(symbol=token) if token else None,
             destination_chain="Zcash",
             additional_params={"is_privacy": True}
+        )
+
+    def _extract_x402_payment_details(self, match: re.Match) -> CommandDetails:
+        """Extract X402 payment details."""
+        groups = match.groupdict()
+        
+        # Extract amount and token if present
+        amount = None
+        token = None
+        if "amount" in groups and groups["amount"]:
+            try:
+                amount = float(self._parse_decimal(groups["amount"]))
+            except (ValueError, KeyError):
+                pass
+        if "token" in groups and groups["token"]:
+            token = groups["token"].upper()
+        
+        return CommandDetails(
+            amount=amount,
+            token_in=TokenInfo(symbol=token) if token else None,
+            additional_params={
+                "payment_type": "x402_agentic",
+                "original_command": match.string
+            }
         )
 
     def _extract_transfer_details(self, match: re.Match) -> CommandDetails:

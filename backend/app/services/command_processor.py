@@ -136,6 +136,7 @@ Command types available:
 - BALANCE: Balance check requests
 - PORTFOLIO: Portfolio analysis requests
 - BRIDGE_TO_PRIVACY: Requests to bridge to Zcash or use privacy pools (questions about making funds private)
+- X402_PAYMENT: Recurring payments, agent payments, scheduled payments, batch settlements, or automation setup
 - GREETING: Only simple greetings like "hi", "hello", "hey", without other content
 - CONFIRMATION: Yes/no confirmations
 - UNKNOWN: Unclear or unrelated commands
@@ -144,6 +145,7 @@ Classification guidelines:
 - Questions about who you are, what you can do, privacy features → CONTEXTUAL_QUESTION (not GREETING)
 - Questions that require explanations or detailed responses → CONTEXTUAL_QUESTION
 - Questions about privacy, making funds private, private transactions → BRIDGE_TO_PRIVACY or CONTEXTUAL_QUESTION (about privacy capabilities)
+- Requests involving "recurring", "monthly", "weekly", "schedule", "pay agent", "settlement" → X402_PAYMENT
 - Only classify as GREETING if it's a simple hello with no other content
 - If the user is asking about something recently discussed → CONTEXTUAL_QUESTION
 - Cross-chain swaps with different tokens or chains → CROSS_CHAIN_SWAP
