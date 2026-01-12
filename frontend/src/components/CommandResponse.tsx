@@ -324,7 +324,9 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     });
 
                     toast({ title: "Approval Sent", description: "Waiting for confirmation...", status: "success", duration: 5000 });
-                    await publicClient.waitForTransactionReceipt({ hash });
+                    if (publicClient) {
+                        await publicClient.waitForTransactionReceipt({ hash });
+                    }
                 }
 
                 toast({ title: "Executing Payment...", description: "Agent is processing the transfer...", status: "info", duration: 3000 });
