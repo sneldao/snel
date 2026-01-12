@@ -184,7 +184,69 @@ export class PaymentHistoryService {
   }
 
   /**
-   * LEGACY: Fetch payment history (for backward compatibility)
+   * Record a MNEE transaction (transfer, payment action execution, etc.)
+   * This is the primary way transactions get added to history
+   */
+  async recordMNEETransaction(
+    walletAddress: string,
+    transaction: {
+      recipient: string;
+      amount: string;
+      token: string;
+      transactionHash: string;
+      chainId: number;
+      status: 'pending' | 'confirmed' | 'failed';
+      category?: string;
+    }
+  ): Promise<void> {
+    try {
+      const history = this.getHistoryFromStorage(walletAddress);
+      
+      const newEntry: PaymentHistoryItem = {
+        id: transaction.transactionHash,
+        timestamp: new Date().toISOString(),
+        amount: transaction.amount,
+        token: transaction.token,
+        recipient: transaction.recipient,
+        status: transaction.status,
+        chainId: transaction.chainId,
+        transactionHash: transaction.transactionHash,
+        category: transaction.category || 'MNEE Transaction',
+        explorerUrl: this.getExplorerUrl(transaction.chainId, transaction.transactionHash),
+      };
+      
+      // Add to beginning of history (most recent first)
+      history.unshift(newEntry);
+      
+      // Keep only last 100 transactions
+      if (history.length > 100) {
+        history.pop();
+      }
+      
+      localStorage.setItem(
+        `${this.STORAGE_HISTORY_KEY}_${walletAddress}`,
+        JSON.stringify(history)
+      );
+    } catch (error) {
+      console.error("Error recording MNEE transaction:", error);
+    }
+  }
+
+  private getExplorerUrl(chainId: number, txHash: string): string {
+    const explorers: Record<number, string> = {
+      1: "https://etherscan.io/tx/",
+      8453: "https://basescan.org/tx/",
+      137: "https://polygonscan.com/tx/",
+      42161: "https://arbiscan.io/tx/",
+      10: "https://optimistic.etherscan.io/tx/",
+    };
+    const baseUrl = explorers[chainId] || "https://etherscan.io/tx/";
+    return `${baseUrl}${txHash}`;
+  }
+
+  /**
+   * Fetch MNEE payment history
+   * Only shows MNEE transactions and payment actions
    */
   async getPaymentHistory(
     walletAddress: string,
@@ -194,7 +256,11 @@ export class PaymentHistoryService {
   ): Promise<PaymentHistoryItem[]> {
     try {
       const history = this.getHistoryFromStorage(walletAddress);
-      return history.slice(offset, offset + limit);
+      // Filter by chainId if provided
+      const filtered = chainId 
+        ? history.filter(h => h.chainId === chainId)
+        : history;
+      return filtered.slice(offset, offset + limit);
     } catch (error) {
       console.error("Error fetching payment history:", error);
       return [];

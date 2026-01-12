@@ -517,15 +517,18 @@ export default function MainApp(props: MainAppProps) {
             );
 
             const historyResponse: Response = {
-              content: {
-                message: `Here's your recent payment history:`,
-                type: "payment_history",
-                history: history,
-              },
-              timestamp: new Date().toISOString(),
-              isCommand: false,
-              status: "success" as const,
-              agentType: "payment" as const,
+             content: {
+               message: `Here's your MNEE payment history:`,
+               type: "payment_history",
+               history: history && history.length > 0 
+                 ? history 
+                 : [],
+               note: "This shows MNEE transactions and payment actions executed on this platform.",
+             },
+             timestamp: new Date().toISOString(),
+             isCommand: false,
+             status: "success" as const,
+             agentType: "payment" as const,
             };
 
             setResponses((prev) => [...prev, historyResponse]);
