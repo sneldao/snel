@@ -16,6 +16,9 @@ from app.models.token import TokenInfo
 
 logger = logging.getLogger(__name__)
 
+# Cache for ENS resolutions to avoid repeated lookups
+_ens_cache: Dict[str, Optional[str]] = {}
+
 
 class TokenQueryService:
     """
@@ -55,6 +58,73 @@ class TokenQueryService:
                     self.web3_instances[chain_id] = Web3(Web3.HTTPProvider(rpc_url))
                 except Exception as e:
                     logger.warning(f"Failed to initialize Web3 for chain {chain_id}: {e}")
+    
+    def resolve_address(self, address_or_ens: str, chain_id: int = 1) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Resolve an address or ENS name to a checksum address.
+        
+        Handles both Ethereum addresses and ENS names.
+        Uses Mainnet (chain_id=1) for ENS resolution.
+        
+        Args:
+            address_or_ens: Ethereum address (0x...) or ENS name (name.eth)
+            chain_id: Chain ID for context (ENS resolves on mainnet regardless)
+            
+        Returns:
+            Tuple of (resolved_address, display_name) where:
+            - resolved_address: Checksum Ethereum address or None if invalid
+            - display_name: Original ENS name if input was ENS, else the address
+        """
+        if not address_or_ens:
+            return None, None
+        
+        # Check if it's already a valid address
+        if Web3.is_address(address_or_ens):
+            try:
+                checksum_addr = Web3.to_checksum_address(address_or_ens)
+                return checksum_addr, checksum_addr
+            except Exception as e:
+                logger.warning(f"Failed to checksum address {address_or_ens}: {e}")
+                return None, None
+        
+        # Check if it looks like an ENS name (word.eth pattern)
+        if not address_or_ens.endswith('.eth'):
+            return None, None
+        
+        # Try to resolve ENS
+        if address_or_ens in _ens_cache:
+            cached_result = _ens_cache[address_or_ens]
+            if cached_result:
+                return cached_result, address_or_ens
+            return None, None
+        
+        try:
+            # Use mainnet (chain_id=1) for ENS resolution
+            w3 = self.web3_instances.get(1)
+            if not w3:
+                logger.warning("No Web3 instance for mainnet (chain 1) - cannot resolve ENS")
+                return None, None
+            
+            # Resolve ENS to address
+            resolved = w3.eth.name_to_address(address_or_ens)
+            if resolved and resolved != "0x0000000000000000000000000000000000000000":
+                checksum_addr = Web3.to_checksum_address(resolved)
+                _ens_cache[address_or_ens] = checksum_addr
+                logger.info(f"Resolved ENS {address_or_ens} to {checksum_addr}")
+                return checksum_addr, address_or_ens
+            
+            logger.warning(f"ENS name {address_or_ens} resolved to zero address")
+            _ens_cache[address_or_ens] = None
+            return None, None
+            
+        except Exception as e:
+            logger.warning(f"Failed to resolve ENS {address_or_ens}: {e}")
+            _ens_cache[address_or_ens] = None
+            return None, None
+    
+    def is_valid_address(self, address: str) -> bool:
+        """Check if a string is a valid Ethereum address (0x...)."""
+        return Web3.is_address(address)
     
     async def get_native_balance(self, wallet_address: str, chain_id: int) -> Optional[float]:
         """

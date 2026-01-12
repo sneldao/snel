@@ -125,35 +125,51 @@ class UnifiedParser:
             CommandType.X402_PAYMENT: [
                 {
                     "pattern": re.compile(
-                        r"(?:pay|send)\s+agent\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
+                        r"(?:setup|create|enable)\s+(?:automated?|monthly|weekly|daily)?\s*(?:portfolio\s+)?(?:rebalancing|rebalance)",
                         re.IGNORECASE
                     ),
-                    "description": "AI agent payment",
+                    "description": "Automated portfolio rebalancing setup",
                     "priority": 1
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:setup|create|schedule)\s+(?:recurring|automated?)\s+payment",
+                        r"(?:setup|create|enable)\s+(?:automated?|weekly|monthly)?\s*(?:yield\s+)?(?:farming|optimization)",
                         re.IGNORECASE
                     ),
-                    "description": "Recurring payment setup",
+                    "description": "Automated yield farming setup",
                     "priority": 2
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:process|execute|run)\s+(?:batch\s+)?settlement",
+                        r"(?:pay|spend|use)\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})\s+(?:to|for|when)",
                         re.IGNORECASE
                     ),
-                    "description": "Batch settlement",
+                    "description": "Conditional payment setup",
                     "priority": 3
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:ai|agent|agentic)\s+payment",
+                        r"(?:setup|create)\s+(?:weekly|monthly|daily)\s+(?:bridge|bridging)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Automated cross-chain bridging",
+                    "priority": 4
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:pay|send)\s+agent\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
+                        re.IGNORECASE
+                    ),
+                    "description": "AI agent payment (legacy)",
+                    "priority": 5
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:ai|agent|agentic)\s+(?:payment|automation)",
                         re.IGNORECASE
                     ),
                     "description": "General agentic payment",
-                    "priority": 4
+                    "priority": 6
                 }
             ],
             CommandType.BRIDGE_TO_PRIVACY: [

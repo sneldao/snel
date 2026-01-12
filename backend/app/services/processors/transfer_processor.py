@@ -73,24 +73,60 @@ class TransferProcessor(BaseProcessor):
             
             # Build ERC20 transfer transaction via TokenQueryService (consolidates Web3)
             from app.services.token_query_service import token_query_service
+            from app.models.token import token_registry
+            
+            # Lookup full token info from registry
+            full_token = token_registry.get_token(details.token_in.symbol)
+            if not full_token:
+                return self._create_guided_error_response(
+                    command_type=CommandType.TRANSFER,
+                    agent_type=AgentType.TRANSFER,
+                    error_context=ErrorContext.MISSING_TOKEN,
+                    additional_message=f"Token {details.token_in.symbol} not found in registry. Please use a supported token."
+                )
+            
+            token_address = full_token.get_address(unified_command.chain_id)
+            if not token_address:
+                chain_name = self._get_chain_name(unified_command.chain_id)
+                return self._create_guided_error_response(
+                    command_type=CommandType.TRANSFER,
+                    agent_type=AgentType.TRANSFER,
+                    error_context=ErrorContext.UNSUPPORTED_CHAIN,
+                    additional_message=f"Token {details.token_in.symbol} is not supported on {chain_name}. Please switch chains or use a different token."
+                )
+            
+            # Resolve destination address (handle both addresses and ENS names)
+            resolved_address, display_name = token_query_service.resolve_address(details.destination, unified_command.chain_id)
+            if not resolved_address:
+                return self._create_guided_error_response(
+                    command_type=CommandType.TRANSFER,
+                    agent_type=AgentType.TRANSFER,
+                    error_context=ErrorContext.INVALID_ADDRESS,
+                    additional_message=f"Could not resolve destination address '{details.destination}'. Please provide a valid Ethereum address or ENS name."
+                )
             
             # Validate transfer parameters
             is_valid, error_msg = token_query_service.validate_transfer(
                 wallet_address=unified_command.wallet_address,
-                token_address=details.token_in.get_address(unified_command.chain_id),
-                to_address=details.destination,
+                token_address=token_address,
+                to_address=resolved_address,
                 amount=Decimal(str(details.amount))
             )
             
             if not is_valid:
-                raise BusinessLogicError(error_msg)
+                return self._create_guided_error_response(
+                    command_type=CommandType.TRANSFER,
+                    agent_type=AgentType.TRANSFER,
+                    error_context=ErrorContext.GENERIC_FAILURE,
+                    additional_message=error_msg
+                )
             
             # Build transfer transaction
             result = token_query_service.build_transfer_transaction(
-                token_address=details.token_in.get_address(unified_command.chain_id),
-                to_address=details.destination,
+                token_address=token_address,
+                to_address=resolved_address,
                 amount=Decimal(str(details.amount)),
-                decimals=details.token_in.decimals,
+                decimals=full_token.decimals,
                 chain_id=unified_command.chain_id
             )
             
@@ -99,10 +135,11 @@ class TransferProcessor(BaseProcessor):
             
             # Format response content
             content = {
-                "message": f"Ready to transfer {amount_str} {details.token_in.symbol} to {details.destination}",
+                "message": f"Ready to transfer {amount_str} {details.token_in.symbol} to {display_name}",
                 "amount": amount_str,
                 "token": details.token_in.symbol,
-                "destination": details.destination,
+                "destination": display_name,
+                "destination_address": resolved_address,
                 "gas_cost_usd": result.get("gasCostUSD", ""),
                 "type": "transfer_ready",
                 "requires_transaction": True
@@ -124,12 +161,14 @@ class TransferProcessor(BaseProcessor):
                     "parsed_command": {
                         "amount": amount_str,
                         "token": details.token_in.symbol,
-                        "destination": details.destination,
+                        "destination": display_name,
+                        "resolved_address": resolved_address,
                         "command_type": "transfer"
                     },
-                    "resolved_address": details.destination,
+                    "resolved_address": resolved_address,
+                    "display_address": display_name,
                     "transaction_ready": True,
-                    "description": result.get("description", f"Transfer {amount_str} {details.token_in.symbol}"),
+                    "description": f"Transfer {amount_str} {details.token_in.symbol} to {display_name}",
                     "solver": result.get("solver", ""),
                     "protocol": result.get("protocol", {}),
                     "gas_optimized": gas_optimization_hint is not None

@@ -41,10 +41,11 @@ class X402Processor:
         except Exception as e:
             logger.error(f"X402 processing error: {e}")
             return UnifiedResponse(
-                success=False,
                 content=f"I encountered an issue with the x402 payment: {str(e)}",
                 agent_type=AgentType.ERROR,
-                command_type=CommandType.X402_PAYMENT
+                status="error",
+                error=str(e),
+                metadata={"command_type": CommandType.X402_PAYMENT}
             )
     
     def _suggest_cronos_network(self, unified_command: UnifiedCommand) -> UnifiedResponse:
@@ -53,7 +54,6 @@ class X402Processor:
         current_chain = chain_info.name if chain_info else f"Chain {unified_command.chain_id}"
         
         return UnifiedResponse(
-            success=True,
             content=f"X402 agentic payments are available on **Cronos EVM**! 🤖\n\n"
                    f"You're currently on {current_chain}. To use AI-triggered payments and automated settlements, "
                    f"please switch to:\n"
@@ -64,10 +64,11 @@ class X402Processor:
                    f"• `setup weekly payment of 100 USDC to supplier.eth`\n"
                    f"• `process batch settlement for contractors`",
             agent_type=AgentType.DEFAULT,
-            command_type=CommandType.X402_PAYMENT,
+            status="success",
             metadata={
                 "suggested_chains": [25, 338],
-                "current_chain": unified_command.chain_id
+                "current_chain": unified_command.chain_id,
+                "command_type": CommandType.X402_PAYMENT
             }
         )
     
@@ -79,7 +80,6 @@ class X402Processor:
             
             if not payment_details:
                 return UnifiedResponse(
-                    success=True,
                     content="I can help you set up automated DeFi services! 🤖\n\n"
                            "**Popular automations:**\n"
                            "• `setup monthly portfolio rebalancing with 50 USDC budget`\n"
@@ -87,8 +87,9 @@ class X402Processor:
                            "• `setup weekly 100 USDC for yield farming when APY > 15%`\n\n"
                            "These use **Cronos x402** to execute automatically when conditions are met.",
                     agent_type=AgentType.DEFAULT,
-                    command_type=CommandType.X402_PAYMENT,
-                    awaiting_confirmation=True
+                    status="success",
+                    awaiting_confirmation=True,
+                    metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
             # Detect automation type
@@ -97,13 +98,14 @@ class X402Processor:
             # Validate amount and token (currently only USDC supported)
             if payment_details['asset'].upper() != 'USDC':
                 return UnifiedResponse(
-                    success=False,
                     content=f"❌ **Token Not Supported**\n\n"
                            f"X402 currently only supports **USDC** payments on Cronos.\n"
                            f"You specified: {payment_details['asset']}\n\n"
                            f"Please try: `setup portfolio rebalancing with {payment_details['amount']} USDC budget`",
                     agent_type=AgentType.ERROR,
-                    command_type=CommandType.X402_PAYMENT
+                    status="error",
+                    error=f"Unsupported token: {payment_details['asset']}",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
             # Check if we have a private key for execution (in real app, this would come from wallet)
@@ -116,12 +118,13 @@ class X402Processor:
             
             if not is_healthy:
                 return UnifiedResponse(
-                    success=False,
                     content=f"❌ **X402 Service Unavailable**\n\n"
                            f"The Cronos x402 facilitator service is currently unavailable.\n"
                            f"Please try again later or check the service status.",
                     agent_type=AgentType.ERROR,
-                    command_type=CommandType.X402_PAYMENT
+                    status="error",
+                    error="X402 facilitator service unavailable",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
             # Create automation-specific response
@@ -132,10 +135,11 @@ class X402Processor:
         except Exception as e:
             logger.error(f"AI payment error: {e}")
             return UnifiedResponse(
-                success=False,
                 content=f"I had trouble processing that automation request: {str(e)}",
                 agent_type=AgentType.ERROR,
-                command_type=CommandType.X402_PAYMENT
+                status="error",
+                error=str(e),
+                metadata={"command_type": CommandType.X402_PAYMENT}
             )
     
     def _detect_automation_type(self, command: str) -> str:
@@ -165,7 +169,6 @@ class X402Processor:
         
         if automation_type == "portfolio_rebalancing":
             return UnifiedResponse(
-                success=True,
                 content=f"🎯 **Automated Portfolio Rebalancing Setup**\n\n"
                        f"**Service Details:**\n"
                        f"• Monthly Budget: {payment_details['amount']} {payment_details['asset']}\n"
@@ -179,7 +182,7 @@ class X402Processor:
                        f"4. You stay balanced without manual intervention\n\n"
                        f"**Ready to authorize?** This will enable autonomous portfolio management.",
                 agent_type=AgentType.TRANSFER,
-                command_type=CommandType.X402_PAYMENT,
+                status="success",
                 awaiting_confirmation=True,
                 metadata={
                     "automation_type": "portfolio_rebalancing",
@@ -189,13 +192,13 @@ class X402Processor:
                     "requires_signature": True,
                     "protocol": "x402",
                     "facilitator_healthy": is_healthy,
-                    "service_description": "Automated portfolio rebalancing when allocation drifts >5%"
+                    "service_description": "Automated portfolio rebalancing when allocation drifts >5%",
+                    "command_type": CommandType.X402_PAYMENT
                 }
             )
         
         elif automation_type == "yield_farming":
             return UnifiedResponse(
-                success=True,
                 content=f"🌾 **Automated Yield Farming Setup**\n\n"
                        f"**Service Details:**\n"
                        f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
@@ -209,7 +212,7 @@ class X402Processor:
                        f"4. You earn passive income without monitoring\n\n"
                        f"**Ready to start earning?** This enables autonomous yield optimization.",
                 agent_type=AgentType.TRANSFER,
-                command_type=CommandType.X402_PAYMENT,
+                status="success",
                 awaiting_confirmation=True,
                 metadata={
                     "automation_type": "yield_farming",
@@ -219,13 +222,13 @@ class X402Processor:
                     "requires_signature": True,
                     "protocol": "x402",
                     "facilitator_healthy": is_healthy,
-                    "service_description": "Automated yield farming when APY > 15%"
+                    "service_description": "Automated yield farming when APY > 15%",
+                    "command_type": CommandType.X402_PAYMENT
                 }
             )
         
         elif automation_type == "conditional_trading":
             return UnifiedResponse(
-                success=True,
                 content=f"📈 **Conditional Trading Setup**\n\n"
                        f"**Trade Details:**\n"
                        f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
@@ -239,7 +242,7 @@ class X402Processor:
                        f"4. You never miss opportunities while offline\n\n"
                        f"**Ready to set the trap?** This enables autonomous market execution.",
                 agent_type=AgentType.TRANSFER,
-                command_type=CommandType.X402_PAYMENT,
+                status="success",
                 awaiting_confirmation=True,
                 metadata={
                     "automation_type": "conditional_trading",
@@ -249,14 +252,14 @@ class X402Processor:
                     "requires_signature": True,
                     "protocol": "x402",
                     "facilitator_healthy": is_healthy,
-                    "service_description": "Conditional trade execution based on market triggers"
+                    "service_description": "Conditional trade execution based on market triggers",
+                    "command_type": CommandType.X402_PAYMENT
                 }
             )
         
         else:
             # General automation
             return UnifiedResponse(
-                success=True,
                 content=f"🤖 **DeFi Automation Service**\n\n"
                        f"**Service Details:**\n"
                        f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
@@ -269,7 +272,7 @@ class X402Processor:
                        f"• Cross-chain bridging on schedule\n\n"
                        f"**Ready to automate?** This enables autonomous DeFi management.",
                 agent_type=AgentType.TRANSFER,
-                command_type=CommandType.X402_PAYMENT,
+                status="success",
                 awaiting_confirmation=True,
                 metadata={
                     "automation_type": "general_automation",
@@ -279,7 +282,8 @@ class X402Processor:
                     "requires_signature": True,
                     "protocol": "x402",
                     "facilitator_healthy": is_healthy,
-                    "service_description": "General DeFi automation services"
+                    "service_description": "General DeFi automation services",
+                    "command_type": CommandType.X402_PAYMENT
                 }
             )
     
@@ -290,7 +294,6 @@ class X402Processor:
             
             if not payment_details:
                 return UnifiedResponse(
-                    success=True,
                     content="Let me help you set up a recurring payment! 🔄\n\n"
                            "I need these details:\n"
                            "• **Frequency**: daily, weekly, or monthly\n"
@@ -298,12 +301,12 @@ class X402Processor:
                            "• **Recipient**: e.g., 'supplier.eth'\n\n"
                            "Try: `setup weekly payment of 100 USDC to supplier.eth`",
                     agent_type=AgentType.DEFAULT,
-                    command_type=CommandType.X402_PAYMENT,
-                    awaiting_confirmation=True
+                    status="success",
+                    awaiting_confirmation=True,
+                    metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
             return UnifiedResponse(
-                success=True,
                 content=f"🔄 **Recurring Payment Setup**\n\n"
                        f"**Payment Schedule:**\n"
                        f"• Frequency: {payment_details['interval'].title()}\n"
@@ -314,7 +317,7 @@ class X402Processor:
                        f"allowing payments to execute automatically based on your schedule.\n\n"
                        f"*The recurring payment will be active once you sign the authorization.*",
                 agent_type=AgentType.TRANSFER,
-                command_type=CommandType.X402_PAYMENT,
+                status="success",
                 awaiting_confirmation=True,
                 metadata={
                     "payment_type": "recurring",
@@ -323,24 +326,25 @@ class X402Processor:
                     "asset": payment_details['asset'],
                     "recipient": payment_details['recipient'],
                     "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
-                    "requires_signature": True
+                    "requires_signature": True,
+                    "command_type": CommandType.X402_PAYMENT
                 }
             )
             
         except Exception as e:
             logger.error(f"Recurring payment error: {e}")
             return UnifiedResponse(
-                success=False,
                 content=f"I had trouble setting up that recurring payment: {str(e)}",
                 agent_type=AgentType.ERROR,
-                command_type=CommandType.X402_PAYMENT
+                status="error",
+                error=str(e),
+                metadata={"command_type": CommandType.X402_PAYMENT}
             )
     
     async def _handle_settlement(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Handle batch settlement operations."""
         try:
             return UnifiedResponse(
-                success=True,
                 content=f"📦 **Batch Settlement Processing**\n\n"
                        f"I can help you process multiple payments in a single transaction using "
                        f"Cronos x402 batch settlement capabilities.\n\n"
@@ -352,21 +356,23 @@ class X402Processor:
                        f"simplify multi-recipient payments.\n\n"
                        f"*Would you like me to help you set up a specific batch payment?*",
                 agent_type=AgentType.DEFAULT,
-                command_type=CommandType.X402_PAYMENT,
+                status="success",
                 awaiting_confirmation=True,
                 metadata={
                     "payment_type": "batch_settlement",
-                    "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet"
+                    "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+                    "command_type": CommandType.X402_PAYMENT
                 }
             )
             
         except Exception as e:
             logger.error(f"Settlement error: {e}")
             return UnifiedResponse(
-                success=False,
                 content=f"I had trouble with that batch settlement request: {str(e)}",
                 agent_type=AgentType.ERROR,
-                command_type=CommandType.X402_PAYMENT
+                status="error",
+                error=str(e),
+                metadata={"command_type": CommandType.X402_PAYMENT}
             )
     
     async def _handle_general_x402_info(self, unified_command: UnifiedCommand) -> UnifiedResponse:
