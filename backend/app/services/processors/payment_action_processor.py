@@ -10,6 +10,15 @@ from app.domains.payment_actions.models import (
 )
 from app.domains.payment_actions.service import get_payment_action_service
 from app.domains.payment_actions.executor import get_payment_executor
+from app.services.utils.command_extraction import (
+    extract_address,
+    extract_and_resolve_address,
+    extract_amount,
+    extract_token,
+    extract_chain,
+)
+from app.services.token_query_service import token_query_service
+from app.models.token import token_registry
 
 from .base_processor import BaseProcessor
 
@@ -177,11 +186,11 @@ class PaymentActionProcessor(BaseProcessor):
         current_step = flow["step"]
         data = flow["data"]
         
-        # Try to extract payment details from user input
-        recipient = self._extract_recipient(command.command)
-        amount = self._extract_amount(command.command)
-        token = self._extract_token(command.command)
-        chain_id = self._extract_chain(command.command)
+        # Try to extract payment details from user input using shared extraction utilities
+        recipient = extract_address(command.command)
+        amount = extract_amount(command.command)
+        token = extract_token(command.command)
+        chain_id = extract_chain(command.command)
         
         # Update flow data with any extracted info
         if recipient:
@@ -207,13 +216,39 @@ class PaymentActionProcessor(BaseProcessor):
         if recipient or amount or token:
             # Advance flow
             if current_step == "recipient" and recipient:
+                # Resolve recipient address to show user what they're sending to
+                resolved_addr, display_name = token_query_service.resolve_address(recipient, data.get('chain_id', 8453))
+                
+                if not resolved_addr:
+                    # Failed to resolve - show error
+                    return UnifiedResponse(
+                        content={
+                            "message": f"I couldn't resolve '{recipient}'. Please provide a valid Ethereum address or ENS name.",
+                            "step": "recipient",
+                            "prompt": "Who are you sending to? (Wallet address or ENS name)",
+                            "error": f"Could not resolve {recipient}",
+                        },
+                        agent_type=AgentType.DEFAULT,
+                        status="success",
+                        awaiting_confirmation=True,
+                        metadata={
+                            "flow": "guided_send",
+                            "step_number": 1,
+                            "total_steps": 4,
+                        },
+                    )
+                
+                # Save resolved address
+                data["recipient"] = resolved_addr
+                data["recipient_display"] = display_name
+                
                 flow["step"] = "amount"
                 return UnifiedResponse(
                     content={
-                        "message": f"Great! Sending to {recipient}.",
+                        "message": f"Great! Sending to {display_name}.",
                         "step": "amount",
                         "prompt": f"How much do you want to send? (e.g., '100 USDC' or just '100' if using {data.get('token', 'USDC')})",
-                        "info": f"Recipient: {recipient}",
+                        "info": f"Recipient: {display_name} ({resolved_addr})",
                     },
                     agent_type=AgentType.DEFAULT,
                     status="success",
@@ -222,6 +257,7 @@ class PaymentActionProcessor(BaseProcessor):
                         "flow": "guided_send",
                         "step_number": 2,
                         "total_steps": 4,
+                        "resolved_address": resolved_addr,
                     },
                 )
             
@@ -234,7 +270,7 @@ class PaymentActionProcessor(BaseProcessor):
                             "message": f"Perfect! {amount}",
                             "step": "token",
                             "prompt": "Which token? (e.g., 'USDC', 'ETH', 'USDT')",
-                            "info": f"Recipient: {data.get('recipient')}, Amount: {amount}",
+                            "info": f"Recipient: {data.get('recipient_display', data.get('recipient'))}, Amount: {amount}",
                         },
                         agent_type=AgentType.DEFAULT,
                         status="success",
@@ -246,13 +282,56 @@ class PaymentActionProcessor(BaseProcessor):
                         },
                     )
                 elif token:
+                    # Validate token is in registry
+                    token_info = token_registry.get_token(token)
+                    if not token_info:
+                        return UnifiedResponse(
+                            content={
+                                "message": f"Token '{token}' not found in our registry.",
+                                "step": "token",
+                                "prompt": "Which token? (e.g., 'USDC', 'ETH', 'USDT')",
+                                "error": f"Unknown token: {token}",
+                            },
+                            agent_type=AgentType.DEFAULT,
+                            status="success",
+                            awaiting_confirmation=True,
+                            metadata={
+                                "flow": "guided_send",
+                                "step_number": 3,
+                                "total_steps": 4,
+                            },
+                        )
+                    
+                    # Validate token is on current chain
+                    chain_id = data.get('chain_id', 8453)
+                    if not token_info.is_supported_on_chain(chain_id):
+                        chain_name = {8453: "Base", 1: "Ethereum", 137: "Polygon", 42161: "Arbitrum"}.get(chain_id, f"chain {chain_id}")
+                        return UnifiedResponse(
+                            content={
+                                "message": f"Token '{token}' is not available on {chain_name}.",
+                                "step": "token",
+                                "prompt": "Which token? (e.g., 'USDC', 'ETH', 'USDT')",
+                                "error": f"{token} not supported on {chain_name}",
+                            },
+                            agent_type=AgentType.DEFAULT,
+                            status="success",
+                            awaiting_confirmation=True,
+                            metadata={
+                                "flow": "guided_send",
+                                "step_number": 3,
+                                "total_steps": 4,
+                            },
+                        )
+                    
                     flow["step"] = "confirm"
+                    data["token"] = token
+                    
                     # We have enough to confirm
                     return UnifiedResponse(
                         content={
                             "message": "Ready to send!",
                             "step": "confirm",
-                            "prompt": f"Confirm: Send {data.get('amount', amount)} {data.get('token', token)} to {data.get('recipient')}?",
+                            "prompt": f"Confirm: Send {data.get('amount', amount)} {token} to {data.get('recipient_display', data.get('recipient'))}?",
                             "info": f"Say 'yes', 'confirm', or 'send' to proceed",
                         },
                         agent_type=AgentType.DEFAULT,
@@ -262,6 +341,8 @@ class PaymentActionProcessor(BaseProcessor):
                             "flow": "guided_send",
                             "step_number": 4,
                             "total_steps": 4,
+                            "resolved_address": data.get('recipient'),
+                            "resolved_token": token_info.symbol,
                         },
                     )
         
@@ -306,61 +387,6 @@ class PaymentActionProcessor(BaseProcessor):
                 "total_steps": 4,
             },
         )
-    
-    def _extract_recipient(self, text: str) -> Optional[str]:
-        """Extract recipient address or ENS name from text."""
-        import re
-        # Check for Ethereum address (0x followed by 40 hex chars)
-        eth_match = re.search(r'0x[a-fA-F0-9]{40}', text)
-        if eth_match:
-            return eth_match.group(0)
-        
-        # Check for ENS name (word.eth)
-        ens_match = re.search(r'(\w+\.eth)', text, re.IGNORECASE)
-        if ens_match:
-            return ens_match.group(1)
-        
-        return None
-    
-    def _extract_amount(self, text: str) -> Optional[str]:
-        """Extract amount from text."""
-        import re
-        # Look for number patterns: "100", "100.5", "0.01"
-        amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:USDC|USDT|ETH|BTC|DAI|MNEE)?', text, re.IGNORECASE)
-        if amount_match:
-            return amount_match.group(1)
-        return None
-    
-    def _extract_token(self, text: str) -> Optional[str]:
-        """Extract token symbol from text."""
-        import re
-        # Look for common token symbols
-        tokens = ['USDC', 'USDT', 'ETH', 'BTC', 'DAI', 'MNEE', 'WETH', 'MATIC', 'ARB', 'OP']
-        for token in tokens:
-            if token.lower() in text.lower():
-                return token
-        return None
-    
-    def _extract_chain(self, text: str) -> Optional[int]:
-        """Extract chain from text."""
-        text_lower = text.lower()
-        chains = {
-            'ethereum': 1,
-            'polygon': 137,
-            'arbitrum': 42161,
-            'optimism': 10,
-            'base': 8453,
-            'bsc': 56,
-            'binance': 56,
-            'avalanche': 43114,
-            'cronos': 25,
-        }
-        
-        for chain_name, chain_id in chains.items():
-            if chain_name in text_lower:
-                return chain_id
-        
-        return None
     
     async def _handle_create(
         self,
