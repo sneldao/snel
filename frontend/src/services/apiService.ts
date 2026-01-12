@@ -373,6 +373,42 @@ export class ApiService {
   }
 
   // Add these methods to support the PortfolioService
+  async get(endpoint: string) {
+    logger.api("GET", `${this.apiUrl}${endpoint}`);
+
+    try {
+      const response = await fetch(`${this.apiUrl}${endpoint}`, {
+        method: "GET",
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error("API Error Response:", errorText);
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.detail) {
+            throw new Error(errorJson.detail);
+          }
+        } catch (parseError) {
+          // If parsing fails, use the original error
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      logger.error("API request failed:", {
+        endpoint,
+        error,
+      });
+      throw error;
+    }
+  }
+
   async post(endpoint: string, data: Record<string, unknown>) {
     logger.api("POST", `${this.apiUrl}${endpoint}`, data);
 
