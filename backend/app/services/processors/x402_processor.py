@@ -210,6 +210,10 @@ class X402Processor:
     ) -> UnifiedResponse:
         """Create automation-specific response."""
         
+        # Override network for MNEE
+        if payment_details.get('asset', '').upper() == 'MNEE':
+            network = "ethereum-mainnet"
+        
         if automation_type == "portfolio_rebalancing":
             metadata = {
                 "automation_type": "portfolio_rebalancing",
