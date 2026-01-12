@@ -98,8 +98,8 @@ out/
 .qodo
 .vercel
 
-# Ignore research directory
-research/
+# Ignore research directory (only at root level, not service code)
+/research/
 
 # Additional .env protection
 backend/.env
