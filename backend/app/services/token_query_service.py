@@ -314,6 +314,9 @@ class TokenQueryService:
             # Convert amount to token units (wei)
             amount_wei = int(amount * Decimal(10 ** decimals))
             
+            # DEBUG: Log the scaling
+            logger.info(f"DEBUG build_transfer: amount={amount}, decimals={decimals}, amount_wei={amount_wei}")
+            
             # Encode transfer(address to, uint256 amount)
             encoded_params = abi_encode(
                 ['address', 'uint256'],
