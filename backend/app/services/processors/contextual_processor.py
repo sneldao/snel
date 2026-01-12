@@ -256,17 +256,17 @@ X402 AGENTIC PAYMENT FEATURES YOU SUPPORT:
             # Check if this is a question about the assistant itself
             cmd_lower = unified_command.command.lower().strip()
             about_assistant_patterns = [
-               "who are you", "what are you", "what can you do", "about you",
-               "about snel", "your purpose", "what is snel", "describe yourself",
-               "tell me about you", "capabilities", "features", "help me",
-               "what do you know", "what's your name", "introduce yourself",
-               "private", "privacy", "private transaction", "stuff in private",
-               "privacy features", "privacy feature", "enable", "support",
-               "what privacy", "how private", "make private", "keep private",
-               "anonymous", "anonymity", "confidential", "secure transaction",
-               "mnee", "stablecoin", "commerce payment", "programmatic money",
-               "x402", "agentic payment", "ai payment", "cronos", "automated payment",
-               "agent payment", "recurring payment", "batch settlement"
+                "who are you", "what are you", "what can you do", "about you",
+                "about snel", "your purpose", "what is snel", "describe yourself",
+                "tell me about you", "capabilities", "features", "help me",
+                "what do you know", "what's your name", "introduce yourself",
+                "private", "privacy", "private transaction", "stuff in private",
+                "privacy features", "privacy feature", "enable", "support",
+                "what privacy", "how private", "make private", "keep private",
+                "anonymous", "anonymity", "confidential", "secure transaction",
+                "mnee", "stablecoin", "commerce payment", "programmatic money",
+                "x402", "agentic payment", "ai payment", "automated payment",
+                "agent payment", "recurring payment", "batch settlement"
             ]
             
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
