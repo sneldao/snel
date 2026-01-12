@@ -576,6 +576,8 @@ class X402Processor:
         asset = amount_match.group(2)
         
         recipient = self._extract_recipient_from_command(command)
+        if not recipient:
+            return None
         
         return {
             "amount": amount,
@@ -583,8 +585,8 @@ class X402Processor:
             "recipient": recipient
         }
 
-    def _extract_recipient_from_command(self, command: str) -> str:
-        """Extract recipient from command with proper address resolution."""
+    def _extract_recipient_from_command(self, command: str) -> Optional[str]:
+        """Extract recipient from command with real address resolution."""
         import re
         
         # Extract recipient with proper address resolution
@@ -593,23 +595,17 @@ class X402Processor:
             r'pay\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
             r'to\s+([a-zA-Z0-9._-]+\.eth)',  # ENS name
             r'pay\s+([a-zA-Z0-9._-]+\.eth)',  # ENS name
-            r'to\s+(agent)',  # Agent keyword
-            r'pay\s+(agent)'  # Agent keyword
         ]
         
-        recipient = None
         for pattern in recipient_patterns:
             match = re.search(pattern, command.lower())
             if match:
                 captured = match.group(1)
                 recipient = self._resolve_recipient_address(captured)
-                break
+                if recipient:
+                    return recipient
         
-        if not recipient:
-            # Default to a treasury/agent address for demo purposes
-            recipient = "0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e"  # Example treasury address
-        
-        return recipient
+        return None
     
     def _parse_recurring_command(self, command: str) -> Optional[Dict[str, str]]:
         """Parse recurring payment details from natural language command."""
@@ -632,25 +628,9 @@ class X402Processor:
         elif "monthly" in command.lower():
             interval = "monthly"
         
-        # Extract recipient with proper address resolution
-        recipient_patterns = [
-            r'to\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
-            r'payment.*to\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
-            r'to\s+([a-zA-Z0-9._-]+\.eth)',  # ENS name
-            r'payment.*to\s+([a-zA-Z0-9._-]+\.eth)'  # ENS name
-        ]
-        
-        recipient = None
-        for pattern in recipient_patterns:
-            match = re.search(pattern, command.lower())
-            if match:
-                captured = match.group(1)
-                recipient = self._resolve_recipient_address(captured)
-                break
-        
+        recipient = self._extract_recipient_from_command(command)
         if not recipient:
-            # Default to a treasury/merchant address for demo purposes
-            recipient = "0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e"  # Example merchant address
+            return None
         
         return {
             "amount": amount,
@@ -659,7 +639,7 @@ class X402Processor:
             "interval": interval
         }
 
-    def _resolve_recipient_address(self, recipient_input: str) -> str:
+    def _resolve_recipient_address(self, recipient_input: str) -> Optional[str]:
         """
         Resolve recipient input to a valid Ethereum address.
         
@@ -667,22 +647,11 @@ class X402Processor:
             recipient_input: Can be an Ethereum address, ENS name, or keyword
             
         Returns:
-            Valid Ethereum address
+            Valid Ethereum address or None if resolution fails
         """
         # If it's already a valid Ethereum address, return as-is
         if recipient_input.startswith('0x') and len(recipient_input) == 42:
             return recipient_input
-        
-        # Handle common keywords
-        keyword_addresses = {
-            'agent': '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e',  # Agent treasury
-            'treasury': '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e',  # Treasury address
-            'merchant': '0x8ba1f109551bD432803012645Hac136c22C57B',  # Example merchant
-            'supplier': '0x1234567890123456789012345678901234567890',  # Example supplier
-        }
-        
-        if recipient_input.lower() in keyword_addresses:
-            return keyword_addresses[recipient_input.lower()]
         
         # Use centralized TokenQueryService for ENS resolution
         from app.services.token_query_service import token_query_service
@@ -691,6 +660,4 @@ class X402Processor:
         if resolved_address:
             return resolved_address
             
-        logger.warning(f"Could not resolve recipient {recipient_input}, defaulting to treasury")
-        # Default fallback only if resolution fails completely
-        return '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e'
+        return None
