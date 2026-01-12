@@ -69,7 +69,8 @@ class TransferProcessor(BaseProcessor):
             # Format amount to avoid scientific notation
             amount_str = self._format_amount(details.amount)
             
-            logger.info(f"Attempting transfer: {amount_str} {details.token_in.symbol} to {details.destination}")
+            # DEBUG: Log raw parsed values
+            logger.info(f"DEBUG transfer: raw_amount={details.amount}, formatted={amount_str}, token={details.token_in.symbol}, dest={details.destination}")
             
             # Build ERC20 transfer transaction via TokenQueryService (consolidates Web3)
             from app.services.token_query_service import token_query_service
@@ -172,6 +173,9 @@ class TransferProcessor(BaseProcessor):
             
             # Format transaction data
             transaction_data = self._create_transaction_data(result, unified_command.chain_id)
+            
+            # DEBUG: Log response before sending
+            logger.info(f"DEBUG response amount_str={amount_str}, token={details.token_in.symbol}, full_token.decimals={full_token.decimals}")
             
             return self._create_success_response(
                 content=content,
