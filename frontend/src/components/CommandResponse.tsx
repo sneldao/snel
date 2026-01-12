@@ -270,6 +270,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
 
         const metadata = (content as any).metadata || {};
         const amount = parseFloat(metadata.budget || metadata.amount || '0');
+        const approvalAmount = metadata.approval_amount ? parseFloat(metadata.approval_amount) : amount;
         const asset = metadata.asset || 'USDC';
         const network = metadata.network || 'cronos-testnet';
         const recipient = metadata.recipient || metadata.payTo;
@@ -280,13 +281,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
 
         try {
             // Step 1: Prepare payment
+            // For recurring MNEE, we request approval for the ANNUAL amount (cap), not single payment
             toast({ title: "Preparing Payment...", status: "info", duration: 2000 });
 
             const preparation = await unifiedPaymentService.preparePayment({
                 network,
                 user_address: address,
                 recipient_address: recipient,
-                amount,
+                amount: approvalAmount, // Use annual cap for approval check
                 token_symbol: asset
             });
 
@@ -301,11 +303,17 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
 
                 toast({ title: "Submitting Payment...", status: "info", duration: 2000 });
 
+                // Ensure we submit with original single payment amount metadata
+                const submitMetadata = {
+                    ...preparation.metadata,
+                    amount: amount // Force single payment amount for execution
+                };
+
                 await unifiedPaymentService.submitPayment(preparation.protocol, {
                     signature,
                     user_address: address,
                     message: preparation.typed_data.message,
-                    metadata: preparation.metadata
+                    metadata: submitMetadata
                 });
 
                 toast({ title: "Automation Authorized!", description: "Payment executed successfully.", status: "success" });
@@ -313,13 +321,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             } else if (preparation.action_type === 'approve_allowance') {
                 // MNEE Flow: Approve allowance if needed
                 if (!preparation.allowance_sufficient) {
-                    toast({ title: "Approval Required", description: "Please sign the approval transaction.", status: "warning", duration: 5000 });
+                    toast({ title: "Approval Required", description: `Please approve the 1-year budget cap (${approvalAmount} ${asset}).`, status: "warning", duration: 5000 });
 
                     const hash = await walletClient.writeContract({
                         address: preparation.token_address! as `0x${string}`,
                         abi: parseAbi(['function approve(address spender, uint256 amount) returns (bool)']),
                         functionName: 'approve',
-                        args: [preparation.relayer_address! as `0x${string}`, BigInt(preparation.amount_atomic!)],
+                        args: [preparation.relayer_address! as `0x${string}`, BigInt(preparation.amount_atomic!)], // This uses the annual amount
                         chain: undefined // Let wallet decide
                     });
 
@@ -329,13 +337,19 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     }
                 }
 
-                toast({ title: "Executing Payment...", description: "Agent is processing the transfer...", status: "info", duration: 3000 });
+                toast({ title: "Executing Payment...", description: "Agent is processing the first transfer...", status: "info", duration: 3000 });
+
+                // Submit execution for SINGLE payment amount
+                const submitMetadata = {
+                    ...preparation.metadata,
+                    amount: amount // Override to single payment amount
+                };
 
                 await unifiedPaymentService.submitPayment(preparation.protocol, {
-                    metadata: preparation.metadata
+                    metadata: submitMetadata
                 });
 
-                toast({ title: "Payment Executed!", description: "Transfer completed via Relayer.", status: "success" });
+                toast({ title: "Payment Executed!", description: "First transfer completed via Relayer.", status: "success" });
 
             } else if (preparation.action_type === 'ready_to_execute') {
                 // Already ready - just execute
