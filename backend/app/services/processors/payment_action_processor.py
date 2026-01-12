@@ -193,6 +193,11 @@ class PaymentActionProcessor(BaseProcessor):
         token = extract_token(command.command)
         chain_id = extract_chain(command.command)
         
+        # MNEE routing: If user specifies MNEE, force Ethereum (chain 1)
+        if token and token.upper() == "MNEE":
+            logger.info(f"MNEE specified in payment action, forcing Ethereum (chain 1)")
+            chain_id = 1
+        
         # Update flow data with any extracted info
         if recipient:
             data["recipient"] = recipient
@@ -306,7 +311,32 @@ class PaymentActionProcessor(BaseProcessor):
                     # Validate token is on current chain
                     chain_id = data.get('chain_id', 8453)
                     if not token_info.is_supported_on_chain(chain_id):
-                        chain_name = {8453: "Base", 1: "Ethereum", 137: "Polygon", 42161: "Arbitrum"}.get(chain_id, f"chain {chain_id}")
+                        chain_name = {8453: "Base", 1: "Ethereum", 137: "Polygon", 42161: "Arbitrum", 25: "Cronos", 338: "Cronos"}.get(chain_id, f"chain {chain_id}")
+                        
+                        # Special handling: MNEE only on Ethereum, suggest Ethereum or USDC
+                        if token.upper() == "MNEE" and chain_id not in [1]:
+                            return UnifiedResponse(
+                                content={
+                                    "message": f"MNEE is only available on Ethereum Mainnet. Would you like to:",
+                                    "step": "token",
+                                    "options": [
+                                        "Switch to Ethereum and use MNEE",
+                                        f"Use USDC on {chain_name} instead"
+                                    ],
+                                    "prompt": "Which option? (type 'ethereum' or 'usdc')",
+                                    "info": f"Recipient: {data.get('recipient_display', data.get('recipient'))}, Amount: {amount}",
+                                },
+                                agent_type=AgentType.DEFAULT,
+                                status="success",
+                                awaiting_confirmation=True,
+                                metadata={
+                                    "flow": "guided_send",
+                                    "step_number": 3,
+                                    "total_steps": 4,
+                                    "token_mismatch": "mnee_not_on_chain"
+                                },
+                            )
+                        
                         return UnifiedResponse(
                             content={
                                 "message": f"Token '{token}' is not available on {chain_name}.",

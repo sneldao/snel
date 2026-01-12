@@ -38,6 +38,12 @@ class TransferProcessor(BaseProcessor):
             # Extract transfer details
             details = unified_command.details
             
+            # MNEE routing: If user specifies MNEE but not on Ethereum, redirect to Ethereum
+            if details and details.token_in and details.token_in.symbol.upper() == "MNEE" and unified_command.chain_id != 1:
+                logger.info(f"MNEE specified on chain {unified_command.chain_id}, redirecting to Ethereum (chain 1)")
+                # Update the unified_command to use Ethereum
+                unified_command.chain_id = 1
+            
             # Null-safety check: details must exist
             if details is None:
                 return self._create_guided_error_response(
