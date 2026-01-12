@@ -290,13 +290,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 token_symbol: asset
             });
 
-            if (preparation.action_type === 'sign_typed_data') {
+            if (preparation.action_type === 'sign_typed_data' && preparation.typed_data) {
                 // X402 Flow: Sign EIP-712 data
                 const signature = await walletClient.signTypedData({
-                    domain: preparation.domain!,
-                    types: preparation.types!,
-                    primaryType: preparation.primaryType!,
-                    message: preparation.message!
+                    domain: preparation.typed_data.domain,
+                    types: preparation.typed_data.types,
+                    primaryType: preparation.typed_data.primaryType,
+                    message: preparation.typed_data.message
                 });
 
                 toast({ title: "Submitting Payment...", status: "info", duration: 2000 });
@@ -304,7 +304,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 await unifiedPaymentService.submitPayment(preparation.protocol, {
                     signature,
                     user_address: address,
-                    message: preparation.message,
+                    message: preparation.typed_data.message,
                     metadata: preparation.metadata
                 });
 

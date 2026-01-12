@@ -38,10 +38,12 @@ export interface PaymentPreparationResult {
     protocol: PaymentProtocol;
 
     // For X402 (EIP-712 signing)
-    domain?: any;
-    types?: any;
-    primaryType?: string;
-    message?: any;
+    typed_data?: {
+        domain: any;
+        types: any;
+        primaryType: string;
+        message: any;
+    };
 
     // For MNEE (Allowance approval)
     relayer_address?: string;
