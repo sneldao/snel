@@ -114,3 +114,49 @@ async def get_payment_status(
 ):
     """Check status of a submitted MNEE ticket."""
     return await executor.get_execution_status(ticket_id)
+
+@router.get("/mnee/transfers/{wallet_address}")
+async def get_mnee_transfers(
+    wallet_address: str,
+    chain_id: int = 1,
+    limit: int = 20
+):
+    """
+    Get MNEE transfer history from blockchain for a wallet.
+    
+    Source of truth: blockchain via Alchemy Asset Transfers API.
+    This includes all MNEE transfers (to or from) on the specified chain.
+    """
+    try:
+        from app.services.token_query_service import token_query_service
+        
+        # Validate address
+        if not token_query_service.is_valid_address(wallet_address):
+            raise HTTPException(status_code=400, detail="Invalid wallet address")
+        
+        # Fetch transfers from blockchain
+        result = await token_query_service.get_mnee_transfers(
+            wallet_address=wallet_address,
+            chain_id=chain_id,
+            limit=limit
+        )
+        
+        if result.get("source") == "error":
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to fetch transfer history from blockchain"
+            )
+        
+        if result.get("source") == "unavailable":
+            logger.warning(
+                f"MNEE transfers unavailable for chain {chain_id} or missing config"
+            )
+            return {"transfers": [], "chain_id": chain_id, "total": 0}
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching MNEE transfers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

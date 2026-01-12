@@ -202,20 +202,6 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             const txService = new TransactionService(walletClient as any, publicClient as any, chainId);
             const result = await txService.executeTransaction(transactionData);
 
-            // Record MNEE transaction in payment history
-            if (address && result?.hash) {
-              const paymentHistoryService = new (await import('../services/paymentHistoryService').then(m => m.PaymentHistoryService))();
-              await paymentHistoryService.recordMNEETransaction(address, {
-                recipient: transactionData.to || '',
-                amount: (content as any)?.details?.amount || (content as any)?.amount || '0',
-                token: (content as any)?.details?.token || (content as any)?.token || 'MNEE',
-                transactionHash: result.hash as string,
-                chainId: chainId,
-                status: 'pending',
-                category: typeChecks.isPaymentSignature ? 'Payment Action' : 'Transfer',
-              });
-            }
-
             // Handle Payment Result Submission
              if (typeChecks.isPaymentSignature && address && content && typeof content === 'object') {
                   const actionId = (content as any).action_id;

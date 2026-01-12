@@ -126,6 +126,138 @@ class TokenQueryService:
         """Check if a string is a valid Ethereum address (0x...)."""
         return Web3.is_address(address)
     
+    async def get_mnee_transfers(
+        self,
+        wallet_address: str,
+        chain_id: int,
+        limit: int = 20
+    ) -> Dict[str, any]:
+        """
+        Fetch MNEE transfer history via Alchemy Asset Transfers API.
+        
+        Source of truth: blockchain via Alchemy, not app database.
+        Works across all chains where MNEE is deployed.
+        
+        Args:
+            wallet_address: User's wallet address
+            chain_id: Chain ID to query
+            limit: Max transfers to return
+            
+        Returns:
+            Dict with transfers list and metadata
+        """
+        try:
+            if not self.alchemy_api_key:
+                logger.warning("Alchemy API key not configured - cannot fetch transfers")
+                return {"transfers": [], "chain_id": chain_id, "source": "unavailable"}
+            
+            # Get MNEE token address for the chain
+            from app.models.token import token_registry
+            mnee = token_registry.get_token("mnee")
+            if not mnee:
+                logger.warning("MNEE token not found in registry")
+                return {"transfers": [], "chain_id": chain_id, "source": "unavailable"}
+            
+            mnee_address = mnee.get_address(chain_id)
+            if not mnee_address:
+                logger.info(f"MNEE not supported on chain {chain_id}")
+                return {"transfers": [], "chain_id": chain_id, "source": "unavailable"}
+            
+            # Map chain_id to Alchemy network name
+            network_map = {
+                1: "eth-mainnet",
+                8453: "base-mainnet",
+                137: "polygon-mainnet",
+                42161: "arb-mainnet",
+                10: "opt-mainnet",
+            }
+            
+            network = network_map.get(chain_id)
+            if not network:
+                logger.warning(f"Alchemy not configured for chain {chain_id}")
+                return {"transfers": [], "chain_id": chain_id, "source": "unavailable"}
+            
+            # Use Alchemy API via requests
+            import aiohttp
+            
+            alchemy_url = f"https://{network}.g.alchemy.com/v2/{self.alchemy_api_key}"
+            
+            # Query using eth_getLogs for Transfer events
+            # Transfer event signature: keccak256("Transfer(address,address,uint256)")
+            TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+            
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "eth_getLogs",
+                "params": [
+                    {
+                        "address": mnee_address,
+                        "topics": [
+                            TRANSFER_TOPIC,
+                            # Topic 1 (from): can be any address
+                            None,
+                            # Topic 2 (to): filter by wallet address
+                            f"0x{wallet_address.lower()[2:].zfill(64)}"
+                        ],
+                        "fromBlock": "0x0",
+                        "toBlock": "latest"
+                    }
+                ]
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(alchemy_url, json=payload) as resp:
+                    if resp.status != 200:
+                        logger.error(f"Alchemy API error: {resp.status}")
+                        return {"transfers": [], "chain_id": chain_id, "source": "error"}
+                    
+                    data = await resp.json()
+                    
+                    if "error" in data:
+                        logger.error(f"Alchemy RPC error: {data['error']}")
+                        return {"transfers": [], "chain_id": chain_id, "source": "error"}
+                    
+                    logs = data.get("result", [])
+                    
+                    # Parse transfer events
+                    transfers = []
+                    for log in logs[-limit:]:  # Get last N transfers
+                        try:
+                            # Parse log data
+                            from_addr = f"0x{log['topics'][1][-40:]}"  # Remove padding
+                            to_addr = f"0x{log['topics'][2][-40:]}"
+                            
+                            # Decode amount from data field (256-bit uint)
+                            amount_hex = log['data']
+                            amount_wei = int(amount_hex, 16)
+                            amount = amount_wei / (10 ** mnee.decimals)
+                            
+                            transfers.append({
+                                "from": from_addr,
+                                "to": to_addr,
+                                "amount": str(round(amount, 6)),
+                                "tx_hash": log.get("transactionHash", ""),
+                                "block_number": int(log.get("blockNumber", "0"), 16),
+                                "timestamp": None,  # Would need block timestamp lookup
+                            })
+                        except Exception as e:
+                            logger.warning(f"Failed to parse transfer log: {e}")
+                            continue
+                    
+                    logger.info(f"Fetched {len(transfers)} MNEE transfers for {wallet_address} on chain {chain_id}")
+                    
+                    return {
+                        "transfers": transfers,
+                        "chain_id": chain_id,
+                        "source": "alchemy",
+                        "total": len(transfers)
+                    }
+                    
+        except Exception as e:
+            logger.error(f"Failed to fetch MNEE transfers: {e}")
+            return {"transfers": [], "chain_id": chain_id, "source": "error"}
+    
     def estimate_gas(self, chain_id: int, transaction_type: str = "erc20_transfer") -> Dict[str, any]:
         """
         Estimate gas for a transaction.

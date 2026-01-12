@@ -184,51 +184,42 @@ export class PaymentHistoryService {
   }
 
   /**
-   * Record a MNEE transaction (transfer, payment action execution, etc.)
-   * This is the primary way transactions get added to history
+   * Fetch MNEE payment history from blockchain via backend
+   * Source of truth: blockchain via Alchemy, not localStorage
    */
-  async recordMNEETransaction(
+  async getPaymentHistory(
     walletAddress: string,
-    transaction: {
-      recipient: string;
-      amount: string;
-      token: string;
-      transactionHash: string;
-      chainId: number;
-      status: 'pending' | 'confirmed' | 'failed';
-      category?: string;
-    }
-  ): Promise<void> {
+    chainId?: number,
+    limit: number = 20,
+    offset: number = 0
+  ): Promise<PaymentHistoryItem[]> {
     try {
-      const history = this.getHistoryFromStorage(walletAddress);
+      // Query backend API for blockchain-sourced transfer history
+      const response = await this.apiService.get(
+        `/api/mnee/transfers/${walletAddress}?chainId=${chainId || 1}&limit=${limit}`
+      );
       
-      const newEntry: PaymentHistoryItem = {
-        id: transaction.transactionHash,
-        timestamp: new Date().toISOString(),
-        amount: transaction.amount,
-        token: transaction.token,
-        recipient: transaction.recipient,
-        status: transaction.status,
-        chainId: transaction.chainId,
-        transactionHash: transaction.transactionHash,
-        category: transaction.category || 'MNEE Transaction',
-        explorerUrl: this.getExplorerUrl(transaction.chainId, transaction.transactionHash),
-      };
-      
-      // Add to beginning of history (most recent first)
-      history.unshift(newEntry);
-      
-      // Keep only last 100 transactions
-      if (history.length > 100) {
-        history.pop();
+      if (response?.transfers) {
+        // Convert blockchain logs to PaymentHistoryItem format
+        return response.transfers.map((tx: any) => ({
+          id: tx.tx_hash,
+          timestamp: tx.timestamp || new Date().toISOString(),
+          amount: tx.amount,
+          token: "MNEE",
+          recipient: tx.to,
+          status: 'confirmed' as const,
+          chainId: response.chain_id,
+          transactionHash: tx.tx_hash,
+          category: 'MNEE Transfer',
+          explorerUrl: this.getExplorerUrl(response.chain_id, tx.tx_hash),
+        }));
       }
       
-      localStorage.setItem(
-        `${this.STORAGE_HISTORY_KEY}_${walletAddress}`,
-        JSON.stringify(history)
-      );
+      return [];
     } catch (error) {
-      console.error("Error recording MNEE transaction:", error);
+      console.error("Error fetching payment history from blockchain:", error);
+      // Fallback to empty if API unavailable
+      return [];
     }
   }
 
@@ -242,29 +233,6 @@ export class PaymentHistoryService {
     };
     const baseUrl = explorers[chainId] || "https://etherscan.io/tx/";
     return `${baseUrl}${txHash}`;
-  }
-
-  /**
-   * Fetch MNEE payment history
-   * Only shows MNEE transactions and payment actions
-   */
-  async getPaymentHistory(
-    walletAddress: string,
-    chainId?: number,
-    limit: number = 20,
-    offset: number = 0
-  ): Promise<PaymentHistoryItem[]> {
-    try {
-      const history = this.getHistoryFromStorage(walletAddress);
-      // Filter by chainId if provided
-      const filtered = chainId 
-        ? history.filter(h => h.chainId === chainId)
-        : history;
-      return filtered.slice(offset, offset + limit);
-    } catch (error) {
-      console.error("Error fetching payment history:", error);
-      return [];
-    }
   }
 
   /**
