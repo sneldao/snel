@@ -4,7 +4,7 @@ Payment Actions API - Manage recurring and template payments.
 Endpoints for CRUD operations on user payment actions.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from app.domains.payment_actions.service import get_payment_action_service
@@ -12,7 +12,6 @@ from app.domains.payment_actions.models import (
     PaymentAction,
     UpdatePaymentActionRequest,
 )
-from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/payment-actions", tags=["payment-actions"])
 
@@ -32,12 +31,10 @@ class PaymentActionResponse(BaseModel):
 
 
 @router.get("", response_model=List[PaymentActionResponse])
-async def list_payment_actions(
-    wallet_address: Optional[str] = Depends(get_current_user),
-):
+async def list_payment_actions(wallet_address: str):
     """Get all payment actions for the user."""
     if not wallet_address:
-        raise HTTPException(status_code=401, detail="User not authenticated")
+        raise HTTPException(status_code=400, detail="wallet_address is required")
     
     try:
         service = await get_payment_action_service()
@@ -63,13 +60,10 @@ async def list_payment_actions(
 
 
 @router.get("/{action_id}", response_model=PaymentActionResponse)
-async def get_payment_action(
-    action_id: str,
-    wallet_address: Optional[str] = Depends(get_current_user),
-):
+async def get_payment_action(action_id: str, wallet_address: str):
     """Get a specific payment action."""
     if not wallet_address:
-        raise HTTPException(status_code=401, detail="User not authenticated")
+        raise HTTPException(status_code=400, detail="wallet_address is required")
     
     try:
         service = await get_payment_action_service()
@@ -100,11 +94,11 @@ async def get_payment_action(
 async def update_payment_action(
     action_id: str,
     request: UpdatePaymentActionRequest,
-    wallet_address: Optional[str] = Depends(get_current_user),
+    wallet_address: str,
 ):
     """Update a payment action."""
     if not wallet_address:
-        raise HTTPException(status_code=401, detail="User not authenticated")
+        raise HTTPException(status_code=400, detail="wallet_address is required")
     
     try:
         service = await get_payment_action_service()
@@ -132,13 +126,10 @@ async def update_payment_action(
 
 
 @router.delete("/{action_id}")
-async def delete_payment_action(
-    action_id: str,
-    wallet_address: Optional[str] = Depends(get_current_user),
-):
+async def delete_payment_action(action_id: str, wallet_address: str):
     """Delete a payment action."""
     if not wallet_address:
-        raise HTTPException(status_code=401, detail="User not authenticated")
+        raise HTTPException(status_code=400, detail="wallet_address is required")
     
     try:
         service = await get_payment_action_service()

@@ -89,7 +89,7 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   const handleDeleteAction = async (actionId: string) => {
     setIsDeleting(true);
     try {
-      await ApiService.delete(`/api/v1/payment-actions/${actionId}`);
+      await ApiService.delete(`/api/v1/payment-actions/${actionId}?wallet_address=${walletAddress}`);
       
       // Reload actions
       await loadUserActions();
@@ -120,7 +120,7 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
     try {
       const newEnabledState = !action.isEnabled;
       
-      await ApiService.put(`/api/v1/payment-actions/${action.id}`, {
+      await ApiService.put(`/api/v1/payment-actions/${action.id}?wallet_address=${walletAddress}`, {
         is_enabled: newEnabledState,
       });
       
