@@ -262,33 +262,90 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     );
 
     // Handle X402 Automation Execution using Unified Service
-    const handleX402Execution = React.useCallback(async () => {
+    const handleX402Execution = React.useCallback(async (overrides?: any) => {
         if (!walletClient || !address) {
             toast({ title: 'Wallet not connected', status: 'error', duration: 3000 });
             return;
         }
 
-        const metadata = (content as any).metadata || {};
-        const amount = parseFloat(metadata.budget || metadata.amount || '0');
+        const baseMetadata = (content as any).metadata || {};
+        const metadata = { ...baseMetadata, ...(overrides || {}) };
+
+        const amount = parseFloat(metadata.amount || metadata.budget || '0');
         const approvalAmount = metadata.approval_amount ? parseFloat(metadata.approval_amount) : amount;
         const asset = metadata.asset || 'USDC';
         const network = metadata.network || 'cronos-testnet';
         const recipient = metadata.recipient || metadata.payTo;
+        const frequency = metadata.interval || 'monthly';
+        const budgetCapMonths = metadata.budget_cap_months || 12;
 
         if (!recipient) {
             throw new Error('No recipient address specified in automation metadata');
         }
 
+        // Create Payment Action with user's final parameters if this is a recurring payment
+        if (metadata.automation_type === 'recurring_payment' && !metadata.action_id) {
+            try {
+                const { paymentActionService } = await import('../services/paymentActionService');
+
+                const chainId = network === 'ethereum-mainnet' ? 1 :
+                    network === 'cronos-mainnet' ? 25 : 338;
+
+                const action = await paymentActionService.createPaymentAction(address, {
+                    name: `${frequency.charAt(0).toUpperCase() + frequency.slice(1)} to ${recipient.slice(0, 8)}...`,
+                    amount: amount.toString(),
+                    token: asset,
+                    recipient_address: recipient,
+                    chain_id: chainId,
+                    frequency: frequency,
+                    metadata: {
+                        network,
+                        budget_cap_months: budgetCapMonths,
+                        created_via: 'x402_automation_card'
+                    },
+                    is_pinned: true
+                });
+
+                toast({
+                    title: "Payment Action Created",
+                    description: `Recurring ${frequency} payment scheduled`,
+                    status: "success"
+                });
+
+                // Update metadata with action ID for future reference
+                metadata.action_id = action.id;
+
+            } catch (error) {
+                console.error('Failed to create Payment Action:', error);
+                toast({
+                    title: "Warning",
+                    description: "Payment will execute but recurring schedule may not persist",
+                    status: "warning"
+                });
+            }
+        }
+
         try {
             // Step 1: Prepare payment
-            // For recurring MNEE, we request approval for the ANNUAL amount (cap), not single payment
+            // Calculate approval amount based on user's custom budget cap
+            let finalApprovalAmount = approvalAmount;
+            if (metadata.automation_type === 'recurring_payment') {
+                const frequencyMultipliers = {
+                    'daily': 365,
+                    'weekly': 52,
+                    'monthly': 12
+                };
+                const multiplier = frequencyMultipliers[frequency] || 12;
+                finalApprovalAmount = amount * multiplier * (budgetCapMonths / 12);
+            }
+
             toast({ title: "Preparing Payment...", status: "info", duration: 2000 });
 
             const preparation = await unifiedPaymentService.preparePayment({
                 network,
                 user_address: address,
                 recipient_address: recipient,
-                amount: approvalAmount, // Use annual cap for approval check
+                amount: finalApprovalAmount, // Use calculated approval amount
                 token_symbol: asset
             });
 
@@ -321,7 +378,13 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             } else if (preparation.action_type === 'approve_allowance') {
                 // MNEE Flow: Approve allowance if needed
                 if (!preparation.allowance_sufficient) {
-                    toast({ title: "Approval Required", description: `Please approve the 1-year budget cap (${approvalAmount} ${asset}).`, status: "warning", duration: 5000 });
+                    const durationText = budgetCapMonths === 12 ? '1-year' : `${budgetCapMonths}-month`;
+                    toast({
+                        title: "Approval Required",
+                        description: `Please approve the ${durationText} budget cap (${finalApprovalAmount.toLocaleString()} ${asset}).`,
+                        status: "warning",
+                        duration: 5000
+                    });
 
                     const hash = await walletClient.writeContract({
                         address: preparation.token_address! as `0x${string}`,
@@ -441,9 +504,9 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                                 chainId={chainId}
                                 textColor={textColor}
                                 isExecuting={isExecuting}
-                                onExecute={() => {
+                                onExecute={(overrides?: any) => {
                                     if (typeChecks.isX402Automation) {
-                                        handleX402Execution();
+                                        handleX402Execution(overrides);
                                     } else if (typeof content === 'object' && content !== null &&
                                         ((content as any).flow_info || (content as any).type === 'swap_approval' || (content as any).type === 'multi_step_transaction')) {
                                         handleMultiStepTransaction(content);

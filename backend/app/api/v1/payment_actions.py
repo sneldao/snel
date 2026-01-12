@@ -10,10 +10,27 @@ from typing import Optional, Dict, Any, List
 from app.domains.payment_actions.service import get_payment_action_service
 from app.domains.payment_actions.models import (
     PaymentAction,
+    CreatePaymentActionRequest,
     UpdatePaymentActionRequest,
+    PaymentActionType,
+    PaymentActionSchedule,
+    PaymentActionFrequency,
 )
 
 router = APIRouter(prefix="/payment-actions", tags=["payment-actions"])
+
+
+class CreatePaymentActionAPIRequest(BaseModel):
+    """API request model for creating payment actions."""
+    name: str
+    action_type: str = "recurring"
+    amount: str
+    token: str
+    recipient_address: str
+    chain_id: int
+    frequency: str = "monthly"  # daily, weekly, monthly
+    metadata: Optional[Dict[str, Any]] = None
+    is_pinned: bool = True
 
 
 class PaymentActionResponse(BaseModel):
@@ -28,6 +45,57 @@ class PaymentActionResponse(BaseModel):
     created_at: str
     last_used: Optional[str] = None
     usage_count: int
+
+
+@router.post("", response_model=PaymentActionResponse)
+async def create_payment_action(
+    request: CreatePaymentActionAPIRequest,
+    wallet_address: str,
+):
+    """Create a new payment action."""
+    if not wallet_address:
+        raise HTTPException(status_code=400, detail="wallet_address is required")
+    
+    try:
+        service = await get_payment_action_service()
+        
+        # Map frequency string to enum
+        frequency_map = {
+            "daily": PaymentActionFrequency.DAILY,
+            "weekly": PaymentActionFrequency.WEEKLY,
+            "monthly": PaymentActionFrequency.MONTHLY,
+        }
+        frequency_enum = frequency_map.get(request.frequency.lower(), PaymentActionFrequency.MONTHLY)
+        
+        # Create the action request
+        create_request = CreatePaymentActionRequest(
+            name=request.name,
+            action_type=PaymentActionType.RECURRING,
+            amount=request.amount,
+            token=request.token,
+            recipient_address=request.recipient_address,
+            chain_id=request.chain_id,
+            schedule=PaymentActionSchedule(frequency=frequency_enum),
+            metadata=request.metadata or {},
+            is_pinned=request.is_pinned,
+        )
+        
+        action = await service.create_action(wallet_address, create_request)
+        
+        return PaymentActionResponse(
+            id=action.id,
+            name=action.name,
+            action_type=action.action_type.value,
+            amount=action.amount,
+            token=action.token,
+            recipient_address=action.recipient_address,
+            is_enabled=action.is_enabled,
+            created_at=action.created_at.isoformat() if action.created_at else None,
+            last_used=action.last_used.isoformat() if action.last_used else None,
+            usage_count=action.usage_count,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("", response_model=List[PaymentActionResponse])

@@ -452,37 +452,34 @@ class X402Processor:
                 network = "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet"
                 chain_id = 338 if "testnet" in network else 25
 
-            # Map frequency
+            # Map frequency and calculate approval cap based on custom duration
             freq_map = {
-                "daily": PaymentActionFrequency.DAILY,
-                "weekly": PaymentActionFrequency.WEEKLY,
-                "monthly": PaymentActionFrequency.MONTHLY
+                "daily": (PaymentActionFrequency.DAILY, 365),
+                "weekly": (PaymentActionFrequency.WEEKLY, 52),
+                "monthly": (PaymentActionFrequency.MONTHLY, 12)
             }
-            frequency = freq_map.get(payment_details['interval'].lower(), PaymentActionFrequency.MONTHLY)
+            
+            freq_enum, annual_multiplier = freq_map.get(payment_details['interval'].lower(), (PaymentActionFrequency.MONTHLY, 12))
+            frequency = freq_enum
+            
+            single_amount = float(payment_details['amount'])
+            
+            # Respect custom budget cap duration from frontend
+            budget_months = 12  # Default
+            if 'budget_cap_months' in payment_details:
+                budget_months = int(payment_details.get('budget_cap_months', 12))
+            
+            # Calculate approval amount based on actual duration
+            if frequency == PaymentActionFrequency.DAILY:
+                approval_amount = single_amount * (365 * budget_months / 12)
+            elif frequency == PaymentActionFrequency.WEEKLY:
+                approval_amount = single_amount * (52 * budget_months / 12)
+            else:  # Monthly
+                approval_amount = single_amount * budget_months
 
-            # Persist MNEE recurring actions
+            # Don't create Payment Action yet - wait for user confirmation with final parameters
+            # The Payment Action will be created during execution with user's custom parameters
             action_id = None
-            if network == "ethereum-mainnet" and unified_command.wallet_address:
-                try:
-                    service = await get_payment_action_service()
-                    request = CreatePaymentActionRequest(
-                        name=f"{payment_details['interval'].title()} to {payment_details['recipient']}",
-                        action_type=PaymentActionType.RECURRING,
-                        amount=payment_details['amount'],
-                        token=payment_details['asset'],
-                        recipient_address=payment_details['recipient'],
-                        chain_id=chain_id,
-                        schedule=PaymentActionSchedule(frequency=frequency),
-                        metadata={"network": network, "created_via": "x402_processor"},
-                        is_pinned=True
-                    )
-                    action = await service.create_action(unified_command.wallet_address, request)
-                    action_id = action.id
-                    logger.info(f"Created persistent payment action {action_id} for user {unified_command.wallet_address}")
-                except Exception as e:
-                    logger.error(f"Failed to create persistent action: {e}")
-
-            metadata = {
                 "payment_type": "recurring",
                 "interval": payment_details['interval'],
                 "amount": payment_details['amount'],
@@ -492,7 +489,9 @@ class X402Processor:
                 "requires_signature": True,
                 "command_type": CommandType.X402_PAYMENT,
                 "automation_type": "recurring_payment",
-                "action_id": action_id  # Include action_id for frontend linkage
+                "action_id": action_id,
+                "approval_amount": str(approval_amount),
+                "budget_cap_months": budget_months  # Include custom duration
             }
             
             # Format network name for display
@@ -501,6 +500,9 @@ class X402Processor:
             else:
                 network_display = f"Cronos {'Testnet' if 'testnet' in network else 'Mainnet'}"
 
+            # Format duration display
+            duration_text = f"{budget_months}-month" if budget_months != 12 else "1-year"
+            
             return UnifiedResponse(
                 content={
                     "message": f"🔄 **Recurring Payment Setup**\n\n"
@@ -509,9 +511,10 @@ class X402Processor:
                            f"• Amount: {payment_details['amount']} {payment_details['asset']}\n"
                            f"• Recipient: {payment_details['recipient']}\n"
                            f"• Network: {network_display}\n\n"
-                           f"This will create an **automated settlement workflow** using {network_display.split()[0]} x402, "
-                           f"allowing payments to execute automatically based on your schedule.\n\n"
-                           f"*The recurring payment will be active once you{' approve the automation' if network == 'ethereum-mainnet' else ' sign the authorization'}.*",
+                           f"This will create a **Payment Action** that uses {network_display.split()[0]} X402 for secure settlement.\n\n"
+                           f"🔒 **Security Note**: You will approve a **{duration_text} budget cap** ({approval_amount} {payment_details['asset']}) "
+                           f"rather than unlimited access, ensuring you stay in control.\n\n"
+                           f"*The recurring payment will be active once you authorize the Payment Action.*",
                     "type": "x402_automation",
                     "metadata": metadata
                 },
