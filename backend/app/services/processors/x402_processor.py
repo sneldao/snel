@@ -420,18 +420,31 @@ class X402Processor:
                     metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
+            # Determine network based on asset
+            if payment_details['asset'].upper() == 'MNEE':
+                network = "ethereum-mainnet"
+            else:
+                # Default to Cronos for USDC and others
+                network = "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet"
+
             metadata = {
                 "payment_type": "recurring",
                 "interval": payment_details['interval'],
                 "amount": payment_details['amount'],
                 "asset": payment_details['asset'],
                 "recipient": payment_details['recipient'],
-                "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+                "network": network,
                 "requires_signature": True,
                 "command_type": CommandType.X402_PAYMENT,
                 "automation_type": "recurring_payment" # Explicitly add for frontend card detection
             }
             
+            # Format network name for display
+            if network == "ethereum-mainnet":
+                network_display = "Ethereum Mainnet"
+            else:
+                network_display = f"Cronos {'Testnet' if 'testnet' in network else 'Mainnet'}"
+
             return UnifiedResponse(
                 content={
                     "message": f"🔄 **Recurring Payment Setup**\n\n"
@@ -439,24 +452,12 @@ class X402Processor:
                            f"• Frequency: {payment_details['interval'].title()}\n"
                            f"• Amount: {payment_details['amount']} {payment_details['asset']}\n"
                            f"• Recipient: {payment_details['recipient']}\n"
-                           f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n\n"
-                           f"This will create an **automated settlement workflow** using Cronos x402, "
+                           f"• Network: {network_display}\n\n"
+                           f"This will create an **automated settlement workflow** using {network_display.split()[0]} x402, "
                            f"allowing payments to execute automatically based on your schedule.\n\n"
                            f"*The recurring payment will be active once you sign the authorization.*",
                     "type": "x402_automation",
-                    "metadata": {
-                        "automation_type": "recurring_payment",
-                        "payment_type": "recurring",
-                        "interval": payment_details['interval'],
-                        "amount": payment_details['amount'],
-                        "budget": float(payment_details['amount']),
-                        "asset": payment_details['asset'],
-                        "recipient": payment_details['recipient'],
-                        "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
-                        "requires_signature": True,
-                        "protocol": "x402",
-                        "command_type": CommandType.X402_PAYMENT
-                    }
+                    "metadata": metadata
                 },
                 agent_type=AgentType.TRANSFER,
                 status="success",

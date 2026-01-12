@@ -353,140 +353,141 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         }
     }, [walletClient, address, content, toast, publicClient]);
 
-// Check if needs quote selection
-const needsSelection = requires_selection && all_quotes && all_quotes.length > 0;
+    // Check if needs quote selection
+    const needsSelection = requires_selection && all_quotes && all_quotes.length > 0;
 
-// Render quote selection if needed
-if (needsSelection) {
+    // Render quote selection if needed
+    if (needsSelection) {
+        return (
+            <Box
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                borderRadius="lg"
+                p={4}
+                mb={4}
+                className={props.className}
+            >
+                <AggregatorSelection
+                    quotes={all_quotes}
+                    onSelect={handleQuoteSelect}
+                    isLoading={status === 'processing'}
+                    tokenSymbol={
+                        typeof content === 'object' && content !== null && 'tokenOut' in content
+                            ? (content as any).tokenOut?.symbol || 'Tokens'
+                            : 'Tokens'
+                    }
+                    tokenDecimals={
+                        typeof content === 'object' && content !== null && 'tokenOut' in content
+                            ? (content as any).tokenOut?.decimals || 18
+                            : 18
+                    }
+                />
+            </Box>
+        );
+    }
+
+    // Main render
     return (
-        <Box
-            bg={bgColor}
-            borderWidth="1px"
-            borderColor={borderColor}
-            borderRadius="lg"
-            p={4}
-            mb={4}
-            className={props.className}
-        >
-            <AggregatorSelection
-                quotes={all_quotes}
-                onSelect={handleQuoteSelect}
-                isLoading={status === 'processing'}
-                tokenSymbol={
-                    typeof content === 'object' && content !== null && 'tokenOut' in content
-                        ? (content as any).tokenOut?.symbol || 'Tokens'
-                        : 'Tokens'
+        <>
+            <Box
+                bg={bgColor}
+                borderWidth="1px"
+                borderColor={borderColor}
+                borderRadius="lg"
+                p={4}
+                mb={4}
+                className={props.className}
+            >
+                <HStack align="start" spacing={3}>
+                    {/* Avatar */}
+                    <Avatar size="sm" name={isCommand ? getUserDisplayName() : handle} src={avatarSrc} />
+
+                    {/* Content */}
+                    <VStack align="start" spacing={2} flex={1}>
+                        {/* Header */}
+                        <HStack justify="space-between" w="100%">
+                            <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                                {isCommand ? getUserDisplayName() : handle}
+                            </Text>
+                            <Text fontSize="xs" color="gray.500">
+                                {new Date(timestamp).toLocaleTimeString()}
+                            </Text>
+                        </HStack>
+
+                        {/* Response Content */}
+                        <Box w="100%">
+                            <ResponseRenderer
+                                content={content}
+                                typeChecks={typeChecks}
+                                agentType={agentType}
+                                transactionData={transactionData}
+                                metadata={metadata}
+                                multiStepState={multiStepState}
+                                chainId={chainId}
+                                textColor={textColor}
+                                isExecuting={isExecuting}
+                                onExecute={() => {
+                                    if (typeChecks.isX402Automation) {
+                                        handleX402Execution();
+                                    } else if (typeof content === 'object' && content !== null &&
+                                        ((content as any).flow_info || (content as any).type === 'swap_approval' || (content as any).type === 'multi_step_transaction')) {
+                                        handleMultiStepTransaction(content);
+                                    } else {
+                                        handleExecuteTransaction();
+                                    }
+                                }}
+                                onCancel={handleCancel}
+                                onDone={reset}
+                                onRetry={retry}
+                                onActionClick={handleActionClick}
+                            />
+
+                            {/* Default text rendering (fallback) */}
+                            {!typeChecks.isSwapConfirmation &&
+                                !typeChecks.isDCAConfirmation &&
+                                !typeChecks.isMultiStepTransaction &&
+                                !typeChecks.isSwapTransaction &&
+                                !typeChecks.isBrianTransaction &&
+                                !typeChecks.isBridgeTransaction &&
+                                !typeChecks.isTransferTransaction &&
+                                !typeChecks.isBalanceResult &&
+                                !typeChecks.isProtocolResearch &&
+                                !typeChecks.isPortfolioDisabled &&
+                                !typeChecks.isBridgePrivacyReady &&
+                                !typeChecks.isCrossChainSuccess &&
+                                !typeChecks.isX402Automation &&
+                                agentType !== 'agno' &&
+                                agentType !== 'portfolio' && (
+                                    <Text
+                                        fontSize="sm"
+                                        color={textColor}
+                                        whiteSpace="pre-wrap"
+                                    >
+                                        {formatLinks(
+                                            getContentError(content) ||
+                                            getContentMessage(content) ||
+                                            (isStringContent(content) ? content : JSON.stringify(content))
+                                        )}
+                                    </Text>
+                                )}
+                        </Box>
+                    </VStack>
+                </HStack>
+            </Box>
+
+            {/* Portfolio Modal */}
+            <PortfolioModal
+                isOpen={isPortfolioModalOpen}
+                onClose={onPortfolioModalClose}
+                portfolioAnalysis={
+                    typeof content === 'object' && content !== null && 'type' in content && (content as any).type === 'portfolio'
+                        ? (content as any).analysis
+                        : {}
                 }
-                tokenDecimals={
-                    typeof content === 'object' && content !== null && 'tokenOut' in content
-                        ? (content as any).tokenOut?.decimals || 18
-                        : 18
-                }
+                metadata={metadata}
+                onActionClick={handleActionClick}
             />
-        </Box>
+        </>
     );
-}
-
-// Main render
-return (
-    <>
-        <Box
-            bg={bgColor}
-            borderWidth="1px"
-            borderColor={borderColor}
-            borderRadius="lg"
-            p={4}
-            mb={4}
-            className={props.className}
-        >
-            <HStack align="start" spacing={3}>
-                {/* Avatar */}
-                <Avatar size="sm" name={isCommand ? getUserDisplayName() : handle} src={avatarSrc} />
-
-                {/* Content */}
-                <VStack align="start" spacing={2} flex={1}>
-                    {/* Header */}
-                    <HStack justify="space-between" w="100%">
-                        <Text fontSize="sm" fontWeight="bold" color={textColor}>
-                            {isCommand ? getUserDisplayName() : handle}
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                            {new Date(timestamp).toLocaleTimeString()}
-                        </Text>
-                    </HStack>
-
-                    {/* Response Content */}
-                    <Box w="100%">
-                        <ResponseRenderer
-                            content={content}
-                            typeChecks={typeChecks}
-                            agentType={agentType}
-                            transactionData={transactionData}
-                            metadata={metadata}
-                            multiStepState={multiStepState}
-                            chainId={chainId}
-                            textColor={textColor}
-                            isExecuting={isExecuting}
-                            onExecute={() => {
-                                if (typeChecks.isX402Automation) {
-                                    handleX402Execution();
-                                } else if (typeof content === 'object' && content !== null &&
-                                    ((content as any).flow_info || (content as any).type === 'swap_approval' || (content as any).type === 'multi_step_transaction')) {
-                                    handleMultiStepTransaction(content);
-                                } else {
-                                    handleExecuteTransaction();
-                                }
-                            }}
-                            onCancel={handleCancel}
-                            onDone={reset}
-                            onRetry={retry}
-                            onActionClick={handleActionClick}
-                        />
-
-                        {/* Default text rendering (fallback) */}
-                        {!typeChecks.isSwapConfirmation &&
-                            !typeChecks.isDCAConfirmation &&
-                            !typeChecks.isMultiStepTransaction &&
-                            !typeChecks.isSwapTransaction &&
-                            !typeChecks.isBrianTransaction &&
-                            !typeChecks.isBridgeTransaction &&
-                            !typeChecks.isTransferTransaction &&
-                            !typeChecks.isBalanceResult &&
-                            !typeChecks.isProtocolResearch &&
-                            !typeChecks.isPortfolioDisabled &&
-                            !typeChecks.isBridgePrivacyReady &&
-                            !typeChecks.isCrossChainSuccess &&
-                            agentType !== 'agno' &&
-                            agentType !== 'portfolio' && (
-                                <Text
-                                    fontSize="sm"
-                                    color={textColor}
-                                    whiteSpace="pre-wrap"
-                                >
-                                    {formatLinks(
-                                        getContentError(content) ||
-                                        getContentMessage(content) ||
-                                        (isStringContent(content) ? content : JSON.stringify(content))
-                                    )}
-                                </Text>
-                            )}
-                    </Box>
-                </VStack>
-            </HStack>
-        </Box>
-
-        {/* Portfolio Modal */}
-        <PortfolioModal
-            isOpen={isPortfolioModalOpen}
-            onClose={onPortfolioModalClose}
-            portfolioAnalysis={
-                typeof content === 'object' && content !== null && 'type' in content && (content as any).type === 'portfolio'
-                    ? (content as any).analysis
-                    : {}
-            }
-            metadata={metadata}
-            onActionClick={handleActionClick}
-        />
-    </>
-);
 };
