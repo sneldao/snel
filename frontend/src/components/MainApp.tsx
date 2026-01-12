@@ -523,7 +523,6 @@ export default function MainApp(props: MainAppProps) {
                history: history && history.length > 0 
                  ? history 
                  : [],
-               note: "This shows MNEE transactions and payment actions executed on this platform.",
              },
              timestamp: new Date().toISOString(),
              isCommand: false,
