@@ -1,11 +1,17 @@
 """Payment API endpoints for handling signed transactions."""
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 
 from app.domains.payment_actions.service import get_payment_action_service, PaymentActionService
 from app.domains.payment_actions.executor import get_payment_executor, PaymentExecutor, ExecutionStatus
+from app.domains.payment_actions.models import (
+    PaymentAction,
+    CreatePaymentActionRequest,
+    UpdatePaymentActionRequest,
+    PaymentRecipient
+)
 from app.protocols.mnee_adapter import MNEEAdapter
 
 router = APIRouter(tags=["payments"])
@@ -22,6 +28,76 @@ class PaymentStatusResponse(BaseModel):
     ticket_id: Optional[str] = None
     transaction_hash: Optional[str] = None
     error: Optional[str] = None
+
+# --- Payment Action CRUD Endpoints ---
+
+@router.get("/payments/actions/{wallet_address}", response_model=List[PaymentAction])
+async def get_payment_actions(
+    wallet_address: str,
+    action_type: Optional[str] = None,
+    service: PaymentActionService = Depends(get_payment_action_service)
+):
+    """List payment actions for a wallet."""
+    return await service.get_actions(wallet_address, action_type=action_type)
+
+@router.post("/payments/actions/{wallet_address}", response_model=PaymentAction)
+async def create_payment_action(
+    wallet_address: str,
+    request: CreatePaymentActionRequest,
+    service: PaymentActionService = Depends(get_payment_action_service)
+):
+    """Create a new payment action."""
+    return await service.create_action(wallet_address, request)
+
+@router.patch("/payments/actions/{wallet_address}/{action_id}", response_model=Optional[PaymentAction])
+async def update_payment_action(
+    wallet_address: str,
+    action_id: str,
+    request: UpdatePaymentActionRequest,
+    service: PaymentActionService = Depends(get_payment_action_service)
+):
+    """Update an existing payment action."""
+    action = await service.update_action(wallet_address, action_id, request)
+    if not action:
+        raise HTTPException(status_code=404, detail="Payment action not found")
+    return action
+
+@router.delete("/payments/actions/{wallet_address}/{action_id}")
+async def delete_payment_action(
+    wallet_address: str,
+    action_id: str,
+    service: PaymentActionService = Depends(get_payment_action_service)
+):
+    """Delete a payment action."""
+    success = await service.delete_action(wallet_address, action_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Payment action not found")
+    return {"success": True}
+
+@router.get("/payments/recipients/{wallet_address}", response_model=List[PaymentRecipient])
+async def get_payment_recipients(
+    wallet_address: str,
+    service: PaymentActionService = Depends(get_payment_action_service)
+):
+    """Get unique recipients from payment actions history."""
+    actions = await service.get_actions(wallet_address)
+    
+    # Extract unique recipients
+    recipients_map = {}
+    for action in actions:
+        if action.recipient_address:
+            # Use address as key to deduplicate
+            key = action.recipient_address.lower()
+            if key not in recipients_map:
+                recipients_map[key] = PaymentRecipient(
+                    address=action.recipient_address,
+                    label=action.name, # Use action name as label/alias
+                    amount=None
+                )
+    
+    return list(recipients_map.values())
+
+# --- Existing Endpoints ---
 
 @router.post("/payments/submit-signature", response_model=PaymentStatusResponse)
 async def submit_signature(

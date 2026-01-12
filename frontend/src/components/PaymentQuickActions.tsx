@@ -24,6 +24,8 @@ import {
   FaChartBar,
   FaChevronRight,
   FaPlus,
+  FaRobot,
+  FaLeaf,
 } from "react-icons/fa";
 import { PaymentAction, PaymentHistoryService } from "../services/paymentHistoryService";
 
@@ -70,34 +72,35 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   };
 
   // System actions (always available)
+  // Showcase x402 agent automation features for hackathon judges
   const systemActions = [
     {
       icon: FaHistory,
       label: "History",
       command: "show my payment history",
       color: "green",
-      description: "View transactions",
-    },
-    {
-      icon: FaChartBar,
-      label: "Analytics",
-      command: "show my spending analytics",
-      color: "purple",
-      description: "Spending insights",
+      description: "All transactions",
     },
     {
       icon: FaClock,
-      label: "Scheduled",
-      command: "show my scheduled payments",
+      label: "Recurring",
+      command: "setup recurring payment",
       color: "orange",
-      description: "Recurring payments",
+      description: "Scheduled MNEE payments",
     },
     {
-      icon: FaAddressBook,
-      label: "Recipients",
-      command: "show my saved recipients",
+      icon: FaRobot,
+      label: "Auto Rebalance",
+      command: "setup automated portfolio rebalancing",
+      color: "blue",
+      description: "Agent-triggered rebalancing",
+    },
+    {
+      icon: FaLeaf,
+      label: "Yield Farm",
+      command: "setup automated yield farming",
       color: "teal",
-      description: "Saved addresses",
+      description: "Agent finds best APY",
     },
   ];
 
