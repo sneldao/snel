@@ -272,6 +272,24 @@ X402 AGENTIC PAYMENT FEATURES YOU SUPPORT:
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
             
             if not context and not is_about_assistant:
+                # Check if this might be a payment or transaction command that was misclassified
+                cmd_lower = unified_command.command.lower()
+                payment_keywords = ["payment", "pay", "send", "transfer", "bridge", "swap", "setup", "recurring", "monthly", "weekly", "daily"]
+                
+                if any(keyword in cmd_lower for keyword in payment_keywords):
+                    return self._create_success_response(
+                        content={
+                            "message": "I can help with that! Could you be more specific about what you'd like to do? For example:\n• `setup monthly payment of 100 USDC to supplier.eth`\n• `send 50 MNEE to merchant.eth`\n• `bridge 100 USDC to Polygon`",
+                            "type": "contextual_response",
+                            "suggestions": [
+                                "Try being more specific about amounts and recipients",
+                                "Include token symbols (USDC, MNEE, ETH, etc.)",
+                                "Specify the recipient address or ENS name"
+                            ]
+                        },
+                        agent_type=AgentType.DEFAULT
+                    )
+                
                 return self._create_success_response(
                     content={
                         "message": "I don't have enough context to answer that question. Could you be more specific?",
@@ -344,6 +362,18 @@ Guidelines:
             
         except Exception as e:
             logger.exception(f"Error handling contextual question: {e}")
+            
+            # Check if this might be a payment command that was misclassified
+            cmd_lower = unified_command.command.lower()
+            payment_keywords = ["payment", "pay", "send", "transfer", "bridge", "swap", "setup", "recurring", "monthly", "weekly", "daily"]
+            
+            if any(keyword in cmd_lower for keyword in payment_keywords):
+                return self._create_error_response(
+                    "I can help with payments and transactions! Try being more specific, like:\n• `setup monthly payment of 100 USDC to supplier.eth`\n• `send 50 MNEE to merchant.eth`\n• `bridge 100 USDC to Polygon`",
+                    AgentType.DEFAULT,
+                    "Command may have been misclassified as contextual question"
+                )
+            
             return self._create_error_response(
                 "Unable to answer your question",
                 AgentType.DEFAULT,
