@@ -78,21 +78,35 @@ class TransferProcessor(BaseProcessor):
             # Lookup full token info from registry
             full_token = token_registry.get_token(details.token_in.symbol)
             if not full_token:
+                # Unknown token - ask user for contract address
                 return self._create_guided_error_response(
                     command_type=CommandType.TRANSFER,
                     agent_type=AgentType.TRANSFER,
                     error_context=ErrorContext.MISSING_TOKEN,
-                    additional_message=f"Token {details.token_in.symbol} not found in registry. Please use a supported token."
+                    additional_message=f"Token {details.token_in.symbol} not in our registry. Please provide the contract address (0x...) if you'd like to proceed with a custom token."
                 )
             
             token_address = full_token.get_address(unified_command.chain_id)
             if not token_address:
                 chain_name = self._get_chain_name(unified_command.chain_id)
+                
+                # Find which chains DO support this token for helpful suggestions
+                supported_chains = []
+                common_chain_ids = [1, 8453, 42161, 10, 137]  # Ethereum, Base, Arbitrum, Optimism, Polygon
+                for chain_id in common_chain_ids:
+                    if full_token.is_supported_on_chain(chain_id):
+                        supported_chains.append(self._get_chain_name(chain_id))
+                
+                suggestion = ""
+                if supported_chains:
+                    chains_str = " or ".join(supported_chains[:2])
+                    suggestion = f" Try switching to {chains_str}."
+                
                 return self._create_guided_error_response(
                     command_type=CommandType.TRANSFER,
                     agent_type=AgentType.TRANSFER,
                     error_context=ErrorContext.UNSUPPORTED_CHAIN,
-                    additional_message=f"Token {details.token_in.symbol} is not supported on {chain_name}. Please switch chains or use a different token."
+                    additional_message=f"Token {details.token_in.symbol} is not supported on {chain_name}.{suggestion}"
                 )
             
             # Resolve destination address (handle both addresses and ENS names)
@@ -130,6 +144,12 @@ class TransferProcessor(BaseProcessor):
                 chain_id=unified_command.chain_id
             )
             
+            # Estimate gas costs
+            gas_estimate = token_query_service.estimate_gas(
+                unified_command.chain_id,
+                transaction_type="erc20_transfer"
+            )
+            
             # Check if this transfer could benefit from batching
             gas_optimization_hint = self._check_gas_optimization_opportunity(unified_command)
             
@@ -140,7 +160,8 @@ class TransferProcessor(BaseProcessor):
                 "token": details.token_in.symbol,
                 "destination": display_name,
                 "resolved_address": resolved_address,
-                "gas_cost_usd": result.get("gasCostUSD", ""),
+                "gas_price_gwei": gas_estimate.get("gas_price_gwei", "0"),
+                "gas_limit": gas_estimate.get("gas_limit", "65000"),
                 "type": "transfer_ready",
                 "requires_transaction": True
             }

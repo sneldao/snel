@@ -23,8 +23,7 @@ export type AgentType =
   | "balance"
   | "protocol_research"
   | "settings"
-  | "payment"
-  | "x402";
+  | "payment";
 
 export const getAgentInfo = (agentType?: AgentType) => {
   switch (agentType) {
@@ -94,12 +93,6 @@ export const getAgentInfo = (agentType?: AgentType) => {
         handle: "@payment",
         avatarSrc: "/icon.png",
       };
-    case "x402":
-      return {
-        name: "X402 Agent",
-        handle: "@x402",
-        avatarSrc: "/icon.png",
-      };
     default:
       return {
         name: "SNEL",
@@ -132,8 +125,6 @@ export const getAgentIcon = (agentType?: AgentType) => {
       return <Icon as={FaRobot} color="blue.500" />;
     case "payment":
       return <Icon as={FaCreditCard} color="green.500" />;
-    case "x402":
-      return <Icon as={FaBolt} color="purple.500" />;
     default:
       return <Icon as={FaRobot} color="gray.500" />;
   }

@@ -126,6 +126,58 @@ class TokenQueryService:
         """Check if a string is a valid Ethereum address (0x...)."""
         return Web3.is_address(address)
     
+    def estimate_gas(self, chain_id: int, transaction_type: str = "erc20_transfer") -> Dict[str, any]:
+        """
+        Estimate gas for a transaction.
+        
+        Returns gas limit and typical gas price for the chain.
+        
+        Args:
+            chain_id: Chain ID
+            transaction_type: Type of transaction (erc20_transfer, eth_transfer, etc.)
+            
+        Returns:
+            Dict with gas_limit and gas_price_gwei
+        """
+        try:
+            w3 = self.web3_instances.get(chain_id)
+            if not w3 or not w3.is_connected():
+                logger.warning(f"No Web3 connection for chain {chain_id}")
+                return {
+                    "gas_limit": "100000" if transaction_type == "erc20_transfer" else "21000",
+                    "gas_price_gwei": "0",
+                    "estimated": False
+                }
+            
+            # Get current gas price
+            gas_price_wei = w3.eth.gas_price
+            gas_price_gwei = float(w3.from_wei(gas_price_wei, 'gwei'))
+            
+            # Standard gas estimates
+            gas_limits = {
+                "erc20_transfer": 65000,      # ERC20 transfer
+                "eth_transfer": 21000,        # ETH transfer
+                "approval": 45000,            # Token approval
+                "swap": 200000,               # Complex swap
+            }
+            
+            gas_limit = gas_limits.get(transaction_type, 100000)
+            
+            return {
+                "gas_limit": str(gas_limit),
+                "gas_price_gwei": str(round(gas_price_gwei, 2)),
+                "estimated_cost_usd": "0",   # Would need price oracle
+                "estimated": True
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to estimate gas: {e}")
+            return {
+                "gas_limit": "100000",
+                "gas_price_gwei": "0",
+                "estimated": False
+            }
+    
     async def get_native_balance(self, wallet_address: str, chain_id: int) -> Optional[float]:
         """
         Get native token balance (ETH, MATIC, etc).

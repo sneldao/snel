@@ -40,6 +40,7 @@ import {
   FaShieldAlt,
   FaExternalLinkAlt,
   FaClock,
+  FaBolt,
 } from "react-icons/fa";
 import { BsArrowLeftRight } from "react-icons/bs";
 import Image from "next/image";
