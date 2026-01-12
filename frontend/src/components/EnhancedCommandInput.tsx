@@ -1653,7 +1653,7 @@ const EnhancedCommandInput: React.FC<EnhancedCommandInputProps> = ({
 
                       {step.type === "action" && (
                         <SimpleGrid columns={3} spacing={3}>
-                          {["swap", "send", "bridge", "check", "analyze"].map(
+                          {["swap", "bridge", "check", "analyze", "pay"].map(
                             (action) => (
                               <EnhancedButton
                                 key={action}

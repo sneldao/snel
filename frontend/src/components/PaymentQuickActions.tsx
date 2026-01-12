@@ -72,13 +72,6 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   // System actions (always available)
   const systemActions = [
     {
-      icon: FaPaperPlane,
-      label: "Send",
-      command: "send ",
-      color: "blue",
-      description: "One-time payment",
-    },
-    {
       icon: FaHistory,
       label: "History",
       command: "show my payment history",
