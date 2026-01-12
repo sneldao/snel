@@ -480,6 +480,8 @@ class X402Processor:
             # Don't create Payment Action yet - wait for user confirmation with final parameters
             # The Payment Action will be created during execution with user's custom parameters
             action_id = None
+
+            metadata = {
                 "payment_type": "recurring",
                 "interval": payment_details['interval'],
                 "amount": payment_details['amount'],
