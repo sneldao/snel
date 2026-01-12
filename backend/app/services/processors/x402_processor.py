@@ -29,14 +29,15 @@ class X402Processor:
                 return self._suggest_cronos_network(unified_command)
             
             # Determine x402 operation type based on natural language
-            if any(keyword in command_lower for keyword in ["pay agent", "agent payment", "ai payment"]):
-                return await self._handle_ai_payment(unified_command)
-            elif any(keyword in command_lower for keyword in ["recurring", "schedule", "automate", "weekly", "monthly", "daily"]):
+            if any(keyword in command_lower for keyword in ["recurring", "schedule", "weekly", "monthly", "daily"]) and "payment" in command_lower:
                 return await self._handle_recurring_payment(unified_command)
+            elif any(keyword in command_lower for keyword in ["pay agent", "agent payment", "ai payment"]):
+                return await self._handle_ai_payment(unified_command)
             elif any(keyword in command_lower for keyword in ["settlement", "batch", "multiple payments"]):
                 return await self._handle_settlement(unified_command)
             else:
-                return await self._handle_general_x402_info(unified_command)
+                # Check for automation keywords first
+                return await self._handle_ai_payment(unified_command)
                 
         except Exception as e:
             logger.error(f"X402 processing error: {e}")
@@ -152,8 +153,10 @@ class X402Processor:
             return "yield_farming"
         elif any(word in command_lower for word in ["bridge", "cross-chain"]):
             return "cross_chain_automation"
-        elif any(word in command_lower for word in ["buy", "sell", "trade", "when", "drops", "below"]):
+        elif any(word in command_lower for word in ["buy", "sell", "trade", "when", "drops", "below", "above"]):
             return "conditional_trading"
+        elif any(word in command_lower for word in ["recurring", "weekly", "monthly", "daily"]) and "payment" in command_lower:
+            return "recurring_payment"
         else:
             return "general_automation"
     
@@ -226,6 +229,40 @@ class X402Processor:
                     "command_type": CommandType.X402_PAYMENT
                 }
             )
+        
+        elif automation_type == "cross_chain_automation":
+            return UnifiedResponse(
+                content=f"🌉 **Automated Cross-Chain Bridge Setup**\n\n"
+                       f"**Service Details:**\n"
+                       f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
+                       f"• Trigger: Monthly automated bridging\n"
+                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
+                       f"• Execution: Automatic via x402 when scheduled\n\n"
+                       f"**How it works:**\n"
+                       f"1. I monitor your bridge schedule 24/7\n"
+                       f"2. When it's time to bridge, x402 authorizes transfer\n"
+                       f"3. Funds bridge automatically to destination chain\n"
+                       f"4. You maintain liquidity across chains effortlessly\n\n"
+                       f"**Ready to bridge?** This enables autonomous cross-chain management.",
+                agent_type=AgentType.TRANSFER,
+                status="success",
+                awaiting_confirmation=True,
+                metadata={
+                    "automation_type": "cross_chain_automation",
+                    "budget": float(payment_details['amount']),
+                    "asset": payment_details['asset'],
+                    "network": network,
+                    "requires_signature": True,
+                    "protocol": "x402",
+                    "facilitator_healthy": is_healthy,
+                    "service_description": "Automated cross-chain bridging on schedule",
+                    "command_type": CommandType.X402_PAYMENT
+                }
+            )
+        
+        elif automation_type == "recurring_payment":
+            # Redirect to recurring payment handler
+            return await self._handle_recurring_payment(unified_command)
         
         elif automation_type == "conditional_trading":
             return UnifiedResponse(
@@ -378,7 +415,6 @@ class X402Processor:
     async def _handle_general_x402_info(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Provide information about x402 capabilities."""
         return UnifiedResponse(
-            success=True,
             content="🤖 **X402 Agentic Payment System**\n\n"
                    "I can help you with AI-powered payments on Cronos EVM:\n\n"
                    "**AI Agent Payments:**\n"
@@ -393,10 +429,11 @@ class X402Processor:
                    "All payments use **Cronos x402 protocol** for secure, AI-triggered transactions "
                    "with EIP-712 authorization and automated settlement workflows.",
             agent_type=AgentType.DEFAULT,
-            command_type=CommandType.X402_PAYMENT,
+            status="success",
             metadata={
                 "info_type": "x402_capabilities",
-                "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet"
+                "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+                "command_type": CommandType.X402_PAYMENT
             }
         )
     

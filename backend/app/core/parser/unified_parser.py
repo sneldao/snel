@@ -133,7 +133,7 @@ class UnifiedParser:
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:setup|create|enable)\s+(?:automated?|weekly|monthly)?\s*(?:yield\s+)?(?:farming|optimization)",
+                        r"(?:setup|create|enable)\s+(?:automated?|weekly|monthly|daily)?\s*(?:\d+\s+\w+\s+for\s+)?(?:yield\s+)?(?:farming|optimization)",
                         re.IGNORECASE
                     ),
                     "description": "Automated yield farming setup",
@@ -141,19 +141,27 @@ class UnifiedParser:
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:pay|spend|use)\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})\s+(?:to|for|when)",
+                        r"(?:setup|create)\s+(?:automated?|weekly|monthly|daily)\s+(?:bridge|bridging)",
                         re.IGNORECASE
                     ),
-                    "description": "Conditional payment setup",
+                    "description": "Automated cross-chain bridging",
                     "priority": 3
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:setup|create)\s+(?:weekly|monthly|daily)\s+(?:bridge|bridging)",
+                        r"(?:setup|create)\s+(?:weekly|monthly|daily)?\s*(?:recurring\s+)?(?:payment|payments)\s+of\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
                         re.IGNORECASE
                     ),
-                    "description": "Automated cross-chain bridging",
+                    "description": "Recurring payment setup",
                     "priority": 4
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:pay|spend|use)\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})\s+(?:to|for|when)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Conditional payment setup",
+                    "priority": 5
                 },
                 {
                     "pattern": re.compile(
@@ -161,7 +169,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "AI agent payment (legacy)",
-                    "priority": 5
+                    "priority": 6
                 },
                 {
                     "pattern": re.compile(
@@ -169,7 +177,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "General agentic payment",
-                    "priority": 6
+                    "priority": 7
                 }
             ],
             CommandType.BRIDGE_TO_PRIVACY: [

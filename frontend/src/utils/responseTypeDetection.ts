@@ -37,6 +37,7 @@ export interface ResponseTypeChecks {
     isBridgeStatus: boolean;
     isPostBridgeSuccess: boolean;
     isPaymentSignature: boolean;
+    isX402Automation: boolean;
 }
 
 interface DetectResponseTypesProps {
@@ -57,10 +58,10 @@ export const detectResponseTypes = ({
         ((content as any)?.type === 'swap_confirmation' ||
             (content as any)?.type === 'swap_ready');
 
-    const isPaymentSignature = 
-        typeof content === 'object' && 
-        ((content as any)?.status === 'awaiting_signature' || 
-         (content as any)?.type === 'payment_signature_request');
+    const isPaymentSignature =
+        typeof content === 'object' &&
+        ((content as any)?.status === 'awaiting_signature' ||
+            (content as any)?.type === 'payment_signature_request');
 
     const isDCAConfirmation =
         typeof content === 'object' && (content as any)?.type === 'dca_confirmation';
@@ -130,6 +131,13 @@ export const detectResponseTypes = ({
 
     const isPostBridgeSuccess = isPostBridgeSuccessContent(content);
 
+    const isX402Automation =
+        typeof content === 'object' &&
+        ((content as any)?.automation_type ||
+            (content as any)?.protocol === 'x402' ||
+            agentType === 'x402' ||
+            (content as any)?.metadata?.protocol === 'x402');
+
     return {
         isSwapConfirmation,
         isDCAConfirmation,
@@ -148,5 +156,6 @@ export const detectResponseTypes = ({
         isBridgeStatus,
         isPostBridgeSuccess,
         isPaymentSignature,
+        isX402Automation,
     };
 };

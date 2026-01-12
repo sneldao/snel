@@ -139,7 +139,7 @@ class TransferProcessor(BaseProcessor):
                 "amount": amount_str,
                 "token": details.token_in.symbol,
                 "destination": display_name,
-                "destination_address": resolved_address,
+                "resolved_address": resolved_address,
                 "gas_cost_usd": result.get("gasCostUSD", ""),
                 "type": "transfer_ready",
                 "requires_transaction": True

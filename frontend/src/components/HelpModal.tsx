@@ -117,6 +117,16 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         "can I do stuff in private?",
       ],
     },
+    {
+      category: "X402 Automation",
+      icon: FaBolt,
+      examples: [
+        "setup portfolio rebalancing with 50 USDC",
+        "pay 20 USDC when ETH drops below $3000",
+        "setup weekly 100 USDC for yield farming",
+        "create automated bridge 200 USDC monthly",
+      ],
+    },
   ];
 
   return (
@@ -400,12 +410,12 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                     </Heading>
                     <VStack spacing={2} align="stretch">
                       {ZCASH_EDUCATION_LINKS.map((link, idx) => (
-                         <Link
+                        <Link
                           key={idx}
                           href={link.url}
                           isExternal
                           _hover={{ textDecoration: 'none' }}
-                         >
+                        >
                           <Box
                             p={2}
                             borderRadius="md"

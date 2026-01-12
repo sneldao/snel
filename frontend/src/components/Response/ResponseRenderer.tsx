@@ -19,6 +19,7 @@ import { PrivacyBridgeGuidance } from '../Privacy/PrivacyBridgeGuidance';
 import { BridgeStatusTracker } from '../Bridge/BridgeStatusTracker';
 import { PostBridgeModal } from '../Bridge/PostBridgeModal';
 import { PaymentHistoryResponse } from '../PaymentHistoryResponse';
+import { X402AutomationCard } from '../X402AutomationCard';
 import type { ResponseContent, ResponseMetadata, TransactionData, BridgeStatusContent, PostBridgeSuccessContent } from '../../types/responses';
 import type { AgentType } from '../../utils/agentInfo';
 import type { ResponseTypeChecks } from '../../utils/responseTypeDetection';
@@ -84,6 +85,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         isBridgePrivacyReady,
         isCrossChainSuccess,
         isPaymentSignature,
+        isX402Automation,
     } = typeChecks;
 
     // Auto-open post-bridge modal when success content arrives
@@ -93,10 +95,22 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         }
     }, [content]);
 
+    // X402 Automation
+    if (isX402Automation) {
+        return (
+            <X402AutomationCard
+                content={content}
+                onExecute={onExecute}
+                onCancel={onCancel}
+                isExecuting={isExecuting}
+            />
+        );
+    }
+
     // Payment Signature Request
     if (isPaymentSignature) {
         return (
-             <UnifiedConfirmation
+            <UnifiedConfirmation
                 agentType="payment"
                 content={{
                     message: getContentMessage(content) || 'Sign Payment Transaction',

@@ -29,6 +29,7 @@ import {
   FaChartPie,
   FaSearch,
   FaShieldAlt,
+  FaBolt,
 } from "react-icons/fa";
 import {
   useAccount,
@@ -996,9 +997,9 @@ export default function MainApp(props: MainAppProps) {
 
                   {/* Premium & Privacy Features */}
                   <SimpleGrid
-                    columns={2}
-                    spacing={4}
-                    maxW="400px"
+                    columns={3}
+                    spacing={3}
+                    maxW="600px"
                     mt={4}
                     pt={4}
                     borderTopWidth="1px"
@@ -1050,6 +1051,29 @@ export default function MainApp(props: MainAppProps) {
                         Asset Shielding
                       </Text>
                     </VStack>
+
+                    <VStack
+                      spacing={1}
+                      align="center"
+                      p={3}
+                      borderRadius="md"
+                      bg="linear-gradient(135deg, rgba(138, 43, 226, 0.05) 0%, rgba(138, 43, 226, 0.02) 100%)"
+                      border="1px solid"
+                      borderColor="rgba(138, 43, 226, 0.2)"
+                    >
+                      <Icon as={FaBolt} color="purple.600" boxSize={5} />
+                      <Text
+                        fontSize="xs"
+                        fontWeight="semibold"
+                        textAlign="center"
+                        color="gray.700"
+                      >
+                        X402 Automation
+                      </Text>
+                      <Text fontSize="2xs" textAlign="center" color="gray.500">
+                        AI-Triggered Payments
+                      </Text>
+                    </VStack>
                   </SimpleGrid>
 
                   {/* Hint about help modal */}
@@ -1058,19 +1082,29 @@ export default function MainApp(props: MainAppProps) {
                     Click ⚙️ above to configure API keys
                   </Text>
                   {/* Features Hint */}
-                  <HStack spacing={4} justify="center" mt={2}>
-                    <Text fontSize="2xs" color="gray.500" textAlign="center">
-                      💰 Try MNEE: &quot;pay $100 MNEE to merchant...&quot;
-                    </Text>
-                    <Text fontSize="2xs" color="gray.500" textAlign="center">
-                      🛡️ Try Privacy: &quot;bridge 1 ETH to Zcash&quot;
-                    </Text>
-                  </HStack>
+                  <VStack spacing={2} mt={2}>
+                    <HStack spacing={4} justify="center">
+                      <Text fontSize="2xs" color="gray.500" textAlign="center">
+                        💰 Try MNEE: &quot;pay $100 MNEE to merchant...&quot;
+                      </Text>
+                      <Text fontSize="2xs" color="gray.500" textAlign="center">
+                        🛡️ Try Privacy: &quot;bridge 1 ETH to Zcash&quot;
+                      </Text>
+                    </HStack>
+                    <HStack spacing={4} justify="center">
+                      <Text fontSize="2xs" color="purple.500" textAlign="center">
+                        🤖 Try X402: &quot;setup portfolio rebalancing with 50 USDC&quot;
+                      </Text>
+                      <Text fontSize="2xs" color="purple.500" textAlign="center">
+                        ⚡ Try Automation: &quot;pay 20 USDC when ETH drops below $3000&quot;
+                      </Text>
+                    </HStack>
+                  </VStack>
 
                 </VStack>
-                </VStack>
-                ) : (
-                <VStack spacing={4} align="stretch">
+              </VStack>
+            ) : (
+              <VStack spacing={4} align="stretch">
                 {responses.map((response, index) => {
                   // Debug what's being passed to CommandResponse
                   if (
@@ -1162,8 +1196,8 @@ export default function MainApp(props: MainAppProps) {
                     </HStack>
                   </Box>
                 </VStack>
-                </VStack>
-                )}
+              </VStack>
+            )}
           </Box>
         </VStack>
       </Container>
