@@ -15,6 +15,13 @@ import {
   VStack,
   Divider,
   Spinner,
+  useToast,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from "@chakra-ui/react";
 import { 
   FaPaperPlane, 
@@ -26,8 +33,12 @@ import {
   FaPlus,
   FaRobot,
   FaLeaf,
+  FaTrash,
+  FaEyeSlash,
+  FaEye,
 } from "react-icons/fa";
 import { PaymentAction, PaymentHistoryService } from "../services/paymentHistoryService";
+import { ApiService } from "../services/apiService";
 
 interface PaymentQuickActionsProps {
   onCommandSubmit: (command: string) => void;
@@ -45,6 +56,10 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [userActions, setUserActions] = React.useState<PaymentAction[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const toast = useToast();
+  const cancelRef = React.useRef(null);
 
   // Load user's payment actions on mount and when wallet changes
   React.useEffect(() => {
@@ -69,6 +84,74 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
 
   const handleQuickAction = (command: string) => {
     onCommandSubmit(command);
+  };
+
+  const handleDeleteAction = async (actionId: string) => {
+    setIsDeleting(true);
+    try {
+      await ApiService.delete(`/api/v1/payment-actions/${actionId}`);
+      
+      // Reload actions
+      await loadUserActions();
+      
+      toast({
+        title: "Action Deleted",
+        description: "Payment action has been removed.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Error deleting action:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete payment action.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmId(null);
+    }
+  };
+
+  const handleToggleEnabled = async (action: PaymentAction) => {
+    try {
+      const newEnabledState = !action.isEnabled;
+      
+      await ApiService.put(`/api/v1/payment-actions/${action.id}`, {
+        is_enabled: newEnabledState,
+      });
+      
+      // Update local state
+      setUserActions(prev => 
+        prev.map(a => 
+          a.id === action.id 
+            ? { ...a, isEnabled: newEnabledState }
+            : a
+        )
+      );
+      
+      toast({
+        title: newEnabledState ? "Action Enabled" : "Action Disabled",
+        description: newEnabledState 
+          ? "Payment action is now active."
+          : "Payment action has been paused.",
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Error updating action:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update payment action.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
   };
 
   // System actions (always available)
@@ -188,27 +271,58 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
                 <>
                   <Text fontSize="sm" fontWeight="bold">Your Actions</Text>
                   {userActions.map((action) => (
-                    <Button
+                    <Box
                       key={action.id}
-                      variant="ghost"
-                      justifyContent="space-between"
-                      rightIcon={<FaChevronRight />}
-                      onClick={() => {
-                        handleQuickAction(`use action ${action.id}`);
-                        onClose();
-                      }}
-                      py={6}
+                      borderWidth="1px"
+                      borderRadius="lg"
+                      p={4}
+                      bg={action.isEnabled ? "white" : "gray.50"}
+                      opacity={action.isEnabled ? 1 : 0.7}
                     >
-                      <HStack spacing={3} flex={1}>
-                        <Icon as={FaPaperPlane} boxSize={5} color="blue.500" />
-                        <VStack align="flex-start" spacing={0}>
+                      <HStack justify="space-between" mb={3}>
+                        <VStack align="flex-start" spacing={1} flex={1}>
                           <Text fontWeight="medium">{action.name}</Text>
                           <Text fontSize="xs" color="gray.500">
                             {action.amount} {action.token}
                           </Text>
                         </VStack>
+                        <Text fontSize="xs" color={action.isEnabled ? "green.500" : "orange.500"}>
+                          {action.isEnabled ? "Active" : "Paused"}
+                        </Text>
                       </HStack>
-                    </Button>
+                      
+                      <HStack spacing={2} justify="flex-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          colorScheme="blue"
+                          onClick={() => {
+                            handleQuickAction(`use action ${action.id}`);
+                            onClose();
+                          }}
+                        >
+                          Execute
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          leftIcon={<Icon as={action.isEnabled ? FaEyeSlash : FaEye} />}
+                          colorScheme={action.isEnabled ? "orange" : "green"}
+                          onClick={() => handleToggleEnabled(action)}
+                        >
+                          {action.isEnabled ? "Pause" : "Enable"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          colorScheme="red"
+                          leftIcon={<Icon as={FaTrash} />}
+                          onClick={() => setDeleteConfirmId(action.id)}
+                        >
+                          Delete
+                        </Button>
+                      </HStack>
+                    </Box>
                   ))}
                 </>
               )}
@@ -243,7 +357,40 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
             </VStack>
           </ModalBody>
         </ModalContent>
-      </Modal>
-    </>
-  );
-};
+        </Modal>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog
+        isOpen={deleteConfirmId !== null}
+        leastDestructiveRef={cancelRef}
+        onClose={() => setDeleteConfirmId(null)}
+        >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Delete Payment Action
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              Are you sure you want to delete this payment action? This action cannot be undone.
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={() => setDeleteConfirmId(null)}>
+                Cancel
+              </Button>
+              <Button
+                colorScheme="red"
+                onClick={() => deleteConfirmId && handleDeleteAction(deleteConfirmId)}
+                ml={3}
+                isLoading={isDeleting}
+              >
+                Delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+        </AlertDialog>
+        </>
+        );
+        };

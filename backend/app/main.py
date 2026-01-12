@@ -17,7 +17,7 @@ from app.core.dependencies import get_service_container
 from app.core.config_manager import config_manager
 
 # Import API routers
-from app.api.v1 import chat, swap, agno, health, bridge, keeper, payments, x402, payment, mnee
+from app.api.v1 import chat, swap, agno, health, bridge, keeper, payments, x402, payment, mnee, payment_actions
 from app.api.v1.websocket import router as websocket_router
 from app.api import webhooks
 from app.protocols.registry import protocol_registry
@@ -95,6 +95,7 @@ app.include_router(payments.router, prefix="/api/v1")  # Payment signature submi
 app.include_router(x402.router, prefix="/api/v1")  # X402 agentic payments
 app.include_router(payment.router, prefix="/api/v1")  # Unified payment router
 app.include_router(mnee.router, prefix="/api/v1")  # MNEE Relayer endpoints
+app.include_router(payment_actions.router, prefix="/api/v1")  # Payment action management
 app.include_router(websocket_router, prefix="/api/v1/ws")
 app.include_router(keeper.router)  # Keeper job endpoints
 app.include_router(webhooks.router)  # Webhook endpoints for AI agents

@@ -184,7 +184,9 @@ class RecurringScheduler:
         last_used = action.last_used
         
         # Calculate next due date based on frequency
-        if frequency == PaymentActionFrequency.DAILY:
+        if frequency == PaymentActionFrequency.HOURLY:
+            interval = timedelta(hours=1)
+        elif frequency == PaymentActionFrequency.DAILY:
             interval = timedelta(days=1)
         elif frequency == PaymentActionFrequency.WEEKLY:
             interval = timedelta(weeks=1)

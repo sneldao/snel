@@ -15,6 +15,7 @@ class PaymentActionType(Enum):
 
 class PaymentActionFrequency(Enum):
     """Frequency options for recurring payments."""
+    HOURLY = "hourly"
     DAILY = "daily"
     WEEKLY = "weekly"
     MONTHLY = "monthly"

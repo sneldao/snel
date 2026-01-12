@@ -149,7 +149,7 @@ class UnifiedParser:
                 },
                 {
                     "pattern": re.compile(
-                        r"(?:setup|create)\s+(?:weekly|monthly|daily)?\s*(?:recurring\s+)?(?:payment|payments)\s+of\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
+                        r"(?:setup|create)\s+(?:hourly|weekly|monthly|daily)?\s*(?:recurring\s+)?(?:payment|payments)\s+of\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
                         re.IGNORECASE
                     ),
                     "description": "Recurring payment setup",

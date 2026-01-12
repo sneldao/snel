@@ -351,13 +351,6 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         }
     }, [walletClient, address, content, toast, publicClient]);
 
-} catch (error) {
-    console.error("Automation error:", error);
-    const msg = error instanceof Error ? error.message : String(error);
-    toast({ title: "Execution Failed", description: msg, status: "error" });
-}
-    }, [walletClient, address, content, toast, publicClient]);
-
 // Check if needs quote selection
 const needsSelection = requires_selection && all_quotes && all_quotes.length > 0;
 

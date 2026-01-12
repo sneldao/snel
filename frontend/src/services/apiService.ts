@@ -414,6 +414,80 @@ export class ApiService {
       throw error;
     }
   }
+
+  async put(endpoint: string, data: Record<string, unknown>) {
+    logger.api("PUT", `${this.apiUrl}${endpoint}`, data);
+
+    try {
+      const response = await fetch(`${this.apiUrl}${endpoint}`, {
+        method: "PUT",
+        headers: this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error("API Error Response:", errorText);
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.detail) {
+            throw new Error(errorJson.detail);
+          }
+        } catch (parseError) {
+          // If parsing fails, use the original error
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      logger.error("API request failed:", {
+        endpoint,
+        error,
+        requestData: data,
+      });
+      throw error;
+    }
+  }
+
+  async delete(endpoint: string) {
+    logger.api("DELETE", `${this.apiUrl}${endpoint}`);
+
+    try {
+      const response = await fetch(`${this.apiUrl}${endpoint}`, {
+        method: "DELETE",
+        headers: this.getHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error("API Error Response:", errorText);
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.detail) {
+            throw new Error(errorJson.detail);
+          }
+        } catch (parseError) {
+          // If parsing fails, use the original error
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      logger.error("API request failed:", {
+        endpoint,
+        error,
+      });
+      throw error;
+    }
+  }
   
   /**
    * Check if a service is available by testing the connection
