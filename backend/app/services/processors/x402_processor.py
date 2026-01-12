@@ -90,11 +90,11 @@ class X402Processor:
                 payment_details = {
                     "amount": str(unified_command.details.amount),
                     "asset": unified_command.details.token_in.symbol,
-                    "recipient": self._extract_recipient_from_command(unified_command.command)
+                    "recipient": await self._extract_recipient_from_command(unified_command.command)
                 }
             else:
                 # Fallback to natural language parsing
-                payment_details = self._parse_payment_command(unified_command.command)
+                payment_details = await self._parse_payment_command(unified_command.command)
             
             if not payment_details:
                 message = (
@@ -413,7 +413,7 @@ class X402Processor:
     async def _handle_recurring_payment(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Handle recurring payment setup with natural conversation."""
         try:
-            payment_details = self._parse_recurring_command(unified_command.command)
+            payment_details = await self._parse_recurring_command(unified_command.command)
             
             if not payment_details:
                 message = (
@@ -563,7 +563,7 @@ class X402Processor:
             metadata=metadata
         )
     
-    def _parse_payment_command(self, command: str) -> Optional[Dict[str, str]]:
+    async def _parse_payment_command(self, command: str) -> Optional[Dict[str, str]]:
         """Parse payment details from natural language command."""
         import re
         
@@ -575,7 +575,7 @@ class X402Processor:
         amount = amount_match.group(1)
         asset = amount_match.group(2)
         
-        recipient = self._extract_recipient_from_command(command)
+        recipient = await self._extract_recipient_from_command(command)
         if not recipient:
             return None
         
@@ -585,7 +585,7 @@ class X402Processor:
             "recipient": recipient
         }
 
-    def _extract_recipient_from_command(self, command: str) -> Optional[str]:
+    async def _extract_recipient_from_command(self, command: str) -> Optional[str]:
         """Extract recipient from command with real address resolution."""
         import re
         
@@ -601,13 +601,13 @@ class X402Processor:
             match = re.search(pattern, command.lower())
             if match:
                 captured = match.group(1)
-                recipient = self._resolve_recipient_address(captured)
+                recipient = await self._resolve_recipient_address(captured)
                 if recipient:
                     return recipient
         
         return None
     
-    def _parse_recurring_command(self, command: str) -> Optional[Dict[str, str]]:
+    async def _parse_recurring_command(self, command: str) -> Optional[Dict[str, str]]:
         """Parse recurring payment details from natural language command."""
         import re
         
@@ -628,7 +628,7 @@ class X402Processor:
         elif "monthly" in command.lower():
             interval = "monthly"
         
-        recipient = self._extract_recipient_from_command(command)
+        recipient = await self._extract_recipient_from_command(command)
         if not recipient:
             return None
         
@@ -639,7 +639,7 @@ class X402Processor:
             "interval": interval
         }
 
-    def _resolve_recipient_address(self, recipient_input: str) -> Optional[str]:
+    async def _resolve_recipient_address(self, recipient_input: str) -> Optional[str]:
         """
         Resolve recipient input to a valid Ethereum address.
         
@@ -656,7 +656,7 @@ class X402Processor:
         # Use centralized TokenQueryService for ENS resolution
         from app.services.token_query_service import token_query_service
         
-        resolved_address, _ = token_query_service.resolve_address(recipient_input)
+        resolved_address, _ = await token_query_service.resolve_address_async(recipient_input)
         if resolved_address:
             return resolved_address
             
