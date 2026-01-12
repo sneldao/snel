@@ -111,7 +111,8 @@ class TransferProcessor(BaseProcessor):
                 )
             
             # Resolve destination address (handle both addresses and ENS names)
-            resolved_address, display_name = token_query_service.resolve_address(details.destination, unified_command.chain_id)
+            # Try async resolution with Web3.bio fallback
+            resolved_address, display_name = await token_query_service.resolve_address_async(details.destination, unified_command.chain_id)
             if not resolved_address:
                 return self._create_guided_error_response(
                     command_type=CommandType.TRANSFER,

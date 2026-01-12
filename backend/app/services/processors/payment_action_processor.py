@@ -218,7 +218,7 @@ class PaymentActionProcessor(BaseProcessor):
             # Advance flow
             if current_step == "recipient" and recipient:
                 # Resolve recipient address to show user what they're sending to
-                resolved_addr, display_name = token_query_service.resolve_address(recipient, data.get('chain_id', 8453))
+                resolved_addr, display_name = await token_query_service.resolve_address_async(recipient, data.get('chain_id', 8453))
                 
                 if not resolved_addr:
                     # Failed to resolve - show error

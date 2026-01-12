@@ -59,12 +59,68 @@ class TokenQueryService:
                 except Exception as e:
                     logger.warning(f"Failed to initialize Web3 for chain {chain_id}: {e}")
     
+    async def _resolve_ens_web3bio(self, identity: str) -> Optional[str]:
+        """
+        Fallback ENS resolution using Web3.bio API.
+        
+        Args:
+            identity: ENS name or Ethereum address
+            
+        Returns:
+            Checksum address or None if resolution fails
+        """
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                url = f"https://api.web3.bio/ns/{identity}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if isinstance(data, list) and len(data) > 0:
+                            address = data[0].get('address')
+                            if address and Web3.is_address(address):
+                                return Web3.to_checksum_address(address)
+                        elif isinstance(data, dict):
+                            address = data.get('address')
+                            if address and Web3.is_address(address):
+                                return Web3.to_checksum_address(address)
+        except Exception as e:
+            logger.debug(f"Web3.bio resolution failed for {identity}: {e}")
+        
+        return None
+
+    async def resolve_address_async(self, address_or_ens: str, chain_id: int = 1) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Async version of resolve_address with Web3.bio fallback.
+        
+        Args:
+            address_or_ens: Ethereum address (0x...) or ENS name (name.eth)
+            chain_id: Chain ID for context (ENS resolves on mainnet regardless)
+            
+        Returns:
+            Tuple of (resolved_address, display_name)
+        """
+        # First try synchronous resolution
+        result = self.resolve_address(address_or_ens, chain_id)
+        if result[0]:
+            return result
+        
+        # If sync failed and it looks like ENS, try Web3.bio fallback
+        if address_or_ens.endswith('.eth'):
+            web3bio_result = await self._resolve_ens_web3bio(address_or_ens)
+            if web3bio_result:
+                _ens_cache[address_or_ens] = web3bio_result
+                logger.info(f"Resolved ENS {address_or_ens} to {web3bio_result} via Web3.bio")
+                return web3bio_result, address_or_ens
+        
+        return None, None
+
     def resolve_address(self, address_or_ens: str, chain_id: int = 1) -> Tuple[Optional[str], Optional[str]]:
         """
         Resolve an address or ENS name to a checksum address.
         
         Handles both Ethereum addresses and ENS names.
-        Uses Mainnet (chain_id=1) for ENS resolution.
+        Uses Mainnet (chain_id=1) for ENS resolution with Web3.bio fallback.
         
         Args:
             address_or_ens: Ethereum address (0x...) or ENS name (name.eth)
@@ -118,7 +174,8 @@ class TokenQueryService:
             return None, None
             
         except Exception as e:
-            logger.warning(f"Failed to resolve ENS {address_or_ens}: {e}")
+            logger.warning(f"Failed to resolve ENS {address_or_ens} via Web3: {e}, trying Web3.bio fallback")
+            # Will try async fallback in async context
             _ens_cache[address_or_ens] = None
             return None, None
     
