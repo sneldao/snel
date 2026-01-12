@@ -24,6 +24,9 @@ class PaymentActionProcessor(BaseProcessor):
         super().__init__(settings, protocol_registry, gmp_service, price_service, transaction_flow_service, **kwargs)
         self.service = None
         self.executor = None
+        # Track active guided send flows per wallet
+        # Format: {wallet_address: {"step": "recipient", "data": {...}}}
+        self._active_flows: Dict[str, Dict[str, Any]] = {}
     
     async def _init_service(self):
         """Lazy initialize service and executor."""
@@ -44,8 +47,22 @@ class PaymentActionProcessor(BaseProcessor):
                 status="error",
             )
         
-        # Parse command intent
-        text = command.command.lower()
+        # Parse command intent early for cancellation check
+        text = command.command.lower().strip()
+        
+        # Check for flow cancellation
+        if text in ["cancel", "stop", "never mind", "nevermind", "abort", "reset"]:
+            if wallet_address in self._active_flows:
+                del self._active_flows[wallet_address]
+            return UnifiedResponse(
+                content="Payment flow cancelled. What would you like to do?",
+                agent_type=AgentType.DEFAULT,
+                status="success",
+            )
+        
+        # Check if user has an active guided send flow
+        if wallet_address in self._active_flows:
+            return await self._handle_flow_continuation(command, wallet_address)
         
         # CREATE action
         if any(phrase in text for phrase in [
@@ -127,6 +144,12 @@ class PaymentActionProcessor(BaseProcessor):
         wallet_address: str,
     ) -> UnifiedResponse:
         """Handle guided send/pay flow - collects recipient and amount interactively."""
+        # Initialize flow state
+        self._active_flows[wallet_address] = {
+            "step": "recipient",
+            "data": {}
+        }
+        
         return UnifiedResponse(
             content={
                 "message": "Let's set up a payment! I'll guide you through it.",
@@ -143,6 +166,201 @@ class PaymentActionProcessor(BaseProcessor):
                 "total_steps": 4,
             },
         )
+    
+    async def _handle_flow_continuation(
+        self,
+        command: UnifiedCommand,
+        wallet_address: str,
+    ) -> UnifiedResponse:
+        """Handle continuation of guided send flow - intelligently parse user input for payment details."""
+        flow = self._active_flows[wallet_address]
+        current_step = flow["step"]
+        data = flow["data"]
+        
+        # Try to extract payment details from user input
+        recipient = self._extract_recipient(command.command)
+        amount = self._extract_amount(command.command)
+        token = self._extract_token(command.command)
+        chain_id = self._extract_chain(command.command)
+        
+        # Update flow data with any extracted info
+        if recipient:
+            data["recipient"] = recipient
+        if amount:
+            data["amount"] = amount
+        if token:
+            data["token"] = token
+        if chain_id:
+            data["chain_id"] = chain_id
+        
+        # Smart flow progression - check what we have vs what we need
+        # Always need: recipient, amount, token
+        missing = []
+        if not data.get("recipient"):
+            missing.append("recipient")
+        if not data.get("amount"):
+            missing.append("amount")
+        if not data.get("token"):
+            missing.append("token")
+        
+        # If user provided something useful, acknowledge and continue
+        if recipient or amount or token:
+            # Advance flow
+            if current_step == "recipient" and recipient:
+                flow["step"] = "amount"
+                return UnifiedResponse(
+                    content={
+                        "message": f"Great! Sending to {recipient}.",
+                        "step": "amount",
+                        "prompt": f"How much do you want to send? (e.g., '100 USDC' or just '100' if using {data.get('token', 'USDC')})",
+                        "info": f"Recipient: {recipient}",
+                    },
+                    agent_type=AgentType.DEFAULT,
+                    status="success",
+                    awaiting_confirmation=True,
+                    metadata={
+                        "flow": "guided_send",
+                        "step_number": 2,
+                        "total_steps": 4,
+                    },
+                )
+            
+            elif current_step == "amount" and (amount or token):
+                flow["step"] = "token" if not token else "confirm"
+                
+                if not token and amount:
+                    return UnifiedResponse(
+                        content={
+                            "message": f"Perfect! {amount}",
+                            "step": "token",
+                            "prompt": "Which token? (e.g., 'USDC', 'ETH', 'USDT')",
+                            "info": f"Recipient: {data.get('recipient')}, Amount: {amount}",
+                        },
+                        agent_type=AgentType.DEFAULT,
+                        status="success",
+                        awaiting_confirmation=True,
+                        metadata={
+                            "flow": "guided_send",
+                            "step_number": 3,
+                            "total_steps": 4,
+                        },
+                    )
+                elif token:
+                    flow["step"] = "confirm"
+                    # We have enough to confirm
+                    return UnifiedResponse(
+                        content={
+                            "message": "Ready to send!",
+                            "step": "confirm",
+                            "prompt": f"Confirm: Send {data.get('amount', amount)} {data.get('token', token)} to {data.get('recipient')}?",
+                            "info": f"Say 'yes', 'confirm', or 'send' to proceed",
+                        },
+                        agent_type=AgentType.DEFAULT,
+                        status="success",
+                        awaiting_confirmation=True,
+                        metadata={
+                            "flow": "guided_send",
+                            "step_number": 4,
+                            "total_steps": 4,
+                        },
+                    )
+        
+        # No new info extracted - reprompt for missing pieces
+        if current_step == "recipient":
+            return UnifiedResponse(
+                content={
+                    "message": "I need a recipient address to proceed.",
+                    "step": "recipient",
+                    "prompt": "Who are you sending to? (Wallet address or ENS name)",
+                    "error": "Please provide a valid Ethereum address or ENS name",
+                },
+                agent_type=AgentType.DEFAULT,
+                status="success",
+                awaiting_confirmation=True,
+                metadata={
+                    "flow": "guided_send",
+                    "step_number": 1,
+                    "total_steps": 4,
+                },
+            )
+        
+        # For other steps, show what's missing
+        missing_str = " and ".join(missing)
+        return UnifiedResponse(
+            content={
+                "message": f"I'm still missing: {missing_str}",
+                "step": current_step,
+                "prompt": f"Please provide: {missing_str}",
+                "collected": {
+                    "recipient": data.get("recipient"),
+                    "amount": data.get("amount"),
+                    "token": data.get("token"),
+                },
+            },
+            agent_type=AgentType.DEFAULT,
+            status="success",
+            awaiting_confirmation=True,
+            metadata={
+                "flow": "guided_send",
+                "step_number": min(2, len([k for k, v in data.items() if v])),
+                "total_steps": 4,
+            },
+        )
+    
+    def _extract_recipient(self, text: str) -> Optional[str]:
+        """Extract recipient address or ENS name from text."""
+        import re
+        # Check for Ethereum address (0x followed by 40 hex chars)
+        eth_match = re.search(r'0x[a-fA-F0-9]{40}', text)
+        if eth_match:
+            return eth_match.group(0)
+        
+        # Check for ENS name (word.eth)
+        ens_match = re.search(r'(\w+\.eth)', text, re.IGNORECASE)
+        if ens_match:
+            return ens_match.group(1)
+        
+        return None
+    
+    def _extract_amount(self, text: str) -> Optional[str]:
+        """Extract amount from text."""
+        import re
+        # Look for number patterns: "100", "100.5", "0.01"
+        amount_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:USDC|USDT|ETH|BTC|DAI|MNEE)?', text, re.IGNORECASE)
+        if amount_match:
+            return amount_match.group(1)
+        return None
+    
+    def _extract_token(self, text: str) -> Optional[str]:
+        """Extract token symbol from text."""
+        import re
+        # Look for common token symbols
+        tokens = ['USDC', 'USDT', 'ETH', 'BTC', 'DAI', 'MNEE', 'WETH', 'MATIC', 'ARB', 'OP']
+        for token in tokens:
+            if token.lower() in text.lower():
+                return token
+        return None
+    
+    def _extract_chain(self, text: str) -> Optional[int]:
+        """Extract chain from text."""
+        text_lower = text.lower()
+        chains = {
+            'ethereum': 1,
+            'polygon': 137,
+            'arbitrum': 42161,
+            'optimism': 10,
+            'base': 8453,
+            'bsc': 56,
+            'binance': 56,
+            'avalanche': 43114,
+            'cronos': 25,
+        }
+        
+        for chain_name, chain_id in chains.items():
+            if chain_name in text_lower:
+                return chain_id
+        
+        return None
     
     async def _handle_create(
         self,
