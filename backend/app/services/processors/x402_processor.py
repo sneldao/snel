@@ -54,23 +54,32 @@ class X402Processor:
         chain_info = get_chain_info(unified_command.chain_id)
         current_chain = chain_info.name if chain_info else f"Chain {unified_command.chain_id}"
         
+        metadata = {
+            "suggested_chains": [25, 338],
+            "current_chain": unified_command.chain_id,
+            "command_type": CommandType.X402_PAYMENT
+        }
+        
+        message = (
+            f"X402 agentic payments are available on **Cronos EVM**! 🤖\n\n"
+            f"You're currently on {current_chain}. To use AI-triggered payments and automated settlements, "
+            f"please switch to:\n"
+            f"• **Cronos Mainnet** (Chain ID: 25) for production\n"
+            f"• **Cronos Testnet** (Chain ID: 338) for testing\n\n"
+            f"Once connected, you can use commands like:\n"
+            f"• `pay agent 10 USDC for API calls`\n"
+            f"• `setup weekly payment of 100 USDC to supplier.eth`\n"
+            f"• `process batch settlement for contractors`"
+        )
+        
         return UnifiedResponse(
-            content=f"X402 agentic payments are available on **Cronos EVM**! 🤖\n\n"
-                   f"You're currently on {current_chain}. To use AI-triggered payments and automated settlements, "
-                   f"please switch to:\n"
-                   f"• **Cronos Mainnet** (Chain ID: 25) for production\n"
-                   f"• **Cronos Testnet** (Chain ID: 338) for testing\n\n"
-                   f"Once connected, you can use commands like:\n"
-                   f"• `pay agent 10 USDC for API calls`\n"
-                   f"• `setup weekly payment of 100 USDC to supplier.eth`\n"
-                   f"• `process batch settlement for contractors`",
+            content={
+                "message": message,
+                "metadata": metadata
+            },
             agent_type=AgentType.DEFAULT,
             status="success",
-            metadata={
-                "suggested_chains": [25, 338],
-                "current_chain": unified_command.chain_id,
-                "command_type": CommandType.X402_PAYMENT
-            }
+            metadata=metadata
         )
     
     async def _handle_ai_payment(self, unified_command: UnifiedCommand) -> UnifiedResponse:
@@ -80,13 +89,19 @@ class X402Processor:
             payment_details = self._parse_payment_command(unified_command.command)
             
             if not payment_details:
+                message = (
+                    "I can help you set up automated DeFi services! 🤖\n\n"
+                    "**Popular automations:**\n"
+                    "• `setup monthly portfolio rebalancing with 50 USDC budget`\n"
+                    "• `pay 20 USDC to rebalance when my ETH allocation drops below 30%`\n"
+                    "• `setup weekly 100 USDC for yield farming when APY > 15%`\n\n"
+                    "These use **Cronos x402** to execute automatically when conditions are met."
+                )
                 return UnifiedResponse(
-                    content="I can help you set up automated DeFi services! 🤖\n\n"
-                           "**Popular automations:**\n"
-                           "• `setup monthly portfolio rebalancing with 50 USDC budget`\n"
-                           "• `pay 20 USDC to rebalance when my ETH allocation drops below 30%`\n"
-                           "• `setup weekly 100 USDC for yield farming when APY > 15%`\n\n"
-                           "These use **Cronos x402** to execute automatically when conditions are met.",
+                    content={
+                        "message": message,
+                        "metadata": {"command_type": CommandType.X402_PAYMENT}
+                    },
                     agent_type=AgentType.DEFAULT,
                     status="success",
                     awaiting_confirmation=True,
@@ -196,93 +211,111 @@ class X402Processor:
         """Create automation-specific response."""
         
         if automation_type == "portfolio_rebalancing":
+            metadata = {
+                "automation_type": "portfolio_rebalancing",
+                "budget": float(payment_details['amount']),
+                "asset": payment_details['asset'],
+                "network": network,
+                "requires_signature": True,
+                "protocol": "x402",
+                "facilitator_healthy": is_healthy,
+                "service_description": "Automated portfolio rebalancing when allocation drifts >5%",
+                "command_type": CommandType.X402_PAYMENT
+            }
             return UnifiedResponse(
-                content=f"🎯 **Automated Portfolio Rebalancing Setup**\n\n"
-                       f"**Service Details:**\n"
-                       f"• Monthly Budget: {payment_details['amount']} {payment_details['asset']}\n"
-                       f"• Trigger: When allocation drifts >5% from target\n"
-                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'} (low fees)\n"
-                       f"• Execution: Automatic via x402 when needed\n\n"
-                       f"**How it works:**\n"
-                       f"1. I monitor your portfolio allocation 24/7\n"
-                       f"2. When rebalancing is needed, x402 authorizes payment\n"
-                       f"3. Trades execute automatically to restore target allocation\n"
-                       f"4. You stay balanced without manual intervention\n\n"
-                       f"**Ready to authorize?** This will enable autonomous portfolio management.",
+                content={
+                    "message": f"🎯 **Automated Portfolio Rebalancing Setup**\n\n"
+                           f"**Service Details:**\n"
+                           f"• Monthly Budget: {payment_details['amount']} {payment_details['asset']}\n"
+                           f"• Trigger: When allocation drifts >5% from target\n"
+                           f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'} (low fees)\n"
+                           f"• Execution: Automatic via x402 when needed\n\n"
+                           f"**How it works:**\n"
+                           f"1. I monitor your portfolio allocation 24/7\n"
+                           f"2. When rebalancing is needed, x402 authorizes payment\n"
+                           f"3. Trades execute automatically to restore target allocation\n"
+                           f"4. You stay balanced without manual intervention\n\n"
+                           f"**Ready to authorize?** This will enable autonomous portfolio management.",
+                    "type": "x402_automation",
+                    "metadata": metadata
+                },
                 agent_type=AgentType.TRANSFER,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "automation_type": "portfolio_rebalancing",
-                    "budget": float(payment_details['amount']),
-                    "asset": payment_details['asset'],
-                    "network": network,
-                    "requires_signature": True,
-                    "protocol": "x402",
-                    "facilitator_healthy": is_healthy,
-                    "service_description": "Automated portfolio rebalancing when allocation drifts >5%",
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
         
         elif automation_type == "yield_farming":
+            metadata = {
+                "automation_type": "yield_farming",
+                "budget": float(payment_details['amount']),
+                "asset": payment_details['asset'],
+                "network": network,
+                "requires_signature": True,
+                "protocol": "x402",
+                "facilitator_healthy": is_healthy,
+                "service_description": "Automated yield farming when APY > 15%",
+                "command_type": CommandType.X402_PAYMENT
+            }
+            message = (
+                f"🌾 **Automated Yield Farming Setup**\n\n"
+                f"**Service Details:**\n"
+                f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
+                f"• Trigger: When APY opportunities > 15% detected\n"
+                f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
+                f"• Execution: Automatic via x402 when conditions met\n\n"
+                f"**How it works:**\n"
+                f"1. I scan DeFi protocols for high-yield opportunities\n"
+                f"2. When APY > 15% found, x402 authorizes farming\n"
+                f"3. Funds deploy automatically to maximize yield\n"
+                f"4. You earn passive income without monitoring\n\n"
+                f"**Ready to start earning?** This enables autonomous yield optimization."
+            )
             return UnifiedResponse(
-                content=f"🌾 **Automated Yield Farming Setup**\n\n"
-                       f"**Service Details:**\n"
-                       f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
-                       f"• Trigger: When APY opportunities > 15% detected\n"
-                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
-                       f"• Execution: Automatic via x402 when conditions met\n\n"
-                       f"**How it works:**\n"
-                       f"1. I scan DeFi protocols for high-yield opportunities\n"
-                       f"2. When APY > 15% found, x402 authorizes farming\n"
-                       f"3. Funds deploy automatically to maximize yield\n"
-                       f"4. You earn passive income without monitoring\n\n"
-                       f"**Ready to start earning?** This enables autonomous yield optimization.",
+                content={
+                    "message": message,
+                    "type": "x402_automation",
+                    "metadata": metadata
+                },
                 agent_type=AgentType.TRANSFER,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "automation_type": "yield_farming",
-                    "budget": float(payment_details['amount']),
-                    "asset": payment_details['asset'],
-                    "network": network,
-                    "requires_signature": True,
-                    "protocol": "x402",
-                    "facilitator_healthy": is_healthy,
-                    "service_description": "Automated yield farming when APY > 15%",
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
         
         elif automation_type == "cross_chain_automation":
+            metadata = {
+                "automation_type": "cross_chain_automation",
+                "budget": float(payment_details['amount']),
+                "asset": payment_details['asset'],
+                "network": network,
+                "requires_signature": True,
+                "protocol": "x402",
+                "facilitator_healthy": is_healthy,
+                "service_description": "Automated cross-chain bridging on schedule",
+                "command_type": CommandType.X402_PAYMENT
+            }
             return UnifiedResponse(
-                content=f"🌉 **Automated Cross-Chain Bridge Setup**\n\n"
-                       f"**Service Details:**\n"
-                       f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
-                       f"• Trigger: Monthly automated bridging\n"
-                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
-                       f"• Execution: Automatic via x402 when scheduled\n\n"
-                       f"**How it works:**\n"
-                       f"1. I monitor your bridge schedule 24/7\n"
-                       f"2. When it's time to bridge, x402 authorizes transfer\n"
-                       f"3. Funds bridge automatically to destination chain\n"
-                       f"4. You maintain liquidity across chains effortlessly\n\n"
-                       f"**Ready to bridge?** This enables autonomous cross-chain management.",
+                content={
+                    "message": f"🌉 **Automated Cross-Chain Bridge Setup**\n\n"
+                           f"**Service Details:**\n"
+                           f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
+                           f"• Trigger: Monthly automated bridging\n"
+                           f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
+                           f"• Execution: Automatic via x402 when scheduled\n\n"
+                           f"**How it works:**\n"
+                           f"1. I monitor your bridge schedule 24/7\n"
+                           f"2. When it's time to bridge, x402 authorizes transfer\n"
+                           f"3. Funds bridge automatically to destination chain\n"
+                           f"4. You maintain liquidity across chains effortlessly\n\n"
+                           f"**Ready to bridge?** This enables autonomous cross-chain management.",
+                    "type": "x402_automation",
+                    "metadata": metadata
+                },
                 agent_type=AgentType.TRANSFER,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "automation_type": "cross_chain_automation",
-                    "budget": float(payment_details['amount']),
-                    "asset": payment_details['asset'],
-                    "network": network,
-                    "requires_signature": True,
-                    "protocol": "x402",
-                    "facilitator_healthy": is_healthy,
-                    "service_description": "Automated cross-chain bridging on schedule",
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
         
         elif automation_type == "recurring_payment":
@@ -290,63 +323,76 @@ class X402Processor:
             return await self._handle_recurring_payment(unified_command)
         
         elif automation_type == "conditional_trading":
+            metadata = {
+                "automation_type": "conditional_trading",
+                "budget": float(payment_details['amount']),
+                "asset": payment_details['asset'],
+                "network": network,
+                "requires_signature": True,
+                "protocol": "x402",
+                "facilitator_healthy": is_healthy,
+                "service_description": "Conditional trade execution based on market triggers",
+                "command_type": CommandType.X402_PAYMENT
+            }
             return UnifiedResponse(
-                content=f"📈 **Conditional Trading Setup**\n\n"
-                       f"**Trade Details:**\n"
-                       f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
-                       f"• Condition: Based on your specified trigger\n"
-                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
-                       f"• Execution: Automatic via x402 when condition met\n\n"
-                       f"**How it works:**\n"
-                       f"1. I monitor market conditions 24/7\n"
-                       f"2. When your condition is met, x402 authorizes trade\n"
-                       f"3. Trade executes automatically at optimal timing\n"
-                       f"4. You never miss opportunities while offline\n\n"
-                       f"**Ready to set the trap?** This enables autonomous market execution.",
+                content={
+                    "message": f"📈 **Conditional Trading Setup**\n\n"
+                           f"**Trade Details:**\n"
+                           f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
+                           f"• Condition: Based on your specified trigger\n"
+                           f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
+                           f"• Execution: Automatic via x402 when condition met\n\n"
+                           f"**How it works:**\n"
+                           f"1. I monitor market conditions 24/7\n"
+                           f"2. When your condition is met, x402 authorizes trade\n"
+                           f"3. Trade executes automatically at optimal timing\n"
+                           f"4. You never miss opportunities while offline\n\n"
+                           f"**Ready to set the trap?** This enables autonomous market execution.",
+                    "type": "x402_automation",
+                    "metadata": metadata
+                },
                 agent_type=AgentType.TRANSFER,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "automation_type": "conditional_trading",
-                    "budget": float(payment_details['amount']),
-                    "asset": payment_details['asset'],
-                    "network": network,
-                    "requires_signature": True,
-                    "protocol": "x402",
-                    "facilitator_healthy": is_healthy,
-                    "service_description": "Conditional trade execution based on market triggers",
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
         
         else:
             # General automation
+            metadata = {
+                "automation_type": "general_automation",
+                "budget": float(payment_details['amount']),
+                "asset": payment_details['asset'],
+                "network": network,
+                "requires_signature": True,
+                "protocol": "x402",
+                "facilitator_healthy": is_healthy,
+                "service_description": "General DeFi automation services",
+                "command_type": CommandType.X402_PAYMENT
+            }
+            message = (
+                f"🤖 **DeFi Automation Service**\n\n"
+                f"**Service Details:**\n"
+                f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
+                f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
+                f"• Execution: Automatic via x402 when conditions met\n\n"
+                f"**Available Automations:**\n"
+                f"• Portfolio rebalancing when allocation drifts\n"
+                f"• Yield farming when high APY opportunities arise\n"
+                f"• Conditional trading based on price triggers\n"
+                f"• Cross-chain bridging on schedule\n\n"
+                f"**Ready to automate?** This enables autonomous DeFi management."
+            )
             return UnifiedResponse(
-                content=f"🤖 **DeFi Automation Service**\n\n"
-                       f"**Service Details:**\n"
-                       f"• Budget: {payment_details['amount']} {payment_details['asset']}\n"
-                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n"
-                       f"• Execution: Automatic via x402 when conditions met\n\n"
-                       f"**Available Automations:**\n"
-                       f"• Portfolio rebalancing when allocation drifts\n"
-                       f"• Yield farming when high APY opportunities arise\n"
-                       f"• Conditional trading based on price triggers\n"
-                       f"• Cross-chain bridging on schedule\n\n"
-                       f"**Ready to automate?** This enables autonomous DeFi management.",
+                content={
+                    "message": message,
+                    "type": "x402_automation",
+                    "metadata": metadata
+                },
                 agent_type=AgentType.TRANSFER,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "automation_type": "general_automation",
-                    "budget": float(payment_details['amount']),
-                    "asset": payment_details['asset'],
-                    "network": network,
-                    "requires_signature": True,
-                    "protocol": "x402",
-                    "facilitator_healthy": is_healthy,
-                    "service_description": "General DeFi automation services",
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
     
     async def _handle_recurring_payment(self, unified_command: UnifiedCommand) -> UnifiedResponse:
@@ -355,42 +401,67 @@ class X402Processor:
             payment_details = self._parse_recurring_command(unified_command.command)
             
             if not payment_details:
+                message = (
+                    "Let me help you set up a recurring payment! 🔄\n\n"
+                    "I need these details:\n"
+                    "• **Frequency**: daily, weekly, or monthly\n"
+                    "• **Amount and token**: e.g., '100 USDC'\n"
+                    "• **Recipient**: e.g., 'supplier.eth'\n\n"
+                    "Try: `setup weekly payment of 100 USDC to supplier.eth`"
+                )
                 return UnifiedResponse(
-                    content="Let me help you set up a recurring payment! 🔄\n\n"
-                           "I need these details:\n"
-                           "• **Frequency**: daily, weekly, or monthly\n"
-                           "• **Amount and token**: e.g., '100 USDC'\n"
-                           "• **Recipient**: e.g., 'supplier.eth'\n\n"
-                           "Try: `setup weekly payment of 100 USDC to supplier.eth`",
+                    content={
+                        "message": message,
+                        "metadata": {"command_type": CommandType.X402_PAYMENT}
+                    },
                     agent_type=AgentType.DEFAULT,
                     status="success",
                     awaiting_confirmation=True,
                     metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
+            metadata = {
+                "payment_type": "recurring",
+                "interval": payment_details['interval'],
+                "amount": payment_details['amount'],
+                "asset": payment_details['asset'],
+                "recipient": payment_details['recipient'],
+                "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+                "requires_signature": True,
+                "command_type": CommandType.X402_PAYMENT,
+                "automation_type": "recurring_payment" # Explicitly add for frontend card detection
+            }
+            
             return UnifiedResponse(
-                content=f"🔄 **Recurring Payment Setup**\n\n"
-                       f"**Payment Schedule:**\n"
-                       f"• Frequency: {payment_details['interval'].title()}\n"
-                       f"• Amount: {payment_details['amount']} {payment_details['asset']}\n"
-                       f"• Recipient: {payment_details['recipient']}\n"
-                       f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n\n"
-                       f"This will create an **automated settlement workflow** using Cronos x402, "
-                       f"allowing payments to execute automatically based on your schedule.\n\n"
-                       f"*The recurring payment will be active once you sign the authorization.*",
+                content={
+                    "message": f"🔄 **Recurring Payment Setup**\n\n"
+                           f"**Payment Schedule:**\n"
+                           f"• Frequency: {payment_details['interval'].title()}\n"
+                           f"• Amount: {payment_details['amount']} {payment_details['asset']}\n"
+                           f"• Recipient: {payment_details['recipient']}\n"
+                           f"• Network: Cronos {'Testnet' if unified_command.chain_id == 338 else 'Mainnet'}\n\n"
+                           f"This will create an **automated settlement workflow** using Cronos x402, "
+                           f"allowing payments to execute automatically based on your schedule.\n\n"
+                           f"*The recurring payment will be active once you sign the authorization.*",
+                    "type": "x402_automation",
+                    "metadata": {
+                        "automation_type": "recurring_payment",
+                        "payment_type": "recurring",
+                        "interval": payment_details['interval'],
+                        "amount": payment_details['amount'],
+                        "budget": float(payment_details['amount']),
+                        "asset": payment_details['asset'],
+                        "recipient": payment_details['recipient'],
+                        "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+                        "requires_signature": True,
+                        "protocol": "x402",
+                        "command_type": CommandType.X402_PAYMENT
+                    }
+                },
                 agent_type=AgentType.TRANSFER,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "payment_type": "recurring",
-                    "interval": payment_details['interval'],
-                    "amount": payment_details['amount'],
-                    "asset": payment_details['asset'],
-                    "recipient": payment_details['recipient'],
-                    "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
-                    "requires_signature": True,
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
             
         except Exception as e:
@@ -406,25 +477,32 @@ class X402Processor:
     async def _handle_settlement(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Handle batch settlement operations."""
         try:
+            metadata = {
+                "payment_type": "batch_settlement",
+                "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+                "command_type": CommandType.X402_PAYMENT
+            }
+            message = (
+                f"📦 **Batch Settlement Processing**\n\n"
+                f"I can help you process multiple payments in a single transaction using "
+                f"Cronos x402 batch settlement capabilities.\n\n"
+                f"**Example batch operations:**\n"
+                f"• Pay multiple suppliers at once\n"
+                f"• Process contractor payments in bulk\n"
+                f"• Execute scheduled payment batches\n\n"
+                f"This uses **automated settlement workflows** to reduce gas costs and "
+                f"simplify multi-recipient payments.\n\n"
+                f"*Would you like me to help you set up a specific batch payment?*"
+            )
             return UnifiedResponse(
-                content=f"📦 **Batch Settlement Processing**\n\n"
-                       f"I can help you process multiple payments in a single transaction using "
-                       f"Cronos x402 batch settlement capabilities.\n\n"
-                       f"**Example batch operations:**\n"
-                       f"• Pay multiple suppliers at once\n"
-                       f"• Process contractor payments in bulk\n"
-                       f"• Execute scheduled payment batches\n\n"
-                       f"This uses **automated settlement workflows** to reduce gas costs and "
-                       f"simplify multi-recipient payments.\n\n"
-                       f"*Would you like me to help you set up a specific batch payment?*",
+                content={
+                    "message": message,
+                    "metadata": metadata
+                },
                 agent_type=AgentType.DEFAULT,
                 status="success",
                 awaiting_confirmation=True,
-                metadata={
-                    "payment_type": "batch_settlement",
-                    "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
-                    "command_type": CommandType.X402_PAYMENT
-                }
+                metadata=metadata
             )
             
         except Exception as e:
@@ -439,27 +517,34 @@ class X402Processor:
     
     async def _handle_general_x402_info(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Provide information about x402 capabilities."""
+        metadata = {
+            "info_type": "x402_capabilities",
+            "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
+            "command_type": CommandType.X402_PAYMENT
+        }
+        message = (
+            "🤖 **X402 Agentic Payment System**\n\n"
+            "I can help you with AI-powered payments on Cronos EVM:\n\n"
+            "**AI Agent Payments:**\n"
+            "• `pay agent 10 USDC for API calls`\n"
+            "• `send 5 CRO to agent.eth for processing`\n\n"
+            "**Recurring Payments:**\n"
+            "• `setup weekly payment of 100 USDC to supplier.eth`\n"
+            "• `create monthly payment of 50 CRO to contractor.eth`\n\n"
+            "**Batch Settlements:**\n"
+            "• `process batch settlement for suppliers`\n"
+            "• `execute batch payment to contractors`\n\n"
+            "All payments use **Cronos x402 protocol** for secure, AI-triggered transactions "
+            "with EIP-712 authorization and automated settlement workflows."
+        )
         return UnifiedResponse(
-            content="🤖 **X402 Agentic Payment System**\n\n"
-                   "I can help you with AI-powered payments on Cronos EVM:\n\n"
-                   "**AI Agent Payments:**\n"
-                   "• `pay agent 10 USDC for API calls`\n"
-                   "• `send 5 CRO to agent.eth for processing`\n\n"
-                   "**Recurring Payments:**\n"
-                   "• `setup weekly payment of 100 USDC to supplier.eth`\n"
-                   "• `create monthly payment of 50 CRO to contractor.eth`\n\n"
-                   "**Batch Settlements:**\n"
-                   "• `process batch settlement for suppliers`\n"
-                   "• `execute batch payment to contractors`\n\n"
-                   "All payments use **Cronos x402 protocol** for secure, AI-triggered transactions "
-                   "with EIP-712 authorization and automated settlement workflows.",
+            content={
+                "message": message,
+                "metadata": metadata
+            },
             agent_type=AgentType.DEFAULT,
             status="success",
-            metadata={
-                "info_type": "x402_capabilities",
-                "network": "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet",
-                "command_type": CommandType.X402_PAYMENT
-            }
+            metadata=metadata
         )
     
     def _parse_payment_command(self, command: str) -> Optional[Dict[str, str]]:

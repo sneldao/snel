@@ -72,6 +72,14 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
                     icon: FaRobot,
                     color: 'orange.500',
                 };
+            case 'recurring_payment':
+                return {
+                    title: '🔄 Recurring Payment',
+                    description: 'Automated settlement on schedule',
+                    frequency: content?.metadata?.interval ? content.metadata.interval.charAt(0).toUpperCase() + content.metadata.interval.slice(1) : 'Scheduled',
+                    icon: FaClock,
+                    color: 'blue.500',
+                };
             case 'cross_chain_automation':
                 return {
                     title: '🌉 Cross-Chain Bridge',
@@ -92,6 +100,7 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
     };
 
     const automationDetails = getAutomationDetails();
+    const recipient = content?.metadata?.recipient;
 
     return (
         <Box
@@ -161,6 +170,14 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
                         <Text fontSize="sm" fontWeight="medium">Frequency:</Text>
                         <Text fontSize="sm">{automationDetails.frequency}</Text>
                     </HStack>
+                    {recipient && (
+                        <HStack justify="space-between">
+                            <Text fontSize="sm" fontWeight="medium">Recipient:</Text>
+                            <Text fontSize="sm" fontFamily="mono">
+                                {recipient.length > 20 ? `${recipient.slice(0, 6)}...${recipient.slice(-4)}` : recipient}
+                            </Text>
+                        </HStack>
+                    )}
                 </VStack>
 
                 <Divider />
