@@ -174,7 +174,16 @@ async def get_payment_action_service(backend: Optional[BaseStorageBackend] = Non
     if _service_instance is None:
         if backend is None:
             # Import here to avoid circular imports
-            from .backend_factory import get_payment_actions_backend
-            backend = await get_payment_actions_backend()
+            # from .backend_factory import get_payment_actions_backend
+            # backend = await get_payment_actions_backend()
+            
+            # Default to Persistent JSON Storage for Hackathon/Dev
+            from .storage import JsonFileStorageBackend
+            import os
+            
+            # Use a path in the project root or temp dir to persist
+            storage_path = os.getenv("PAYMENT_STORAGE_PATH", "payment_actions_db.json")
+            backend = JsonFileStorageBackend(file_path=storage_path)
+            
         _service_instance = PaymentActionService(backend=backend)
     return _service_instance

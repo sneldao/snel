@@ -25,6 +25,8 @@ export const SpendingAnalyticsView: React.FC<SpendingAnalyticsProps> = ({
   analytics, 
   isLoading 
 }) => {
+  const [showDemo, setShowDemo] = React.useState(false);
+
   if (isLoading) {
     return (
       <Box textAlign="center" py={8}>
@@ -33,8 +35,41 @@ export const SpendingAnalyticsView: React.FC<SpendingAnalyticsProps> = ({
     );
   }
 
+  // Handle empty state with Toggle for Demo
+  if (!showDemo && (parseFloat(analytics.totalSpent) === 0 && analytics.categories.length === 0)) {
+    return (
+      <Box textAlign="center" py={8} borderWidth="1px" borderRadius="lg" bg="gray.50">
+        <Icon as={FaChartBar} boxSize={8} color="gray.400" mb={3} />
+        <Text fontWeight="bold" color="gray.600">No Spending Data</Text>
+        <Text fontSize="sm" color="gray.500" mb={4}>
+          Make payments to see your spending analytics here.
+        </Text>
+        <Button size="xs" variant="link" colorScheme="blue" onClick={() => setShowDemo(true)}>
+          See Example
+        </Button>
+      </Box>
+    );
+  }
+
+  // Use real data or mock data based on toggle
+  const displayData = showDemo ? {
+      totalSpent: '27.8',
+      period: 'month',
+      categories: [
+        { name: 'Payments', amount: '12.5', percentage: 45 },
+        { name: 'Transfers', amount: '8.2', percentage: 30 },
+        { name: 'Gifts', amount: '4.3', percentage: 15 },
+        { name: 'Bills', amount: '2.8', percentage: 10 }
+      ],
+      trend: 'decreasing',
+      comparisonPeriod: {
+        amount: '32.5',
+        change: -14.5
+      }
+  } : analytics;
+
   const getTrendIcon = () => {
-    switch (analytics.trend) {
+    switch (displayData.trend) {
       case 'increasing': return <Icon as={FaArrowUp} color="red.500" />;
       case 'decreasing': return <Icon as={FaArrowDown} color="green.500" />;
       default: return null;
@@ -42,7 +77,7 @@ export const SpendingAnalyticsView: React.FC<SpendingAnalyticsProps> = ({
   };
 
   const getTrendColor = () => {
-    switch (analytics.trend) {
+    switch (displayData.trend) {
       case 'increasing': return 'red.500';
       case 'decreasing': return 'green.500';
       default: return 'gray.500';
@@ -51,23 +86,36 @@ export const SpendingAnalyticsView: React.FC<SpendingAnalyticsProps> = ({
 
   return (
     <VStack spacing={6} align="stretch">
+      {/* Demo Banner */}
+      {showDemo && (
+        <HStack bg="blue.50" p={2} borderRadius="md" justify="space-between">
+          <HStack>
+            <Badge colorScheme="blue">EXAMPLE</Badge>
+            <Text fontSize="xs" color="blue.700">This is sample data.</Text>
+          </HStack>
+          <Button size="xs" variant="ghost" colorScheme="blue" onClick={() => setShowDemo(false)}>
+            Hide
+          </Button>
+        </HStack>
+      )}
+
       {/* Total Spent */}
       <Box borderWidth="1px" borderRadius="lg" p={4}>
         <Stat>
           <StatLabel>Total Spent</StatLabel>
-          <StatNumber>{analytics.totalSpent} ETH</StatNumber>
-          {analytics.comparisonPeriod && (
+          <StatNumber>{displayData.totalSpent} ETH</StatNumber>
+          {displayData.comparisonPeriod && (
             <StatHelpText>
               <HStack spacing={2}>
-                <StatArrow type={analytics.trend === 'decreasing' ? 'decrease' : 'increase'} />
+                <StatArrow type={displayData.trend === 'decreasing' ? 'decrease' : 'increase'} />
                 {getTrendIcon()}
                 <Text color={getTrendColor()}>
-                  {Math.abs(analytics.comparisonPeriod.change).toFixed(1)}% 
-                  {analytics.trend === 'decreasing' ? ' decrease' : ' increase'}
+                  {Math.abs(displayData.comparisonPeriod.change).toFixed(1)}% 
+                  {displayData.trend === 'decreasing' ? ' decrease' : ' increase'}
                 </Text>
               </HStack>
               <Text fontSize="xs" color="gray.500">
-                vs previous period ({analytics.comparisonPeriod.amount} ETH)
+                vs previous period ({displayData.comparisonPeriod.amount} ETH)
               </Text>
             </StatHelpText>
           )}
@@ -78,7 +126,7 @@ export const SpendingAnalyticsView: React.FC<SpendingAnalyticsProps> = ({
       <Box>
         <Text fontWeight="bold" mb={3}>Spending by Category</Text>
         <VStack spacing={4} align="stretch">
-          {analytics.categories.map((category, index) => (
+          {displayData.categories.map((category, index) => (
             <Box key={index}>
               <HStack justify="space-between" mb={1}>
                 <Text fontSize="sm">{category.name}</Text>
@@ -103,7 +151,7 @@ export const SpendingAnalyticsView: React.FC<SpendingAnalyticsProps> = ({
       {/* Period Info */}
       <HStack justify="space-between" fontSize="sm" color="gray.500">
         <Text>
-          Period: This {analytics.period}
+          Period: This {displayData.period}
         </Text>
         <Badge colorScheme="purple">
           <Icon as={FaChartBar} mr={1} />

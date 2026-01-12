@@ -1,5 +1,63 @@
 # Payments & Transactions
 
+## X402 Agentic Payment Integration
+
+### Overview
+
+X402 is Cronos' protocol for AI-triggered payments and automated settlement workflows. SNEL integrates x402 naturally into conversations, following the same pattern as MNEE payments.
+
+### Core Features
+
+- **AI-Triggered Payments**: Autonomous payments executed by AI agents based on conditions
+- **EIP-712 Authorization**: Secure cryptographic signatures for payment delegation  
+- **Gasless Transactions**: EIP-7702 delegation for reduced transaction costs
+- **Automated Settlement**: Recurring and scheduled payment workflows
+- **Batch Processing**: Multiple payments in single transaction for efficiency
+- **Agent-to-Agent Transactions**: Direct AI-to-AI settlement without human intervention
+
+### Natural Language Commands
+
+```bash
+# AI Agent Payments
+"pay agent 10 USDC for API calls"
+"send 5 CRO to agent.eth for processing"
+
+# Recurring Payments
+"setup weekly payment of 100 USDC to supplier.eth"
+"create monthly payment of 50 CRO to contractor.eth"
+
+# Batch Settlements
+"process batch settlement for suppliers"
+"execute batch payment to contractors"
+```
+
+### Network Support
+
+- **Cronos Mainnet** (Chain ID: 25)
+- **Cronos Testnet** (Chain ID: 338)
+
+When users attempt x402 commands on other networks, SNEL naturally suggests switching to Cronos.
+
+### Integration Architecture
+
+X402 follows the same natural integration pattern as MNEE:
+
+1. **Contextual Discovery**: Mentioned in capability discussions
+2. **Network-Aware Suggestions**: Prompts to switch to Cronos when needed
+3. **Natural Language Processing**: Commands parsed conversationally
+4. **Knowledge Base Integration**: Full protocol information available
+
+### User Experience Flow
+
+```
+User: "what can you do?"
+SNEL: "I support MNEE commerce payments and X402 agentic payments on Cronos..."
+
+User: "pay agent 10 USDC"
+SNEL: [If not on Cronos] "X402 agentic payments are available on Cronos EVM! Switch to..."
+SNEL: [If on Cronos] "🤖 AI Agent Payment Ready - Amount: 10 USDC..."
+```
+
 ## Payment Actions System (Phase 1)
 
 User-customizable payment actions with guided chat-based creation and personalization.

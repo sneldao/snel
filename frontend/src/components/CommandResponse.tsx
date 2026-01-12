@@ -104,6 +104,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         [walletClient, publicClient, chainId]
     );
 
+    const apiService = React.useMemo(() => new ApiService(), []);
+
     // Extract transaction data
     const transactionData = transaction || getTransactionFromContent(content);
 
@@ -200,13 +202,28 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             const txService = new TransactionService(walletClient, publicClient, chainId);
             const result = await txService.executeTransaction(transactionData);
 
-            toast({
-                title: 'Transaction Sent',
-                description: `Transaction hash: ${result.hash}`,
-                status: 'success',
-                duration: 5000,
-                isClosable: true,
-            });
+            // Handle Payment Result Submission
+            if (typeChecks.isPaymentSignature && address && content && typeof content === 'object') {
+                 const actionId = (content as any).action_id;
+                 if (actionId) {
+                     await apiService.submitPaymentResult(actionId, result.hash, address);
+                     toast({
+                        title: 'Payment Submitted',
+                        description: 'Your payment has been recorded successfully.',
+                        status: 'success',
+                        duration: 3000,
+                        isClosable: true,
+                     });
+                 }
+            } else {
+                 toast({
+                    title: 'Transaction Sent',
+                    description: `Transaction hash: ${result.hash}`,
+                    status: 'success',
+                    duration: 5000,
+                    isClosable: true,
+                });
+            }
         } catch (error) {
             console.error('Failed to execute transaction:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -227,7 +244,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                 isClosable: true,
             });
         }
-    }, [transactionData, walletClient, publicClient, chainId, userRejected, toast, setUserRejected]);
+    }, [transactionData, walletClient, publicClient, chainId, userRejected, toast, setUserRejected, typeChecks, address, content, apiService]);
 
     // Handle portfolio action clicks
     const handleActionClick = React.useCallback(

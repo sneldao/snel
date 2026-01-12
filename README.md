@@ -13,9 +13,10 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 
 ## ✨ Key Features
 
-- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"`, `"pay $100 MNEE to merchant for order #1234"`, or `"swap $100 of USDC for ETH"`.
-- **🌐 Multi-Chain Support**: Operates on 16+ networks including Ethereum, Polygon, Base, and Arbitrum.
+- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"`, `"pay agent 10 USDC for API calls"`, or `"swap $100 of USDC for ETH"`.
+- **🌐 Multi-Chain Support**: Operates on 19+ networks including Ethereum, Polygon, Base, Arbitrum, and Cronos EVM.
 - **💳 MNEE Commerce Payments**: Native support for MNEE stablecoin with invoice references for business-to-business transactions.
+- **🤖 X402 Agentic Payments**: AI-triggered payments and automated settlement workflows on Cronos EVM.
 - **🔄 Advanced Transaction Handling**: Automatically handles multi-step processes like approvals and swaps with real-time status updates.
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
 - **🛡️ Privacy Bridging**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP.
@@ -63,6 +64,11 @@ See the [docs/README.md](docs/README.md) for a complete overview of the document
 **MNEE Commerce Payments**:
 - `pay $100 MNEE to merchant for order #1234` - MNEE payment with invoice reference
 - `send 50 MNEE to 0x... for invoice INV-001` - Direct MNEE transfer with memo
+
+**X402 Agentic Payments**:
+- `pay agent 10 USDC for API calls` - AI-triggered payment on Cronos
+- `setup weekly payment of 100 USDC to supplier.eth` - Recurring automated payment
+- `process batch settlement for contractors` - Multi-recipient batch payment
 
 **Privacy & Bridging**:
 - `bridge 1 ETH to Zcash` - Privacy bridge via Axelar
@@ -117,14 +123,15 @@ cd frontend && npm run dev
 
 **Track**: AI and Agent Payments (Primary), Commerce and Creator Tools, Financial Automation  
 **Focus**: Autonomous Agent Payments & Programmable B2B Commerce  
+**Hackathon**: Cronos x402 Paytech Hackathon  
 **Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
 
-SNEL integrates MNEE stablecoin as a native payment option, enabling:
-- **Natural Language Payments**: Execute commands like `"pay $100 MNEE to merchant.eth for invoice #42"`
-- **Autonomous Agent Payments**: AI-to-AI settlement using programmable MNEE transfers
+SNEL integrates both MNEE stablecoin and Cronos x402 protocol, enabling:
+- **Natural Language Payments**: Execute commands like `"pay $100 MNEE to merchant.eth for invoice #42"` and `"pay agent 10 USDC for API calls"`
+- **Autonomous Agent Payments**: AI-to-AI settlement using programmable MNEE transfers and x402 agentic payments
 - **Commerce & Invoicing**: Built-in support for invoice references and merchant metadata
-- **Treasury Automation**: AI-managed treasury operations using MNEE for stability
-- **Seamless Conversion**: Intelligent USD-to-MNEE price routing and conversion
+- **Treasury Automation**: AI-managed treasury operations using MNEE for stability and x402 for automation
+- **Seamless Conversion**: Intelligent USD-to-token price routing and conversion
 
 See our detailed [ROADMAP.md](docs/ROADMAP.md) for our hackathon plans and future development.
 

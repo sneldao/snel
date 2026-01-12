@@ -322,6 +322,56 @@ export class ApiService {
     }
   }
 
+  async submitPaymentSignature(
+    actionId: string,
+    signedRawTx: string,
+    walletAddress: string
+  ) {
+    const response = await fetch(`${this.apiUrl}/payments/submit-signature`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        action_id: actionId,
+        signed_raw_tx: signedRawTx,
+        wallet_address: walletAddress,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.detail || `Error ${response.status}: ${response.statusText}`
+      );
+    }
+
+    return response.json();
+  }
+
+  async submitPaymentResult(
+    actionId: string,
+    txHash: string,
+    walletAddress: string
+  ) {
+    const response = await fetch(`${this.apiUrl}/payments/submit-result`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        action_id: actionId,
+        transaction_hash: txHash,
+        wallet_address: walletAddress,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.detail || `Error ${response.status}: ${response.statusText}`
+      );
+    }
+
+    return response.json();
+  }
+
   // Add these methods to support the PortfolioService
   async post(endpoint: string, data: Record<string, unknown>) {
     logger.api("POST", `${this.apiUrl}${endpoint}`, data);

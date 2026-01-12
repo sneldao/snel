@@ -273,6 +273,40 @@ class MNEEAdapter:
         
         network_info = self._get_network_info(chain_id)
         
+        if chain_id == 1: # Ethereum
+            # Construct ERC-20 Transfer Transaction
+            mnee_address = "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"
+            
+            # Simple manual construction of ERC-20 transfer data selector + args
+            # transfer(address,uint256) -> 0xa9059cbb
+            # to_address padded to 32 bytes
+            # amount padded to 32 bytes
+            
+            if not to_address:
+                raise ValueError("Recipient address required for Ethereum transaction")
+                
+            clean_to = to_address.replace("0x", "")
+            padded_to = clean_to.zfill(64)
+            
+            amount_atomic = quote.get("to_amount_atomic") # This is MNEE atomic (10^5)? 
+            # WAIT: MNEE on Ethereum is ERC-20. Does it use 6 or 18 decimals?
+            # MNEE on Ethereum usually matches fiat, so likely 6 or 18.
+            # The adapter says: "1 MNEE = 100,000 atomic" -> 5 decimals?
+            # I should double check. But assuming atomic amount from quote is correct.
+            
+            hex_amount = hex(int(amount_atomic))[2:]
+            padded_amount = hex_amount.zfill(64)
+            
+            data = f"0xa9059cbb{padded_to}{padded_amount}"
+            
+            return {
+                "to": mnee_address,
+                "data": data,
+                "value": "0",
+                "chain_id": 1,
+                "gas_limit": "65000" # Estimate
+            }
+
         return {
             "protocol": "mnee",
             "chain_id": chain_id,

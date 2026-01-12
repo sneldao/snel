@@ -83,6 +83,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         isPortfolioDisabled,
         isBridgePrivacyReady,
         isCrossChainSuccess,
+        isPaymentSignature,
     } = typeChecks;
 
     // Auto-open post-bridge modal when success content arrives
@@ -91,6 +92,25 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
             setIsPostBridgeModalOpen(true);
         }
     }, [content]);
+
+    // Payment Signature Request
+    if (isPaymentSignature) {
+        return (
+             <UnifiedConfirmation
+                agentType="payment"
+                content={{
+                    message: getContentMessage(content) || 'Sign Payment Transaction',
+                    type: 'payment_signature',
+                    details: isObjectContent(content) ? (content as any).payment_details || {} : {},
+                }}
+                transaction={transactionData}
+                metadata={metadata}
+                onExecute={onExecute}
+                onCancel={onCancel}
+                isLoading={isExecuting}
+            />
+        );
+    }
 
     // Multi-Step Transaction / Progress View
     // If we have multi-step state, it means a flow has started or is in progress.

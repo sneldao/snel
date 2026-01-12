@@ -33,7 +33,7 @@
     "react-remove-scroll": "^2.7.1",
     "react-speech-recognition": "^4.0.1",
     "recharts": "^3.1.0",
-    "viem": "^2.24.0",
+    "viem": "^2.44.1",
     "wagmi": "^2.8.8",
     "ws": "^8.16.0"
   },
@@ -43,7 +43,6 @@
     "start": "next start",
     "lint": "eslint ."
   },
-
   "overrides": {
     "zod-validation-error": {
       "zod": "4.3.5"

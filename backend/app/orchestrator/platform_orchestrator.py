@@ -23,6 +23,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.portfolio.portfolio_service import Web3Helper
 from config.settings import Settings
 from openai import AsyncOpenAI
+# Payment imports
+from app.domains.payment_actions.models import CreatePaymentActionRequest, PaymentActionType
+from app.domains.payment_actions.service import get_payment_action_service
+from app.domains.payment_actions.executor import get_payment_executor, ExecutionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +106,10 @@ class SNELOrchestrator:
                 self._service_pool['command_processor'] = command_processor
             except Exception as e:
                 logger.warning(f"Command processor initialization failed: {e}")
+
+        # Initialize Payment Services (Async init handling in methods)
+        self._service_pool['payment_service'] = None
+        self._service_pool['payment_executor'] = None
         
         # RELIABLE: Health monitoring and circuit breakers
         self._service_health: Dict[str, ServiceHealth] = {}
@@ -313,7 +321,13 @@ class SNELOrchestrator:
                     cache_key, 
                     self._execute_swap(parameters, platform, platform_config)
                 )
-            elif operation.lower() in ['bridge', 'transfer']:
+            elif operation.lower() in ['pay', 'send', 'payment', 'transfer']:
+                 # Payments are critical, deduplicate but prioritize
+                result = await self._deduplicate_request(
+                    cache_key,
+                    self._execute_payment(parameters, platform, platform_config)
+                )
+            elif operation.lower() in ['bridge']:
                 result = await self._deduplicate_request(
                     cache_key,
                     self._execute_bridge(parameters, platform, platform_config)
@@ -364,6 +378,78 @@ class SNELOrchestrator:
             
             return self._format_error_response(error_msg, platform)
     
+    async def _execute_payment(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
+        """ENHANCED: Platform-optimized payment execution with MNEE integration"""
+        try:
+            # Lazy load services
+            payment_service = await get_payment_action_service()
+            payment_executor = await get_payment_executor()
+            
+            # Extract parameters
+            recipient = params.get('recipient', params.get('to_address', params.get('to')))
+            amount = params.get('amount')
+            token = params.get('token', 'MNEE')  # Default to MNEE
+            chain_id = int(params.get('chain_id', 1))
+            wallet_address = params.get('wallet_address', params.get('from_address'))
+            schedule = params.get('schedule')
+            name = params.get('name', f"Payment to {recipient[:6]}...")
+            
+            if not all([recipient, amount, wallet_address]):
+                raise ValueError("Missing required parameters: recipient, amount, wallet_address")
+                
+            # Create payment action
+            action_request = CreatePaymentActionRequest(
+                name=name,
+                action_type=PaymentActionType.RECURRING if schedule else PaymentActionType.SINGLE,
+                recipient_address=recipient,
+                amount=str(amount),
+                token=token,
+                chain_id=chain_id,
+                schedule=schedule,
+                metadata={"platform": platform.value}
+            )
+            
+            # 1. Store action (Persistent)
+            action = await payment_service.create_action(wallet_address, action_request)
+            
+            # 2. Execute (Build Tx) - Pauses at AWAITING_SIGNATURE
+            execution_result = await payment_executor.execute_action(
+                action=action,
+                from_wallet=wallet_address,
+                signing_function=None  # No signer = return raw tx for user
+            )
+            
+            if execution_result.status == ExecutionStatus.FAILED:
+                raise Exception(execution_result.error_message)
+                
+            # 3. Format Response for User Signing
+            base_result = {
+                'operation': 'payment',
+                'action_id': action.id,
+                'status': 'awaiting_signature',
+                'payment_details': {
+                    'recipient': recipient,
+                    'amount': amount,
+                    'token': token,
+                    'chain_id': chain_id,
+                    'fee_mnee': execution_result.metadata.get('quote', {}).get('estimated_fee_mnee', 'Unknown')
+                },
+                'transaction_data': execution_result.metadata.get('transaction'),
+                'next_steps': 'Sign the transaction data to complete payment.'
+            }
+            
+            if config.get('detailed_responses'):
+                base_result['mnee_quote'] = execution_result.metadata.get('quote')
+                
+            if platform == Platform.LINE_MINI_DAPP:
+                base_result['mobile_deeplink'] = f"snel://sign?action_id={action.id}"
+                
+            return base_result
+
+        except Exception as e:
+            logger.error(f"Payment execution failed: {e}")
+            raise e
+
     async def _execute_swap(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
         """ENHANCED: Platform-optimized swap execution using existing SNEL services"""
         

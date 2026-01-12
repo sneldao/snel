@@ -23,6 +23,10 @@ export enum ChainId {
   MODE = 34443,
   TAIKO = 167004,
 
+  // Cronos EVM Networks
+  CRONOS = 25,
+  CRONOS_TESTNET = 338,
+
   // Other Networks
   AVALANCHE = 43114,
   MANTLE = 5000,
@@ -49,6 +53,10 @@ export const SUPPORTED_CHAINS = {
   324: "zkSync Era",
   34443: "Mode",
   167004: "Taiko",
+
+  // Cronos EVM Networks
+  25: "Cronos",
+  338: "Cronos Testnet",
 
   // Other Networks
   43114: "Avalanche",
@@ -77,6 +85,10 @@ export const BLOCK_EXPLORERS = {
   34443: "https://explorer.mode.network/tx/",
   167004: "https://explorer.test.taiko.xyz/tx/",
 
+  // Cronos EVM Networks
+  25: "https://cronoscan.com/tx/",
+  338: "https://testnet.cronoscan.com/tx/",
+
   // Other Networks
   43114: "https://snowtrace.io/tx/",
   5000: "https://explorer.mantle.xyz/tx/",
@@ -102,6 +114,10 @@ export const CHAIN_CONFIG = {
   324: { name: "zkSync Era", explorer: "https://explorer.zksync.io/tx/", axelarName: null },
   34443: { name: "Mode", explorer: "https://explorer.mode.network/tx/", axelarName: null },
   167004: { name: "Taiko", explorer: "https://explorer.test.taiko.xyz/tx/", axelarName: null },
+
+  // Cronos EVM Networks
+  25: { name: "Cronos", explorer: "https://cronoscan.com/tx/", axelarName: "cronos", x402Support: true },
+  338: { name: "Cronos Testnet", explorer: "https://testnet.cronoscan.com/tx/", axelarName: "cronos-testnet", x402Support: true },
 
   // Other Networks
   43114: { name: "Avalanche", explorer: "https://snowtrace.io/tx/", axelarName: "Avalanche" },
@@ -145,6 +161,8 @@ export const CHAIN_COLORS: Record<string, string> = {
   'Base': '#0052FF',
   'Avalanche': '#E84142',
   'BSC': '#F0B90B',
+  'Cronos': '#002D74', // Cronos brand color
+  'Cronos Testnet': '#4A90E2', // Lighter blue for testnet
   'Kaia': '#00D2FF', // Kaia brand color
   'Zcash': '#F4B728', // Zcash brand color
 } as const;
@@ -169,4 +187,25 @@ export const isAxelarSupported = (chainId: number): boolean => {
 
 export const getSupportedAxelarChains = (): number[] => {
   return Object.keys(AXELAR_GATEWAY_ADDRESSES).map(Number);
+};
+
+// X402 Agentic Payment Support
+export const isX402Supported = (chainId: number): boolean => {
+  const config = CHAIN_CONFIG[chainId as SupportedChainId];
+  return config?.x402Support === true;
+};
+
+export const getX402SupportedChains = (): number[] => {
+  return Object.entries(CHAIN_CONFIG)
+    .filter(([_, config]) => config.x402Support === true)
+    .map(([chainId, _]) => Number(chainId));
+};
+
+export const getX402FacilitatorUrl = (chainId: number): string | null => {
+  if (chainId === ChainId.CRONOS) {
+    return "https://facilitator.cronos.org";
+  } else if (chainId === ChainId.CRONOS_TESTNET) {
+    return "https://facilitator-testnet.cronos.org";
+  }
+  return null;
 };

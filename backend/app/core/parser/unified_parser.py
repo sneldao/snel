@@ -122,6 +122,40 @@ class UnifiedParser:
                     "priority": 1
                 }
             ],
+            CommandType.X402_PAYMENT: [
+                {
+                    "pattern": re.compile(
+                        r"(?:pay|send)\s+agent\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{3,5})",
+                        re.IGNORECASE
+                    ),
+                    "description": "AI agent payment",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:setup|create|schedule)\s+(?:recurring|automated?)\s+payment",
+                        re.IGNORECASE
+                    ),
+                    "description": "Recurring payment setup",
+                    "priority": 2
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:process|execute|run)\s+(?:batch\s+)?settlement",
+                        re.IGNORECASE
+                    ),
+                    "description": "Batch settlement",
+                    "priority": 3
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:ai|agent|agentic)\s+payment",
+                        re.IGNORECASE
+                    ),
+                    "description": "General agentic payment",
+                    "priority": 4
+                }
+            ],
             CommandType.BRIDGE_TO_PRIVACY: [
                 {
                     "pattern": re.compile(

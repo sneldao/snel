@@ -122,6 +122,8 @@ export const PaymentHistoryList: React.FC<PaymentHistoryListProps> = ({
   isLoading, 
   error 
 }) => {
+  const [showDemo, setShowDemo] = React.useState(false);
+
   if (isLoading) {
     return (
       <VStack spacing={4} py={8}>
@@ -143,17 +145,70 @@ export const PaymentHistoryList: React.FC<PaymentHistoryListProps> = ({
     );
   }
 
-  if (items.length === 0) {
+  // Handle empty state with Toggle for Demo
+  if (!showDemo && items.length === 0) {
     return (
       <Box textAlign="center" py={8}>
-        <Text color="gray.500">No payment history found</Text>
+        <Text color="gray.500" mb={4}>No payment history found</Text>
+        <Box as="button" fontSize="sm" color="blue.500" fontWeight="medium" onClick={() => setShowDemo(true)}>
+          See Example
+        </Box>
       </Box>
     );
   }
 
+  // Mock data for demo mode
+  const mockItems: PaymentHistoryItem[] = [
+    {
+      id: 'demo_1',
+      timestamp: new Date().toISOString(),
+      amount: '0.5',
+      token: 'ETH',
+      recipient: '0x1234...5678',
+      status: 'confirmed',
+      chainId: 1,
+      category: 'Rent',
+      transactionHash: '0xabc...def'
+    },
+    {
+      id: 'demo_2',
+      timestamp: new Date(Date.now() - 86400000).toISOString(),
+      amount: '100',
+      token: 'USDC',
+      recipient: '0x8765...4321',
+      status: 'pending',
+      chainId: 8453, // Base
+      category: 'Services'
+    },
+    {
+      id: 'demo_3',
+      timestamp: new Date(Date.now() - 172800000).toISOString(),
+      amount: '50',
+      token: 'MNEE',
+      recipient: '0x9999...8888',
+      status: 'confirmed',
+      chainId: 1,
+      category: 'Groceries'
+    }
+  ];
+
+  const displayItems = showDemo ? mockItems : items;
+
   return (
     <VStack spacing={3} align="stretch">
-      {items.map((item) => (
+      {showDemo && (
+        <HStack bg="blue.50" p={2} borderRadius="md" justify="space-between" mb={2}>
+          <HStack>
+            <Badge colorScheme="blue">EXAMPLE</Badge>
+            <Text fontSize="xs" color="blue.700">This is sample history.</Text>
+          </HStack>
+          <Box as="button" fontSize="xs" color="blue.700" fontWeight="bold" onClick={() => setShowDemo(false)}>
+            Hide
+          </Box>
+        </HStack>
+      )}
+      
+      {displayItems.map((item) => (
         <React.Fragment key={item.id}>
           <PaymentHistoryItemComponent item={item} />
           <Divider />

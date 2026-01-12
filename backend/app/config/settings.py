@@ -71,7 +71,9 @@ class ChainSettings:
         324: "zksync",
         34443: "mode",
         100: "gnosis",
-        167000: "taiko"
+        167000: "taiko",
+        25: "cronos",          # Cronos Mainnet
+        338: "cronos-testnet"  # Cronos Testnet
     })
     
     default_chain_id: int = field(default_factory=lambda: int(os.getenv("DEFAULT_CHAIN_ID", "1")))

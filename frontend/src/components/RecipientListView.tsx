@@ -91,9 +91,18 @@ export const RecipientListView: React.FC<RecipientListViewProps> = ({
   onSelectRecipient
 }) => {
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [showDemo, setShowDemo] = React.useState(false);
   const toast = useToast();
 
-  const filteredRecipients = recipients.filter(recipient => 
+  const mockRecipients: Recipient[] = [
+    { id: 'demo_1', name: 'Alice', address: '0x123...456', lastUsed: new Date().toISOString(), chainId: 1 },
+    { id: 'demo_2', name: 'Bob (Work)', address: '0xabc...def', lastUsed: new Date(Date.now() - 86400000).toISOString(), chainId: 8453 },
+    { id: 'demo_3', name: 'Charlie', address: '0x789...012', chainId: 10 }
+  ];
+
+  const sourceRecipients = showDemo ? mockRecipients : recipients;
+
+  const filteredRecipients = sourceRecipients.filter(recipient => 
     recipient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     recipient.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -108,6 +117,19 @@ export const RecipientListView: React.FC<RecipientListViewProps> = ({
 
   return (
     <VStack spacing={4} align="stretch">
+      {/* Demo Banner */}
+      {showDemo && (
+        <HStack bg="blue.50" p={2} borderRadius="md" justify="space-between">
+          <HStack>
+            <Badge colorScheme="blue">EXAMPLE</Badge>
+            <Text fontSize="xs" color="blue.700">Sample contacts.</Text>
+          </HStack>
+          <Box as="button" fontSize="xs" color="blue.700" fontWeight="bold" onClick={() => setShowDemo(false)}>
+            Hide
+          </Box>
+        </HStack>
+      )}
+
       {/* Search and Add */}
       <HStack spacing={2}>
         <InputGroup flex={1}>
@@ -134,9 +156,14 @@ export const RecipientListView: React.FC<RecipientListViewProps> = ({
         <Box textAlign="center" py={8}>
           <Icon as={FaUser} boxSize={8} color="gray.300" mb={2} />
           <Text color="gray.500" mb={2}>No recipients found</Text>
-          <Text fontSize="sm" color="gray.400">
+          <Text fontSize="sm" color="gray.400" mb={3}>
             {searchTerm ? "Try a different search term" : "Add your first recipient"}
           </Text>
+          {!searchTerm && !showDemo && (
+             <Box as="button" fontSize="sm" color="blue.500" fontWeight="medium" onClick={() => setShowDemo(true)}>
+               See Example
+             </Box>
+          )}
         </Box>
       ) : (
         <VStack spacing={3} align="stretch">
@@ -155,7 +182,7 @@ export const RecipientListView: React.FC<RecipientListViewProps> = ({
       {/* Stats */}
       <HStack justify="space-between" fontSize="sm" color="gray.500">
         <Text>
-          {recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}
+          {sourceRecipients.length} {sourceRecipients.length === 1 ? 'recipient' : 'recipients'}
         </Text>
         <Badge colorScheme="blue">
           <Icon as={FaHistory} mr={1} />

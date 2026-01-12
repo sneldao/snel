@@ -183,6 +183,34 @@ CHAINS: Dict[int, ChainInfo] = {
         explorer_url="https://blastscan.io/tx/",
         supported_protocols={"0x"}
     ),
+    
+    # Cronos EVM Networks
+    25: ChainInfo(
+        id=25,
+        name="Cronos",
+        type=ChainType.EVM,
+        rpc_url="https://evm.cronos.org",
+        explorer_url="https://cronoscan.com/tx/",
+        supported_protocols={"0x", "brian", "x402"},
+        privacy=PrivacyCapabilities(
+            x402_support=True,     # Full x402 agentic payment support
+            gmp_privacy=True,      # GMP privacy fallback
+            compliance_support=True # Compliance-ready privacy
+        )
+    ),
+    338: ChainInfo(
+        id=338,
+        name="Cronos Testnet",
+        type=ChainType.EVM,
+        rpc_url="https://evm-t3.cronos.org",
+        explorer_url="https://testnet.cronoscan.com/tx/",
+        supported_protocols={"0x", "brian", "x402"},
+        privacy=PrivacyCapabilities(
+            x402_support=True,     # Full x402 agentic payment support
+            gmp_privacy=True,      # GMP privacy fallback
+            compliance_support=True # Compliance-ready privacy
+        )
+    ),
     # Starknet
     1101: ChainInfo(
         id=1101,

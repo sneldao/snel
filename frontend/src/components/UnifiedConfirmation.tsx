@@ -35,7 +35,7 @@ interface TransactionData {
 }
 
 interface UnifiedConfirmationProps {
-  agentType: "transfer" | "bridge" | "swap" | "balance" | "portfolio";
+  agentType: "transfer" | "bridge" | "swap" | "balance" | "portfolio" | "payment";
   content: {
     message: string;
     type: string;
@@ -53,6 +53,8 @@ interface UnifiedConfirmationProps {
       to_chain?: string;
       protocol?: string;
       route?: string;
+      recipient?: string; // Add recipient for payment
+      fee_mnee?: string; // Add fee for payment
     };
   };
   transaction?: TransactionData;
@@ -89,6 +91,8 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
         return "Balance Check";
       case "portfolio":
         return "Portfolio Analysis";
+      case "payment":
+        return "Payment Action";
       default:
         return "Transaction";
     }
@@ -106,9 +110,46 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
         return "orange";
       case "portfolio":
         return "teal";
+      case "payment":
+        return "cyan";
       default:
         return "gray";
     }
+  };
+
+  const renderPaymentDetails = () => {
+    const amount = content.details?.amount || "0";
+    const token = content.details?.token || "MNEE";
+    const recipient = content.details?.recipient || "Unknown";
+    const fee = content.details?.fee_mnee || "Unknown";
+
+    return (
+      <VStack spacing={3} align="stretch">
+        <HStack justify="space-between">
+          <Text color="gray.600">Payment To:</Text>
+          <Text fontWeight="bold">{recipient.slice(0, 6)}...{recipient.slice(-4)}</Text>
+        </HStack>
+        <HStack justify="space-between">
+          <Text color="gray.600">Amount:</Text>
+          <Text fontWeight="bold">
+            {amount} {token}
+          </Text>
+        </HStack>
+        <HStack justify="space-between">
+          <Text color="gray.600">Estimated Fee:</Text>
+          <Text fontWeight="bold">{fee} MNEE</Text>
+        </HStack>
+         <Alert status="info" borderRadius="md" mt={2}>
+            <AlertIcon />
+            <Box flex="1">
+              <AlertTitle fontSize="sm">Action Required</AlertTitle>
+              <AlertDescription display="block" fontSize="xs">
+                Please sign the transaction in your wallet to complete the payment.
+              </AlertDescription>
+            </Box>
+          </Alert>
+      </VStack>
+    );
   };
 
   const renderTransferDetails = () => {
@@ -259,6 +300,8 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
         return renderBridgeDetails();
       case "swap":
         return renderSwapDetails();
+      case "payment":
+        return renderPaymentDetails();
       default:
         return (
           <Text color="gray.600" fontSize="sm">

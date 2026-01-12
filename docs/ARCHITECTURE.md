@@ -25,13 +25,15 @@ SNELOrchestrator
 - **Token Swaps**: Multi-chain via Brian API + 0x Protocol
 - **Cross-Chain Bridging**: Axelar GMP + LayerZero integration
 - **Privacy Bridging**: Zcash integration for private transactions
+- **X402 Agentic Payments**: AI-triggered payments on Cronos EVM
 - **Portfolio Analysis**: Web3 balance aggregation + AI insights
 - **Protocol Research**: AI-powered DeFi protocol analysis
 - **Natural Language Processing**: OpenAI-powered command interpretation
 
-#### Supported Networks (17+)
+#### Supported Networks (19+)
 - **Layer 1**: Ethereum, Avalanche, BSC
 - **Layer 2**: Base, Arbitrum, Optimism, Polygon
+- **Cronos EVM**: Cronos Mainnet, Cronos Testnet (x402 support)
 - **Privacy**: Zcash
 - **Emerging**: zkSync, Scroll, Linea, Mantle, Blast, Mode, Taiko
 
@@ -49,9 +51,10 @@ CoralEnvironment → SNELCoralMCPAdapter → SNELOrchestrator
 #### Agent Capabilities
 1. **execute_swap** - Multi-chain token swaps ($0.10-$0.20)
 2. **execute_bridge** - Cross-chain operations ($0.15-$0.30)
-3. **analyze_portfolio** - Portfolio analysis ($0.05)
-4. **research_protocol** - DeFi protocol research ($0.05)
-5. **interpret_command** - Natural language processing ($0.01)
+3. **execute_x402_payment** - AI-triggered payments on Cronos ($0.05-$0.15)
+4. **analyze_portfolio** - Portfolio analysis ($0.05)
+5. **research_protocol** - DeFi protocol research ($0.05)
+6. **interpret_command** - Natural language processing ($0.01)
 
 ## Deployment Guide
 

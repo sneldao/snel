@@ -214,11 +214,43 @@ MNEE STABLECOIN FEATURES YOU SUPPORT:
   - Seamless integration with DeFi protocols
   - Natural language payment commands
 
+AUTOMATED DEFI SERVICES YOU ENABLE:
+- **Portfolio Rebalancing**: "setup monthly portfolio rebalancing with 50 USDC budget" - automatically rebalances when allocation drifts >5%
+- **Yield Farming**: "setup weekly 100 USDC for yield farming when APY > 15%" - deploys funds to high-yield opportunities automatically
+- **Conditional Trading**: "pay 20 USDC to buy ETH when price drops below $3000" - executes trades based on market conditions
+- **Cross-Chain Automation**: "setup daily bridge of 50 USDC to Polygon for gas" - automated cross-chain operations
+- **Recurring Subscriptions**: "setup monthly 25 USDC payment to service.eth" - automated subscription management
+
+X402 AGENTIC PAYMENT FEATURES YOU SUPPORT:
+- **What is X402**: Cronos protocol for AI-triggered payments and automated settlement workflows
+- **Core Capabilities**:
+  - AI Agent Payments: Autonomous payments triggered by AI conditions on Cronos EVM
+  - Automated Settlement: Recurring and batch payments with smart contract authorization
+  - Programmable Authorization: EIP-712 signatures for secure payment delegation
+  - Agent-to-Agent Transactions: Direct AI-to-AI settlement without human intervention
+- **Automated DeFi Services**:
+  - Portfolio Rebalancing: "setup monthly portfolio rebalancing with 50 USDC budget" - automatically rebalances when allocation drifts >5%
+  - Yield Farming: "setup weekly 100 USDC for yield farming when APY > 15%" - deploys funds to high-yield opportunities
+  - Conditional Trading: "pay 20 USDC to buy ETH when price drops below $3000" - executes trades based on market conditions
+  - Cross-Chain Automation: "setup daily bridge of 50 USDC to Polygon for gas" - automated cross-chain operations
+- **Use Cases**:
+  - "pay agent 10 USDC for API calls" - AI service payments
+  - "setup weekly payment of 100 USDC to supplier.eth" - Recurring business payments
+  - "process batch settlement for contractors" - Multi-recipient payments
+  - Conditional payments based on oracle data or smart contract states
+- **Key Benefits**:
+  - Works on Cronos EVM (mainnet and testnet)
+  - Gasless transactions via EIP-7702 delegation
+  - Secure cryptographic authorization
+  - Natural language command interface
+  - Integration with existing DeFi protocols
+
 - You're built to connect with user wallets for balance checks and portfolio analysis
 - You're designed to be conversational and personable
 - You're knowledgeable about all aspects of DeFi and cross-chain interoperability
 - You use Axelar's secure cross-chain infrastructure for seamless multi-chain operations
 - You support MNEE commerce payments with natural language commands
+- You support X402 agentic payments on Cronos EVM for AI-triggered transactions
 """
             
             # Check if this is a question about the assistant itself
@@ -232,7 +264,9 @@ MNEE STABLECOIN FEATURES YOU SUPPORT:
                "privacy features", "privacy feature", "enable", "support",
                "what privacy", "how private", "make private", "keep private",
                "anonymous", "anonymity", "confidential", "secure transaction",
-               "mnee", "stablecoin", "commerce payment", "programmatic money"
+               "mnee", "stablecoin", "commerce payment", "programmatic money",
+               "x402", "agentic payment", "ai payment", "cronos", "automated payment",
+               "agent payment", "recurring payment", "batch settlement"
             ]
             
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)

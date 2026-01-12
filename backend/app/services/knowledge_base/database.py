@@ -243,6 +243,36 @@ class ProtocolKnowledgeBase:
                 names={"en": "MNEE Stablecoin", "es": "Moneda Estable MNEE", "zh": "MNEE稳定币"},
                 last_verified=datetime(2024, 1, 6),
             ),
+            "x402": ProtocolEntry(
+                official_name="Cronos x402 Agentic Payment Protocol",
+                type="Agentic Payment Infrastructure",
+                aliases=["x402 protocol", "cronos x402", "agentic payments", "ai payments"],
+                summary="X402 is Cronos' protocol for AI-triggered payments and automated settlement workflows. It enables secure, programmable payments that can be executed by AI agents with cryptographic authorization.",
+                key_features=[
+                    "AI-triggered payments - autonomous payments executed by AI agents based on conditions",
+                    "EIP-712 authorization - secure cryptographic signatures for payment delegation",
+                    "Gasless transactions - EIP-7702 delegation for reduced transaction costs",
+                    "Automated settlement - recurring and scheduled payment workflows",
+                    "Batch processing - multiple payments in single transaction for efficiency",
+                    "Smart contract integration - programmable payment conditions and triggers",
+                    "Agent-to-agent transactions - direct AI-to-AI settlement without human intervention"
+                ],
+                how_it_works="X402 works by allowing users to pre-authorize payments using EIP-712 signatures. AI agents can then execute these payments when specific conditions are met, such as API usage thresholds, time-based schedules, or smart contract states. The protocol uses Cronos EVM's fast finality and low costs to enable efficient automated payments.",
+                use_cases=[
+                    "AI service payments - pay for API calls, compute resources, and AI services",
+                    "Recurring business payments - automated supplier, contractor, and subscription payments",
+                    "Batch settlements - process multiple payments efficiently in single transactions",
+                    "Conditional payments - execute payments based on oracle data or contract states",
+                    "Agent automation - enable AI agents to handle payment workflows autonomously",
+                    "DeFi automation - automated yield farming, liquidity provision, and rebalancing"
+                ],
+                governance_token=None,
+                integrations_with=["cronos", "crypto.com", "axelar"],
+                bridges_to=["ethereum", "polygon", "base"],
+                competes_with=["traditional payment processors", "manual payment systems"],
+                names={"en": "X402 Agentic Payments", "es": "Pagos Agénticos X402", "zh": "X402智能支付"},
+                last_verified=datetime(2024, 1, 12),
+            ),
         }
 
 

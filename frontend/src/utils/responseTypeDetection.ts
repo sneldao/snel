@@ -36,6 +36,7 @@ export interface ResponseTypeChecks {
     isBridgePrivacyReady: boolean;
     isBridgeStatus: boolean;
     isPostBridgeSuccess: boolean;
+    isPaymentSignature: boolean;
 }
 
 interface DetectResponseTypesProps {
@@ -55,6 +56,11 @@ export const detectResponseTypes = ({
         typeof content === 'object' &&
         ((content as any)?.type === 'swap_confirmation' ||
             (content as any)?.type === 'swap_ready');
+
+    const isPaymentSignature = 
+        typeof content === 'object' && 
+        ((content as any)?.status === 'awaiting_signature' || 
+         (content as any)?.type === 'payment_signature_request');
 
     const isDCAConfirmation =
         typeof content === 'object' && (content as any)?.type === 'dca_confirmation';
@@ -141,5 +147,6 @@ export const detectResponseTypes = ({
         isBridgePrivacyReady,
         isBridgeStatus,
         isPostBridgeSuccess,
+        isPaymentSignature,
     };
 };

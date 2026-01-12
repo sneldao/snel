@@ -121,7 +121,33 @@ export const PaymentTemplateListView: React.FC<PaymentTemplateListViewProps> = (
   onAddTemplate,
   onUseTemplate
 }) => {
+  const [showDemo, setShowDemo] = React.useState(false);
   const toast = useToast();
+
+  const mockTemplates: PaymentTemplate[] = [
+    {
+        id: 'demo_1',
+        name: 'Weekly Rent',
+        amount: '0.5',
+        token: 'ETH',
+        recipient: '0x123...456',
+        chainId: 1,
+        createdAt: new Date().toISOString(),
+        schedule: { frequency: 'weekly', dayOfWeek: 1 }
+    },
+    {
+        id: 'demo_2',
+        name: 'Monthly Subscription',
+        amount: '50',
+        token: 'USDC',
+        recipient: '0xabc...def',
+        chainId: 8453,
+        createdAt: new Date().toISOString(),
+        schedule: { frequency: 'monthly', dayOfMonth: 1 }
+    }
+  ];
+
+  const sourceTemplates = showDemo ? mockTemplates : templates;
 
   if (isLoading) {
     return (
@@ -133,6 +159,19 @@ export const PaymentTemplateListView: React.FC<PaymentTemplateListViewProps> = (
 
   return (
     <VStack spacing={4} align="stretch">
+      {/* Demo Banner */}
+      {showDemo && (
+        <HStack bg="blue.50" p={2} borderRadius="md" justify="space-between">
+          <HStack>
+            <Badge colorScheme="blue">EXAMPLE</Badge>
+            <Text fontSize="xs" color="blue.700">Sample templates.</Text>
+          </HStack>
+          <Box as="button" fontSize="xs" color="blue.700" fontWeight="bold" onClick={() => setShowDemo(false)}>
+            Hide
+          </Box>
+        </HStack>
+      )}
+
       {/* Header with Add Button */}
       <HStack justify="space-between">
         <Text fontWeight="bold" fontSize="lg">
@@ -148,24 +187,32 @@ export const PaymentTemplateListView: React.FC<PaymentTemplateListViewProps> = (
       </HStack>
 
       {/* Templates List */}
-      {templates.length === 0 ? (
+      {sourceTemplates.length === 0 ? (
         <Box textAlign="center" py={8}>
           <Icon as={FaCalendarAlt} boxSize={8} color="gray.300" mb={2} />
           <Text color="gray.500" mb={2}>No payment templates</Text>
           <Text fontSize="sm" color="gray.400" mb={4}>
             Create templates for recurring payments
           </Text>
-          <Button 
-            leftIcon={<Icon as={FaPlus} />} 
-            colorScheme="blue"
-            onClick={onAddTemplate}
-          >
-            Create First Template
-          </Button>
+          <HStack justify="center" spacing={4}>
+             {!showDemo && (
+                <Box as="button" fontSize="sm" color="blue.500" fontWeight="medium" onClick={() => setShowDemo(true)}>
+                  See Example
+                </Box>
+             )}
+             <Button 
+                size="sm"
+                leftIcon={<Icon as={FaPlus} />} 
+                colorScheme="blue"
+                onClick={onAddTemplate}
+             >
+                Create First Template
+             </Button>
+          </HStack>
         </Box>
       ) : (
         <VStack spacing={3} align="stretch">
-          {templates.map((template) => (
+          {sourceTemplates.map((template) => (
             <React.Fragment key={template.id}>
               <PaymentTemplateItem 
                 template={template} 
@@ -180,7 +227,7 @@ export const PaymentTemplateListView: React.FC<PaymentTemplateListViewProps> = (
       {/* Stats */}
       <HStack justify="space-between" fontSize="sm" color="gray.500">
         <Text>
-          {templates.length} {templates.length === 1 ? 'template' : 'templates'}
+          {sourceTemplates.length} {sourceTemplates.length === 1 ? 'template' : 'templates'}
         </Text>
         <Badge colorScheme="green">
           <Icon as={FaCalendarAlt} mr={1} />

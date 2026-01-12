@@ -211,22 +211,44 @@ export class PaymentHistoryService {
   ): Promise<SpendingAnalytics> {
     const history = await this.getPaymentHistory(walletAddress, chainId);
     
-    const categories = [
-      { name: 'Payments', amount: '12.5', percentage: 45 },
-      { name: 'Transfers', amount: '8.2', percentage: 30 },
-      { name: 'Gifts', amount: '4.3', percentage: 15 },
-      { name: 'Bills', amount: '2.8', percentage: 10 }
-    ];
+    if (!history || history.length === 0) {
+      return {
+        totalSpent: '0',
+        period,
+        categories: [],
+        trend: 'stable'
+      };
+    }
+
+    // Calculate total spent
+    let total = 0;
+    const categoryMap = new Map<string, number>();
+
+    for (const item of history) {
+        // Simple filter by period could be added here
+        const amount = parseFloat(item.amount);
+        if (!isNaN(amount)) {
+            total += amount;
+            const cat = item.category || 'Uncategorized';
+            categoryMap.set(cat, (categoryMap.get(cat) || 0) + amount);
+        }
+    }
+
+    // Format categories
+    const categories = Array.from(categoryMap.entries())
+        .map(([name, amount]) => ({
+            name,
+            amount: amount.toFixed(4),
+            percentage: total > 0 ? Math.round((amount / total) * 100) : 0
+        }))
+        .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
 
     return {
-      totalSpent: '27.8',
+      totalSpent: total.toFixed(4),
       period,
       categories,
-      trend: 'decreasing',
-      comparisonPeriod: {
-        amount: '32.5',
-        change: -14.5
-      }
+      trend: 'stable', // Trend calculation requires previous period data
+      comparisonPeriod: undefined
     };
   }
 
