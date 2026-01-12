@@ -163,7 +163,7 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
                     <HStack justify="space-between">
                         <Text fontSize="sm" fontWeight="medium">Network:</Text>
                         <Text fontSize="sm">
-                            Cronos {network.includes('testnet') ? 'Testnet' : 'Mainnet'}
+                            {network.includes('ethereum') ? 'Ethereum Mainnet' : `Cronos ${network.includes('testnet') ? 'Testnet' : 'Mainnet'}`}
                         </Text>
                     </HStack>
                     <HStack justify="space-between">
@@ -203,7 +203,7 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
                         <HStack spacing={2}>
                             <Icon as={FaCheckCircle} color="green.500" boxSize={3} />
                             <Text fontSize="xs" color="gray.600">
-                                Actions execute automatically on Cronos
+                                Actions execute automatically on {network.includes('ethereum') ? 'Ethereum' : 'Cronos'}
                             </Text>
                         </HStack>
                     </VStack>
@@ -253,7 +253,7 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
                             borderRadius="full"
                         />
                         <Text fontSize="xs" color="gray.600" textAlign="center">
-                            Setting up automation with Cronos x402 facilitator...
+                            Setting up automation with {network.includes('ethereum') ? 'Ethereum' : 'Cronos'} x402 facilitator...
                         </Text>
                     </VStack>
                 )}
