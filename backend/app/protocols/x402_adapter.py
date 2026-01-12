@@ -1,11 +1,12 @@
 """
-Cronos x402 Protocol Adapter for Real Agentic Payments
+X402 Protocol Adapter for Real Agentic Payments
 
-This adapter integrates with the actual Cronos x402 facilitator to enable:
-- Real AI-triggered payments on Cronos EVM
+This adapter integrates with the x402 facilitator to enable:
+- Real AI-triggered payments on Cronos EVM and Ethereum mainnet
 - Automated settlement workflows with actual transactions
 - Agent-to-agent transactions with EIP-712 signatures
 - Programmable payment authorization via facilitator API
+- Support for USDC on Cronos and MNEE stablecoin on Ethereum
 """
 
 import json
@@ -21,20 +22,40 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Cronos x402 Facilitator Constants
+# X402 Facilitator Constants
 FACILITATOR_URLS = {
     "cronos-mainnet": "https://facilitator.cronoslabs.org/v2/x402",
-    "cronos-testnet": "https://facilitator.cronoslabs.org/v2/x402"
+    "cronos-testnet": "https://facilitator.cronoslabs.org/v2/x402",
+    "ethereum-mainnet": "https://facilitator.cronoslabs.org/v2/x402"  # Same facilitator for all networks
 }
 
-USDC_CONTRACTS = {
+# Stablecoin contracts for x402 payments
+STABLECOIN_CONTRACTS = {
+    # Cronos networks use USDC
     "cronos-mainnet": "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",  # USDC.e Mainnet
-    "cronos-testnet": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0"   # devUSDC.e Testnet
+    "cronos-testnet": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",   # devUSDC.e Testnet
+    # Ethereum mainnet uses MNEE stablecoin
+    "ethereum-mainnet": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"  # MNEE stablecoin contract
 }
 
 CHAIN_IDS = {
     "cronos-mainnet": 25,
-    "cronos-testnet": 338
+    "cronos-testnet": 338,
+    "ethereum-mainnet": 1
+}
+
+# Network display names
+NETWORK_NAMES = {
+    "cronos-mainnet": "Cronos",
+    "cronos-testnet": "Cronos Testnet",
+    "ethereum-mainnet": "Ethereum"
+}
+
+# Stablecoin symbols by network
+STABLECOIN_SYMBOLS = {
+    "cronos-mainnet": "USDC",
+    "cronos-testnet": "USDC",
+    "ethereum-mainnet": "MNEE"
 }
 
 @dataclass
@@ -60,15 +81,25 @@ class X402PaymentResult:
     value: Optional[str] = None
 
 class X402Adapter:
-    """Real adapter for Cronos x402 agentic payment protocol."""
+    """Real adapter for x402 agentic payment protocol on Cronos and Ethereum."""
     
     def __init__(self, network: str = "cronos-testnet"):
-        """Initialize with network (cronos-mainnet or cronos-testnet)."""
+        """Initialize with network (cronos-mainnet, cronos-testnet, or ethereum-mainnet)."""
+        if network not in FACILITATOR_URLS:
+            raise ValueError(f"Unsupported network: {network}. Supported: {list(FACILITATOR_URLS.keys())}")
+        
         self.network = network
         self.facilitator_url = FACILITATOR_URLS[network]
-        self.usdc_contract = USDC_CONTRACTS[network]
+        self.stablecoin_contract = STABLECOIN_CONTRACTS[network]
         self.chain_id = CHAIN_IDS[network]
+        self.stablecoin_symbol = STABLECOIN_SYMBOLS[network]
+        self.network_name = NETWORK_NAMES[network]
         self.client = httpx.AsyncClient(timeout=30.0)
+        
+        # Keep backward compatibility
+        self.usdc_contract = self.stablecoin_contract
+        
+        logger.info(f"X402Adapter initialized for {self.network_name} (chain {self.chain_id}) using {self.stablecoin_symbol}")
         
     async def check_facilitator_health(self) -> bool:
         """Check if the facilitator service is healthy."""
@@ -95,6 +126,80 @@ class X402Adapter:
         """Generate a random 32-byte nonce for EIP-3009 authorization."""
         return "0x" + secrets.token_hex(32)
     
+    async def create_unsigned_payment_payload(
+        self,
+        payment_requirements: X402PaymentRequirements,
+        amount_usdc: float
+    ) -> Dict[str, Any]:
+        """
+        Create the unsigned EIP-712 payload for the frontend to sign.
+        Returns the data needed for eth_signTypedData_v4.
+        """
+        try:
+            # Convert USDC amount to atomic units (6 decimals)
+            amount_atomic = int(amount_usdc * 1_000_000)
+            
+            # Generate unique nonce
+            nonce = self.generate_nonce()
+            
+            # Calculate validity window (5 minutes)
+            valid_after = 0  # Valid immediately
+            valid_before = int(time.time()) + payment_requirements.maxTimeoutSeconds
+            
+            # Set up EIP-712 domain for USDC.e on Cronos
+            domain = {
+                "name": "Bridged USDC (Stargate)",
+                "version": "1",
+                "chainId": self.chain_id,
+                "verifyingContract": payment_requirements.asset,
+            }
+            
+            # Define EIP-712 typed data structure for EIP-3009
+            types = {
+                "EIP712Domain": [
+                    {"name": "name", "type": "string"},
+                    {"name": "version", "type": "string"},
+                    {"name": "chainId", "type": "uint256"},
+                    {"name": "verifyingContract", "type": "address"},
+                ],
+                "TransferWithAuthorization": [
+                    {"name": "from", "type": "address"},
+                    {"name": "to", "type": "address"},
+                    {"name": "value", "type": "uint256"},
+                    {"name": "validAfter", "type": "uint256"},
+                    {"name": "validBefore", "type": "uint256"},
+                    {"name": "nonce", "type": "bytes32"},
+                ],
+            }
+            
+            # Create the message
+            # Note: 'from' must be filled by the frontend/user address
+            message = {
+                "to": payment_requirements.payTo,
+                "value": amount_atomic,
+                "validAfter": valid_after,
+                "validBefore": valid_before,
+                "nonce": nonce,
+            }
+            
+            return {
+                "domain": domain,
+                "types": types,
+                "primaryType": "TransferWithAuthorization",
+                "message": message,
+                # Metadata to reconstruct the header later
+                "metadata": {
+                    "scheme": payment_requirements.scheme,
+                    "network": payment_requirements.network,
+                    "asset": payment_requirements.asset,
+                    "amount_atomic": str(amount_atomic)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to create unsigned payload: {e}")
+            raise
+
     async def create_payment_header(
         self,
         private_key: str,
@@ -177,6 +282,39 @@ class X402Adapter:
             
         except Exception as e:
             logger.error(f"Failed to create payment header: {e}")
+            raise
+
+    def construct_payment_header_from_signature(
+        self,
+        signature: str,
+        user_address: str,
+        metadata: Dict[str, Any],
+        message: Dict[str, Any]
+    ) -> str:
+        """Construct the final payment header using a provided signature."""
+        try:
+            payment_header = {
+                "x402Version": 1,
+                "scheme": metadata["scheme"],
+                "network": metadata["network"],
+                "payload": {
+                    "from": user_address,
+                    "to": message["to"],
+                    "value": str(message["value"]),
+                    "validAfter": message["validAfter"],
+                    "validBefore": message["validBefore"],
+                    "nonce": message["nonce"],
+                    "signature": signature,
+                    "asset": metadata["asset"],
+                }
+            }
+            
+            # Base64-encode
+            header_json = json.dumps(payment_header)
+            return base64.b64encode(header_json.encode()).decode()
+            
+        except Exception as e:
+            logger.error(f"Failed to construct header from signature: {e}")
             raise
     
     async def verify_payment(
@@ -288,15 +426,24 @@ class X402Adapter:
         amount_usdc: float,
         metadata: Optional[Dict[str, Any]] = None
     ) -> X402PaymentResult:
-        """Execute a complete AI-triggered payment using x402 protocol."""
+        """Execute a complete AI-triggered payment using x402 protocol.
+        
+        Args:
+            private_key: Private key for signing transactions
+            recipient_address: Recipient wallet address
+            amount_usdc: Amount in stablecoin (USDC for Cronos, MNEE for Ethereum)
+            metadata: Optional payment metadata
+        """
         try:
+            logger.info(f"Executing x402 payment: {amount_usdc} {self.stablecoin_symbol} on {self.network_name}")
+            
             # Create payment requirements
             payment_requirements = X402PaymentRequirements(
                 scheme="exact",
                 network=self.network,
                 payTo=recipient_address,
-                asset=self.usdc_contract,
-                maxAmountRequired=str(int(amount_usdc * 1_000_000)),  # Convert to atomic units
+                asset=self.stablecoin_contract,
+                maxAmountRequired=str(int(amount_usdc * 1_000_000)),  # Convert to atomic units (6 decimals)
                 maxTimeoutSeconds=300  # 5 minutes
             )
             
@@ -341,7 +488,15 @@ async def execute_ai_payment(
     network: str = "cronos-testnet",
     metadata: Optional[Dict[str, Any]] = None
 ) -> X402PaymentResult:
-    """Execute an AI-triggered payment on Cronos."""
+    """Execute an AI-triggered payment on supported networks (Cronos or Ethereum).
+    
+    Args:
+        private_key: Private key for signing
+        recipient_address: Recipient address
+        amount_usdc: Amount in stablecoin (USDC for Cronos, MNEE for Ethereum)
+        network: Network name (cronos-mainnet, cronos-testnet, ethereum-mainnet)
+        metadata: Optional payment metadata
+    """
     adapter = X402Adapter(network)
     try:
         return await adapter.execute_agentic_payment(

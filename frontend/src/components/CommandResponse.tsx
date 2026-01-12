@@ -18,10 +18,13 @@ import {
     useDisclosure,
 } from '@chakra-ui/react';
 import { useAccount, useChainId, useWalletClient, usePublicClient } from 'wagmi';
+import { parseAbi, parseUnits } from 'viem';
 
 // Services
 import { ApiService } from '../services/apiService';
 import { TransactionService } from '../services/transactionService';
+import { unifiedPaymentService } from '../services/unifiedPaymentService';
+import { getProtocolConfig } from '../config/protocolConfig';
 
 // Hooks
 import { useMultiStepTransaction } from '../hooks/useMultiStepTransaction';
@@ -203,27 +206,27 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             const result = await txService.executeTransaction(transactionData);
 
             // Handle Payment Result Submission
-             if (typeChecks.isPaymentSignature && address && content && typeof content === 'object') {
-                  const actionId = (content as any).action_id;
-                  if (actionId && result?.hash) {
-                      await apiService.submitPaymentResult(actionId, result.hash as string, address);
-                      toast({
-                         title: 'Payment Submitted',
-                         description: 'Your payment has been recorded successfully.',
-                         status: 'success',
-                         duration: 3000,
-                         isClosable: true,
-                      });
-                  }
-             } else {
-                  toast({
-                     title: 'Transaction Sent',
-                     description: `Transaction hash: ${result.hash}`,
-                     status: 'success',
-                     duration: 5000,
-                     isClosable: true,
-                 });
-             }
+            if (typeChecks.isPaymentSignature && address && content && typeof content === 'object') {
+                const actionId = (content as any).action_id;
+                if (actionId && result?.hash) {
+                    await apiService.submitPaymentResult(actionId, result.hash as string, address);
+                    toast({
+                        title: 'Payment Submitted',
+                        description: 'Your payment has been recorded successfully.',
+                        status: 'success',
+                        duration: 3000,
+                        isClosable: true,
+                    });
+                }
+            } else {
+                toast({
+                    title: 'Transaction Sent',
+                    description: `Transaction hash: ${result.hash}`,
+                    status: 'success',
+                    duration: 5000,
+                    isClosable: true,
+                });
+            }
         } catch (error) {
             console.error('Failed to execute transaction:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -258,138 +261,237 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         [onPortfolioModalOpen, onActionClick]
     );
 
-    // Check if needs quote selection
-    const needsSelection = requires_selection && all_quotes && all_quotes.length > 0;
+    // Handle X402 Automation Execution using Unified Service
+    const handleX402Execution = React.useCallback(async () => {
+        if (!walletClient || !address) {
+            toast({ title: 'Wallet not connected', status: 'error', duration: 3000 });
+            return;
+        }
 
-    // Render quote selection if needed
-    if (needsSelection) {
-        return (
-            <Box
-                bg={bgColor}
-                borderWidth="1px"
-                borderColor={borderColor}
-                borderRadius="lg"
-                p={4}
-                mb={4}
-                className={props.className}
-            >
-                <AggregatorSelection
-                    quotes={all_quotes}
-                    onSelect={handleQuoteSelect}
-                    isLoading={status === 'processing'}
-                    tokenSymbol={
-                        typeof content === 'object' && content !== null && 'tokenOut' in content
-                            ? (content as any).tokenOut?.symbol || 'Tokens'
-                            : 'Tokens'
-                    }
-                    tokenDecimals={
-                        typeof content === 'object' && content !== null && 'tokenOut' in content
-                            ? (content as any).tokenOut?.decimals || 18
-                            : 18
-                    }
-                />
-            </Box>
-        );
-    }
+        const metadata = (content as any).metadata || {};
+        const amount = parseFloat(metadata.budget || metadata.amount || '0');
+        const asset = metadata.asset || 'USDC';
+        const network = metadata.network || 'cronos-testnet';
+        const recipient = metadata.recipient || metadata.payTo;
 
-    // Main render
-    return (
-        <>
-            <Box
-                bg={bgColor}
-                borderWidth="1px"
-                borderColor={borderColor}
-                borderRadius="lg"
-                p={4}
-                mb={4}
-                className={props.className}
-            >
-                <HStack align="start" spacing={3}>
-                    {/* Avatar */}
-                    <Avatar size="sm" name={isCommand ? getUserDisplayName() : handle} src={avatarSrc} />
+        if (!recipient) {
+            throw new Error('No recipient address specified in automation metadata');
+        }
 
-                    {/* Content */}
-                    <VStack align="start" spacing={2} flex={1}>
-                        {/* Header */}
-                        <HStack justify="space-between" w="100%">
-                            <Text fontSize="sm" fontWeight="bold" color={textColor}>
-                                {isCommand ? getUserDisplayName() : handle}
-                            </Text>
-                            <Text fontSize="xs" color="gray.500">
-                                {new Date(timestamp).toLocaleTimeString()}
-                            </Text>
-                        </HStack>
+        try {
+            // Step 1: Prepare payment
+            toast({ title: "Preparing Payment...", status: "info", duration: 2000 });
 
-                        {/* Response Content */}
-                        <Box w="100%">
-                            <ResponseRenderer
-                                content={content}
-                                typeChecks={typeChecks}
-                                agentType={agentType}
-                                transactionData={transactionData}
-                                metadata={metadata}
-                                multiStepState={multiStepState}
-                                chainId={chainId}
-                                textColor={textColor}
-                                isExecuting={isExecuting}
-                                onExecute={() => {
-                                    if (typeof content === 'object' && content !== null &&
-                                        ((content as any).flow_info || (content as any).type === 'swap_approval' || (content as any).type === 'multi_step_transaction')) {
-                                        handleMultiStepTransaction(content);
-                                    } else {
-                                        handleExecuteTransaction();
-                                    }
-                                }}
-                                onCancel={handleCancel}
-                                onDone={reset}
-                                onRetry={retry}
-                                onActionClick={handleActionClick}
-                            />
+            const preparation = await unifiedPaymentService.preparePayment({
+                network,
+                user_address: address,
+                recipient_address: recipient,
+                amount,
+                token_symbol: asset
+            });
 
-                            {/* Default text rendering (fallback) */}
-                            {!typeChecks.isSwapConfirmation &&
-                                !typeChecks.isDCAConfirmation &&
-                                !typeChecks.isMultiStepTransaction &&
-                                !typeChecks.isSwapTransaction &&
-                                !typeChecks.isBrianTransaction &&
-                                !typeChecks.isBridgeTransaction &&
-                                !typeChecks.isTransferTransaction &&
-                                !typeChecks.isBalanceResult &&
-                                !typeChecks.isProtocolResearch &&
-                                !typeChecks.isPortfolioDisabled &&
-                                !typeChecks.isBridgePrivacyReady &&
-                                !typeChecks.isCrossChainSuccess &&
-                                agentType !== 'agno' &&
-                                agentType !== 'portfolio' && (
-                                    <Text
-                                        fontSize="sm"
-                                        color={textColor}
-                                        whiteSpace="pre-wrap"
-                                    >
-                                        {formatLinks(
-                                            getContentError(content) ||
-                                            getContentMessage(content) ||
-                                            (isStringContent(content) ? content : JSON.stringify(content))
-                                        )}
-                                    </Text>
-                                )}
-                        </Box>
-                    </VStack>
-                </HStack>
-            </Box>
+            if (preparation.action_type === 'sign_typed_data') {
+                // X402 Flow: Sign EIP-712 data
+                const signature = await walletClient.signTypedData({
+                    domain: preparation.domain!,
+                    types: preparation.types!,
+                    primaryType: preparation.primaryType!,
+                    message: preparation.message!
+                });
 
-            {/* Portfolio Modal */}
-            <PortfolioModal
-                isOpen={isPortfolioModalOpen}
-                onClose={onPortfolioModalClose}
-                portfolioAnalysis={
-                    typeof content === 'object' && content !== null && 'type' in content && (content as any).type === 'portfolio'
-                        ? (content as any).analysis
-                        : {}
+                toast({ title: "Submitting Payment...", status: "info", duration: 2000 });
+
+                await unifiedPaymentService.submitPayment(preparation.protocol, {
+                    signature,
+                    user_address: address,
+                    message: preparation.message,
+                    metadata: preparation.metadata
+                });
+
+                toast({ title: "Automation Authorized!", description: "Payment executed successfully.", status: "success" });
+
+            } else if (preparation.action_type === 'approve_allowance') {
+                // MNEE Flow: Approve allowance if needed
+                if (!preparation.allowance_sufficient) {
+                    toast({ title: "Approval Required", description: "Please sign the approval transaction.", status: "warning", duration: 5000 });
+
+                    const hash = await walletClient.writeContract({
+                        address: preparation.token_address! as `0x${string}`,
+                        abi: parseAbi(['function approve(address spender, uint256 amount) returns (bool)']),
+                        functionName: 'approve',
+                        args: [preparation.relayer_address! as `0x${string}`, BigInt(preparation.amount_atomic!)],
+                        chain: undefined // Let wallet decide
+                    });
+
+                    toast({ title: "Approval Sent", description: "Waiting for confirmation...", status: "success", duration: 5000 });
+                    await publicClient.waitForTransactionReceipt({ hash });
                 }
-                metadata={metadata}
-                onActionClick={handleActionClick}
+
+                toast({ title: "Executing Payment...", description: "Agent is processing the transfer...", status: "info", duration: 3000 });
+
+                await unifiedPaymentService.submitPayment(preparation.protocol, {
+                    metadata: preparation.metadata
+                });
+
+                toast({ title: "Payment Executed!", description: "Transfer completed via Relayer.", status: "success" });
+
+            } else if (preparation.action_type === 'ready_to_execute') {
+                // Already ready - just execute
+                await unifiedPaymentService.submitPayment(preparation.protocol, {
+                    metadata: preparation.metadata
+                });
+
+                toast({ title: "Payment Executed!", description: "Transfer completed successfully.", status: "success" });
+            }
+
+        } catch (error) {
+            console.error("Automation error:", error);
+            const msg = error instanceof Error ? error.message : String(error);
+            toast({ title: "Execution Failed", description: msg, status: "error" });
+        }
+    }, [walletClient, address, content, toast, publicClient]);
+
+} catch (error) {
+    console.error("Automation error:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    toast({ title: "Execution Failed", description: msg, status: "error" });
+}
+    }, [walletClient, address, content, toast, publicClient]);
+
+// Check if needs quote selection
+const needsSelection = requires_selection && all_quotes && all_quotes.length > 0;
+
+// Render quote selection if needed
+if (needsSelection) {
+    return (
+        <Box
+            bg={bgColor}
+            borderWidth="1px"
+            borderColor={borderColor}
+            borderRadius="lg"
+            p={4}
+            mb={4}
+            className={props.className}
+        >
+            <AggregatorSelection
+                quotes={all_quotes}
+                onSelect={handleQuoteSelect}
+                isLoading={status === 'processing'}
+                tokenSymbol={
+                    typeof content === 'object' && content !== null && 'tokenOut' in content
+                        ? (content as any).tokenOut?.symbol || 'Tokens'
+                        : 'Tokens'
+                }
+                tokenDecimals={
+                    typeof content === 'object' && content !== null && 'tokenOut' in content
+                        ? (content as any).tokenOut?.decimals || 18
+                        : 18
+                }
             />
-        </>
+        </Box>
     );
+}
+
+// Main render
+return (
+    <>
+        <Box
+            bg={bgColor}
+            borderWidth="1px"
+            borderColor={borderColor}
+            borderRadius="lg"
+            p={4}
+            mb={4}
+            className={props.className}
+        >
+            <HStack align="start" spacing={3}>
+                {/* Avatar */}
+                <Avatar size="sm" name={isCommand ? getUserDisplayName() : handle} src={avatarSrc} />
+
+                {/* Content */}
+                <VStack align="start" spacing={2} flex={1}>
+                    {/* Header */}
+                    <HStack justify="space-between" w="100%">
+                        <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                            {isCommand ? getUserDisplayName() : handle}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                            {new Date(timestamp).toLocaleTimeString()}
+                        </Text>
+                    </HStack>
+
+                    {/* Response Content */}
+                    <Box w="100%">
+                        <ResponseRenderer
+                            content={content}
+                            typeChecks={typeChecks}
+                            agentType={agentType}
+                            transactionData={transactionData}
+                            metadata={metadata}
+                            multiStepState={multiStepState}
+                            chainId={chainId}
+                            textColor={textColor}
+                            isExecuting={isExecuting}
+                            onExecute={() => {
+                                if (typeChecks.isX402Automation) {
+                                    handleX402Execution();
+                                } else if (typeof content === 'object' && content !== null &&
+                                    ((content as any).flow_info || (content as any).type === 'swap_approval' || (content as any).type === 'multi_step_transaction')) {
+                                    handleMultiStepTransaction(content);
+                                } else {
+                                    handleExecuteTransaction();
+                                }
+                            }}
+                            onCancel={handleCancel}
+                            onDone={reset}
+                            onRetry={retry}
+                            onActionClick={handleActionClick}
+                        />
+
+                        {/* Default text rendering (fallback) */}
+                        {!typeChecks.isSwapConfirmation &&
+                            !typeChecks.isDCAConfirmation &&
+                            !typeChecks.isMultiStepTransaction &&
+                            !typeChecks.isSwapTransaction &&
+                            !typeChecks.isBrianTransaction &&
+                            !typeChecks.isBridgeTransaction &&
+                            !typeChecks.isTransferTransaction &&
+                            !typeChecks.isBalanceResult &&
+                            !typeChecks.isProtocolResearch &&
+                            !typeChecks.isPortfolioDisabled &&
+                            !typeChecks.isBridgePrivacyReady &&
+                            !typeChecks.isCrossChainSuccess &&
+                            agentType !== 'agno' &&
+                            agentType !== 'portfolio' && (
+                                <Text
+                                    fontSize="sm"
+                                    color={textColor}
+                                    whiteSpace="pre-wrap"
+                                >
+                                    {formatLinks(
+                                        getContentError(content) ||
+                                        getContentMessage(content) ||
+                                        (isStringContent(content) ? content : JSON.stringify(content))
+                                    )}
+                                </Text>
+                            )}
+                    </Box>
+                </VStack>
+            </HStack>
+        </Box>
+
+        {/* Portfolio Modal */}
+        <PortfolioModal
+            isOpen={isPortfolioModalOpen}
+            onClose={onPortfolioModalClose}
+            portfolioAnalysis={
+                typeof content === 'object' && content !== null && 'type' in content && (content as any).type === 'portfolio'
+                    ? (content as any).analysis
+                    : {}
+            }
+            metadata={metadata}
+            onActionClick={handleActionClick}
+        />
+    </>
+);
 };

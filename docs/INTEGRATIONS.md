@@ -1,5 +1,16 @@
 # Integrations & Privacy
 
+## Unified Payment System
+
+SNEL provides a unified payment architecture that seamlessly handles payments across multiple networks:
+
+- **Cronos (USDC)**: Uses X402 protocol for automated conditional payments with EIP-712 signing
+- **Ethereum (MNEE)**: Uses Relayer pattern for gasless payments with ERC-20 approvals
+- **Security**: Client-side signing only, no private keys transmitted to backend
+- **User Experience**: Single API abstracts protocol complexity, users don't need to know which protocol is used
+
+See [PAYMENTS.md](./PAYMENTS.md) for detailed configuration and usage.
+
 ## LINE Mini-DApp Integration
 
 ### Submission Requirements

@@ -7,13 +7,44 @@ import logging
 import aiohttp
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
+from web3 import Web3
+from eth_account import Account
 from app.models.token import TokenInfo
 from app.services.price_service import price_service
 
 logger = logging.getLogger(__name__)
 
+# Minimal ERC-20 ABI for Relayer operations
+ERC20_ABI = [
+    {
+        "constant": True,
+        "inputs": [
+            {"name": "_owner", "type": "address"},
+            {"name": "_spender", "type": "address"}
+        ],
+        "name": "allowance",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "payable": False,
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "constant": False,
+        "inputs": [
+            {"name": "_from", "type": "address"},
+            {"name": "_to", "type": "address"},
+            {"name": "_value", "type": "uint256"}
+        ],
+        "name": "transferFrom",
+        "outputs": [{"name": "", "type": "bool"}],
+        "payable": False,
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]
+
 class MNEEAdapter:
-    """MNEE Protocol adapter for 1Sat Ordinals operations."""
+    """MNEE Protocol adapter for 1Sat Ordinals operations and Ethereum Relayer."""
 
     def __init__(self):
         """Initialize the MNEE protocol adapter."""
@@ -29,11 +60,96 @@ class MNEEAdapter:
         # MNEE operates on 1Sat Ordinals (primary) and is multi-chain
         self.supported_chains = [236, 1]  # 1Sat Ordinals (primary), Ethereum
         
+        # Relayer Configuration
+        self.relayer_address = os.getenv("MNEE_RELAYER_ADDRESS")
+        self.relayer_private_key = os.getenv("MNEE_RELAYER_PRIVATE_KEY")
+        self.eth_rpc_url = os.getenv("ETH_RPC_URL")
+        if not self.eth_rpc_url:
+            raise ValueError("ETH_RPC_URL environment variable is required for MNEE Relayer")
+        self.mnee_eth_address = "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"
+        
+        # Initialize Web3
+        try:
+            self.w3 = Web3(Web3.HTTPProvider(self.eth_rpc_url))
+        except Exception as e:
+            logger.warning(f"Failed to initialize Web3 connection: {e}")
+            self.w3 = None
+        if self.relayer_address:
+            self.relayer_address = Web3.to_checksum_address(self.relayer_address)
+        
         logger.info(f"MNEE adapter initialized for {self.environment} environment at {self.api_base_url}")
+        if self.relayer_address:
+            logger.info(f"MNEE Relayer configured: {self.relayer_address}")
 
     @property
     def protocol_id(self) -> str:
         return "mnee"
+        
+    def get_relayer_address(self) -> Optional[str]:
+        """Get the configured Relayer address."""
+        return self.relayer_address
+
+    async def check_allowance(self, owner_address: str, spender_address: str) -> int:
+        """Check MNEE allowance on Ethereum."""
+        try:
+            if not self.w3:
+                raise ValueError("Web3 connection not available")
+                
+            contract = self.w3.eth.contract(address=self.mnee_eth_address, abi=ERC20_ABI)
+            allowance = contract.functions.allowance(
+                Web3.to_checksum_address(owner_address),
+                Web3.to_checksum_address(spender_address)
+            ).call()
+            return allowance
+        except Exception as e:
+            logger.error(f"Failed to check allowance: {e}")
+            raise
+
+    async def execute_relayed_transfer(
+        self,
+        user_address: str,
+        recipient_address: str,
+        amount_atomic: int
+    ) -> str:
+        """
+        Execute a transferFrom transaction using the Relayer wallet.
+        User must have approved the Relayer address beforehand.
+        """
+        if not self.relayer_private_key or not self.relayer_address:
+            raise ValueError("Relayer not configured (missing key or address)")
+            
+        if not self.w3:
+            raise ValueError("Web3 connection not available")
+
+        try:
+            contract = self.w3.eth.contract(address=self.mnee_eth_address, abi=ERC20_ABI)
+            
+            # Build transaction
+            txn = contract.functions.transferFrom(
+                Web3.to_checksum_address(user_address),
+                Web3.to_checksum_address(recipient_address),
+                amount_atomic
+            ).build_transaction({
+                'chainId': 1,
+                'gas': 100000, # Estimated gas limit
+                'gasPrice': self.w3.eth.gas_price,
+                'nonce': self.w3.eth.get_transaction_count(self.relayer_address),
+            })
+            
+            # Sign transaction
+            signed_txn = self.w3.eth.account.sign_transaction(txn, private_key=self.relayer_private_key)
+            
+            # Send transaction
+            tx_hash = self.w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            
+            # Wait for receipt (optional, depends on if we want to block)
+            # receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            return self.w3.to_hex(tx_hash)
+            
+        except Exception as e:
+            logger.error(f"Relayed transfer failed: {e}")
+            raise
 
     @property
     def name(self) -> str:

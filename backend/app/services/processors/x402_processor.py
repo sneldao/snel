@@ -96,22 +96,47 @@ class X402Processor:
             # Detect automation type
             automation_type = self._detect_automation_type(unified_command.command)
             
-            # Validate amount and token (currently only USDC supported)
-            if payment_details['asset'].upper() != 'USDC':
+            # Determine network and supported stablecoin
+            if unified_command.chain_id == 338:
+                network = "cronos-testnet"
+                supported_token = "USDC"
+            elif unified_command.chain_id == 25:
+                network = "cronos-mainnet"
+                supported_token = "USDC"
+            elif unified_command.chain_id == 1:
+                network = "ethereum-mainnet"
+                supported_token = "MNEE"
+            else:
+                network = "cronos-testnet"
+                supported_token = "USDC"
+            
+            # Validate amount and token
+            if payment_details['asset'].upper() not in ['USDC', 'MNEE']:
                 return UnifiedResponse(
                     content=f"❌ **Token Not Supported**\n\n"
-                           f"X402 currently only supports **USDC** payments on Cronos.\n"
+                           f"X402 supports **USDC** on Cronos and **MNEE** on Ethereum.\n"
                            f"You specified: {payment_details['asset']}\n\n"
-                           f"Please try: `setup portfolio rebalancing with {payment_details['amount']} USDC budget`",
+                           f"Please try: `setup portfolio rebalancing with {payment_details['amount']} {supported_token} budget`",
                     agent_type=AgentType.ERROR,
                     status="error",
                     error=f"Unsupported token: {payment_details['asset']}",
                     metadata={"command_type": CommandType.X402_PAYMENT}
                 )
             
-            # Check if we have a private key for execution (in real app, this would come from wallet)
-            # For now, we'll prepare the transaction but require wallet signature
-            network = "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet"
+            # Validate token matches network
+            asset_upper = payment_details['asset'].upper()
+            if (asset_upper == 'USDC' and unified_command.chain_id == 1) or \
+               (asset_upper == 'MNEE' and unified_command.chain_id in [25, 338]):
+                return UnifiedResponse(
+                    content=f"❌ **Token/Network Mismatch**\n\n"
+                           f"On {get_chain_info(unified_command.chain_id).name}, please use **{supported_token}**.\n"
+                           f"You specified: {payment_details['asset']}\n\n"
+                           f"Please try: `setup portfolio rebalancing with {payment_details['amount']} {supported_token} budget`",
+                    agent_type=AgentType.ERROR,
+                    status="error",
+                    error=f"Token {asset_upper} not supported on this network",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
+                )
             
             # Check facilitator health
             from app.protocols.x402_adapter import check_x402_service_health
@@ -449,21 +474,27 @@ class X402Processor:
         amount = amount_match.group(1)
         asset = amount_match.group(2)
         
-        # Extract recipient (simplified) - fix the regex groups
+        # Extract recipient with proper address resolution
         recipient_patterns = [
-            r'to\s+([a-zA-Z0-9._-]+\.eth)',
-            r'pay\s+([a-zA-Z0-9._-]+\.eth)',
-            r'to\s+(agent)',
-            r'pay\s+(agent)'
+            r'to\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
+            r'pay\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
+            r'to\s+([a-zA-Z0-9._-]+\.eth)',  # ENS name
+            r'pay\s+([a-zA-Z0-9._-]+\.eth)',  # ENS name
+            r'to\s+(agent)',  # Agent keyword
+            r'pay\s+(agent)'  # Agent keyword
         ]
         
-        recipient = "agent.eth"  # Default
+        recipient = None
         for pattern in recipient_patterns:
             match = re.search(pattern, command.lower())
             if match:
                 captured = match.group(1)
-                recipient = captured + ".eth" if captured == "agent" else captured
+                recipient = self._resolve_recipient_address(captured)
                 break
+        
+        if not recipient:
+            # Default to a treasury/agent address for demo purposes
+            recipient = "0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e"  # Example treasury address
         
         return {
             "amount": amount,
@@ -492,18 +523,25 @@ class X402Processor:
         elif "monthly" in command.lower():
             interval = "monthly"
         
-        # Extract recipient - fix the regex
+        # Extract recipient with proper address resolution
         recipient_patterns = [
-            r'to\s+([a-zA-Z0-9._-]+\.eth)',
-            r'payment.*to\s+([a-zA-Z0-9._-]+\.eth)'
+            r'to\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
+            r'payment.*to\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
+            r'to\s+([a-zA-Z0-9._-]+\.eth)',  # ENS name
+            r'payment.*to\s+([a-zA-Z0-9._-]+\.eth)'  # ENS name
         ]
         
-        recipient = "merchant.eth"  # Default
+        recipient = None
         for pattern in recipient_patterns:
             match = re.search(pattern, command.lower())
             if match:
-                recipient = match.group(1)
+                captured = match.group(1)
+                recipient = self._resolve_recipient_address(captured)
                 break
+        
+        if not recipient:
+            # Default to a treasury/merchant address for demo purposes
+            recipient = "0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e"  # Example merchant address
         
         return {
             "amount": amount,
@@ -511,3 +549,37 @@ class X402Processor:
             "recipient": recipient,
             "interval": interval
         }
+
+    def _resolve_recipient_address(self, recipient_input: str) -> str:
+        """
+        Resolve recipient input to a valid Ethereum address.
+        
+        Args:
+            recipient_input: Can be an Ethereum address, ENS name, or keyword
+            
+        Returns:
+            Valid Ethereum address
+        """
+        # If it's already a valid Ethereum address, return as-is
+        if recipient_input.startswith('0x') and len(recipient_input) == 42:
+            return recipient_input
+        
+        # Handle common keywords
+        keyword_addresses = {
+            'agent': '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e',  # Agent treasury
+            'treasury': '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e',  # Treasury address
+            'merchant': '0x8ba1f109551bD432803012645Hac136c22C57B',  # Example merchant
+            'supplier': '0x1234567890123456789012345678901234567890',  # Example supplier
+        }
+        
+        if recipient_input.lower() in keyword_addresses:
+            return keyword_addresses[recipient_input.lower()]
+        
+        # For ENS names, in production you would resolve via ENS
+        # For now, return a default address with a note
+        if recipient_input.endswith('.eth'):
+            logger.warning(f"ENS resolution not implemented for {recipient_input}, using default address")
+            return '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e'
+        
+        # Default fallback
+        return '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e'

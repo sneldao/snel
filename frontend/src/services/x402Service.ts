@@ -13,7 +13,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export interface X402PaymentRequest {
     recipient_address: string;
     amount_usdc: number;
-    network: 'cronos-mainnet' | 'cronos-testnet';
+    network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet';
     metadata?: Record<string, any>;
 }
 
@@ -41,7 +41,7 @@ class X402Service {
     /**
      * Check x402 facilitator service health
      */
-    async checkHealth(network: 'cronos-mainnet' | 'cronos-testnet' = 'cronos-testnet'): Promise<X402HealthStatus> {
+    async checkHealth(network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet' = 'cronos-testnet'): Promise<X402HealthStatus> {
         try {
             const response = await axios.get(`${API_BASE_URL}/api/v1/x402/health/${network}`);
             return response.data;
@@ -61,6 +61,56 @@ class X402Service {
         } catch (error) {
             console.error('Failed to get supported networks:', error);
             throw new Error('Failed to get supported networks');
+        }
+    }
+
+    /**
+     * Step 1: Prepare payment for client-side signing
+     * Returns EIP-712 typed data
+     */
+    async preparePayment(
+        userAddress: string,
+        recipientAddress: string,
+        amountUsdc: number,
+        network: 'cronos-mainnet' | 'cronos-testnet' = 'cronos-testnet'
+    ) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/v1/x402/prepare-payment`, {
+                user_address: userAddress,
+                recipient_address: recipientAddress,
+                amount_usdc: amountUsdc,
+                network
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Failed to prepare x402 payment:', error);
+            throw new Error('Failed to prepare payment');
+        }
+    }
+
+    /**
+     * Step 2: Submit signed payment to backend
+     */
+    async submitPayment(
+        signature: string,
+        userAddress: string,
+        message: any,
+        metadata: any
+    ): Promise<X402PaymentResult> {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/v1/x402/submit-payment`, {
+                signature,
+                user_address: userAddress,
+                message,
+                metadata
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('Failed to submit x402 payment:', error);
+            if (error.response?.data?.detail) {
+                throw new Error(error.response.data.detail);
+            }
+            throw new Error('Failed to submit payment');
         }
     }
 
@@ -114,7 +164,7 @@ class X402Service {
         paymentHeader: string,
         recipientAddress: string,
         amountUsdc: number,
-        network: 'cronos-mainnet' | 'cronos-testnet' = 'cronos-testnet'
+        network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet' = 'cronos-testnet'
     ) {
         try {
             const response = await axios.post(`${API_BASE_URL}/api/v1/x402/verify-payment`, {
@@ -134,7 +184,10 @@ class X402Service {
     /**
      * Get chain configuration for x402 networks
      */
-    getChainConfig(network: 'cronos-mainnet' | 'cronos-testnet') {
+    getChainConfig(network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet') {
+        if (network === 'ethereum-mainnet') {
+            return { id: 1, name: 'Ethereum' };
+        }
         return network === 'cronos-mainnet' ? cronos : cronosTestnet;
     }
 
@@ -153,18 +206,28 @@ class X402Service {
     }
 
     /**
-     * Get USDC contract address for network
+     * Get stablecoin contract address for network
      */
-    getUSDCContract(network: 'cronos-mainnet' | 'cronos-testnet'): string {
-        return network === 'cronos-mainnet'
-            ? '0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C'  // USDC.e Mainnet
-            : '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0'; // devUSDC.e Testnet
+    getStablecoinContract(network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet'): string {
+        const contracts = {
+            'cronos-mainnet': '0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C',  // USDC.e Mainnet
+            'cronos-testnet': '0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0',   // devUSDC.e Testnet
+            'ethereum-mainnet': '0x7D89c67d3c4E72E8C5c64BE201dC225F99d16aCa'  // MNEE stablecoin
+        };
+        return contracts[network];
+    }
+
+    /**
+     * Get stablecoin symbol for network
+     */
+    getStablecoinSymbol(network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet'): string {
+        return network === 'ethereum-mainnet' ? 'MNEE' : 'USDC';
     }
 
     /**
      * Get facilitator URL for network
      */
-    getFacilitatorUrl(network: 'cronos-mainnet' | 'cronos-testnet'): string {
+    getFacilitatorUrl(network: 'cronos-mainnet' | 'cronos-testnet' | 'ethereum-mainnet'): string {
         return 'https://facilitator.cronoslabs.org/v2/x402';
     }
 }

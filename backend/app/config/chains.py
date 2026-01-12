@@ -44,9 +44,9 @@ CHAINS: Dict[int, ChainInfo] = {
         name="Ethereum",
         type=ChainType.EVM,
         explorer_url="https://etherscan.io/tx/",
-        supported_protocols={"0x", "brian"},
+        supported_protocols={"0x", "brian", "x402"},  # x402 via MNEE stablecoin
         privacy=PrivacyCapabilities(
-            x402_support=True,     # Full x402 privacy support
+            x402_support=True,     # Full x402 privacy support via MNEE
             gmp_privacy=True,      # GMP privacy fallback
             compliance_support=True # Compliance-ready privacy
         )

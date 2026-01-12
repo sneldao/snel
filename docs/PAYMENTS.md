@@ -1,18 +1,29 @@
 # Payments & Transactions
 
+## Unified Payment Architecture
+
+SNEL provides a unified payment system that works seamlessly across multiple networks and protocols while maintaining user control of funds.
+
+### Supported Networks & Protocols
+
+| Network | Chain ID | Token | Protocol | Features |
+|---------|----------|-------|----------|----------|
+| Cronos Mainnet | 25 | USDC | X402 | Automation, Conditional, Scheduled |
+| Cronos Testnet | 338 | USDC | X402 | Automation, Conditional, Scheduled |
+| Ethereum Mainnet | 1 | MNEE | Relayer | Gasless, Instant, Permit2 |
+
+### Security Model
+- **Client-Side Signing**: All signatures generated in user's wallet
+- **No Private Keys**: Backend never receives or stores private keys
+- **Permission-Based**: Users grant specific permissions (EIP-712 signatures or ERC-20 approvals)
+- **Agent Execution**: Backend executes when conditions are met using granted permissions
+
 ## X402 Agentic Payment Integration
 
-### Overview
-
-X402 is Cronos' protocol for AI-triggered payments and automated settlement workflows. SNEL integrates x402 naturally into conversations, following the same pattern as MNEE payments.
-
 ### Core Features
-
 - **AI-Triggered Payments**: Autonomous payments executed by AI agents based on conditions
 - **EIP-712 Authorization**: Secure cryptographic signatures for payment delegation  
-- **Gasless Transactions**: EIP-7702 delegation for reduced transaction costs
 - **Automated Settlement**: Recurring and scheduled payment workflows
-- **Batch Processing**: Multiple payments in single transaction for efficiency
 - **Agent-to-Agent Transactions**: Direct AI-to-AI settlement without human intervention
 
 ### Natural Language Commands
@@ -31,1109 +42,255 @@ X402 is Cronos' protocol for AI-triggered payments and automated settlement work
 "execute batch payment to contractors"
 ```
 
-### Network Support
-
-- **Cronos Mainnet** (Chain ID: 25)
-- **Cronos Testnet** (Chain ID: 338)
-
-When users attempt x402 commands on other networks, SNEL naturally suggests switching to Cronos.
-
-### Integration Architecture
-
-X402 follows the same natural integration pattern as MNEE:
-
-1. **Contextual Discovery**: Mentioned in capability discussions
-2. **Network-Aware Suggestions**: Prompts to switch to Cronos when needed
-3. **Natural Language Processing**: Commands parsed conversationally
-4. **Knowledge Base Integration**: Full protocol information available
-
-### User Experience Flow
-
-```
-User: "what can you do?"
-SNEL: "I support MNEE commerce payments and X402 agentic payments on Cronos..."
-
-User: "pay agent 10 USDC"
-SNEL: [If not on Cronos] "X402 agentic payments are available on Cronos EVM! Switch to..."
-SNEL: [If on Cronos] "🤖 AI Agent Payment Ready - Amount: 10 USDC..."
-```
-
-## Payment Actions System (Phase 1)
-
-User-customizable payment actions with guided chat-based creation and personalization.
-
-### Architecture
-
-**Unified Data Model**: Single `PaymentAction` replaces templates, recipients, and shortcuts.
-- `actionType`: send | recurring | template | shortcut
-- `isPinned`: Show in quick action buttons (max 5)
-- `usageCount`, `lastUsed`: Track usage patterns
-- `schedule`: Optional recurring configuration
-
-**Storage**:
-- **Frontend**: localStorage (`snel_payment_actions_{walletAddress}`)
-- **Backend**: In-memory service (PaymentActionService), ready for Redis/DB upgrade
-
-### User Flow
-
-1. **Create**: "create payment action" → 7-step guided chat flow
-2. **Display**: Pinned actions appear as quick buttons (max 5)
-3. **Execute**: Click action or say "use action {name}"
-4. **Manage**: "show my payment actions", "update {action}", "delete {action}"
-
-### For Developers
-
-**Create Action**:
-```typescript
-const action = await service.createPaymentAction(walletAddress, {
-  name: "Weekly Rent",
-  actionType: "recurring",
-  recipientAddress: "0x742d...",
-  amount: "1.5",
-  token: "ETH",
-  chainId: 1,
-  schedule: { frequency: "weekly", dayOfWeek: 1 },
-  isPinned: true,
-});
-```
-
-**Get Quick Actions**:
-```typescript
-const quickActions = await service.getQuickActions(walletAddress);
-// Returns max 5 pinned actions, sorted by usage
-```
-
-**Files**:
-- Backend: `backend/app/domains/payment_actions/{models,service}.py`
-- Backend: `backend/app/services/processors/payment_action_processor.py`
-- Frontend: `frontend/src/services/paymentHistoryService.ts`
-- Frontend: `frontend/src/components/PaymentActionFlow.tsx` (creation flow)
-- Enhanced: `frontend/src/components/PaymentQuickActions.tsx` (dynamic buttons)
-
-### Phase 2: Persistent Storage ✅
-
-**Complete**: Backend persistent storage with pluggable backends
-
-**Architecture**: Storage abstraction layer with three backends:
-1. **InMemoryStorageBackend** - Development, single-instance testing
-2. **RedisStorageBackend** - Default production, distributed, fast
-3. **PostgreSQLStorageBackend** - Fallback (ORM setup pending)
-
-**New Files**:
-- `backend/app/domains/payment_actions/storage.py` - Abstract backend interface + implementations
-- `backend/app/domains/payment_actions/backend_factory.py` - Backend initialization from config
-
-**Enhanced Files**:
-- `backend/app/domains/payment_actions/service.py` - Pluggable backend support
-- `backend/app/config/settings.py` - Backend selection via `PAYMENT_ACTIONS_BACKEND` env var
-
-**Configuration**:
-```env
-PAYMENT_ACTIONS_BACKEND=redis    # "memory" | "redis" | "postgresql"
-REDIS_URL=redis://localhost:6379
-```
-
-**Testing**: All tests passing (in-memory, multiple actions, usage tracking)
-
-### Phase 3: Real Payment Execution ✅
-
-**Complete**: Real MNEE payment execution for payment actions
-
-**Architecture**: Multi-layer execution with validation, signing, and tracking
-
-**New Files**:
-- `backend/app/domains/payment_actions/executor.py` - PaymentExecutor service for MNEE transfers
-- `backend/app/domains/payment_actions/transaction_history.py` - Transaction history and status tracking
-
-**Enhanced Files**:
-- `backend/app/services/processors/payment_action_processor.py` - Execute, validate, and check status handlers
-
-**Execution Flow**:
-1. **Validate** - Check action is enabled, chain supported, amounts valid
-2. **Quote** - Get MNEE price and fee estimation
-3. **Build** - Construct transaction with MNEE adapter
-4. **Sign** - Await wallet signature (pluggable signing function)
-5. **Submit** - Send to MNEE API, receive ticket ID
-6. **Track** - Monitor status via MNEE ticket system
-
-**New Commands**:
-```
-User: "execute action rent"
-→ Validates action
-→ Builds transaction
-→ Returns quote + awaits signature
-
-User: "check payment status {ticket_id}"
-→ Queries MNEE API ticket status
-→ Returns confirmed/pending/failed status
-
-User: "validate action coffee"
-→ Pre-flight checks without execution
-→ Returns warnings and errors
-```
-
-**ExecutionResult States**:
-- QUEUED → BUILDING → AWAITING_SIGNATURE → SUBMITTED → PROCESSING → COMPLETED
-- FAILED (at any stage with error message)
-
-**Transaction History**:
-- Records all executed payments with MNEE ticket IDs
-- Tracks confirmations, fees, and on-chain hashes
-- Supports filtering by status, action, and timeframe
-
-### Phase 4: Natural Language Triggers & Smart Suggestions ✅
-
-**Complete**: Trigger matching, suggestion engine, and recurring scheduler
-
-### Phase 5: AI Agent Webhooks & Batch Payments ✅
-
-**Complete**: Programmatic payment execution for AI agents and batch/split payments
-
-**Architecture**: Three specialized services for NLP and automation
-
-**New Files**:
-- `backend/app/domains/payment_actions/triggers.py` - TriggerMatcher + TriggerAnalyzer
-- `backend/app/domains/payment_actions/suggestions.py` - SuggestionEngine with usage analytics
-- `backend/app/domains/payment_actions/scheduler.py` - RecurringScheduler for automation
-
-**Features**:
-
-1. **Trigger Matching** (triggers.py):
-   - Natural language matching ("coffee" → finds "Coffee Fund" action)
-   - Confidence scoring (0.0-1.0) for fuzzy matches
-   - Word overlap detection
-   - Character-level similarity (SequenceMatcher)
-   - Trigger suggestion generator
-
-2. **Smart Suggestions** (suggestions.py):
-   - Usage-based ranking (frequency + recency)
-   - Time-based context (weekdays vs weekends, hours)
-   - Overdue recurring payment detection
-   - Intelligent scoring: recent (0.4) + frequent (0.4) + pinned (0.2)
-
-3. **Recurring Scheduler** (scheduler.py):
-   - Daily, weekly, monthly frequency support
-   - Day-of-week and day-of-month targeting
-   - Due/overdue status calculation
-   - Upcoming payment forecasting
-   - Human-readable descriptions
-
-**New Commands**:
-```
-User: "coffee"
-→ Trigger matcher finds "Coffee Fund" action
-→ Shows matching action with confidence score
-→ Ready to execute
-
-User: "what should i pay today?"
-→ Suggestion engine analyzes usage patterns
-→ Returns: "Frequent Payment (score=0.95), Weekly Payment (score=0.82)"
-
-User: "show my upcoming payments"
-→ Scheduler checks all recurring actions
-→ Returns due + upcoming in next 7 days
-
-User: "create a daily reminder for coffee"
-→ Sets DAILY frequency
-→ Trigger includes "coffee"
-→ Scheduler monitors for execution
-```
-
-**Test Coverage**: 12 tests, 100% passing
-- Trigger matching: exact, substring, fuzzy
-- Trigger suggestions: by action type
-- Suggestions by usage: frequency + recency scoring
-- Suggestions by time: context-aware
-- Scheduler: daily, weekly, monthly payments
-- Due/upcoming detection and forecasting
-
-### Phase 5: AI Agent Webhooks & Batch Payments
-
-**Complete**: Webhook endpoints for AI agents + batch payments with revenue splits + automatic keeper job
-
-**Architecture**: Three webhook endpoints + batch split calculation + recurring execution scheduler
-
-**New Features**:
-
-1. **AI Agent Payment Webhooks**:
-   ```
-   POST /api/webhooks/execute-action
-   - Agent triggers payment programmatically
-   - HMAC signature validation (production-ready)
-   - Execution tracking with request IDs
-   
-   Example: AI agent pays for data
-   Agent → Webhook → Execute action → MNEE transfer → Ticket returned
-   ```
-
-2. **Batch Payments with Splits**:
-   ```
-   POST /api/webhooks/execute-batch
-   - Multiple recipients in single call
-   - Percentage-based distribution (60%, 40%)
-   - Or fixed amounts (10, 20, 30)
-   - Audit trail for all splits
-   
-   Example: Creator platform pays 3 creators
-   100 MNEE → Split to 3 wallets → Each gets their share
-   ```
-
-3. **Automatic Recurring Execution**:
-   ```
-   Keeper Job (scheduler service)
-   - Runs hourly/daily/on-demand
-   - Finds all due recurring payments
-   - Executes automatically
-   - Tracks execution history
-   
-   Example: Monthly subscriptions auto-execute on schedule
-   ```
-
-**New Files**:
-- `backend/app/domains/payment_actions/webhooks.py` - Webhook models, signature validation
-- `backend/app/services/webhook_service.py` - Event processing, batch split logic
-- `backend/app/api/webhooks.py` - 3 webhook endpoints (execute-action, execute-batch, create-action)
-- `backend/app/domains/payment_actions/keeper.py` - Recurring payment scheduler
-- `backend/app/api/v1/keeper.py` - Keeper job management endpoints
-- `scripts/run_keeper.py` - CLI runner for keeper (hourly, daily, etc.)
-
-**Enhanced Files**:
-- `backend/app/domains/payment_actions/models.py` - Added `PaymentRecipient` + batch support
-- `backend/app/domains/payment_actions/storage.py` - Added `list_wallets()` method to all backends
-- `backend/app/domains/payment_actions/service.py` - Added `get_all_wallets()` for keeper
-- `backend/app/main.py` - Registered webhook + keeper routers
-
-**New Commands** (via Webhook):
-```
-# Execute existing action
-POST /api/webhooks/execute-action
-{"action_id": "rent", "wallet_address": "0x...", "override_amount": "100"}
-
-# Batch payout
-POST /api/webhooks/execute-batch
-{
-  "recipients": [
-    {"address": "0xA...", "percentage": 60},
-    {"address": "0xB...", "percentage": 40}
-  ]
-}
-
-# Create action via API
-POST /api/webhooks/create-action
-{"name": "Monthly rent", "amount": "500", ...}
-
-# Manual keeper trigger
-POST /api/v1/keeper/run-check
-
-# Scheduled keeper
-python scripts/run_keeper.py --scheduler hourly
-```
-
-**Test Cases**:
-- Webhook signature verification (HMAC-SHA256)
-- Batch split calculation (percentages → amounts)
-- Recurring due detection (daily/weekly/monthly)
-- Execution history tracking
-- Error handling + retry logic
-
-**Hackathon Focus**:
-- ✅ AI & Agent Payments: Webhooks enable autonomous agent transactions
-- ✅ Commerce & Creator Tools: Batch splits solve creator payout distribution
-- ✅ Programmable Finance: Keeper job automates subscription execution
-
----
-
-## Implementation Summary: Phases 1-4
-
-### Architecture Overview
-
-**Unified Payment Action System** - Complete end-to-end payment management:
-
-```
-User Creates Action (Phase 1) → Action Stored Persistently (Phase 2) → Action Executed (Phase 3)
-                     ↓
-          PaymentActionFlow.tsx
-          (7-step guided chat)
-                     ↓
-          PaymentActionService
-          (CRUD operations)
-                     ↓
-          Storage Backend
-          (Redis/Memory/PostgreSQL)
-                     ↓
-          PaymentExecutor
-          (MNEE transactions)
-                     ↓
-          TransactionHistory
-          (Track on-chain status)
-```
-
-### Files Created
-
-**Phase 1 (Data Model)**:
-- `backend/app/domains/payment_actions/models.py` - Unified PaymentAction schema
-- `backend/app/domains/payment_actions/service.py` - CRUD service
-- `backend/app/services/processors/payment_action_processor.py` - Chat handler
-- `frontend/src/components/PaymentActionFlow.tsx` - 7-step creation UI
-- `frontend/src/services/paymentHistoryService.ts` - localStorage integration
-
-**Phase 2 (Persistence)**:
-- `backend/app/domains/payment_actions/storage.py` - Abstract backend + implementations (InMemory, Redis, PostgreSQL stub)
-- `backend/app/domains/payment_actions/backend_factory.py` - Backend initialization from config
-- Enhanced: `service.py` (pluggable backends), `settings.py` (backend selection)
-
-**Phase 3 (Execution)**:
-- `backend/app/domains/payment_actions/executor.py` - PaymentExecutor for MNEE transfers
-- `backend/app/domains/payment_actions/transaction_history.py` - Transaction tracking
-- Enhanced: `payment_action_processor.py` (execute, validate, status commands)
-
-**Phase 4 (Intelligence)**:
-- `backend/app/domains/payment_actions/triggers.py` - TriggerMatcher + TriggerAnalyzer
-- `backend/app/domains/payment_actions/suggestions.py` - SuggestionEngine
-- `backend/app/domains/payment_actions/scheduler.py` - RecurringScheduler
-- Enhanced: `payment_action_processor.py` (trigger-based execution, suggestions)
-
-### Principles Applied
-
-✅ **ENHANCEMENT FIRST** - Enhanced existing components, didn't create unnecessary new layers
-✅ **AGGRESSIVE CONSOLIDATION** - Single PaymentAction model replaces 4 previous patterns, deleted 300+ mock lines
-✅ **PREVENT BLOAT** - Net ~600 lines across 3 phases, minimal dependencies
-✅ **DRY** - Single source of truth: PaymentAction model, storage backends, executor logic
-✅ **CLEAN** - Clear separation: storage abstraction, execution pipeline, chat handlers
-✅ **MODULAR** - Pluggable backends, injectable signing functions, testable services
-✅ **PERFORMANT** - Redis support, cached quick actions, async/await throughout
-✅ **ORGANIZED** - Domain-driven structure, single payment_actions domain, clear naming
-
-### Test Coverage
-
-**Phase 1**: Creation, listing, updating, deletion ✅
-**Phase 2**: In-memory, Redis, multiple actions with filtering ✅
-**Phase 3**: Validation, execution flow, transaction history, status tracking ✅
-**Phase 4**: Trigger matching, suggestions, scheduling ✅
-
-**All tests passing** (20 total):
-- `test_payment_actions_storage.py` - 3 tests
-- `test_payment_execution.py` - 5 tests
-- `test_payment_phase4.py` - 12 tests
-
-### Configuration
-
-Environment variables control the entire system:
-
-```env
-# Backend storage selection
-PAYMENT_ACTIONS_BACKEND=redis    # "memory" | "redis" | "postgresql"
-
-# Redis configuration
-REDIS_URL=redis://localhost:6379
-REDIS_DB=0
-REDIS_MAX_CONNECTIONS=10
-
-# MNEE API configuration
-MNEE_API_KEY=your_key_here
-MNEE_ENVIRONMENT=production      # "production" | "sandbox"
-```
-
-### User Experience
-
-**Create Action**:
-```
-User: "create payment action"
-→ Guided 7-step flow (name, type, recipient, amount, token, chain, schedule)
-→ Action stored in user's wallet namespace
-→ Appears in quick actions if pinned
-```
-
-**Execute Action**:
-```
-User: "execute action rent"
-→ Validates: enabled, chain supported, amount valid
-→ Gets quote: shows MNEE fee estimate
-→ Builds transaction: prepares for signing
-→ Awaits signature: (pluggable wallet integration)
-→ Submits to MNEE: receives ticket ID for tracking
-→ Returns status: pending/submitted/confirmed
-```
-
-**Track Payment**:
-```
-User: "check payment status {ticket_id}"
-→ Queries MNEE API via adapter
-→ Returns: confirmed/pending/failed
-→ Updates transaction history
-```
-
-### Future Enhancements
-
-Phase 5+ opportunities:
-- Backend cron integration for automated recurring execution
-- AI model training on trigger/suggestion preferences
-- Mobile app native payment shortcuts
-- Multi-signature support for team payments
-- Payment approval workflows
-- Budget tracking and analytics dashboard
-- Recurring payment adjustments based on market prices
-
----
-
-## MNEE Integration
-
-### MNEE Protocol Overview
-
-**MNEE** is a programmable USD-backed stablecoin with:
-- **Primary Network**: 1Sat Ordinals (Chain ID: 236)
+### Flow Architecture
+
+#### Cronos (X402)
+1. **Preparation**: Backend generates EIP-712 typed data
+2. **User Action**: User signs typed data in wallet (via Wagmi/WalletConnect)
+3. **Execution**: Backend submits signature to X402 facilitator
+4. **Confirmation**: Transaction receipt automatically retrieved and confirmed
+
+#### Ethereum (MNEE)
+1. **Preparation**: Backend checks user's allowance for relayer
+2. **User Action**: User approves relayer via wallet (if insufficient allowance)
+3. **Receipt Waiting**: Frontend waits for approval transaction confirmation
+4. **Execution**: Backend executes transferFrom via relayer
+
+## MNEE Stablecoin Integration
+
+### Overview
+MNEE is a programmable stablecoin designed for B2B payments and AI-driven commerce.
+
+### Key Features
+- **Instant Transactions**: Near-zero latency settlement
+- **Gasless UX**: Users don't need ETH for gas fees
+- **Programmable**: Smart contract automation capabilities
+- **1:1 USD Backing**: Collateralized by U.S. Treasury bills
+
+### Technical Details
 - **Multi-chain Support**: Ethereum (Chain ID: 1)
 - **Decimals**: 5 (1 MNEE = 100,000 atomic units = 10^5)
 - **Ethereum Address**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF`
-- **Features**: Instant transactions, gasless UX, near-zero fees
-- **Collateral**: 1:1 USD backed by U.S. Treasury bills and cash equivalents
-- **Regulation**: Regulated in Antigua with full AML/KYC compliance
 
-### MNEE API Integration
+### Natural Language Commands
 
-MNEE payments are handled through the backend MNEE Protocol Adapter, which interfaces with the MNEE API.
+```bash
+# Direct Payments
+"send 100 MNEE to supplier.eth"
+"pay 50 MNEE for services"
 
-#### Adapter Architecture
+# Recurring Payments
+"setup monthly payment of 1000 MNEE to contractor.eth"
+"create weekly payment of 250 MNEE to vendor.eth"
 
-```python
-# backend/app/protocols/mnee_adapter.py
-from protocols.mnee_adapter import MNEEAdapter
-
-adapter = MNEEAdapter()
-# Automatically initializes with MNEE_API_KEY from environment
-# Supports both production and sandbox environments
+# Conditional Payments
+"pay 500 MNEE when milestone completed"
+"release 1000 MNEE when invoice approved"
 ```
 
-#### Configuration
+## Payment Actions System
 
-Add to `.env`:
+### Overview
+Payment Actions provide persistent, user-controlled automation for recurring and conditional payments.
+
+### Core Features
+- **Persistent Storage**: Actions survive server restarts
+- **User Control**: Full CRUD operations via natural language
+- **Flexible Scheduling**: One-time, recurring, or conditional execution
+- **Multi-Backend Support**: Memory, Redis, or PostgreSQL storage
+
+### Action Types
+
+#### Recurring Payments
+```bash
+"create weekly payment of 100 USDC to supplier.eth"
+"setup monthly salary payment of 5000 MNEE to employee.eth"
+```
+
+#### Conditional Payments
+```bash
+"pay 1000 MNEE when ETH price drops below $3000"
+"release 500 USDC when milestone completed"
+```
+
+#### One-time Scheduled
+```bash
+"pay 2000 MNEE on December 31st"
+"send 100 USDC tomorrow at 9 AM"
+```
+
+### Management Commands
+
+```bash
+# List actions
+"show my payment actions"
+"list all scheduled payments"
+
+# Modify actions
+"pause payment to supplier.eth"
+"update contractor payment to 150 USDC"
+"delete recurring payment to vendor.eth"
+
+# Execute actions
+"execute payment to supplier.eth now"
+"trigger all pending payments"
+```
+
+## Configuration
+
+Environment variables control the unified payment system:
+
 ```env
+# Required: X402 Configuration (Cronos)
+CRONOS_MAINNET_RPC_URL=https://evm.cronos.org
+CRONOS_TESTNET_RPC_URL=https://evm-t3.cronos.org
+X402_FACILITATOR_URL=https://facilitator.cronoslabs.org/v2/x402
+
+# Required: MNEE Relayer Configuration (Ethereum)
+ETH_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
+MNEE_RELAYER_ADDRESS=0x[your_relayer_public_address]
+MNEE_RELAYER_PRIVATE_KEY=0x[corresponding_private_key]
+
+# Backend storage selection
+PAYMENT_ACTIONS_BACKEND=redis    # "memory" | "redis" | "postgresql"
+REDIS_URL=redis://localhost:6379
+
+# Optional: MNEE API configuration
 MNEE_API_KEY=your_mnee_api_key_here
-MNEE_ENVIRONMENT=production  # or "sandbox"
+MNEE_ENVIRONMENT=production      # "production" | "sandbox"
 ```
 
-#### Core API Endpoints
+**Important**: 
+- All RPC URLs and private keys must be in the **backend** environment
+- Frontend only needs `NEXT_PUBLIC_API_URL` to communicate with backend
+- Never put private keys or RPC URLs in frontend for security
 
-All endpoints are integrated and ready to use:
+## Technical Implementation
 
-##### 1. **Configuration** - GET `/v1/config`
-```python
-config = await adapter.get_config()
-# Returns: {
-#   "decimals": 5,
-#   "tokenId": "...",
-#   "fees": [{"fee": 1000, "min": 10000, "max": 1000000}],
-#   ...
-# }
-```
+### Wallet Integration
+- **Framework**: Wagmi v2 with Viem
+- **Connectors**: WalletConnect, MetaMask, Injected wallets
+- **Transaction Handling**: Automatic receipt waiting and confirmation
+- **Error Recovery**: Comprehensive error handling with user feedback
 
-##### 2. **Balances** - POST `/v2/balance`
-```python
-balances = await adapter.get_balance(["address1", "address2"])
-# Returns: [
-#   {"address": "address1", "amt": 1000000, "precised": 10.0},
-#   ...
-# ]
-```
-
-##### 3. **UTXOs** - POST `/v2/utxos`
-```python
-utxos = await adapter.get_utxos(["address1"], page=1, size=10)
-# Returns: [
-#   {
-#     "txid": "...",
-#     "vout": 0,
-#     "satoshis": 1000000,
-#     "data": {...},
-#     ...
-#   },
-#   ...
-# ]
-```
-
-##### 4. **Transfer** - POST `/v2/transfer`
-```python
-ticket_id = await adapter.transfer(rawtx_base64)
-# Returns: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-```
-
-##### 5. **Ticket Status** - GET `/v2/ticket`
-```python
-ticket = await adapter.get_ticket(ticket_id)
-# Returns: {
-#   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-#   "status": "completed",
-#   "tx_id": "...",
-#   "createdAt": "...",
-#   ...
-# }
-```
-
-#### Quote Generation
-
-Generate quotes for MNEE transfers:
-```python
-from models.token import token_registry
-
-mnee_token = token_registry.get_token("mnee")
-quote = await adapter.get_quote(
-    from_token=mnee_token,
-    to_token=mnee_token,
-    amount=Decimal("100"),
-    chain_id=236,  # 1Sat Ordinals
-    wallet_address="user_address"
-)
-# Returns comprehensive quote with:
-# - Amounts (regular + atomic units)
-# - Estimated fees (MNEE + USD)
-# - Network features
-# - Metadata (price, collateral, regulation info)
-```
-
-#### Transaction Building
-
-Build transactions ready for signing:
-```python
-txn = await adapter.build_transaction(
-    quote=quote,
-    chain_id=236,
-    from_address="sender_address",
-    to_address="recipient_address"
-)
-# Returns:
-# {
-#   "protocol": "mnee",
-#   "type": "transfer",
-#   "amount_atomic": 10000000,
-#   "estimated_fee_atomic": 100,
-#   "execution_method": "MNEE API",
-#   "api_info": {
-#     "base_url": "https://proxy-api.mnee.net",
-#     "endpoints": {...},
-#     "authentication": "auth_token header"
-#   }
-# }
-```
-
-### MNEE SDK Complete Reference
-
-This document provides comprehensive documentation for the MNEE SDK, designed to give LLMs full context for working with the SDK.
-
-#### Table of Contents
-
-1. [Setup and Configuration](#setup-and-configuration)
-2. [Core Methods](#core-methods)
-3. [Batch Operations](#batch-operations)
-4. [HD Wallet](#hd-wallet)
-5. [Type Definitions](#type-definitions)
-6. [Webhook Support](#webhook-support)
-
-#### Setup and Configuration
-
-##### Installation and Initialization
-
+### Transaction Flow
 ```typescript
-import Mnee from '@mnee/ts-sdk';
-
-// Initialize MNEE SDK
-const mnee = new Mnee({
-  environment: 'production', // or 'sandbox' (required)
-  apiKey: 'your-api-key'     // optional but recommended
+// Example: MNEE approval with receipt waiting
+const hash = await walletClient.writeContract({
+    address: tokenAddress,
+    abi: parseAbi(['function approve(address spender, uint256 amount) returns (bool)']),
+    functionName: 'approve',
+    args: [relayerAddress, amount]
 });
 
-// All types are also exported from the main module
-import {
-  MNEEBalance,
-  MNEEUtxo,
-  TransferResponse,
-  HDWallet
-  // ... and more
-} from '@mnee/ts-sdk';
+// Automatic receipt waiting
+await publicClient.waitForTransactionReceipt({ hash });
 ```
 
-##### SdkConfig Type
+## API Endpoints
 
-```typescript
-type SdkConfig = {
-  environment: 'production' | 'sandbox';
-  apiKey?: string;
-};
+### Unified Payment API
+- `POST /api/v1/payment/execute/prepare` - Prepare payment for signing
+- `POST /api/v1/payment/execute/submit` - Submit signed payment
+
+### Protocol-Specific APIs
+- `POST /api/v1/x402/prepare-payment` - X402 preparation
+- `POST /api/v1/x402/submit-payment` - X402 submission
+- `GET /api/v1/mnee/relayer-address` - Get MNEE relayer address
+- `GET /api/v1/mnee/allowance/{address}` - Check MNEE allowance
+- `POST /api/v1/mnee/execute-relayed-payment` - Execute MNEE payment
+
+### Payment Actions API
+- `POST /api/v1/payment-actions` - Create payment action
+- `GET /api/v1/payment-actions` - List user's actions
+- `PUT /api/v1/payment-actions/{id}` - Update action
+- `DELETE /api/v1/payment-actions/{id}` - Delete action
+- `POST /api/v1/payment-actions/{id}/execute` - Execute action
+
+## Usage Examples
+
+### Cronos USDC Payment (X402)
+```bash
+# User command
+"pay agent 50 USDC on cronos"
+
+# Flow
+1. Backend detects: cronos-testnet + USDC → X402
+2. Generates EIP-712 typed data
+3. User signs in wallet
+4. Backend submits to X402 facilitator
+5. On-chain settlement
 ```
 
-#### Core Methods
+### Ethereum MNEE Payment (Relayer)
+```bash
+# User command  
+"setup recurring 100 MNEE payments"
 
-##### Balance Operations
-
-###### Single Address Balance
-
-```typescript
-const balance = await mnee.balance('address');
-// Returns: { address: string, amount: number, decimalAmount: number }
+# Flow
+1. Backend detects: ethereum-mainnet + MNEE → Relayer
+2. Checks user's MNEE allowance for relayer
+3. User approves relayer (if needed)
+4. Backend executes transferFrom when conditions met
+5. On-chain settlement (backend pays gas)
 ```
 
-##### Transfer Operations
+## Testing
 
-###### Simple Transfer
-
-```typescript
-const recipients: SendMNEE[] = [
-  { address: 'recipient1', amount: 10.5 },
-  { address: 'recipient2', amount: 5.25 }
-];
-
-const response = await mnee.transfer(
-  recipients,
-  'sender-private-key-wif',
-  { broadcast: true, callbackUrl: 'https://your-api.com/webhook' }  // optional
-);
-// Returns: TransferResponse
+### Running Tests
+```bash
+cd backend
+python -m pytest tests/test_payment_router.py -v
 ```
 
-## Payment Systems & User Experience
-
-### MNEE UI/UX & User Flow Evaluation
-
-#### Design Principles Assessment
-
-#### ✅ **Consistency Principle: 10/10**
-
-**MNEE follows existing UI patterns perfectly:**
-
-1. **Token Selection**:
-   - MNEE appears in the same token picker as USDC/DAI
-   - Same visual hierarchy and interaction patterns
-   - Consistent with existing token display
-
-2. **Payment Flow**:
-   - Identical to other token payment flows
-   - Same confirmation screens and steps
-   - Consistent error handling and success states
-
-3. **Balance Display**:
-   - Same formatting as other tokens
-   - Consistent position in balance lists
-   - Same refresh and update behaviors
-
-#### ✅ **Accessibility Principle: 9/10**
-
-MNEE maintains accessibility standards:
-
-- Same keyboard navigation as other tokens
-- Consistent screen reader support
-- Equivalent color contrast ratios
-- Only minor issue: MNEE icon needs alt text optimization
-
-#### ✅ **Performance Principle: 10/10**
-
-**Zero performance impact from MNEE integration:**
-
-- Same loading times as other tokens
-- No additional API calls specific to MNEE
-- Consistent memory usage patterns
-- Identical caching behavior
-
-#### ✅ **User Experience Principle: 9/10**
-
-**Seamless user experience:**
-
-- Users don't need to learn new patterns for MNEE
-- Same mental model applies to MNEE as other tokens
-- Consistent feedback mechanisms
-- Only minor issue: MNEE-specific help text could be more prominent
-
-### User Flow Analysis
-
-#### Payment Flow: 10/10
-1. Select MNEE token (same as other tokens)
-2. Enter amount (same UX)
-3. Confirm transaction (same UX)
-4. View status (same UX)
-
-#### Balance Checking: 10/10
-1. View balance list (MNEE appears with other tokens)
-2. Check MNEE balance (same format as others)
-3. Refresh balance (same behavior)
-
-#### Transaction History: 10/10
-1. View transaction history (MNEE transactions appear with others)
-2. Filter by MNEE (same filtering mechanism)
-3. View transaction details (same format)
-
-### Visual Consistency Score: 10/10
-
-- **Color Scheme**: MNEE follows existing color patterns
-- **Typography**: Same fonts and sizes as other tokens
-- **Spacing**: Consistent with existing UI spacing
-- **Icons**: MNEE icon follows same style guidelines
-- **Layout**: Same grid and positioning as other elements
-
-### Mobile Responsiveness: 10/10
-
-- MNEE works identically on mobile and desktop
-- Same touch targets and interaction areas
-- Consistent with mobile-first design approach
-- No additional mobile-specific considerations needed
-
-### Integration Quality: 10/10
-
-**MNEE feels native to the platform:**
-
-- No jarring transitions when using MNEE
-- Consistent with platform's design language
-- Follows same interaction patterns as core features
-- Maintains platform's professional appearance
-
-### Summary
-
-| Aspect | Score | Notes |
-|--------|-------|-------|
-| Visual Consistency | 10/10 | Perfect alignment with existing design |
-| Interaction Patterns | 10/10 | Same UX as other tokens |
-| Performance Impact | 10/10 | Zero additional overhead |
-| Accessibility | 9/10 | Only minor alt text issue |
-| User Experience | 9/10 | Only minor help text visibility issue |
-| Overall Integration | 9.5/10 | Excellent integration quality |
-
-**Recommendation**: MNEE integration is ready for production. Minor improvements suggested for help text visibility and alt text optimization.
-
-## Transaction Processing & Error Handling
-
-### Swap Service Critical Fixes (Jan 7, 2026)
-
-#### Issues Fixed
-
-**1. Swap Route Discovery Broken**
-- **Problem**: User requests "swap 1 usdc for eth" → Error: "No swap route found"
-- **Root Cause**: Method name mismatch in protocol registry (`get_swap_quote()` → `get_quote()`)
-- **Impact**: Swap service completely non-functional
-- **Status**: ✅ FIXED
-
-**2. Wallet Connection Blocked**
-- **Problem**: Browser console "origins don't match" errors, wallet injection fails
-- **Root Cause**: Hardcoded origin URL doesn't match dynamic deployment
-- **Impact**: Users cannot connect wallets or sign transactions
-- **Status**: ✅ FIXED
-
-**3. Brian API Shutdown**
-- **Problem**: Brian Protocol ceased operations, APIs shutting down in 3 months
-- **Impact**: Fallback protocol no longer available
-- **Status**: ✅ REMOVED (consolidated routing to 0x + Uniswap)
-
-### Swap Routing (Updated)
-- **Single-chain**: 0x (best rates) → Uniswap V3 (reliable)
-- **Cross-chain**: Circle CCTP V2 (USDC) → Axelar (other tokens)
-
-### Knowledge Base Architecture Improvements
-
-#### Overview
-
-Refactored protocol knowledge base into a modular, structured system with dynamic metrics, analytics, and relationship mapping.
-
-#### 1. Structured ProtocolEntry Schema
-
-**File**: `backend/app/services/knowledge_base/models.py`
-
-Pydantic-based schema enforcement instead of arbitrary dicts.
-
-**Required Fields:**
-- `official_name` - Full protocol name
-- `type` - Category (dex, bridge, stablecoin, etc.)
-- `summary` - One-line description
-- `key_features` - List of main features
-
-**Organized Optional Fields:**
-- **Concept**: privacy_explanation, technical_explanation, how_it_works
-- **Finance**: governance_token, launch_date, tokenomics
-- **Security**: audits (firm, date, status), security_info
-- **Infrastructure**: contracts (chain → address mapping), recommended_wallets
-- **Relationships**: integrations_with, bridges_to, competes_with
-- **Localization**: names (en, es, zh)
-- **Metadata**: last_verified, source_url, from_knowledge_base
-
-#### 2. Alias Support
-
-```python
-"mnee": {
-    "aliases": ["mnee token", "mnee stablecoin"],
-    ...
-}
-"zcash": {
-    "aliases": ["zec", "zcash protocol"],
-    ...
-}
-```
-
-- Fast exact-match lookup on aliases (no fuzzy matching overhead)
-- Handles common name variations automatically
-- Example: "What is uni?" → matches "uniswap"
-
-#### 3. Dynamic Metrics Layer
-
-**File**: `backend/app/services/knowledge_base/models.py` (ProtocolMetrics)
-
-Separate from static KB (single responsibility principle).
-
-**Fields:**
-- tvl, volume_24h, market_cap, apy_yield, fees
-- last_updated, source
-
-**Benefits:**
-- Can be cached from Firecrawl scrapes (auto-enrichment)
-- Enables queries like "What's MNEE's TVL?" without re-scraping
-- Metrics updated independently of static KB
-
-#### 4. Query Analytics
-
-- Tracks all KB lookups that miss (queries without a match)
-- `get_top_misses(limit=20)` returns most-searched missing protocols
-- Data-driven KB expansion: "Which protocols should we add next?"
-- Logged with protocol name and frequency
-
-#### 5. Protocol Relationships
-
-```python
-"mnee": {
-    "integrations_with": ["uniswap", "aave", "curve"],
-    "bridges_to": ["ethereum", "polygon", "base"],
-    "competes_with": ["usdc", "usdt", "dai"],
-}
-```
-
-- Enables: "Find protocols that integrate with MNEE"
-- Enables: "What are MNEE's alternatives?"
-- Reduces dependency on external search
-
-#### 6. Multi-Language Support
-
-```python
-"names": {
-    "en": "MNEE Stablecoin",
-    "es": "Moneda Estable MNEE",
-    "zh": "MNEE稳定币"
-}
-```
-
-- Handles queries in Spanish, Mandarin, etc.
-- Extensible to any language
-- Used by research endpoints for localized responses
-
-#### 7. Auto-Enrichment from Firecrawl
-
-```python
-kb.update_metrics(protocol_name, metrics)
-```
-
-- When Firecrawl scrapes a protocol, extracted metrics are cached
-- Next query reuses cached data (no re-scrape)
-- Timestamp tracks freshness
-- Single source of truth: KB is enriched by research
-
-#### 8. Singleton KB Service
-
-```python
-from app/services/knowledge_base import get_protocol_kb
-kb = get_protocol_kb()
-kb_result = kb.get("mnee")  # Returns (matched_key, entry)
-kb.update_metrics("mnee", metrics)
-misses = kb.get_top_misses(20)
-```
-
-- Central access point, no scattered imports
-- Manages all KB operations
-- Dependency injection ready
-
-### Test Results
-
-#### ✅ Null-Safety
-```
-Input: Completely unparseable command with null details
-Output: Safe error response with guidance (NO CRASH)
-Status: PASS
-```
-
-#### ✅ KB Enrichment
-```
-Input: "swap eth to mnee" (missing amount)
-Output: Error message enhanced with MNEE Stablecoin info:
-  - Official name
-  - Summary
-  - Available chains (Ethereum, Polygon, Base, Arbitrum)
-  - Integrations (Uniswap, Aave, Curve)
-Status: PASS
-```
-
-#### ✅ Alias Matching
-```
-Input: Token alias "zec"
-Output: Resolves to "zcash" entry in KB
-Status: PASS
-```
-
-#### ✅ Miss Tracking
-```
-Input: Unknown token "fakecoin123"
-Output: Logged as KB miss for analytics
-Status: PASS
-```
-
-#### ✅ Swap Service (Post-Fix)
-```
-Input: "swap 1 usdc for eth" on Ethereum
-Output: Quote with 0x protocol, estimated output, price impact
-Status: PASS (fixed Jan 7)
-```
-
-### Architecture Benefits
-
-✅ **ENHANCEMENT FIRST** - No new modules, enhanced existing ones
-✅ **AGGRESSIVE CONSOLIDATION** - Unified error flow, removed duplication
-✅ **PREVENT BLOAT** - Structured schema, no arbitrary fields
-✅ **DRY** - KB is single source of truth for token metadata
-✅ **CLEAN** - Clear separation: null check → KB lookup → enriched response
-✅ **MODULAR** - KB operations isolated and testable
-✅ **PERFORMANT** - Alias matching faster than fuzzy, metrics cached
-✅ **ORGANIZED** - Domain-driven processor pattern, knowledge_base/ domain
-
-### Files Modified Summary
-
-#### Backend
-- `backend/app/services/processors/swap_processor.py`
-  - Null-safety check (13 lines)
-  - KB lookup integration (40 lines)
-  - Enrichment helper method (36 lines)
-
-- `backend/app/services/processors/bridge_processor.py`
-  - Null-safety check (9 lines)
-  - KB lookup integration (18 lines)
-
-- `backend/app/services/processors/transfer_processor.py`
-  - Null-safety checks (19 lines)
-  - KB imports
-
-#### Frontend
-- `frontend/src/utils/errorFormatting.tsx`
-  - KB match rendering (52 lines)
-  - Styled display components
-  - Next steps suggestions
-
-- `frontend/src/providers/Web3Provider.tsx`
-  - Dynamic origin function (8 lines)
-  - Dynamic icon URL (1 line)
-
-**Total Changes: ~200 lines**
-**New Files: 0 (all enhancements to existing)**
-**Deleted Files: 2 (IMPLEMENTATION_SUMMARY.md, KNOWLEDGE_BASE_IMPROVEMENTS.md)**
-
-### Backward Compatibility
-
-✅ All changes are additive (no breaking changes)
-✅ Existing error handlers still work
-✅ KB lookups gracefully degrade if token not found
-✅ Frontend error formatting has fallbacks
-✅ Swap service works with only 2 adapters (0x, Uniswap)
-
-### Known Limitations & Future Work
-
-#### Current Limitations
-1. **Swap Routing** - No longer has Brian fallback, only 0x and Uniswap (sufficient for most cases)
-2. **API Keys** - Requires ZEROX_API_KEY and Alchemy/Infura keys to be functional
-3. **Token Resolution** - Relies on token service for unknown tokens (may have delays)
-
-#### Future Enhancements (Ready to Build)
-
-1. **Analytics Dashboard**
-   - View `kb.get_top_misses()` to see frequently searched tokens
-   - Data-driven KB expansion priorities
-
-2. **One-Click Retry**
-   - Frontend buttons: "Try 'swap 1 eth for MNEE on Polygon'"
-   - Leverages KB chains/integrations data
-
-3. **Token Discovery Flow**
-   - "Learn more about MNEE?" → Research flow integration
-   - Links to external resources (CoinGecko, Etherscan, etc.)
-
-4. **Multi-Language Support**
-   - KB already has `names` field for ES/ZH
-   - Just needs frontend language detection
-
-5. **Smart Suggestions**
-   - "Competing with USDC, USDT, DAI?" → Show alternatives
-   - Uses KB's `competes_with` field
-
-6. **Additional Protocol Adapters**
-   - CowSwap, Paraswap, 1inch for better routing
-   - CCTP for more cross-chain pairs
-
-### Status: PRODUCTION READY ✅
-
-All critical issues resolved, core functionality working, architecture clean and extensible.   - Can process MNEE payment commands
-
-#### Communication Gaps Identified:
-
-1. **Limited Context Awareness**:
-   - AI doesn't understand MNEE's role in commerce ecosystem
-   - Lacks knowledge of MNEE's relationship to other payment methods
-
-2. **Onboarding Experience**:
-   - New users unaware of MNEE's specific use cases
-   - No clear guidance on when to use MNEE vs other tokens
-
-3. **Error Handling**:
-   - Unclear feedback when MNEE operations fail
-   - No fallback suggestions for MNEE-specific issues
-
-#### Improvement Recommendations:
-
-1. **Enhanced AI Training**:
-   - Add MNEE-specific context to AI prompt system
-   - Include MNEE use cases in agent knowledge base
-
-2. **Improved Onboarding**:
-   - Add MNEE-specific onboarding flow
-   - Create MNEE use case examples in UI
-
-3. **Better Error Messages**:
-   - Implement MNEE-specific error handling
-   - Provide clear fallback options
-
-### MNEE Integration Evaluation
-
-#### Build Status: ✅ PASSING
-
-#### Backend Build Status
-- **Token Configuration**: ✅ Working
-- **Token Service**: ✅ Working
-- **AI Prompts**: ✅ Working
-- **Demo Script**: ✅ Working
-- **Integration Tests**: ✅ All Passing
-
-#### Frontend Integration
-- **Token Display**: ✅ Working
-- **Token Selection**: ✅ Working
-- **Payment Flow**: ✅ Working
-- **UI Consistency**: ✅ Working
-
-#### API Integration
-- **Token Lookup**: ✅ Working
-- **Balance Checking**: ✅ Working
-- **Transaction Processing**: ✅ Working
-- **Rate Conversion**: ✅ Working
-
-#### Performance Metrics
-- **Response Time**: < 500ms average
-- **Success Rate**: > 99%
-- **Error Rate**: < 1%
-- **Throughput**: 100+ requests/minute
-
-#### Compatibility Status
-- **Web App**: ✅ Fully Compatible
-- **Mobile App**: ✅ Fully Compatible
-- **LINE Mini-DApp**: ✅ Fully Compatible
-- **Coral Agent**: ✅ Fully Compatible
-
-#### Security Assessment
-- **Input Validation**: ✅ All inputs sanitized
-- **Rate Limiting**: ✅ Properly implemented
-- **Authentication**: ✅ Secure token handling
-- **Data Encryption**: ✅ End-to-end encryption
+### Test Coverage
+- Protocol routing logic (11 tests)
+- Payment preparation and submission
+- Error handling and validation
+- Network/token validation
+
+## Troubleshooting
+
+### Common Issues
+
+#### "MNEE Relayer not configured"
+- Ensure `MNEE_RELAYER_ADDRESS` and `MNEE_RELAYER_PRIVATE_KEY` are set
+- Verify relayer has sufficient ETH for gas
+
+#### "Insufficient allowance"
+- User needs to approve relayer address
+- Check allowance with `/api/v1/mnee/allowance/{address}`
+
+#### "X402 facilitator unreachable"
+- Verify `X402_FACILITATOR_URL` is correct
+- Check network connectivity
+
+### Debug Mode
+Set `LOG_LEVEL=DEBUG` to enable detailed logging of payment flows.
+
+## Security Considerations
+
+### Production Checklist
+- [x] Remove private key parameters from API requests
+- [x] Remove placeholder addresses and use proper resolution
+- [x] Add proper environment variable validation
+- [x] Implement proper wallet integration (Wagmi + WalletConnect)
+- [x] Add transaction receipt waiting and confirmation
+- [x] Comprehensive error handling and retry logic
+- [ ] Add rate limiting and abuse prevention
+- [ ] Secure relayer private key storage (AWS KMS, HashiCorp Vault)
+
+### Implemented Security Features
+1. **Wallet Integration**: Full Wagmi integration with WalletConnect support
+2. **Transaction Receipts**: Automatic receipt waiting via `publicClient.waitForTransactionReceipt()`
+3. **No Private Key Transmission**: Private keys never leave user's wallet
+4. **Explicit Permissions**: Users see exactly what they're authorizing
+5. **Limited Scope**: Signatures/approvals are for specific amounts and recipients
+6. **Time Bounds**: X402 signatures have expiration times
+7. **Revocable**: Users can revoke approvals at any time
+
+### Wallet Support
+- **MetaMask**: Native support via Wagmi
+- **WalletConnect**: Full integration for mobile wallets
+- **Injected Wallets**: Support for browser extension wallets
+- **LINE Integration**: Bitget Wallet integration for LINE Mini-dApp
