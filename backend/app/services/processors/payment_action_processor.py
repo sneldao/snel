@@ -112,10 +112,36 @@ class PaymentActionProcessor(BaseProcessor):
         ]):
             return await self._handle_validate(command, wallet_address)
         
+        # GUIDED SEND flow (just "send" or "pay")
+        elif text.strip() in ["send", "pay"]:
+            return await self._handle_send_guided(wallet_address)
+        
         return UnifiedResponse(
             content="Unknown payment action command",
             agent_type=AgentType.ERROR,
             status="error",
+        )
+    
+    async def _handle_send_guided(
+        self,
+        wallet_address: str,
+    ) -> UnifiedResponse:
+        """Handle guided send/pay flow - collects recipient and amount interactively."""
+        return UnifiedResponse(
+            content={
+                "message": "Let's set up a payment! I'll guide you through it.",
+                "step": "recipient",
+                "prompt": "Who are you sending to? (Wallet address or ENS name, e.g., 'vitalik.eth' or '0x1234...')",
+                "help": "You can use an Ethereum address (0x...) or an ENS name like 'user.eth'",
+            },
+            agent_type=AgentType.DEFAULT,
+            status="success",
+            awaiting_confirmation=True,
+            metadata={
+                "flow": "guided_send",
+                "step_number": 1,
+                "total_steps": 4,
+            },
         )
     
     async def _handle_create(

@@ -267,6 +267,15 @@ class UnifiedParser:
             CommandType.PAYMENT_ACTION: [
                 {
                     "pattern": re.compile(
+                        r"^(?:send|pay)$",
+                        re.IGNORECASE
+                    ),
+                    "description": "Send/pay guided flow",
+                    "priority": 2,
+                    "action": "guided_send"
+                },
+                {
+                    "pattern": re.compile(
                         r"(?:create|new|make)\s+(?:a\s+)?(?:payment\s+)?(?:action|template|shortcut)",
                         re.IGNORECASE
                     ),
