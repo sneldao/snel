@@ -85,8 +85,16 @@ class X402Processor:
     async def _handle_ai_payment(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Handle AI-triggered payments with real x402 execution."""
         try:
-            # Parse payment details from natural language
-            payment_details = self._parse_payment_command(unified_command.command)
+            # Use parsed details from unified command if available
+            if unified_command.details and unified_command.details.amount and unified_command.details.token_in:
+                payment_details = {
+                    "amount": str(unified_command.details.amount),
+                    "asset": unified_command.details.token_in.symbol,
+                    "recipient": self._extract_recipient_from_command(unified_command.command)
+                }
+            else:
+                # Fallback to natural language parsing
+                payment_details = self._parse_payment_command(unified_command.command)
             
             if not payment_details:
                 message = (
@@ -95,6 +103,9 @@ class X402Processor:
                     "• `setup monthly portfolio rebalancing with 50 USDC budget`\n"
                     "• `pay 20 USDC to rebalance when my ETH allocation drops below 30%`\n"
                     "• `setup weekly 100 USDC for yield farming when APY > 15%`\n\n"
+                    "**Recurring payments:**\n"
+                    "• `setup monthly payment of 100 USDC to supplier.eth`\n"
+                    "• `setup weekly 25 MNEE payment to globalnative.eth`\n\n"
                     "These use **Cronos x402** to execute automatically when conditions are met."
                 )
                 return UnifiedResponse(
@@ -564,6 +575,18 @@ class X402Processor:
         amount = amount_match.group(1)
         asset = amount_match.group(2)
         
+        recipient = self._extract_recipient_from_command(command)
+        
+        return {
+            "amount": amount,
+            "asset": asset,
+            "recipient": recipient
+        }
+
+    def _extract_recipient_from_command(self, command: str) -> str:
+        """Extract recipient from command with proper address resolution."""
+        import re
+        
         # Extract recipient with proper address resolution
         recipient_patterns = [
             r'to\s+(0x[a-fA-F0-9]{40})',  # Direct Ethereum address
@@ -586,11 +609,7 @@ class X402Processor:
             # Default to a treasury/agent address for demo purposes
             recipient = "0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e"  # Example treasury address
         
-        return {
-            "amount": amount,
-            "asset": asset,
-            "recipient": recipient
-        }
+        return recipient
     
     def _parse_recurring_command(self, command: str) -> Optional[Dict[str, str]]:
         """Parse recurring payment details from natural language command."""
@@ -668,6 +687,14 @@ class X402Processor:
         # For ENS names, in production you would resolve via ENS
         # For now, return a default address with a note
         if recipient_input.endswith('.eth'):
+            # Specific ENS overrides for demo/testing
+            ens_overrides = {
+                'globalnative.eth': '0x88402c44234c264c781035df93a67732d84d157a',
+                'snel.eth': '0x64426b38F7645163D9896677464090A178351061',
+            }
+            if recipient_input.lower() in ens_overrides:
+                return ens_overrides[recipient_input.lower()]
+                
             logger.warning(f"ENS resolution not implemented for {recipient_input}, using default address")
             return '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e'
         
