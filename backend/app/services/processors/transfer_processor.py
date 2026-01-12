@@ -154,17 +154,19 @@ class TransferProcessor(BaseProcessor):
             # Check if this transfer could benefit from batching
             gas_optimization_hint = self._check_gas_optimization_opportunity(unified_command)
             
-            # Format response content
+            # Format response content - must nest details for frontend to read correctly
             content = {
                 "message": f"Ready to transfer {amount_str} {details.token_in.symbol} to {display_name}",
-                "amount": amount_str,
-                "token": details.token_in.symbol,
-                "destination": display_name,
-                "resolved_address": resolved_address,
-                "gas_price_gwei": gas_estimate.get("gas_price_gwei", "0"),
-                "gas_limit": gas_estimate.get("gas_limit", "65000"),
                 "type": "transfer_ready",
-                "requires_transaction": True
+                "requires_transaction": True,
+                "details": {
+                    "amount": amount_str,
+                    "token": details.token_in.symbol,
+                    "destination": display_name,
+                    "resolved_address": resolved_address,
+                    "gas_price_gwei": gas_estimate.get("gas_price_gwei", "0"),
+                    "gas_limit": gas_estimate.get("gas_limit", "65000"),
+                }
             }
             
             # Add gas optimization hint if applicable

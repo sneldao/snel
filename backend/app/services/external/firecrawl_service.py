@@ -6,6 +6,7 @@ Note: AI analysis moved to app.services.analysis.ProtocolAnalyzer
 import logging
 import os
 from typing import Dict, Any, Optional, List
+from openai import AsyncOpenAI
 
 from app.services.external.firecrawl_client import FirecrawlClient, FirecrawlError
 
