@@ -115,13 +115,13 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
 
   const paymentAutomation = [
     {
-      category: "X402 Automation",
+      category: "Agent Automation (x402)",
       icon: FaBolt,
       examples: [
-        "setup portfolio rebalancing with 50 USDC",
-        "pay 20 USDC when ETH drops below $3000",
-        "setup weekly 100 USDC for yield farming",
-        "create automated bridge 200 USDC monthly",
+        "setup automated portfolio rebalancing",
+        "setup automated yield farming",
+        "setup recurring payment of 100 MNEE weekly",
+        "pay 50 MNEE when yield > 15%",
       ],
     },
   ];
@@ -180,7 +180,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           <Tabs onChange={setSelectedTab} variant="enclosed">
             <TabList mb="1em">
               <Tab>Commands</Tab>
-              <Tab>Payments & Automation</Tab>
+              <Tab>Agent Automation & Payments</Tab>
               <Tab>Portfolio & Analysis</Tab>
               <Tab>Privacy Guide</Tab>
             </TabList>
@@ -219,10 +219,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               {/* Payment Actions Tab */}
               <TabPanel>
                 <VStack spacing={4} align="stretch">
-                  {/* X402 Automation Section */}
+                  {/* Agent Automation Section */}
                   <Box>
                     <Heading size="sm" mb={3} color={headingColor}>
-                      DeFi Automation (X402)
+                      Agent Automation via x402 Protocol
                     </Heading>
                     <SimpleGrid columns={1} spacing={3} alignItems="stretch">
                       {paymentAutomation.map((category, idx) => (
