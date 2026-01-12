@@ -39,8 +39,9 @@ class TransferProcessor(BaseProcessor):
             details = unified_command.details
             
             # MNEE routing: If user specifies MNEE but not on Ethereum, redirect to Ethereum
+            # X402 protocol can handle MNEE on Ethereum mainnet
             if details and details.token_in and details.token_in.symbol.upper() == "MNEE" and unified_command.chain_id != 1:
-                logger.info(f"MNEE specified on chain {unified_command.chain_id}, redirecting to Ethereum (chain 1)")
+                logger.info(f"MNEE specified on chain {unified_command.chain_id}, redirecting to Ethereum mainnet (chain 1) for X402 protocol")
                 # Update the unified_command to use Ethereum
                 unified_command.chain_id = 1
             

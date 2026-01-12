@@ -45,24 +45,32 @@ class PaymentRouter:
     """Routes payment requests to the appropriate protocol adapter."""
     
     def get_route(self, network: str, token_symbol: str = "USDC") -> PaymentRoute:
-        """Determine the correct protocol based on network and token."""
+        """
+        Determine the correct protocol based on network and token.
         
-        # Cronos Networks -> X402 (USDC only)
-        if network in ["cronos-mainnet", "cronos-testnet"] and token_symbol == "USDC":
+        Routes:
+        - Ethereum MNEE → X402 protocol (chain- and token-agnostic)
+        - Ethereum MNEE → MNEE Relayer (legacy, for backwards compatibility)
+        - Cronos USDC → X402 protocol
+        """
+        
+        # Ethereum Mainnet + MNEE -> X402 (recommended) or MNEE Relayer
+        if network == "ethereum-mainnet" and token_symbol == "MNEE":
+            # Prefer X402 for MNEE as it's more flexible
             return PaymentRoute(
                 protocol="x402",
                 network=network,
                 asset=token_symbol,
                 adapter_class=X402Adapter
             )
-            
-        # Ethereum Mainnet -> MNEE
-        if network == "ethereum-mainnet" and token_symbol == "MNEE":
+        
+        # Cronos Networks -> X402 (USDC or other ERC-20s)
+        if network in ["cronos-mainnet", "cronos-testnet"]:
             return PaymentRoute(
-                protocol="mnee",
+                protocol="x402",
                 network=network,
                 asset=token_symbol,
-                adapter_class=MNEEAdapter
+                adapter_class=X402Adapter
             )
             
         raise ValueError(f"No payment protocol found for {token_symbol} on {network}")

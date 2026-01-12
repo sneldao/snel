@@ -194,8 +194,9 @@ class PaymentActionProcessor(BaseProcessor):
         chain_id = extract_chain(command.command)
         
         # MNEE routing: If user specifies MNEE, force Ethereum (chain 1)
+        # X402 protocol is chain-agnostic and can handle MNEE on Ethereum
         if token and token.upper() == "MNEE":
-            logger.info(f"MNEE specified in payment action, forcing Ethereum (chain 1)")
+            logger.info(f"MNEE specified in payment action, forcing Ethereum mainnet (chain 1) for X402 protocol compatibility")
             chain_id = 1
         
         # Update flow data with any extracted info
