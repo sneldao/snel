@@ -135,7 +135,7 @@ class TokenRegistry:
             id="mnee",
             name="MNEE Stablecoin",
             symbol="MNEE",
-            decimals=5,
+            decimals=18,  # 18 decimals on Ethereum (standard ERC20), not 5
             type=TokenType.ERC20,  # ERC20 on Ethereum, native protocol on 1Sat Ordinals
             verified=True,
             addresses={
