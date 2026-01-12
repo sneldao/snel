@@ -10,32 +10,32 @@ SNEL provides a unified payment system that works seamlessly across multiple net
 |---------|----------|-------|----------|----------|
 | Cronos Mainnet | 25 | USDC | X402 | Automation, Conditional, Scheduled |
 | Cronos Testnet | 338 | USDC | X402 | Automation, Conditional, Scheduled |
-| Ethereum Mainnet | 1 | MNEE | Relayer | Gasless, Instant, Permit2 |
+| Ethereum Mainnet | 1 | MNEE | X402 / Relayer | Automation, Recurring, Agentic |
 
 ### Security Model
 - **Client-Side Signing**: All signatures generated in user's wallet
 - **No Private Keys**: Backend never receives or stores private keys
+- **The "Agentic" Standard**: X402 is used as the unified logic layer for all automations
 - **Permission-Based**: Users grant specific permissions (EIP-712 signatures or ERC-20 approvals)
-- **Agent Execution**: Backend executes when conditions are met using granted permissions
 
 ## X402 Agentic Payment Integration
 
 ### Core Features
+- **Unified Automation**: Single interface for both Cronos and Ethereum automations
 - **AI-Triggered Payments**: Autonomous payments executed by AI agents based on conditions
 - **EIP-712 Authorization**: Secure cryptographic signatures for payment delegation  
 - **Automated Settlement**: Recurring and scheduled payment workflows
-- **Agent-to-Agent Transactions**: Direct AI-to-AI settlement without human intervention
 
 ### Natural Language Commands
 
 ```bash
 # AI Agent Payments
 "pay agent 10 USDC for API calls"
-"send 5 CRO to agent.eth for processing"
+"setup recurring monthly payment of 1 mnee to globalnative.eth"
 
 # Recurring Payments
 "setup weekly payment of 100 USDC to supplier.eth"
-"create monthly payment of 50 CRO to contractor.eth"
+"create monthly payment of 50 MNEE to contractor.eth"
 
 # Batch Settlements
 "process batch settlement for suppliers"
@@ -44,17 +44,17 @@ SNEL provides a unified payment system that works seamlessly across multiple net
 
 ### Flow Architecture
 
-#### Cronos (X402)
-1. **Preparation**: Backend generates EIP-712 typed data
-2. **User Action**: User signs typed data in wallet (via Wagmi/WalletConnect)
-3. **Execution**: Backend submits signature to X402 facilitator
-4. **Confirmation**: Transaction receipt automatically retrieved and confirmed
+The X402 Processor creates a unified "Agentic Automation" experience across chains.
 
-#### Ethereum (MNEE)
-1. **Preparation**: Backend checks user's allowance for relayer
-2. **User Action**: User approves relayer via wallet (if insufficient allowance)
-3. **Receipt Waiting**: Frontend waits for approval transaction confirmation
-4. **Execution**: Backend executes transferFrom via relayer
+#### Cronos (Native X402)
+1. **Preparation**: Backend generates EIP-712 typed data
+2. **User Action**: User signs typed data in wallet
+3. **Execution**: Facilitator executes via X402 protocol
+
+#### Ethereum (MNEE Agentic)
+1. **Preparation**: Backend prepares agentic flow details
+2. **User Action**: User signs EIP-712 typed data (for agent authorization)
+3. **Execution**: Backend executes via Relayer/Guardian system based on signed intent
 
 ## MNEE Stablecoin Integration
 
