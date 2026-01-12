@@ -138,8 +138,9 @@ class PaymentActionProcessor(BaseProcessor):
         ]):
             return await self._handle_validate(command, wallet_address)
         
-        # GUIDED SEND flow (just "send" or "pay")
-        elif text.strip() in ["send", "pay"]:
+        # GUIDED PAY flow (just "pay" to trigger payment action wizard)
+        # Note: "send" with full details goes to transfer_processor
+        elif text.strip() in ["pay"]:
             return await self._handle_send_guided(wallet_address)
         
         return UnifiedResponse(
