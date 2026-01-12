@@ -684,19 +684,13 @@ class X402Processor:
         if recipient_input.lower() in keyword_addresses:
             return keyword_addresses[recipient_input.lower()]
         
-        # For ENS names, in production you would resolve via ENS
-        # For now, return a default address with a note
-        if recipient_input.endswith('.eth'):
-            # Specific ENS overrides for demo/testing
-            ens_overrides = {
-                'globalnative.eth': '0x88402c44234c264c781035df93a67732d84d157a',
-                'snel.eth': '0x64426b38F7645163D9896677464090A178351061',
-            }
-            if recipient_input.lower() in ens_overrides:
-                return ens_overrides[recipient_input.lower()]
-                
-            logger.warning(f"ENS resolution not implemented for {recipient_input}, using default address")
-            return '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e'
+        # Use centralized TokenQueryService for ENS resolution
+        from app.services.token_query_service import token_query_service
         
-        # Default fallback
+        resolved_address, _ = token_query_service.resolve_address(recipient_input)
+        if resolved_address:
+            return resolved_address
+            
+        logger.warning(f"Could not resolve recipient {recipient_input}, defaulting to treasury")
+        # Default fallback only if resolution fails completely
         return '0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5e'
