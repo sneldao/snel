@@ -309,6 +309,7 @@ export class PaymentHistoryService {
     template: Omit<PaymentTemplate, 'id' | 'createdAt'>
   ): Promise<PaymentTemplate> {
     const action = await this.createPaymentAction(walletAddress, {
+      walletAddress,
       name: template.name,
       actionType: 'template',
       recipientAddress: template.recipient,

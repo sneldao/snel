@@ -174,7 +174,7 @@ export default function MainApp(props: MainAppProps) {
   const transactionService = React.useMemo(
     () =>
       walletClient && publicClient && chainId
-        ? new TransactionService(walletClient, publicClient, chainId)
+        ? new TransactionService(walletClient as any, publicClient as any, chainId)
         : null,
     [walletClient, publicClient, chainId]
   );

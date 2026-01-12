@@ -192,12 +192,12 @@ export const getSupportedAxelarChains = (): number[] => {
 // X402 Agentic Payment Support
 export const isX402Supported = (chainId: number): boolean => {
   const config = CHAIN_CONFIG[chainId as SupportedChainId];
-  return config?.x402Support === true;
+  return (config as any)?.x402Support === true;
 };
 
 export const getX402SupportedChains = (): number[] => {
   return Object.entries(CHAIN_CONFIG)
-    .filter(([_, config]) => config.x402Support === true)
+    .filter(([_, config]) => (config as any).x402Support === true)
     .map(([chainId, _]) => Number(chainId));
 };
 

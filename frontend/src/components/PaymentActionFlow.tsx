@@ -1,9 +1,9 @@
-"""
-Payment action flow component - guided creation through natural conversation.
-
-DESIGN ETHOS: Keeps payment customization entirely in chat, no modals or forms.
-Uses multi-step conversation pattern for intuitive action building.
-"""
+/**
+ * Payment action flow component - guided creation through natural conversation.
+ * 
+ * DESIGN ETHOS: Keeps payment customization entirely in chat, no modals or forms.
+ * Uses multi-step conversation pattern for intuitive action building.
+ */
 import * as React from "react";
 import {
   Box,
@@ -115,6 +115,7 @@ export const PaymentActionFlow: React.FC<PaymentActionFlowProps> = ({
   const handleComplete = async () => {
     try {
       const action = await paymentService.createPaymentAction(walletAddress, {
+        walletAddress,
         name: state.data.name!,
         actionType: state.data.actionType!,
         recipientAddress: state.data.recipientAddress!,

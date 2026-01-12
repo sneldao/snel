@@ -199,14 +199,14 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
         }
 
         try {
-            const txService = new TransactionService(walletClient, publicClient, chainId);
+            const txService = new TransactionService(walletClient as any, publicClient as any, chainId);
             const result = await txService.executeTransaction(transactionData);
 
             // Handle Payment Result Submission
             if (typeChecks.isPaymentSignature && address && content && typeof content === 'object') {
                  const actionId = (content as any).action_id;
-                 if (actionId) {
-                     await apiService.submitPaymentResult(actionId, result.hash, address);
+                 if (actionId && result?.hash) {
+                     await apiService.submitPaymentResult(actionId, result.hash as string, address);
                      toast({
                         title: 'Payment Submitted',
                         description: 'Your payment has been recorded successfully.',

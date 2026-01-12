@@ -12,6 +12,7 @@ import {
   StatArrow,
   Badge,
   Icon,
+  Button,
 } from "@chakra-ui/react";
 import { FaChartBar, FaArrowUp, FaArrowDown } from "react-icons/fa";
 import { SpendingAnalytics } from "../services/paymentHistoryService";
