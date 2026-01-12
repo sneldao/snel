@@ -412,6 +412,14 @@ class X402Processor:
     
     async def _handle_recurring_payment(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Handle recurring payment setup with natural conversation."""
+        from app.domains.payment_actions.service import get_payment_action_service
+        from app.domains.payment_actions.models import (
+            CreatePaymentActionRequest,
+            PaymentActionType,
+            PaymentActionSchedule,
+            PaymentActionFrequency
+        )
+        
         try:
             payment_details = await self._parse_recurring_command(unified_command.command)
             
@@ -438,9 +446,41 @@ class X402Processor:
             # Determine network based on asset
             if payment_details['asset'].upper() == 'MNEE':
                 network = "ethereum-mainnet"
+                chain_id = 1
             else:
                 # Default to Cronos for USDC and others
                 network = "cronos-testnet" if unified_command.chain_id == 338 else "cronos-mainnet"
+                chain_id = 338 if "testnet" in network else 25
+
+            # Map frequency
+            freq_map = {
+                "daily": PaymentActionFrequency.DAILY,
+                "weekly": PaymentActionFrequency.WEEKLY,
+                "monthly": PaymentActionFrequency.MONTHLY
+            }
+            frequency = freq_map.get(payment_details['interval'].lower(), PaymentActionFrequency.MONTHLY)
+
+            # Persist MNEE recurring actions
+            action_id = None
+            if network == "ethereum-mainnet" and unified_command.wallet_address:
+                try:
+                    service = await get_payment_action_service()
+                    request = CreatePaymentActionRequest(
+                        name=f"{payment_details['interval'].title()} to {payment_details['recipient']}",
+                        action_type=PaymentActionType.RECURRING,
+                        amount=payment_details['amount'],
+                        token=payment_details['asset'],
+                        recipient_address=payment_details['recipient'],
+                        chain_id=chain_id,
+                        schedule=PaymentActionSchedule(frequency=frequency),
+                        metadata={"network": network, "created_via": "x402_processor"},
+                        is_pinned=True
+                    )
+                    action = await service.create_action(unified_command.wallet_address, request)
+                    action_id = action.id
+                    logger.info(f"Created persistent payment action {action_id} for user {unified_command.wallet_address}")
+                except Exception as e:
+                    logger.error(f"Failed to create persistent action: {e}")
 
             metadata = {
                 "payment_type": "recurring",
@@ -451,7 +491,8 @@ class X402Processor:
                 "network": network,
                 "requires_signature": True,
                 "command_type": CommandType.X402_PAYMENT,
-                "automation_type": "recurring_payment" # Explicitly add for frontend card detection
+                "automation_type": "recurring_payment",
+                "action_id": action_id  # Include action_id for frontend linkage
             }
             
             # Format network name for display
@@ -470,7 +511,7 @@ class X402Processor:
                            f"• Network: {network_display}\n\n"
                            f"This will create an **automated settlement workflow** using {network_display.split()[0]} x402, "
                            f"allowing payments to execute automatically based on your schedule.\n\n"
-                           f"*The recurring payment will be active once you sign the authorization.*",
+                           f"*The recurring payment will be active once you{' approve the automation' if network == 'ethereum-mainnet' else ' sign the authorization'}.*",
                     "type": "x402_automation",
                     "metadata": metadata
                 },
