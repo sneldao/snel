@@ -257,7 +257,7 @@ export const PaymentActionFlow: React.FC<PaymentActionFlowProps> = ({
               onChange={(e) => handleNext({ token: e.target.value })}
             >
               <option value="">Select a token...</option>
-              {["ETH", "USDC", "USDT", "DAI", "MNEE"].map((token) => (
+              {["MNEE", "ETH", "USDC", "USDT", "DAI"].map((token) => (
                 <option key={token} value={token}>
                   {token}
                 </option>

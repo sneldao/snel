@@ -19,6 +19,17 @@ export interface Token {
 export const POPULAR_TOKENS: Token[] = [
   // Ethereum Mainnet Tokens
   {
+    symbol: 'MNEE',
+    name: 'MNEE Stablecoin',
+    address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
+    chainId: ChainId.ETHEREUM,
+    decimals: 5,
+    logoURI: 'https://assets.mnee.xyz/logo.svg', // MNEE stablecoin logo
+    coingeckoId: 'mnee-stablecoin', // MNEE Coingecko ID
+    isPopular: true,
+    isStablecoin: true
+  },
+  {
     symbol: 'ETH',
     name: 'Ethereum',
     address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Native token representation
@@ -68,17 +79,6 @@ export const POPULAR_TOKENS: Token[] = [
     decimals: 18,
     logoURI: 'https://assets.coingecko.com/coins/images/9956/small/Badge_Dai.png',
     coingeckoId: 'dai',
-    isPopular: true,
-    isStablecoin: true
-  },
-  {
-    symbol: 'MNEE',
-    name: 'MNEE Stablecoin',
-    address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
-    chainId: ChainId.ETHEREUM,
-    decimals: 5,
-    logoURI: 'https://assets.mnee.xyz/logo.svg', // MNEE stablecoin logo
-    coingeckoId: 'mnee-stablecoin', // MNEE Coingecko ID
     isPopular: true,
     isStablecoin: true
   },

@@ -6,6 +6,19 @@ from typing import Dict, Any
 # Common token addresses by chain
 COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
     1: {  # Ethereum Mainnet - MNEE is multi-chain
+        "mnee": {
+            "address": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
+            "name": "MNEE Stablecoin",
+            "symbol": "MNEE",
+            "decimals": 5,  # Consistent across chains
+            "verified": True,
+            "metadata": {
+                "protocol": "ERC-20",
+                "network": "Ethereum",
+                "description": "MNEE on Ethereum - multi-chain USD-backed stablecoin",
+                "primary_network": "1Sat Ordinals"
+            }
+        },
         "eth": {
             "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
             "name": "Ethereum",
@@ -19,19 +32,6 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "symbol": "USDC",
             "decimals": 6,
             "verified": True
-        },
-        "mnee": {
-            "address": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
-            "name": "MNEE Stablecoin",
-            "symbol": "MNEE",
-            "decimals": 5,  # Consistent across chains
-            "verified": True,
-            "metadata": {
-                "protocol": "ERC-20",
-                "network": "Ethereum",
-                "description": "MNEE on Ethereum - multi-chain USD-backed stablecoin",
-                "primary_network": "1Sat Ordinals"
-            }
         },
         "weth": {
             "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",

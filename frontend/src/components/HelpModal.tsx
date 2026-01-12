@@ -62,7 +62,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
   const conceptBg = useColorModeValue("gray.100", "gray.700");
   const [selectedTab, setSelectedTab] = useState(0);
 
-  const examples = [
+  const basicCommands = [
     {
       category: "Token Transfers",
       icon: FaArrowRight,
@@ -89,6 +89,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
       icon: FaExchangeAlt,
       examples: ["swap 1 ETH for USDC", "swap $100 worth of USDC for ETH"],
     },
+  ];
+
+  const portfolioAnalysis = [
     {
       category: "Portfolio Analysis",
       icon: FaChartLine,
@@ -108,16 +111,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         "how does Curve work?",
       ],
     },
-    {
-      category: "Privacy Bridging",
-      icon: FaShieldAlt,
-      examples: [
-        "bridge 1 ETH to Zcash",
-        "make my 100 USDC private",
-        "what about privacy?",
-        "can I do stuff in private?",
-      ],
-    },
+  ];
+
+  const paymentAutomation = [
     {
       category: "X402 Automation",
       icon: FaBolt,
@@ -126,6 +122,19 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
         "pay 20 USDC when ETH drops below $3000",
         "setup weekly 100 USDC for yield farming",
         "create automated bridge 200 USDC monthly",
+      ],
+    },
+  ];
+
+  const privacyFeatures = [
+    {
+      category: "Privacy Bridging",
+      icon: FaShieldAlt,
+      examples: [
+        "bridge 1 ETH to Zcash",
+        "make my 100 USDC private",
+        "what about privacy?",
+        "can I do stuff in private?",
       ],
     },
   ];
@@ -171,21 +180,22 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           <Tabs onChange={setSelectedTab} variant="enclosed">
             <TabList mb="1em">
               <Tab>Commands</Tab>
-              <Tab>Payment Actions</Tab>
+              <Tab>Payments & Automation</Tab>
+              <Tab>Portfolio & Analysis</Tab>
               <Tab>Privacy Guide</Tab>
             </TabList>
 
             <TabPanels>
-              {/* Commands Tab */}
+              {/* Commands Tab - Basic Operations */}
               <TabPanel>
                 <SimpleGrid columns={1} spacing={3} alignItems="stretch">
-                  {examples.map((category, idx) => (
+                  {basicCommands.map((category, idx) => (
                     <Box key={idx} p={2} borderRadius="md" bg={exampleBoxBg}>
                       <Flex align="center" mb={1}>
                         <Icon
                           as={category.icon}
                           mr={2}
-                          color={category.category === "Privacy Bridging" ? "yellow.600" : "blue.500"}
+                          color="blue.500"
                           boxSize={4}
                         />
                         <Heading size="xs" color={headingColor}>
@@ -209,23 +219,53 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               {/* Payment Actions Tab */}
               <TabPanel>
                 <VStack spacing={4} align="stretch">
-                  {/* What are Payment Actions */}
+                  {/* X402 Automation Section */}
                   <Box>
-                    <Heading size="sm" mb={2} color={headingColor}>
-                      What are Payment Actions?
+                    <Heading size="sm" mb={3} color={headingColor}>
+                      DeFi Automation (X402)
                     </Heading>
-                    <Text fontSize="sm" color={textColor}>
-                      Create reusable payment shortcuts and automate recurring payments. Once set up, execute payments with a single command or click.
-                    </Text>
+                    <SimpleGrid columns={1} spacing={3} alignItems="stretch">
+                      {paymentAutomation.map((category, idx) => (
+                        <Box key={idx} p={3} borderRadius="md" bg="purple.50" border="1px solid" borderColor="purple.200">
+                          <Flex align="center" mb={2}>
+                            <Icon
+                              as={category.icon}
+                              mr={2}
+                              color="purple.600"
+                              boxSize={4}
+                            />
+                            <Heading size="xs" color="purple.700">
+                              {category.category}
+                            </Heading>
+                          </Flex>
+                          <Text fontSize="xs" color="purple.600" mb={2}>
+                            AI-powered automation on Cronos EVM with real x402 protocol integration
+                          </Text>
+                          <List spacing={1} pl={6} fontSize="xs">
+                            {category.examples.map((example, exIdx) => (
+                              <ListItem key={exIdx} color="purple.700">
+                                <Text as="span" fontFamily="mono" fontWeight="medium">
+                                  &quot;{example}&quot;
+                                </Text>
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      ))}
+                    </SimpleGrid>
                   </Box>
 
                   <Divider />
 
-                  {/* Key Features */}
+                  {/* Traditional Payment Actions */}
                   <Box>
                     <Heading size="sm" mb={2} color={headingColor}>
-                      Key Features
+                      Payment Actions
                     </Heading>
+                    <Text fontSize="sm" color={textColor} mb={3}>
+                      Create reusable payment shortcuts and automate recurring payments.
+                    </Text>
+
                     <VStack spacing={2} align="stretch">
                       <Box p={2} borderRadius="md" bg={exampleBoxBg}>
                         <Flex align="start" mb={1}>
@@ -235,102 +275,97 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                               Quick Actions
                             </Text>
                             <Text fontSize="xs" color={textColor}>
-                              Pin up to 5 frequent payments as buttons for instant access.
-                            </Text>
-                          </VStack>
-                        </Flex>
-                      </Box>
-                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
-                        <Flex align="start" mb={1}>
-                          <Icon as={FaClock} mr={2} color="green.500" boxSize={4} mt="2px" />
-                          <VStack align="start" spacing={0}>
-                            <Text fontSize="xs" fontWeight="semibold" color={headingColor}>
-                              Recurring Payments
-                            </Text>
-                            <Text fontSize="xs" color={textColor}>
-                              Set up daily, weekly, or monthly automatic payments.
+                              Pin frequent payments as buttons for instant access.
                             </Text>
                           </VStack>
                         </Flex>
                       </Box>
                       <Box p={2} borderRadius="md" bg={exampleBoxBg}>
                         <Flex align="start">
-                          <Icon as={FaSearch} mr={2} color="purple.500" boxSize={4} mt="2px" />
+                          <Icon as={FaClock} mr={2} color="green.500" boxSize={4} mt="2px" />
                           <VStack align="start" spacing={0}>
                             <Text fontSize="xs" fontWeight="semibold" color={headingColor}>
-                              Smart Suggestions
+                              Example Commands
                             </Text>
                             <Text fontSize="xs" color={textColor}>
-                              Receive suggestions for due payments based on your habits.
+                              "create payment action" • "use action rent" • "show my actions"
                             </Text>
                           </VStack>
                         </Flex>
                       </Box>
                     </VStack>
                   </Box>
-
-                  <Divider />
-
-                  {/* Example Commands */}
-                  <Box>
-                    <Heading size="sm" mb={2} color={headingColor}>
-                      Example Commands
-                    </Heading>
-                    <VStack spacing={2} align="stretch">
-                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
-                        <Text fontSize="xs" fontWeight="semibold" color={headingColor} mb={1}>
-                          Create
-                        </Text>
-                        <List spacing={1} pl={4} fontSize="xs">
-                          <ListItem color={textColor}>
-                            <Text as="span" fontFamily="mono">
-                              &quot;create payment action&quot;
-                            </Text>
-                          </ListItem>
-                        </List>
-                      </Box>
-                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
-                        <Text fontSize="xs" fontWeight="semibold" color={headingColor} mb={1}>
-                          Execute
-                        </Text>
-                        <List spacing={1} pl={4} fontSize="xs">
-                          <ListItem color={textColor}>
-                            <Text as="span" fontFamily="mono">
-                              &quot;use action rent&quot;
-                            </Text>
-                          </ListItem>
-                          <ListItem color={textColor}>
-                            <Text as="span" fontFamily="mono">
-                              &quot;coffee&quot;
-                            </Text>
-                          </ListItem>
-                        </List>
-                      </Box>
-                      <Box p={2} borderRadius="md" bg={exampleBoxBg}>
-                        <Text fontSize="xs" fontWeight="semibold" color={headingColor} mb={1}>
-                          Manage
-                        </Text>
-                        <List spacing={1} pl={4} fontSize="xs">
-                          <ListItem color={textColor}>
-                            <Text as="span" fontFamily="mono">
-                              &quot;show my payment actions&quot;
-                            </Text>
-                          </ListItem>
-                          <ListItem color={textColor}>
-                            <Text as="span" fontFamily="mono">
-                              &quot;delete action coffee&quot;
-                            </Text>
-                          </ListItem>
-                        </List>
-                      </Box>
-                    </VStack>
-                  </Box>
                 </VStack>
+              </TabPanel>
+
+              {/* Portfolio & Analysis Tab */}
+              <TabPanel>
+                <SimpleGrid columns={1} spacing={3} alignItems="stretch">
+                  {portfolioAnalysis.map((category, idx) => (
+                    <Box key={idx} p={2} borderRadius="md" bg={exampleBoxBg}>
+                      <Flex align="center" mb={1}>
+                        <Icon
+                          as={category.icon}
+                          mr={2}
+                          color="blue.500"
+                          boxSize={4}
+                        />
+                        <Heading size="xs" color={headingColor}>
+                          {category.category}
+                        </Heading>
+                      </Flex>
+                      <List spacing={1} pl={6} fontSize="xs">
+                        {category.examples.map((example, exIdx) => (
+                          <ListItem key={exIdx} color={textColor}>
+                            <Text as="span" fontFamily="mono" fontWeight="medium">
+                              &quot;{example}&quot;
+                            </Text>
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
+                  ))}
+                </SimpleGrid>
               </TabPanel>
 
               {/* Privacy Guide Tab */}
               <TabPanel>
                 <VStack spacing={4} align="stretch">
+                  {/* Privacy Commands */}
+                  <Box>
+                    <Heading size="sm" mb={3} color={headingColor}>
+                      Privacy Commands
+                    </Heading>
+                    <SimpleGrid columns={1} spacing={3} alignItems="stretch">
+                      {privacyFeatures.map((category, idx) => (
+                        <Box key={idx} p={3} borderRadius="md" bg="yellow.50" border="1px solid" borderColor="yellow.200">
+                          <Flex align="center" mb={2}>
+                            <Icon
+                              as={category.icon}
+                              mr={2}
+                              color="yellow.600"
+                              boxSize={4}
+                            />
+                            <Heading size="xs" color="yellow.700">
+                              {category.category}
+                            </Heading>
+                          </Flex>
+                          <List spacing={1} pl={6} fontSize="xs">
+                            {category.examples.map((example, exIdx) => (
+                              <ListItem key={exIdx} color="yellow.700">
+                                <Text as="span" fontFamily="mono" fontWeight="medium">
+                                  &quot;{example}&quot;
+                                </Text>
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
+                      ))}
+                    </SimpleGrid>
+                  </Box>
+
+                  <Divider />
+
                   {/* What is Private Bridging */}
                   <Box>
                     <Heading size="sm" mb={2} color={headingColor}>

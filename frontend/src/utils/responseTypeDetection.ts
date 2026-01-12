@@ -133,10 +133,10 @@ export const detectResponseTypes = ({
 
     const isX402Automation =
         typeof content === 'object' &&
-        ((content as any)?.automation_type ||
-            (content as any)?.protocol === 'x402' ||
-            agentType === 'x402' ||
-            (content as any)?.metadata?.protocol === 'x402');
+        content !== null &&
+        ((content as any)?.metadata?.automation_type ||
+            (content as any)?.metadata?.protocol === 'x402' ||
+            ((content as any)?.metadata?.command_type === 'X402_PAYMENT' && awaitingConfirmation));
 
     return {
         isSwapConfirmation,

@@ -361,10 +361,10 @@ export const Chat: React.FC<ChatProps> = ({
                     stage.status === "completed"
                       ? "green"
                       : stage.status === "error"
-                      ? "red"
-                      : stage.status === "active"
-                      ? "blue"
-                      : "gray"
+                        ? "red"
+                        : stage.status === "active"
+                          ? "blue"
+                          : "gray"
                   }
                 >
                   {stage.agent}
@@ -382,8 +382,8 @@ export const Chat: React.FC<ChatProps> = ({
                 stage.status === "completed"
                   ? "green"
                   : stage.status === "error"
-                  ? "red"
-                  : "blue"
+                    ? "red"
+                    : "blue"
               }
               borderRadius="full"
             />
@@ -409,6 +409,8 @@ export const Chat: React.FC<ChatProps> = ({
       { text: "what's my USDC balance?", category: "Balance" },
       { text: "show me my risk assessment", category: "Portfolio" },
       { text: "research Compound protocol", category: "Research" },
+      { text: "setup portfolio rebalancing with 50 USDC", category: "X402" },
+      { text: "pay 20 USDC when ETH drops below $3000", category: "X402" },
     ];
 
     return (

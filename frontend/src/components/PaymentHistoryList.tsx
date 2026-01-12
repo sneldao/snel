@@ -160,8 +160,18 @@ export const PaymentHistoryList: React.FC<PaymentHistoryListProps> = ({
   // Mock data for demo mode
   const mockItems: PaymentHistoryItem[] = [
     {
-      id: 'demo_1',
+      id: 'demo_3',
       timestamp: new Date().toISOString(),
+      amount: '50',
+      token: 'MNEE',
+      recipient: '0x9999...8888',
+      status: 'confirmed',
+      chainId: 1,
+      category: 'Groceries'
+    },
+    {
+      id: 'demo_1',
+      timestamp: new Date(Date.now() - 86400000).toISOString(),
       amount: '0.5',
       token: 'ETH',
       recipient: '0x1234...5678',
@@ -179,16 +189,6 @@ export const PaymentHistoryList: React.FC<PaymentHistoryListProps> = ({
       status: 'pending',
       chainId: 8453, // Base
       category: 'Services'
-    },
-    {
-      id: 'demo_3',
-      timestamp: new Date(Date.now() - 172800000).toISOString(),
-      amount: '50',
-      token: 'MNEE',
-      recipient: '0x9999...8888',
-      status: 'confirmed',
-      chainId: 1,
-      category: 'Groceries'
     }
   ];
 
