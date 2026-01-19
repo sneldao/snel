@@ -19,7 +19,7 @@ import {
   useColorModeValue,
 } from "@chakra-ui/react";
 import { ChevronDownIcon, ChevronUpIcon } from "@chakra-ui/icons";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount, useChainId, useSignTypedData } from "wagmi";
 import {
   PortfolioService,
   PortfolioAnalysis,
@@ -28,6 +28,7 @@ import {
 import { ApiService } from "../services/apiService";
 import { TerminalProgress } from "./shared/TerminalProgress";
 import { PortfolioSummary } from "./PortfolioSummary";
+import { UnifiedConfirmation } from "./UnifiedConfirmation";
 
 interface Message {
   id: string;
@@ -107,11 +108,14 @@ export const Chat: React.FC<ChatProps> = ({
   const toast = useToast();
   const { address } = useAccount();
   const chainId = useChainId();
+  const { signTypedData } = useSignTypedData();
   const apiService = new ApiService();
   const portfolioService = new PortfolioService(apiService);
   const [currentAnalysis, setCurrentAnalysis] =
     useState<PortfolioAnalysis | null>(initialAnalysis || null);
   const [progressSteps, setProgressSteps] = useState<AnalysisProgress[]>([]);
+  const [pendingPayment, setPendingPayment] = useState<any>(null);
+  const [isExecutingPayment, setIsExecutingPayment] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -215,6 +219,119 @@ export const Chat: React.FC<ChatProps> = ({
     });
   };
 
+  const handlePaymentExecution = async (paymentData: any) => {
+    if (!address) {
+      toast({
+        title: "Wallet not connected",
+        description: "Please connect your wallet first",
+        status: "error",
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setIsExecutingPayment(true);
+
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+      // Step 1: Prepare payment (get EIP-712 payload)
+      const prepareResponse = await fetch(
+        `${apiUrl}/api/v1/x402/prepare-payment`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_address: address,
+            recipient_address: paymentData.recipient,
+            amount_usdc: paymentData.amount,
+            network: paymentData.network || "cronos-testnet",
+          }),
+        }
+      );
+
+      if (!prepareResponse.ok) {
+        throw new Error("Failed to prepare payment");
+      }
+
+      const payload = await prepareResponse.json();
+
+      // Step 2: Sign with Wagmi
+      if (!signTypedData) {
+        throw new Error("Signing not available");
+      }
+
+      const signature = await signTypedData({
+        domain: payload.domain,
+        types: payload.types,
+        primaryType: payload.primaryType,
+        message: {
+          ...payload.message,
+          from: address,
+        },
+        account: address as `0x${string}`,
+      });
+
+      // Step 3: Submit signed payment
+      const submitResponse = await fetch(
+        `${apiUrl}/api/v1/x402/submit-payment`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            signature,
+            user_address: address,
+            message: payload.message,
+            metadata: payload.metadata,
+          }),
+        }
+      );
+
+      if (!submitResponse.ok) {
+        throw new Error("Failed to submit payment");
+      }
+
+      const result = await submitResponse.json();
+
+      // Step 4: Show success
+      toast({
+        title: "Payment Successful",
+        description: `Transaction: ${result.txHash}`,
+        status: "success",
+        isClosable: true,
+        duration: 5000,
+      });
+
+      // Add to chat history
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          type: "system",
+          content: `✅ Payment confirmed. TX: ${result.txHash}`,
+          timestamp: new Date(),
+        },
+      ]);
+
+      setPendingPayment(null);
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("Payment execution failed:", error);
+
+      toast({
+        title: "Payment Failed",
+        description: errorMsg,
+        status: "error",
+        isClosable: true,
+        duration: 5000,
+      });
+    } finally {
+      setIsExecutingPayment(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!input.trim()) return;
 
@@ -226,8 +343,85 @@ export const Chat: React.FC<ChatProps> = ({
     };
 
     setMessages((msgs) => [...msgs, userMessage]);
+    const command = input;
     setInput("");
     setIsAnalyzing(true);
+
+    try {
+      // Check for portfolio commands first
+      if (
+        /portfolio|allocation|holdings|assets|analyze/i.test(command.toLowerCase())
+      ) {
+        await handlePortfolioAnalysis(command);
+      } else {
+        // Process regular commands via API
+        const response = await apiService.processCommand(
+          command,
+          address,
+          chainId
+        );
+
+        // Handle payment responses
+        if (response.agent_type === "payment" || response.content?.type === "payment") {
+          setPendingPayment({
+            ...response.content?.details,
+            message: response.content?.message || "Confirm payment",
+          });
+
+          // Add response message to chat
+          setMessages((msgs) => [
+            ...msgs,
+            {
+              id: `assistant-${Date.now()}`,
+              type: "assistant",
+              content: response.content?.message || "Ready for payment confirmation",
+              timestamp: new Date(),
+              metadata: {
+                type: "payment",
+                details: response.content?.details,
+              },
+            },
+          ]);
+        } else {
+          // Add other responses to chat
+          setMessages((msgs) => [
+            ...msgs,
+            {
+              id: `assistant-${Date.now()}`,
+              type: "assistant",
+              content: response.content?.message || JSON.stringify(response.content),
+              timestamp: new Date(),
+              metadata: {
+                type: response.content?.type,
+              },
+            },
+          ]);
+        }
+      }
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : "Failed to process command";
+      console.error("Command processing error:", error);
+
+      setMessages((msgs) => [
+        ...msgs,
+        {
+          id: `error-${Date.now()}`,
+          type: "system",
+          content: `Error: ${errorMsg}`,
+          timestamp: new Date(),
+        },
+      ]);
+
+      toast({
+        title: "Command Failed",
+        description: errorMsg,
+        status: "error",
+        isClosable: true,
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handlePortfolioAnalysis = async (input: string) => {
@@ -490,7 +684,24 @@ export const Chat: React.FC<ChatProps> = ({
       case "assistant":
         return (
           <VStack align="stretch" maxW="100%" spacing={4}>
-            {currentAnalysis ? (
+            {message.metadata?.type === "payment" && pendingPayment ? (
+              <UnifiedConfirmation
+                agentType="payment"
+                content={{
+                  message: pendingPayment.message || message.content,
+                  type: "payment",
+                  details: {
+                    recipient: pendingPayment.recipient,
+                    amount: pendingPayment.amount,
+                    token: pendingPayment.token || "USDC",
+                    network: pendingPayment.network || "cronos-testnet",
+                  },
+                }}
+                onExecute={() => handlePaymentExecution(pendingPayment)}
+                onCancel={() => setPendingPayment(null)}
+                isLoading={isExecutingPayment}
+              />
+            ) : currentAnalysis ? (
               <PortfolioSummary
                 response={{
                   analysis: currentAnalysis,
