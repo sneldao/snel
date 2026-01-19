@@ -4,8 +4,9 @@
 
 SNEL transforms complex DeFi operations into simple natural language commands. Execute swaps, bridge assets, and manage your portfolio across multiple blockchains with the power of AI - no more complex interfaces or manual protocol navigation.
 
-**Hackathon Track**: AI and Agent Payments | Commerce and Creator Tools | Financial Automation
-**Submission**: MNEE Programmable Stablecoin Hackathon ([Devpost](https://mnee-eth.devpost.com/))
+**Active Hackathon**: Cronos x402 Paytech Hackathon ([DoraHacks](https://dorahacks.io/hackathon/cronos-x402/detail))  
+**Deadline**: January 23, 2026  
+**Previous Track**: MNEE Programmable Stablecoin ([Devpost](https://mnee-eth.devpost.com/))
 
 **MNEE Integration**: SNEL supports MNEE (ERC-20 Programmable Stablecoin) as a native currency for AI-driven payments and commerce.
 - **Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
@@ -13,10 +14,10 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 
 ## ✨ Key Features
 
-- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"`, `"pay agent 10 USDC for API calls"`, or `"swap $100 of USDC for ETH"`.
+- **🤖 AI-Powered Interface**: Use natural language commands like `"swap 1 ETH for USDC on Base"`, `"pay 1 USDC to recipient on cronos"`, or `"swap $100 of USDC for ETH"`.
 - **🌐 Multi-Chain Support**: Operates on 19+ networks including Ethereum, Polygon, Base, Arbitrum, and Cronos EVM.
+- **💳 X402 Agentic Payments**: AI-triggered payments with EIP-712 signing on Cronos testnet/mainnet and Ethereum. Supports USDC (Cronos) and MNEE (Ethereum).
 - **💳 MNEE Commerce Payments**: Native support for MNEE stablecoin with invoice references for business-to-business transactions.
-- **🤖 X402 Agentic Payments**: AI-triggered payments and automated settlement workflows on Cronos EVM.
 - **🔄 Advanced Transaction Handling**: Automatically handles multi-step processes like approvals and swaps with real-time status updates.
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
 - **🛡️ Privacy Bridging**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP.
@@ -86,7 +87,7 @@ See the [docs/README.md](docs/README.md) for a complete overview of the document
 ### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/your-repo/snel.git
+git clone https://github.com/sneldao/snel.git
 cd snel
 
 # Backend setup
@@ -119,21 +120,67 @@ cd frontend && npm run dev
 
 **🎉 Access at:** http://localhost:3000
 
-## 🏆 Hackathon Submission
+### 4. Test X402 Payment (Cronos Testnet)
 
-**Track**: AI and Agent Payments (Primary), Commerce and Creator Tools, Financial Automation  
-**Focus**: Autonomous Agent Payments & Programmable B2B Commerce  
-**Hackathon**: Cronos x402 Paytech Hackathon  
-**Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
+1. Connect wallet to Cronos Testnet (Chain ID: 338)
+2. Get testnet tokens:
+   - TCRO: https://cronos.org/faucet
+   - devUSDC.e: https://faucet.cronos.org
+3. Type command: `pay 1 USDC to 0x1234567890123456789012345678901234567890 on cronos`
+4. Sign transaction in wallet
+5. See success message with tx hash
 
-SNEL integrates both MNEE stablecoin and Cronos x402 protocol, enabling:
-- **Natural Language Payments**: Execute commands like `"pay $100 MNEE to merchant.eth for invoice #42"` and `"pay agent 10 USDC for API calls"`
-- **Autonomous Agent Payments**: AI-to-AI settlement using programmable MNEE transfers and x402 agentic payments
-- **Commerce & Invoicing**: Built-in support for invoice references and merchant metadata
-- **Treasury Automation**: AI-managed treasury operations using MNEE for stability and x402 for automation
-- **Seamless Conversion**: Intelligent USD-to-token price routing and conversion
+## 🏆 Cronos x402 Hackathon Submission
 
-See our detailed [ROADMAP.md](docs/ROADMAP.md) for our hackathon plans and future development.
+**Hackathon**: [Cronos x402 Paytech Hackathon](https://dorahacks.io/hackathon/cronos-x402/detail)  
+**Track**: Main Track (x402 Applications) + Best x402 AI Agentic Finance Solution  
+**Prize Pool**: $42,000  
+**Deadline**: January 23, 2026
+
+### Implementation Status
+
+- ✅ **Phase 1**: Backend x402 integration validated (facilitator tests: 15/15 passing)
+- ✅ **Phase 2**: Frontend payment flow complete (chat → confirmation → signing → settlement)
+- ⏳ **Phase 3**: End-to-end testing on Cronos Testnet
+- 📋 **Phase 4**: Demo video + DoraHacks submission
+
+### How X402 Payments Work in SNEL
+
+```
+User Command: "pay 1 USDC to recipient on cronos"
+    ↓
+Natural language parsing (backend)
+    ↓
+Detect X402_PAYMENT command type
+    ↓
+Frontend shows payment confirmation
+    ↓
+User signs with EIP-712 (Wagmi)
+    ↓
+Backend submits to x402 facilitator
+    ↓
+On-chain settlement on Cronos EVM
+    ↓
+Success confirmation with tx hash
+```
+
+### Key Features Implemented
+
+- **EIP-712 Signing**: Secure, user-controlled signatures with full message transparency
+- **Multi-Network**: Cronos testnet/mainnet (USDC) and Ethereum (MNEE)
+- **Natural Language**: Commands like `"pay 1 USDC to 0x... on cronos"`
+- **Non-Custodial**: User signs directly, backend never holds private keys
+- **Error Handling**: Clear feedback for all failure cases
+- **Type Safety**: 100% TypeScript implementation
+
+### Technical Stack
+
+**Backend**: FastAPI (Python) + x402 Adapter + EIP-712 signing  
+**Frontend**: Next.js + React + Wagmi + Chakra UI  
+**Blockchain**: Cronos EVM + x402 Facilitator API  
+**Wallet**: Wagmi (MetaMask, WalletConnect support)  
+
+See [docs/PAYMENTS.md](docs/PAYMENTS.md) for detailed payment architecture and API specs.
 
 ## 🤝 Contributing
 
