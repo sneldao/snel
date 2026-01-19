@@ -369,33 +369,31 @@ export const Chat: React.FC<ChatProps> = ({
           });
 
           // Add response message to chat
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              id: `assistant-${Date.now()}`,
-              type: "assistant",
-              content: response.content?.message || "Ready for payment confirmation",
-              timestamp: new Date(),
-              metadata: {
-                type: "payment",
-                details: response.content?.details,
-              },
+          const paymentMessage: Message = {
+            id: `assistant-${Date.now()}`,
+            type: "assistant",
+            content: response.content?.message || "Ready for payment confirmation",
+            timestamp: new Date(),
+            metadata: {
+              stage: "payment_confirmation",
+              progress: 0,
+              reasoning: ["Payment confirmation required"],
             },
-          ]);
+          };
+          setMessages((msgs) => [...msgs, paymentMessage]);
         } else {
           // Add other responses to chat
-          setMessages((msgs) => [
-            ...msgs,
-            {
-              id: `assistant-${Date.now()}`,
-              type: "assistant",
-              content: response.content?.message || JSON.stringify(response.content),
-              timestamp: new Date(),
-              metadata: {
-                type: response.content?.type,
-              },
+          const responseMessage: Message = {
+            id: `assistant-${Date.now()}`,
+            type: "assistant",
+            content: response.content?.message || JSON.stringify(response.content),
+            timestamp: new Date(),
+            metadata: {
+              stage: response.content?.type || "response",
+              progress: 100,
             },
-          ]);
+          };
+          setMessages((msgs) => [...msgs, responseMessage]);
         }
       }
     } catch (error) {
@@ -684,7 +682,7 @@ export const Chat: React.FC<ChatProps> = ({
       case "assistant":
         return (
           <VStack align="stretch" maxW="100%" spacing={4}>
-            {message.metadata?.type === "payment" && pendingPayment ? (
+            {message.metadata?.stage === "payment_confirmation" && pendingPayment ? (
               <UnifiedConfirmation
                 agentType="payment"
                 content={{
