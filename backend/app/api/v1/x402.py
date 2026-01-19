@@ -9,8 +9,15 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 import logging
 
-from app.protocols.x402_adapter import X402Adapter, execute_ai_payment, check_x402_service_health
-from app.config.chains import is_x402_privacy_supported
+from app.protocols.x402_adapter import (
+    X402Adapter,
+    X402PaymentRequirements,
+    execute_ai_payment,
+    check_x402_service_health,
+    STABLECOIN_CONTRACTS,
+    CHAIN_IDS,
+    STABLECOIN_SYMBOLS
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +90,11 @@ async def prepare_x402_payment(request: PreparePaymentRequest):
         adapter = X402Adapter(request.network)
         
         # Create requirements
-        from app.protocols.x402_adapter import X402PaymentRequirements, USDC_CONTRACTS
         payment_requirements = X402PaymentRequirements(
             scheme="exact",
             network=request.network,
             payTo=request.recipient_address,
-            asset=USDC_CONTRACTS[request.network],
+            asset=STABLECOIN_CONTRACTS[request.network],
             maxAmountRequired=str(int(request.amount_usdc * 1_000_000)),
             maxTimeoutSeconds=300
         )
@@ -254,13 +260,11 @@ async def verify_x402_payment(
         
         try:
             # Create payment requirements for verification
-            from app.protocols.x402_adapter import X402PaymentRequirements, USDC_CONTRACTS
-            
             payment_requirements = X402PaymentRequirements(
                 scheme="exact",
                 network=network,
                 payTo=recipient_address,
-                asset=USDC_CONTRACTS[network],
+                asset=STABLECOIN_CONTRACTS[network],
                 maxAmountRequired=str(int(amount_usdc * 1_000_000)),
                 maxTimeoutSeconds=300
             )
