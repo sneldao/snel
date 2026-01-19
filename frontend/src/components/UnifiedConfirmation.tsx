@@ -122,12 +122,22 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
     const token = content.details?.token || "MNEE";
     const recipient = content.details?.recipient || "Unknown";
     const fee = content.details?.fee_mnee || "Unknown";
+    const network = content.details?.network || "cronos-testnet";
+    const networkName = network === "cronos-testnet" ? "Cronos Testnet" : 
+                        network === "cronos-mainnet" ? "Cronos Mainnet" :
+                        "Ethereum Mainnet";
 
     return (
       <VStack spacing={3} align="stretch">
         <HStack justify="space-between">
+          <Text color="gray.600">Network:</Text>
+          <Badge colorScheme={network.includes("testnet") ? "yellow" : "blue"}>
+            {networkName}
+          </Badge>
+        </HStack>
+        <HStack justify="space-between">
           <Text color="gray.600">Payment To:</Text>
-          <Text fontWeight="bold">{recipient.slice(0, 6)}...{recipient.slice(-4)}</Text>
+          <Text fontFamily="monospace" fontSize="sm" fontWeight="bold">{recipient.slice(0, 10)}...{recipient.slice(-8)}</Text>
         </HStack>
         <HStack justify="space-between">
           <Text color="gray.600">Amount:</Text>
@@ -135,10 +145,12 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
             {amount} {token}
           </Text>
         </HStack>
-        <HStack justify="space-between">
-          <Text color="gray.600">Estimated Fee:</Text>
-          <Text fontWeight="bold">{fee} MNEE</Text>
-        </HStack>
+        {fee !== "Unknown" && (
+          <HStack justify="space-between">
+            <Text color="gray.600">Estimated Fee:</Text>
+            <Text fontWeight="bold">{fee} MNEE</Text>
+          </HStack>
+        )}
          <Alert status="info" borderRadius="md" mt={2}>
             <AlertIcon />
             <Box flex="1">
@@ -404,9 +416,9 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
             flex={1}
             onClick={onExecute}
             isLoading={isLoading}
-            loadingText="Sending..."
+            loadingText={agentType === "payment" ? "Signing..." : "Sending..."}
           >
-            Send to Wallet
+            {agentType === "payment" ? "Sign & Execute" : "Send to Wallet"}
           </Button>
         </HStack>
       </VStack>
