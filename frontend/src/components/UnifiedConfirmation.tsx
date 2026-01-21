@@ -11,7 +11,15 @@ import {
   AlertIcon,
   AlertTitle,
   AlertDescription,
+  Circle,
+  Icon,
+  useColorModeValue,
 } from "@chakra-ui/react";
+import { motion, AnimatePresence } from "framer-motion";
+import { CheckIcon } from "@chakra-ui/icons";
+
+const MotionBox = motion(Box);
+const MotionVStack = motion(VStack);
 
 interface TokenInfo {
   symbol: string;
@@ -69,6 +77,7 @@ interface UnifiedConfirmationProps {
   onExecute: () => void;
   onCancel?: () => void;
   isLoading?: boolean;
+  isSuccess?: boolean;
 }
 
 export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
@@ -79,7 +88,12 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
   onExecute,
   onCancel,
   isLoading = false,
+  isSuccess = false,
 }) => {
+  const cardBg = useColorModeValue("white", "gray.800");
+  const borderColor = useColorModeValue("gray.200", "gray.700");
+  const glassBg = useColorModeValue("rgba(255, 255, 255, 0.8)", "rgba(26, 32, 44, 0.8)");
+
   const getTitle = () => {
     switch (agentType) {
       case "transfer":
@@ -305,6 +319,35 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
   };
 
   const renderDetails = () => {
+    if (isSuccess) {
+      return (
+        <MotionVStack
+          spacing={4}
+          py={8}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", damping: 12 }}
+        >
+          <Circle
+            size="60px"
+            bg="green.500"
+            color="white"
+            shadow="0 0 20px rgba(72, 187, 120, 0.4)"
+          >
+            <Icon as={CheckIcon} w={8} h={8} />
+          </Circle>
+          <VStack spacing={1}>
+            <Text fontWeight="bold" fontSize="lg">
+              Action Successful!
+            </Text>
+            <Text fontSize="sm" color="gray.500" textAlign="center">
+              Your transaction has been submitted and is being processed.
+            </Text>
+          </VStack>
+        </MotionVStack>
+      );
+    }
+
     switch (agentType) {
       case "transfer":
         return renderTransferDetails();
@@ -356,73 +399,110 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
   };
 
   return (
-    <Box
-      bg="white"
-      border="1px solid"
-      borderColor="gray.200"
-      borderRadius="lg"
-      p={6}
-      shadow="sm"
-      maxW="md"
-      mx="auto"
-    >
-      <VStack spacing={4} align="stretch">
-        {/* Header */}
-        <VStack spacing={2}>
-          <Badge colorScheme={getActionColor()} size="lg" px={3} py={1}>
-            {getTitle()}
-          </Badge>
-          <Text fontSize="sm" color="gray.600" textAlign="center">
-            {content.message}
-          </Text>
-        </VStack>
-
-        <Divider />
-
-        {/* Details */}
-        {renderDetails()}
-
-        {/* Token Warnings */}
-        {renderTokenWarnings()}
-
-        {/* Transaction Info */}
-        {transaction && (
-          <Box fontSize="xs" color="gray.500">
-            <Text>Chain ID: {transaction.chain_id}</Text>
-            <Text>
-              To: {transaction.to.slice(0, 6)}...{transaction.to.slice(-4)}
-            </Text>
-            {transaction.value !== "0" && (
-              <Text>Value: {transaction.value} wei</Text>
-            )}
-          </Box>
-        )}
-
-        {/* Action Buttons */}
-        <HStack spacing={3} pt={2}>
-          {onCancel && (
-            <Button
-              variant="outline"
-              colorScheme="gray"
-              flex={1}
-              onClick={onCancel}
-              isDisabled={isLoading}
-            >
-              Cancel
-            </Button>
+    <AnimatePresence>
+      <MotionBox
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -20, opacity: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        bg={cardBg}
+        border="1px solid"
+        borderColor={borderColor}
+        borderRadius="2xl"
+        p={{ base: 4, md: 6 }}
+        shadow="xl"
+        maxW="md"
+        w="full"
+        mx="auto"
+        backdropFilter="blur(10px)"
+        backgroundColor={glassBg}
+      >
+        <VStack spacing={4} align="stretch">
+          {/* Header - Hidden on success */}
+          {!isSuccess && (
+            <>
+              <VStack spacing={2}>
+                <Badge
+                  colorScheme={getActionColor()}
+                  size="lg"
+                  px={4}
+                  py={1.5}
+                  borderRadius="full"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                >
+                  {getTitle()}
+                </Badge>
+                <Text fontSize="sm" color="gray.500" fontWeight="medium" textAlign="center">
+                  Action Verification
+                </Text>
+              </VStack>
+              <Divider />
+            </>
           )}
-          <Button
-            colorScheme={getActionColor()}
-            flex={1}
-            onClick={onExecute}
-            isLoading={isLoading}
-            loadingText={agentType === "payment" ? "Signing..." : "Sending..."}
-          >
-            {agentType === "payment" ? "Sign & Execute" : "Send to Wallet"}
-          </Button>
-        </HStack>
-      </VStack>
-    </Box>
+
+          {/* Details */}
+          {renderDetails()}
+
+          {/* Token Warnings */}
+          {!isSuccess && renderTokenWarnings()}
+
+          {/* Transaction Info */}
+          {!isSuccess && transaction && (
+            <Box
+              fontSize="2xs"
+              color="gray.400"
+              bg="gray.50"
+              p={2}
+              borderRadius="md"
+              fontFamily="monospace"
+            >
+              <Text>Chain: {transaction.chain_id}</Text>
+              <Text>
+                To: {transaction.to.slice(0, 10)}...{transaction.to.slice(-8)}
+              </Text>
+              {transaction.value !== "0" && (
+                <Text>Value: {transaction.value} wei</Text>
+              )}
+            </Box>
+          )}
+
+          {/* Action Buttons */}
+          {!isSuccess && (
+            <HStack spacing={4} pt={2}>
+              {onCancel && (
+                <Button
+                  variant="ghost"
+                  colorScheme="gray"
+                  flex={1}
+                  onClick={onCancel}
+                  isDisabled={isLoading}
+                  borderRadius="xl"
+                  _hover={{ bg: "gray.100" }}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button
+                colorScheme={getActionColor()}
+                flex={2}
+                onClick={onExecute}
+                isLoading={isLoading}
+                loadingText={agentType === "payment" ? "Signing..." : "Sending..."}
+                borderRadius="xl"
+                size="lg"
+                shadow="md"
+                _hover={{ transform: "translateY(-2px)", shadow: "lg" }}
+                _active={{ transform: "translateY(0)" }}
+                transition="all 0.2s"
+              >
+                {agentType === "payment" ? "Authorize Payment" : "Execute Action"}
+              </Button>
+            </HStack>
+          )}
+        </VStack>
+      </MotionBox>
+    </AnimatePresence>
   );
 };
 

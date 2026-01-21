@@ -116,6 +116,7 @@ export const Chat: React.FC<ChatProps> = ({
   const [progressSteps, setProgressSteps] = useState<AnalysisProgress[]>([]);
   const [pendingPayment, setPendingPayment] = useState<any>(null);
   const [isExecutingPayment, setIsExecutingPayment] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -314,7 +315,14 @@ export const Chat: React.FC<ChatProps> = ({
         },
       ]);
 
-      setPendingPayment(null);
+
+      setPaymentSuccess(true);
+
+      // Auto-clear success after 3 seconds
+      setTimeout(() => {
+        setPendingPayment(null);
+        setPaymentSuccess(false);
+      }, 3000);
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : "Unknown error";
@@ -346,6 +354,22 @@ export const Chat: React.FC<ChatProps> = ({
     const command = input;
     setInput("");
     setIsAnalyzing(true);
+
+    // Proactive Zero-State Check: No Wallet
+    if (!address) {
+      setMessages((msgs) => [...msgs, {
+        id: `assistant-${Date.now()}`,
+        type: "assistant",
+        content: "I've noticed your wallet isn't connected yet. To execute payments, swaps, or portfolio analysis, I'll need a connection. Would you like to connect using MetaMask or WalletConnect?",
+        timestamp: new Date(),
+        metadata: {
+          stage: "onboarding",
+          reasoning: ["Wallet connection required for transactions"]
+        }
+      }]);
+      setIsAnalyzing(false);
+      return;
+    }
 
     try {
       // Check for portfolio commands first
@@ -401,22 +425,28 @@ export const Chat: React.FC<ChatProps> = ({
         error instanceof Error ? error.message : "Failed to process command";
       console.error("Command processing error:", error);
 
+
+      // Agentic Error Guidance
+      let guidance = errorMsg;
+      if (errorMsg.includes("insufficient funds") || errorMsg.includes("low balance")) {
+        guidance = `It looks like you have insufficient funds for this transaction. If you're on Cronos Testnet, you can get free TCRO and USDC from the Official Faucets: https://cronos.org/faucet and https://faucet.cronos.org`;
+      } else if (errorMsg.includes("user rejected")) {
+        guidance = "Transaction was cancelled. No worries! If you're ready to try again, just let me know.";
+      }
+
       setMessages((msgs) => [
         ...msgs,
         {
           id: `error-${Date.now()}`,
-          type: "system",
-          content: `Error: ${errorMsg}`,
+          type: "assistant", // Use assistant for guidance
+          content: guidance,
           timestamp: new Date(),
+          metadata: {
+            stage: "error_guidance",
+            reasoning: [errorMsg]
+          }
         },
       ]);
-
-      toast({
-        title: "Command Failed",
-        description: errorMsg,
-        status: "error",
-        isClosable: true,
-      });
     } finally {
       setIsAnalyzing(false);
     }
@@ -698,6 +728,7 @@ export const Chat: React.FC<ChatProps> = ({
                 onExecute={() => handlePaymentExecution(pendingPayment)}
                 onCancel={() => setPendingPayment(null)}
                 isLoading={isExecutingPayment}
+                isSuccess={paymentSuccess}
               />
             ) : currentAnalysis ? (
               <PortfolioSummary

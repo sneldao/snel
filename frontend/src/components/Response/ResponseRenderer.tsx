@@ -44,6 +44,7 @@ interface ResponseRendererProps {
     chainId: number;
     textColor: string;
     isExecuting: boolean;
+    isSuccess?: boolean;
     onExecute: () => void;
     onCancel: () => void;
     onDone?: () => void;
@@ -61,6 +62,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
     chainId,
     textColor,
     isExecuting,
+    isSuccess = false,
     onExecute,
     onCancel,
     onDone,
@@ -122,6 +124,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 onExecute={onExecute}
                 onCancel={onCancel}
                 isLoading={isExecuting}
+                isSuccess={isSuccess}
             />
         );
     }
@@ -158,6 +161,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 onExecute={onExecute}
                 onCancel={onCancel}
                 isLoading={isExecuting}
+                isSuccess={isSuccess}
             />
         );
     }
@@ -178,6 +182,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 onExecute={onExecute}
                 onCancel={onCancel}
                 isLoading={isExecuting}
+                isSuccess={isSuccess}
             />
         );
     }
@@ -280,6 +285,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                 onExecute={onExecute}
                 onCancel={onCancel}
                 isLoading={isExecuting}
+                isSuccess={isSuccess}
             />
         );
     }

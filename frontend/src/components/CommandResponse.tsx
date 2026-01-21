@@ -112,6 +112,8 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
     // Extract transaction data
     const transactionData = transaction || getTransactionFromContent(content);
 
+    const [isSuccess, setIsSuccess] = React.useState(false);
+
     // Multi-step transaction hook
     const {
         isExecuting,
@@ -373,7 +375,11 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                     metadata: submitMetadata
                 });
 
+                setIsSuccess(true);
                 toast({ title: "Automation Authorized!", description: "Payment executed successfully.", status: "success" });
+
+                // Reset success state after a delay if needed
+                setTimeout(() => setIsSuccess(false), 5000);
 
             } else if (preparation.action_type === 'approve_allowance') {
                 // MNEE Flow: Approve allowance if needed
@@ -504,6 +510,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
                                 chainId={chainId}
                                 textColor={textColor}
                                 isExecuting={isExecuting}
+                                isSuccess={isSuccess || (multiStepState?.isComplete ?? false)}
                                 onExecute={(overrides?: any) => {
                                     if (typeChecks.isX402Automation) {
                                         handleX402Execution(overrides);
