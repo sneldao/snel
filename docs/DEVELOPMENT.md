@@ -427,12 +427,62 @@ async def _handle_research_error(self, error: Exception, protocol_name: str, fal
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** January 6, 2026
+**Document Version:** 1.1
+**Last Updated:** January 21, 2026
 **Author:** Development Team
-**Status:** Ready for Implementation Review
+**Status:** Implementation Complete
 
 ---
+
+## Extending the System (Registry System)
+
+SNEL uses a centralized registry to manage tokens, chains, and protocols. To add a new asset or network, follow these steps:
+
+### 1. Adding a New Token
+Add the token details to `backend/app/config/tokens.py`:
+```python
+COMMON_TOKENS[CHAIN_ID]["symbol"] = {
+    "address": "0x...",
+    "name": "Token Name",
+    "symbol": "SYMBOL",
+    "decimals": 18,
+    "verified": True
+}
+```
+
+### 2. Adding a New Chain
+Add the chain details to `backend/app/config/chains.py`:
+```python
+CHAINS[CHAIN_ID] = ChainInfo(
+    id=CHAIN_ID,
+    name="Chain Name",
+    type=ChainType.EVM,
+    rpc_url="https://...",
+    explorer_url="https://...",
+    supported_protocols={"0x", "uniswap"}
+)
+```
+
+### 3. Adding a New Protocol
+Add the protocol configuration to `backend/app/config/protocols.py`:
+```python
+PROTOCOLS["protocol_id"] = ProtocolConfig(
+    id="protocol_id",
+    name="Protocol Name",
+    type=ProtocolType.AGGREGATOR,
+    supported_chains={1, 137, ...},
+    api_endpoints={"default": "https://api..."}
+)
+```
+
+### 4. Verification
+After making changes to the registry, verify the configuration:
+1. Restart the backend to reload the `ConfigurationManager`.
+2. Check the logs: `Loaded X tokens, Y chains, Z protocols`.
+3. Test with a command: `get price of [token] on [chain]`.
+
+---
+
 
 ## Hetzner Server Deployment
 

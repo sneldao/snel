@@ -161,15 +161,24 @@ Payment Actions provide persistent, user-controlled automation for recurring and
 
 ## Configuration
 
-Environment variables control the unified payment system:
+The payment system uses a **Single Source of Truth** for technical details, powered by the Registry System:
+
+1. **Chain/Asset Registry**:
+   - Technical details (addresses, decimals, RPCs) are managed in:
+     - `backend/app/config/chains.py`
+     - `backend/app/config/tokens.py`
+     - `backend/app/config/protocols.py`
+
+2. **Secrets & Endpoints (Environment Variables)**:
+   Sensitive keys and dynamic overrides are set in the `.env` file:
 
 ```env
-# Required: X402 Configuration (Cronos)
-CRONOS_MAINNET_RPC_URL=https://evm.cronos.org
-CRONOS_TESTNET_RPC_URL=https://evm-t3.cronos.org
-X402_FACILITATOR_URL=https://facilitator.cronoslabs.org/v2/x402
+# Required: API Keys
+MNEE_API_KEY=your_mnee_api_key_here
+ZEROX_API_KEY=your_0x_api_key_here
+MNEE_ENVIRONMENT=production      # "production" | "sandbox"
 
-# Required: MNEE Relayer Configuration (Ethereum)
+# Required: Relayer Configuration (Ethereum)
 ETH_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
 MNEE_RELAYER_ADDRESS=0x[your_relayer_public_address]
 MNEE_RELAYER_PRIVATE_KEY=0x[corresponding_private_key]
@@ -177,10 +186,6 @@ MNEE_RELAYER_PRIVATE_KEY=0x[corresponding_private_key]
 # Backend storage selection
 PAYMENT_ACTIONS_BACKEND=redis    # "memory" | "redis" | "postgresql"
 REDIS_URL=redis://localhost:6379
-
-# Optional: MNEE API configuration
-MNEE_API_KEY=your_mnee_api_key_here
-MNEE_ENVIRONMENT=production      # "production" | "sandbox"
 ```
 
 **Important**: 

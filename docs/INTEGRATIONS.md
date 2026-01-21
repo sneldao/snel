@@ -111,9 +111,9 @@ MNEE is a USD-backed programmable stablecoin with native support on 1Sat Ordinal
 - **Regulation**: Regulated in Antigua with AML/KYC compliance
 
 ### Implementation Details
-- **Protocol Adapter**: `backend/app/protocols/mnee_adapter.py` (320+ lines)
+- **Protocol Adapter**: `backend/app/protocols/mnee_adapter.py`
 - **Token Configuration**: `backend/app/config/tokens.py`
-- **Token Model**: `backend/app/models/token.py`
+- **Protocol Configuration**: `backend/app/config/protocols.py` (Registry)
 - **Frontend Constants**: `frontend/src/constants/tokens.ts`
 
 ### API Integration

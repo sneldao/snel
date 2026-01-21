@@ -20,6 +20,7 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 - **💳 MNEE Commerce Payments**: Native support for MNEE stablecoin with invoice references for business-to-business transactions.
 - **🔄 Advanced Transaction Handling**: Automatically handles multi-step processes like approvals and swaps with real-time status updates.
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
+- **⚙️ Single Source Registry**: Centralized configuration management for 19+ tokens and chains.
 - **🛡️ Privacy Bridging**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP.
 - **💰 Smart Amount Conversion**: Automatically converts USD amounts to token amounts using real-time price data from CoinGecko.
 - **🔐 Secure & User-Friendly**: Non-custodial, supports 50+ wallets, and provides transaction simulation.
@@ -141,6 +142,7 @@ cd frontend && npm run dev
 
 - ✅ **Phase 1**: Backend x402 integration validated (facilitator tests: 15/15 passing)
 - ✅ **Phase 2**: Frontend payment flow complete (chat → confirmation → signing → settlement)
+- ✅ **Phase 2.5**: Centralized Registry Refactor complete (Single Source of Truth)
 - ⏳ **Phase 3**: End-to-end testing on Cronos Testnet
 - 📋 **Phase 4**: Demo video + DoraHacks submission
 

@@ -22,13 +22,21 @@ SNELOrchestrator
 ```
 
 #### DeFi Operations
-- **Token Swaps**: Multi-chain via Brian API + 0x Protocol
+- **Token Swaps**: Multi-chain via 0x Protocol
 - **Cross-Chain Bridging**: Axelar GMP + LayerZero integration
 - **Privacy Bridging**: Zcash integration for private transactions
 - **X402 Agentic Payments**: AI-triggered payments on Cronos EVM
 - **Portfolio Analysis**: Web3 balance aggregation + AI insights
 - **Protocol Research**: AI-powered DeFi protocol analysis
 - **Natural Language Processing**: OpenAI-powered command interpretation
+- **Single Source of Truth Configuration**: Centralized registry for tokens, chains, and protocols
+
+#### Registry System (NEW)
+The system uses a centralized registry to manage all network-specific data, ensuring consistency across adapters and services.
+- **Tokens**: `backend/app/config/tokens.py` (Addresses, decimals, metadata)
+- **Chains**: `backend/app/config/chains.py` (RPCs, explorers, capabilities)
+- **Protocols**: `backend/app/config/protocols.py` (Contract addresses, API endpoints)
+- **ConfigurationManager**: Unified service to access and validate these configurations.
 
 #### Supported Networks (19+)
 - **Layer 1**: Ethereum, Avalanche, BSC
