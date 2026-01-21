@@ -41,7 +41,6 @@ import { CommandInput } from "./CommandInput";
 import { GMPCompatibleCommandResponse as CommandResponse } from "./GMPCompatibleCommandResponse";
 import { WalletButton } from "./WalletButton";
 import { ExternalLinkIcon, SettingsIcon, QuestionIcon } from "@chakra-ui/icons";
-import { ApiKeyModal } from "./ApiKeyModal";
 import { LogoModal } from "./LogoModal";
 import { HelpModal } from "./HelpModal";
 import { PaymentQuickActions } from "./PaymentQuickActions";
@@ -196,7 +195,6 @@ export default function MainApp(props: MainAppProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isAddRecipientModalOpen, setIsAddRecipientModalOpen] = useState(false);
   const [isAddPaymentTemplateModalOpen, setIsAddPaymentTemplateModalOpen] =
     useState(false);
@@ -517,17 +515,17 @@ export default function MainApp(props: MainAppProps) {
             );
 
             const historyResponse: Response = {
-             content: {
-               message: `Here's your MNEE payment history:`,
-               type: "payment_history",
-               history: history && history.length > 0 
-                 ? history 
-                 : [],
-             },
-             timestamp: new Date().toISOString(),
-             isCommand: false,
-             status: "success" as const,
-             agentType: "payment" as const,
+              content: {
+                message: `Here's your MNEE payment history:`,
+                type: "payment_history",
+                history: history && history.length > 0
+                  ? history
+                  : [],
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success" as const,
+              agentType: "payment" as const,
             };
 
             setResponses((prev) => [...prev, historyResponse]);
@@ -847,13 +845,6 @@ export default function MainApp(props: MainAppProps) {
                   onClick={() => setIsHelpModalOpen(true)}
                 >
                   <Icon as={QuestionIcon} />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setIsApiKeyModalOpen(true)}
-                >
-                  <Icon as={SettingsIcon} />
                 </Button>
                 {isConnected && (
                   !showLandingScreen ? (
@@ -1211,10 +1202,6 @@ export default function MainApp(props: MainAppProps) {
       <HelpModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
-      />
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
       />
       <AddRecipientModal
         isOpen={isAddRecipientModalOpen}

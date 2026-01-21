@@ -96,7 +96,7 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
   const sourceUrl = parsed.source_url || "";
   const rawContent = parsed.raw_content || "";
   const hasAnalysis = !!summary && summary !== "No summary available";
-  
+
   // Privacy-specific fields (from knowledge base)
   const privacyExplanation = parsed.privacy_explanation || "";
   const technicalExplanation = parsed.technical_explanation || "";
@@ -143,14 +143,13 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
           protocol_name: protocolName,
           question: question.trim(),
           raw_content: contentToPass || "",
-          openai_api_key: localStorage.getItem("openai_api_key") || "",
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const result = await response.json();
       if (result.success) {
         setQaHistory((prev) => [
@@ -193,14 +192,14 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
       <Box p={4} borderRadius="lg" borderWidth="1px" borderColor={borderColor} bg={bgColor}>
         <VStack spacing={4} align="stretch">
           {/* Header */}
-           <HStack justify="space-between">
-             <Text fontWeight="bold" fontSize="lg">{protocolName.toUpperCase()}</Text>
-             <HStack>
-               <Badge colorScheme={protocolColor}>{protocolType}</Badge>
-               {analysisQuality && <Badge colorScheme="green">{analysisQuality}</Badge>}
-               {fromKnowledgeBase && <Badge colorScheme="blue">Verified</Badge>}
-             </HStack>
-           </HStack>
+          <HStack justify="space-between">
+            <Text fontWeight="bold" fontSize="lg">{protocolName.toUpperCase()}</Text>
+            <HStack>
+              <Badge colorScheme={protocolColor}>{protocolType}</Badge>
+              {analysisQuality && <Badge colorScheme="green">{analysisQuality}</Badge>}
+              {fromKnowledgeBase && <Badge colorScheme="blue">Verified</Badge>}
+            </HStack>
+          </HStack>
           <Divider my={2} />
 
 
@@ -319,183 +318,183 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
 
               {/* Accordion for Details */}
               <Accordion allowToggle>
-                 {/* AI Analysis Summary - as first accordion item */}
-                 {hasAnalysis && summary !== "No summary available" && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaCheckCircle} color="green.500" />
-                           <Text fontWeight="semibold">AI Analysis Summary</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <Text fontSize="sm" color={textColor} lineHeight="1.6">
-                         {summary}
-                       </Text>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* Key Features */}
-                 {keyFeatures.length > 0 && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaStar} color={mutedColor} />
-                           <Text fontWeight="semibold">Key Features</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <List spacing={2}>
-                         {keyFeatures.map((feature: string, index: number) => (
-                           <ListItem key={index}>{feature}</ListItem>
-                         ))}
-                       </List>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* Privacy Explanation */}
-                 {privacyExplanation && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaShieldAlt} color="purple.500" />
-                           <Text fontWeight="semibold">Privacy Explanation</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
-                         {privacyExplanation}
-                       </Text>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* How It Works */}
-                 {howItWorks && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaShieldAlt} color="blue.500" />
-                           <Text fontWeight="semibold">How It Works</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
-                         {howItWorks}
-                       </Text>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* Recommended Wallets */}
-                 {recommendedWallets.length > 0 && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaCheckCircle} color="green.500" />
-                           <Text fontWeight="semibold">Recommended Wallets</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <VStack spacing={2} align="stretch">
-                         {recommendedWallets.map((wallet: any, index: number) => (
-                           <Box key={index} p={2} bg={modalBgColor} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
-                             <HStack justify="space-between" mb={1}>
-                               <Text fontWeight="semibold" fontSize="sm">{wallet.name}</Text>
-                               <Badge colorScheme="blue" fontSize="xs">{wallet.type}</Badge>
-                             </HStack>
-                             <Text fontSize="xs" color={mutedColor} mb={2}>{wallet.note}</Text>
-                             {wallet.url && (
-                               <Button
-                                 as={Link}
-                                 href={wallet.url}
-                                 isExternal
-                                 size="xs"
-                                 variant="outline"
-                                 colorScheme="blue"
-                               >
-                                 Visit Website
-                               </Button>
-                             )}
-                           </Box>
-                         ))}
-                       </VStack>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* Use Cases */}
-                 {useCases.length > 0 && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaStar} color="orange.500" />
-                           <Text fontWeight="semibold">Use Cases</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <List spacing={2}>
-                         {useCases.map((useCase: string, index: number) => (
-                           <ListItem key={index}>{useCase}</ListItem>
-                         ))}
-                       </List>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* Security Information */}
-                 {securityInfo && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaShieldAlt} color={mutedColor} />
-                           <Text fontWeight="semibold">Security Information</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
-                         {securityInfo}
-                       </Text>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-                 {/* Financial Metrics */}
-                 {financialMetrics && (
-                   <AccordionItem>
-                     <AccordionButton>
-                       <Box flex="1" textAlign="left">
-                         <HStack>
-                           <Icon as={FaDollarSign} color={mutedColor} />
-                           <Text fontWeight="semibold">Financial Metrics</Text>
-                         </HStack>
-                       </Box>
-                       <AccordionIcon />
-                     </AccordionButton>
-                     <AccordionPanel pb={4}>
-                       <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
-                         {financialMetrics}
-                       </Text>
-                     </AccordionPanel>
-                   </AccordionItem>
-                 )}
-               </Accordion>
+                {/* AI Analysis Summary - as first accordion item */}
+                {hasAnalysis && summary !== "No summary available" && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaCheckCircle} color="green.500" />
+                          <Text fontWeight="semibold">AI Analysis Summary</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <Text fontSize="sm" color={textColor} lineHeight="1.6">
+                        {summary}
+                      </Text>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* Key Features */}
+                {keyFeatures.length > 0 && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaStar} color={mutedColor} />
+                          <Text fontWeight="semibold">Key Features</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <List spacing={2}>
+                        {keyFeatures.map((feature: string, index: number) => (
+                          <ListItem key={index}>{feature}</ListItem>
+                        ))}
+                      </List>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* Privacy Explanation */}
+                {privacyExplanation && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaShieldAlt} color="purple.500" />
+                          <Text fontWeight="semibold">Privacy Explanation</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
+                        {privacyExplanation}
+                      </Text>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* How It Works */}
+                {howItWorks && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaShieldAlt} color="blue.500" />
+                          <Text fontWeight="semibold">How It Works</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
+                        {howItWorks}
+                      </Text>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* Recommended Wallets */}
+                {recommendedWallets.length > 0 && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaCheckCircle} color="green.500" />
+                          <Text fontWeight="semibold">Recommended Wallets</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <VStack spacing={2} align="stretch">
+                        {recommendedWallets.map((wallet: any, index: number) => (
+                          <Box key={index} p={2} bg={modalBgColor} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                            <HStack justify="space-between" mb={1}>
+                              <Text fontWeight="semibold" fontSize="sm">{wallet.name}</Text>
+                              <Badge colorScheme="blue" fontSize="xs">{wallet.type}</Badge>
+                            </HStack>
+                            <Text fontSize="xs" color={mutedColor} mb={2}>{wallet.note}</Text>
+                            {wallet.url && (
+                              <Button
+                                as={Link}
+                                href={wallet.url}
+                                isExternal
+                                size="xs"
+                                variant="outline"
+                                colorScheme="blue"
+                              >
+                                Visit Website
+                              </Button>
+                            )}
+                          </Box>
+                        ))}
+                      </VStack>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* Use Cases */}
+                {useCases.length > 0 && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaStar} color="orange.500" />
+                          <Text fontWeight="semibold">Use Cases</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <List spacing={2}>
+                        {useCases.map((useCase: string, index: number) => (
+                          <ListItem key={index}>{useCase}</ListItem>
+                        ))}
+                      </List>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* Security Information */}
+                {securityInfo && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaShieldAlt} color={mutedColor} />
+                          <Text fontWeight="semibold">Security Information</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
+                        {securityInfo}
+                      </Text>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+                {/* Financial Metrics */}
+                {financialMetrics && (
+                  <AccordionItem>
+                    <AccordionButton>
+                      <Box flex="1" textAlign="left">
+                        <HStack>
+                          <Icon as={FaDollarSign} color={mutedColor} />
+                          <Text fontWeight="semibold">Financial Metrics</Text>
+                        </HStack>
+                      </Box>
+                      <AccordionIcon />
+                    </AccordionButton>
+                    <AccordionPanel pb={4}>
+                      <Text fontSize="sm" color={textColor} whiteSpace="pre-wrap" lineHeight="1.6">
+                        {financialMetrics}
+                      </Text>
+                    </AccordionPanel>
+                  </AccordionItem>
+                )}
+              </Accordion>
 
               <Divider />
 

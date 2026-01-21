@@ -33,26 +33,10 @@ export class ApiService {
     return this._portfolioService;
   }
 
-  private getApiKeys() {
-    if (typeof window === "undefined") return {};
-    return {
-      openaiKey: localStorage.getItem("openai_api_key") || "",
-      alchemyKey: localStorage.getItem("alchemy_api_key") || "",
-      coingeckoKey: localStorage.getItem("coingecko_api_key") || "",
-    };
-  }
-
   private getHeaders() {
-    const { openaiKey, alchemyKey, coingeckoKey } = this.getApiKeys();
-    const headers: Record<string, string> = {
+    return {
       "Content-Type": "application/json",
     };
-
-    if (openaiKey) headers["X-OpenAI-Key"] = openaiKey;
-    if (alchemyKey) headers["X-Alchemy-Key"] = alchemyKey;
-    if (coingeckoKey) headers["X-CoinGecko-Key"] = coingeckoKey;
-
-    return headers;
   }
 
   async processCommand(
@@ -66,7 +50,7 @@ export class ApiService {
   ) {
     // Portfolio gatekeeper check
     const gatekeeperResult = PortfolioGatekeeper.shouldRunPortfolioAnalysis(
-      command, 
+      command,
       portfolioSettings
     );
 
@@ -98,7 +82,7 @@ export class ApiService {
           return PortfolioGatekeeper.createCachedResponse(cached);
         }
       }
-      
+
       try {
         // Use WebSocket for real-time updates
         const analysis = await this.portfolioService.analyzePortfolio(
@@ -123,10 +107,10 @@ export class ApiService {
         };
       } catch (error) {
         logger.error("Portfolio analysis failed:", error);
-        
+
         // Make sure WebSocket is disconnected
         websocketService.disconnect();
-        
+
         // Return service unavailability information
         return {
           content: {
@@ -146,7 +130,6 @@ export class ApiService {
     // All cross-chain operations are now handled by the unified backend
 
     // For other commands, use the chat endpoint
-    const { openaiKey } = this.getApiKeys();
     const response = await fetch(`${this.apiUrl}/chat/process-command`, {
       method: "POST",
       headers: {
@@ -157,7 +140,6 @@ export class ApiService {
         wallet_address: walletAddress,
         chain_id: chainId || 1,
         user_name: userName,
-        openai_api_key: openaiKey, // Include OpenAI key in body instead of headers
       }),
     });
 
@@ -385,7 +367,7 @@ export class ApiService {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("API Error Response:", errorText);
-        
+
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.detail) {
@@ -394,7 +376,7 @@ export class ApiService {
         } catch (parseError) {
           // If parsing fails, use the original error
         }
-        
+
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -422,7 +404,7 @@ export class ApiService {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("API Error Response:", errorText);
-        
+
         // Try to parse error as JSON
         try {
           const errorJson = JSON.parse(errorText);
@@ -432,7 +414,7 @@ export class ApiService {
         } catch (parseError) {
           // If parsing fails, use the original error
         }
-        
+
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -464,7 +446,7 @@ export class ApiService {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("API Error Response:", errorText);
-        
+
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.detail) {
@@ -473,7 +455,7 @@ export class ApiService {
         } catch (parseError) {
           // If parsing fails, use the original error
         }
-        
+
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -501,7 +483,7 @@ export class ApiService {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("API Error Response:", errorText);
-        
+
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.detail) {
@@ -510,7 +492,7 @@ export class ApiService {
         } catch (parseError) {
           // If parsing fails, use the original error
         }
-        
+
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -524,7 +506,7 @@ export class ApiService {
       throw error;
     }
   }
-  
+
   /**
    * Check if a service is available by testing the connection
    */
@@ -534,7 +516,7 @@ export class ApiService {
         method: "GET",
         headers: this.getHeaders(),
       });
-      
+
       return response.ok;
     } catch (error) {
       logger.error(`Service ${service} availability check failed:`, error);
@@ -555,7 +537,7 @@ export class ApiService {
     // Check if both chains are supported by Axelar
     const fromSupported = axelarService.isChainSupported(intent.fromChain as string);
     const toSupported = axelarService.isChainSupported(intent.toChain as string);
-    
+
     return fromSupported && toSupported;
   }
 
@@ -577,7 +559,7 @@ export class ApiService {
       // Check if at least two major chains are active
       const majorChains = ['Ethereum', 'Polygon', 'Avalanche', 'Arbitrum'];
       const availableChains = supportedChains.filter(chain => majorChains.includes(chain));
-      
+
       if (availableChains.length < 2) {
         return false;
       }
