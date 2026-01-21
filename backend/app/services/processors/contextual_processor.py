@@ -266,42 +266,51 @@ X402 AGENTIC PAYMENT FEATURES YOU SUPPORT:
                 "anonymous", "anonymity", "confidential", "secure transaction",
                 "mnee", "stablecoin", "commerce payment", "programmatic money",
                 "x402", "agentic payment", "ai payment", "automated payment",
-                "agent payment", "recurring payment", "batch settlement"
+                "agent payment", "recurring payment", "batch settlement",
+                "cronos", "ethereum", "base", "polygon", "arbitrum", "chain", "network",
+                "what can i do", "how do i", "tell me about", "what can you",
+                "help with", "info", "information"
             ]
             
             is_about_assistant = any(pattern in cmd_lower for pattern in about_assistant_patterns)
             
             if not context and not is_about_assistant:
-                # Check if this might be a payment or transaction command that was misclassified
-                cmd_lower = unified_command.command.lower()
-                payment_keywords = ["payment", "pay", "send", "transfer", "bridge", "swap", "setup", "recurring", "monthly", "weekly", "daily"]
+                # Check if this might be a blockchain or crypto query that should go to AI anyway
+                crypto_keywords = ["crypto", "bitcoin", "ethereum", "eth", "cronos", "cro", "defi", "web3", "wallet", "token", "coin"]
+                is_crypto_query = any(keyword in cmd_lower for keyword in crypto_keywords)
                 
-                if any(keyword in cmd_lower for keyword in payment_keywords):
+                if not is_crypto_query:
+                    # Check if this might be a payment or transaction command that was misclassified
+                    cmd_lower = unified_command.command.lower()
+                    payment_keywords = ["payment", "pay", "send", "transfer", "bridge", "swap", "setup", "recurring", "monthly", "weekly", "daily"]
+                    
+                    if any(keyword in cmd_lower for keyword in payment_keywords):
+                        return self._create_success_response(
+                            content={
+                                "message": "I can help with that! Could you be more specific about what you'd like to do? For example:\n• `setup monthly payment of 100 USDC to supplier.eth`\n• `send 50 MNEE to merchant.eth`\n• `bridge 100 USDC to Polygon`",
+                                "type": "contextual_response",
+                                "suggestions": [
+                                    "Try being more specific about amounts and recipients",
+                                    "Include token symbols (USDC, MNEE, ETH, etc.)",
+                                    "Specify the recipient address or ENS name"
+                                ]
+                            },
+                            agent_type=AgentType.DEFAULT
+                        )
+                    
                     return self._create_success_response(
                         content={
-                            "message": "I can help with that! Could you be more specific about what you'd like to do? For example:\n• `setup monthly payment of 100 USDC to supplier.eth`\n• `send 50 MNEE to merchant.eth`\n• `bridge 100 USDC to Polygon`",
+                            "message": "I don't have enough context to answer that question. Could you be more specific about what you're interested in?",
                             "type": "contextual_response",
                             "suggestions": [
-                                "Try being more specific about amounts and recipients",
-                                "Include token symbols (USDC, MNEE, ETH, etc.)",
-                                "Specify the recipient address or ENS name"
+                                "Try asking 'what can I do on Cronos?'",
+                                "Ask about a specific DeFi protocol",
+                                "Be more specific about what you want to know"
                             ]
                         },
                         agent_type=AgentType.DEFAULT
                     )
-                
-                return self._create_success_response(
-                    content={
-                        "message": "I don't have enough context to answer that question. Could you be more specific?",
-                        "type": "contextual_response",
-                        "suggestions": [
-                            "Try asking 'research Uniswap' first",
-                            "Ask about a specific protocol",
-                            "Be more specific about what you want to know"
-                        ]
-                    },
-                    agent_type=AgentType.DEFAULT
-                )
+                # If it IS a crypto query, fall through to AI handling
             
             client = AsyncOpenAI(api_key=openai_key)
             
