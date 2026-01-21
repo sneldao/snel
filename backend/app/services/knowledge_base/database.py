@@ -26,6 +26,7 @@ class ProtocolKnowledgeBase:
             Tuple of (canonical_key, entry) or None.
             canonical_key is used in responses (corrects misspellings).
         """
+        import re
         protocol_lower = protocol_name.lower().strip()
         
         # 1. Exact match on key (fastest)
@@ -38,9 +39,12 @@ class ProtocolKnowledgeBase:
                 logger.info(f"Alias match: '{protocol_name}' -> '{key}'")
                 return (key, entry)
         
-        # 3. Exact match on official_name
+        # 3. Match on official_name with word boundaries
+        # Prevents "cronos" from matching "Cronos x402 Agentic Payment Protocol" 
+        # unless there's no better match.
         for key, entry in self.static_entries.items():
-            if protocol_lower in entry.official_name.lower():
+            pattern = rf"\b{re.escape(protocol_lower)}\b"
+            if re.search(pattern, entry.official_name.lower()):
                 return (key, entry)
         
         # 4. Fuzzy match on keys (>80% similarity)
@@ -89,6 +93,68 @@ class ProtocolKnowledgeBase:
     def _init_static_protocols(self) -> Dict[str, ProtocolEntry]:
         """Initialize static protocol knowledge base."""
         return {
+            "cronos": ProtocolEntry(
+                official_name="Cronos",
+                type="EVM-Compatible Blockchain Network",
+                aliases=["cro", "cronos network", "cronos chain", "cronos evm"],
+                summary="Cronos is the leading EVM-compatible Layer 1 blockchain network built on the Cosmos SDK, supported by Crypto.com. It is designed to scale the Web3 user community by providing builders with the ability to instantly port apps and smart contracts from Ethereum and other EVM-compatible chains.",
+                key_features=[
+                    "EVM Compatibility - Built on Ethermint, allowing rapid porting of Ethereum dApps",
+                    "Cosmos Ecosystem Integration - Connected to the IBC (Inter-Blockchain Communication) network",
+                    "High Scalability & Low Cost - Fast block finality and significantly lower fees than Ethereum",
+                    "Cronos x402 Protected - Supports SNEL's Agentic Payment Infrastructure for automated settlement",
+                    "MNEE Native Support - Optimized for the MNEE stablecoin and e-commerce payments",
+                    "Strong Ecosystem - Supported by Crypto.com with over 80M users globally"
+                ],
+                how_it_works="Cronos uses a Proof of Authority (PoA) consensus mechanism initially, transitioning to more decentralized Proof of Stake. It leverages the Cosmos SDK and IBC for interoperability while maintaining full EVM support for developer familiarity.",
+                use_cases=[
+                    "High-speed DeFi (Swaps, Lending, Yield)",
+                    "Web3 Gaming and GameFi",
+                    "NFT Marketplaces",
+                    "Agentic Payments via X402",
+                    "Consumer dApps with Crypto.com integration"
+                ],
+                recommended_wallets=[
+                    {"name": "Crypto.com DeFi Wallet", "type": "Multi-platform", "url": "https://crypto.com/defi-wallet", "note": "Native support for Cronos and integrated dApp browser"},
+                    {"name": "MetaMask", "type": "Browser/Mobile", "url": "https://metamask.io/", "note": "Popular EVM wallet, requires Cronos network configuration"},
+                    {"name": "Rabby Wallet", "type": "Browser", "url": "https://rabby.io/", "note": "Secure EVM wallet with excellent Cronos support"}
+                ],
+                names={"en": "Cronos", "es": "Cronos", "zh": "Cronos"},
+                integrations_with=["crypto.com", "cosmoss", "ethereum", "axelar"],
+                bridges_to=["ethereum", "polygon", "base", "arbitrum", "cosmos"],
+                last_verified=datetime(2024, 1, 21),
+            ),
+            "ethereum": ProtocolEntry(
+                official_name="Ethereum",
+                type="Layer 1 Blockchain Platform",
+                aliases=["eth", "ether", "ethereum network", "ethereum mainnet"],
+                summary="Ethereum is a decentralized, open-source blockchain with smart contract functionality. It is the world's most programmable blockchain and the foundation for most of today's DeFi, NFT, and DAO ecosystems.",
+                key_features=[
+                    "Smart Contracts - Self-executing contracts with the terms of the agreement directly written into code",
+                    "Proof of Stake (PoS) - Secure and energy-efficient consensus mechanism",
+                    "Massive Ecosystem - Largest community of developers and DeFi protocols",
+                    "ERC-20 & ERC-721 Standards - Canonical standards for tokens and NFTs",
+                    "MNEE Automated Payments - Supported by SNEL's agentic settlement via MNEE stablecoin",
+                    "Global Liquidity - Highest Total Value Locked (TVL) in the crypto ecosystem"
+                ],
+                how_it_works="Ethereum operates as a 'world computer' where state transitions are processed by nodes globally. Developers write code in Solidity or Vyper and deploy it to the Ethereum Virtual Machine (EVM).",
+                use_cases=[
+                    "Decentralized Finance (DeFi)",
+                    "Non-Fungible Tokens (NFTs)",
+                    "Decentralized Autonomous Organizations (DAOs)",
+                    "Stablecoin issuance and transfers",
+                    "Privacy-enhanced bridging to Zcash via SNEL"
+                ],
+                recommended_wallets=[
+                    {"name": "MetaMask", "type": "Browser/Mobile", "url": "https://metamask.io/", "note": "The industry standard for Ethereum interaction"},
+                    {"name": "Coinbase Wallet", "type": "Mobile/Browser", "url": "https://www.coinbase.com/wallet", "note": "Easy to use with direct Coinbase integration"},
+                    {"name": "Ledger", "type": "Hardware", "url": "https://ledger.com/", "note": "Maximum security for long-term Ethereum holdings"}
+                ],
+                names={"en": "Ethereum", "es": "Ethereum", "zh": "以太坊"},
+                integrations_with=["uniswap", "aave", "lido", "makerdao"],
+                bridges_to=["arbitrum", "optimism", "base", "polygon", "cronos"],
+                last_verified=datetime(2024, 1, 21),
+            ),
             "zcash": ProtocolEntry(
                 official_name="Zcash",
                 type="Privacy-Preserving Cryptocurrency",
