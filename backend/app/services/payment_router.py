@@ -56,16 +56,20 @@ class PaymentRouter:
         
         # Ethereum Mainnet + MNEE -> X402 (recommended) or MNEE Relayer
         if network == "ethereum-mainnet" and token_symbol == "MNEE":
-            # Prefer X402 for MNEE as it's more flexible
+            # Use MNEE Relayer/Native protocol for Ethereum Mainnet
             return PaymentRoute(
-                protocol="x402",
+                protocol="mnee",
                 network=network,
                 asset=token_symbol,
-                adapter_class=X402Adapter
+                adapter_class=MNEEAdapter
             )
         
-        # Cronos Networks -> X402 (USDC or other ERC-20s)
+        # Cronos Networks -> X402 (USDC)
         if network in ["cronos-mainnet", "cronos-testnet"]:
+            # Validate token support on Cronos
+            if token_symbol != "USDC":
+                 raise ValueError(f"Token {token_symbol} not supported on {network} (Only USDC supported)")
+
             return PaymentRoute(
                 protocol="x402",
                 network=network,

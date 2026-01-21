@@ -130,7 +130,7 @@ class TestProtocolRouting:
     @pytest.mark.asyncio
     async def test_unsupported_token_raises_error(self):
         """Test unsupported token on supported network raises error"""
-        with pytest.raises(ValueError, match="No payment protocol found"):
+        with pytest.raises(ValueError, match="Token ETH not supported on cronos-mainnet"):
             await self.router.prepare_payment(
                 network='cronos-mainnet',
                 user_address='0x123',
