@@ -102,6 +102,24 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
             "decimals": 18,
             "verified": True
         }
+    },
+    25: {  # Cronos Mainnet
+        "usdc": {
+            "address": "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",
+            "name": "USD Coin",
+            "symbol": "USDC",
+            "decimals": 6,
+            "verified": True
+        }
+    },
+    338: {  # Cronos Testnet
+        "usdc": {
+            "address": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
+            "name": "USD Coin",
+            "symbol": "USDC",
+            "decimals": 6,
+            "verified": True
+        }
     }
 }
 

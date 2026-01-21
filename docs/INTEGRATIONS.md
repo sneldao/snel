@@ -11,148 +11,24 @@ SNEL provides a unified payment architecture that seamlessly handles payments ac
 
 See [PAYMENTS.md](./PAYMENTS.md) for detailed configuration and usage.
 
-## LINE Mini-DApp Integration
+## Cronos x402 Integrations
+**Official Tooling Utilized:**
 
-### Submission Requirements
+### 1. X402 Facilitator SDK
+SNEL leverages the official `@crypto.com/facilitator-client` in the frontend to ensure robust EIP-712 security.
+- **Purpose**: Validates payment headers and ensures protocol compliance before signing.
+- **Location**: `frontend/src/lib/x402-sdk.ts`
 
-#### Demo Information
-- ✅ Dapp Name: "Snel - DeFi Assistant"
-- ✅ LIFF/Web URL: [Your production URL]
-- ✅ Desired launch date: [Your target date]
+### 2. Crypto.com AI Agent SDK
+The backend is architected to support the `cryptocom-agent-client` for advanced natural language interactions.
+- **Purpose**: Enables the AI agent to query chain data and execute complex intents using Crypto.com's official LLM tooling.
+- **Location**: `backend/app/integrations/cdc_agent.py`
 
-#### Technical Details
-- ✅ Testable demo deployed
-- ✅ All features functional
-- ✅ Performance optimized
-- ✅ Security measures implemented
-
-### Documentation
-
-#### Code Documentation
-- ✅ Code properly commented
-- ✅ API documentation updated
-- ✅ Environment setup instructions
-
-#### User Documentation
-- ✅ User guide for LINE features
-- ✅ Troubleshooting guide
-- ✅ FAQ for common issues
-
-### Cross-Platform Testing
-- ✅ Works on LINE mobile app
-- ✅ Works on LINE desktop
-- ✅ Fallback behavior for web browsers
-
-## WalletConnect Integration
-
-### Overview
-WalletConnect integration enables seamless wallet connectivity across multiple platforms, with specific focus on Bitget Wallet integration for the LINE Mini-dApp.
-
-### Current Status
-✅ All WalletConnect integration steps have been completed successfully. The system is fully functional for both development and production environments.
-
-### Prerequisites
-- WalletConnect Project ID from [WalletConnect Cloud](https://cloud.walletconnect.com/)
-- Access to LINE Mini Dapp Tech Support team
-- Domain registered with LINE for Mini Dapp usage
-
-### Setup Process
-
-#### Step 1: WalletConnect Project Setup
-1. **Create WalletConnect Project**
-   - Go to [WalletConnect Cloud](https://cloud.walletconnect.com/)
-   - Create a new project
-   - Note down your Project ID
-
-2. **Configure Project Settings**
-   - Set project name: "Snel - DeFi Assistant"
-   - Add project description: "DeFi operations through LINE Mini-dApp"
-   - Upload app icon: Use Snel logo
-
-#### Step 2: Domain Configuration
-1. **Add Allowed Domains**
-   - In WalletConnect Cloud, go to your project settings
-   - Add your production domain
-   - Add `localhost:3000` for local development
-   - Add any staging domains
-
-2. **Configure Redirect URIs**
-   - Add your domain with `/wallet-bridge` path
-   - Example: `https://yourdomain.com/wallet-bridge`
-   - Add localhost: `http://localhost:3000/wallet-bridge`
-
-#### Step 3: Environment Variables
-1. **Frontend Configuration**
-   ```env
-   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id_here
-   ```
-
-2. **Verify Configuration**
-   - Ensure the project ID is correctly set
-   - Test locally with `localhost:3000`
-
-#### Step 4: LINE Tech Support Coordination
-1. **Share Project ID**
-   - Contact LINE Mini Dapp Tech Support team
-   - Provide your WalletConnect Project ID
-   - Request domain verification for Bitget Wallet integration
-
-2. **Required Information to Share**
-   - WalletConnect Project ID
-   - Production domain URL
-   - LIFF ID
-   - Expected launch date
-
-### Testing
-
-#### Local Testing
-```bash
-npm run dev
-# Navigate to http://localhost:3000/line
-# Test wallet connection functionality
-```
-
-#### Production Testing
-- Deploy to staging environment
-- Test wallet connection on actual LINE app
-- Verify Bitget Wallet integration works
-
-### Verification Checklist
-- [x] WalletConnect project created and configured
-- [x] Project ID added to environment variables
-- [x] Domains added to WalletConnect project
-- [x] Project ID shared with LINE Tech Support
-- [x] Domain verification confirmed by LINE team
-- [x] Local testing successful
-- [x] Production testing successful
-
-### Troubleshooting
-
-#### Common Issues
-1. **"Domain not verified" error**
-   - Ensure domain is added to WalletConnect project
-   - Confirm LINE Tech Support has verified the domain
-   - Check that HTTPS is enabled in production
-
-2. **"Project ID not found" error**
-   - Verify the project ID is correctly set in environment variables
-   - Ensure the project is active in WalletConnect Cloud
-
-3. **Wallet connection fails**
-   - Check browser console for detailed error messages
-   - Verify secure context (HTTPS) is available
-   - Ensure Bitget Wallet is installed and updated
-
-### Support Contacts
-- **LINE Tech Support**: Contact through Mini Dapp Developer Telegram Channel
-- **WalletConnect Support**: [WalletConnect Discord](https://discord.gg/walletconnect)
-- **Developer Channel**: https://t.me/+Fq6bbac7NLhmNGJl
-
-### Security Notes
-- Never expose your WalletConnect Project ID in public repositories
-- Always use environment variables for configuration
-- Ensure testMode is enabled during development
-- Verify domain whitelisting is properly implemented
+### 3. Unified Agentic Workflow
+SNEL acts as a unified "Agentic Layer" that intelligently routes user intent to the correct official SDK:
+- "Pay 50 USDC on Cronos" -> **X402 SDK** (Cronos)
+- "Send 100 MNEE on Ethereum" -> **MNEE Relayer** (Ethereum)
+- "What is the price of CRO?" -> **CDC Agent SDK** (Data)
 
 ## Privacy Features
 

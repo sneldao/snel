@@ -4,6 +4,8 @@ Agent configuration and capability definitions for SNEL.
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+from app.config.chains import CHAINS
+from app.config.protocols import PROTOCOLS
 
 class AgentMode(Enum):
     """Different modes the agent can operate in."""
@@ -83,8 +85,8 @@ class AgentConfig:
         "x402_privacy": AgentCapability(
             name="x402 Privacy Transactions",
             description="Execute privacy-preserving transactions using Cronos x402 programmatic payments",
-            supported_chains=[1, 8453, 137],  # Ethereum, Base, Polygon
-            required_protocols=["cronos_x402"],
+            supported_chains=[1, 25, 338],  # Ethereum, Cronos Mainnet, Cronos Testnet
+            required_protocols=["x402"],
             examples=[
                 "send 1 ETH privately via x402",
                 "bridge 100 USDC to privacy using x402",
@@ -105,48 +107,21 @@ class AgentConfig:
         )
     }
     
-    # Chain information
+    # Chain information derived from central config
     SUPPORTED_CHAINS = {
-        1: {"name": "Ethereum", "symbol": "ETH", "type": "L1"},
-        8453: {"name": "Base", "symbol": "ETH", "type": "L2"},
-        42161: {"name": "Arbitrum One", "symbol": "ETH", "type": "L2"},
-        10: {"name": "Optimism", "symbol": "ETH", "type": "L2"},
-        137: {"name": "Polygon", "symbol": "MATIC", "type": "L1"},
-        43114: {"name": "Avalanche", "symbol": "AVAX", "type": "L1"},
-        56: {"name": "BNB Chain", "symbol": "BNB", "type": "L1"},
-        534352: {"name": "Scroll", "symbol": "ETH", "type": "L2"},
-        324: {"name": "zkSync Era", "symbol": "ETH", "type": "L2"},
-        59144: {"name": "Linea", "symbol": "ETH", "type": "L2"},
-        5000: {"name": "Mantle", "symbol": "MNT", "type": "L2"},
-        81457: {"name": "Blast", "symbol": "ETH", "type": "L2"},
-        100: {"name": "Gnosis", "symbol": "xDAI", "type": "L1"},
-        34443: {"name": "Mode", "symbol": "ETH", "type": "L2"},
-        167000: {"name": "Taiko", "symbol": "ETH", "type": "L2"},
-        1101: {"name": "Starknet", "symbol": "ETH", "type": "L2"},
-        8217: {"name": "Kaia", "symbol": "KAIA", "type": "L1"},
-        1337: {"name": "Zcash", "symbol": "ZEC", "type": "Privacy"}
+        cid: {"name": cinfo.name, "symbol": getattr(cinfo, "native_token", "ETH"), "type": "EVM"}
+        for cid, cinfo in CHAINS.items()
     }
     
-    # Protocol capabilities
+    # Protocol capabilities derived from central config
     PROTOCOL_CAPABILITIES = {
-        "0x": {
-            "name": "0x Protocol",
-            "description": "Professional DEX aggregator with deep liquidity",
-            "supported_chains": [1, 8453, 42161, 10, 137, 43114, 56, 81457],
-            "features": ["swap", "limit_orders", "rfq"]
-        },
-        "brian": {
-            "name": "Brian API",
-            "description": "AI-powered DeFi protocol aggregator",
-            "supported_chains": [1, 8453, 42161, 10, 137, 43114, 56, 534352, 324, 59144, 5000, 100, 1101],
-            "features": ["swap", "bridge", "natural_language"]
-        },
-        "axelar": {
-            "name": "Axelar Network",
-            "description": "Cross-chain communication and privacy bridging via GMP",
-            "supported_chains": [1, 8453, 42161, 10, 137, 43114, 56, 1337],
-            "features": ["bridge", "gmp", "privacy"]
+        pid: {
+            "name": pinfo.name,
+            "description": pinfo.name,
+            "supported_chains": list(pinfo.supported_chains),
+            "features": [] # Will be populated if needed
         }
+        for pid, pinfo in PROTOCOLS.items()
     }
     
     # Response templates

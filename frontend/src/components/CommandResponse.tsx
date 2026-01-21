@@ -330,12 +330,12 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             // Calculate approval amount based on user's custom budget cap
             let finalApprovalAmount = approvalAmount;
             if (metadata.automation_type === 'recurring_payment') {
-                const frequencyMultipliers = {
+                const frequencyMultipliers: Record<string, number> = {
                     'daily': 365,
                     'weekly': 52,
                     'monthly': 12
                 };
-                const multiplier = frequencyMultipliers[frequency] || 12;
+                const multiplier = frequencyMultipliers[frequency as string] || 12;
                 finalApprovalAmount = amount * multiplier * (budgetCapMonths / 12);
             }
 

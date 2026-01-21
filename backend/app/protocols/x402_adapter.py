@@ -19,44 +19,14 @@ from eth_account import Account
 from eth_account.messages import encode_typed_data
 import httpx
 import logging
+import os
+from app.config.chains import CHAINS, get_chain_id_by_name
+from app.config.tokens import COMMON_TOKENS
 
 logger = logging.getLogger(__name__)
 
-# X402 Facilitator Constants
-FACILITATOR_URLS = {
-    "cronos-mainnet": "https://facilitator.cronoslabs.org/v2/x402",
-    "cronos-testnet": "https://facilitator.cronoslabs.org/v2/x402",
-    "ethereum-mainnet": "https://facilitator.cronoslabs.org/v2/x402"  # Same facilitator for all networks
-}
-
-# Stablecoin contracts for x402 payments
-STABLECOIN_CONTRACTS = {
-    # Cronos networks use USDC
-    "cronos-mainnet": "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",  # USDC.e Mainnet
-    "cronos-testnet": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",   # devUSDC.e Testnet
-    # Ethereum mainnet uses MNEE stablecoin
-    "ethereum-mainnet": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"  # MNEE stablecoin contract
-}
-
-CHAIN_IDS = {
-    "cronos-mainnet": 25,
-    "cronos-testnet": 338,
-    "ethereum-mainnet": 1
-}
-
-# Network display names
-NETWORK_NAMES = {
-    "cronos-mainnet": "Cronos",
-    "cronos-testnet": "Cronos Testnet",
-    "ethereum-mainnet": "Ethereum"
-}
-
-# Stablecoin symbols by network
-STABLECOIN_SYMBOLS = {
-    "cronos-mainnet": "USDC",
-    "cronos-testnet": "USDC",
-    "ethereum-mainnet": "MNEE"
-}
+# Default X402 Facilitator URL
+DEFAULT_FACILITATOR_URL = os.getenv("X402_FACILITATOR_URL", "https://facilitator.cronoslabs.org/v2/x402")
 
 @dataclass
 class X402PaymentRequirements:
@@ -85,15 +55,32 @@ class X402Adapter:
     
     def __init__(self, network: str = "cronos-testnet"):
         """Initialize with network (cronos-mainnet, cronos-testnet, or ethereum-mainnet)."""
-        if network not in FACILITATOR_URLS:
-            raise ValueError(f"Unsupported network: {network}. Supported: {list(FACILITATOR_URLS.keys())}")
-        
+        chain_id = get_chain_id_by_name(network.split('-')[0] if '-' in network else network)
+        if not chain_id and network == "cronos-testnet":
+            chain_id = 338
+        elif not chain_id and network == "cronos-mainnet":
+            chain_id = 25
+        elif not chain_id and network == "ethereum-mainnet":
+            chain_id = 1
+            
+        if not chain_id or chain_id not in CHAINS:
+             raise ValueError(f"Unsupported network: {network}")
+             
         self.network = network
-        self.facilitator_url = FACILITATOR_URLS[network]
-        self.stablecoin_contract = STABLECOIN_CONTRACTS[network]
-        self.chain_id = CHAIN_IDS[network]
-        self.stablecoin_symbol = STABLECOIN_SYMBOLS[network]
-        self.network_name = NETWORK_NAMES[network]
+        self.chain_id = chain_id
+        self.chain_info = CHAINS[chain_id]
+        self.network_name = self.chain_info.name
+        self.facilitator_url = DEFAULT_FACILITATOR_URL
+        
+        # Get stablecoin symbol for this network
+        self.stablecoin_symbol = "MNEE" if chain_id == 1 else "USDC"
+        
+        # Get contract address from central token config
+        token_data = COMMON_TOKENS.get(chain_id, {}).get(self.stablecoin_symbol.lower())
+        if not token_data:
+            raise ValueError(f"Stablecoin {self.stablecoin_symbol} not configured for chain {chain_id}")
+            
+        self.stablecoin_contract = token_data["address"]
         self.client = httpx.AsyncClient(timeout=30.0)
         
         # Keep backward compatibility

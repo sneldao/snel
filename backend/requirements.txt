@@ -41,3 +41,6 @@ aioredis==2.0.1
 
 # Coral Protocol dependencies
 websockets>=10.0
+
+# Cronos Integration
+cryptocom-agent-client>=0.1.0

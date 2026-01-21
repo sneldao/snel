@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from app.models.token import TokenInfo, TokenType
 from eth_abi import encode
+from app.config.chains import get_chains_by_protocol, get_chain_info
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +22,11 @@ class ZeroXAdapter:
     # Unified API endpoint for v2
     BASE_URL = "https://api.0x.org"
 
-    # Supported chains for 0x API v2
-    SUPPORTED_CHAINS = [1, 137, 56, 42161, 10, 43114, 59144, 8453, 5000, 81457]
+    # Supported chains will be derived from config
+    @property
+    def supported_chains(self) -> List[int]:
+        """List of supported chain IDs dynamically from config."""
+        return [c.id for c in get_chains_by_protocol("0x")]
     
     # Retry configuration
     MAX_RETRIES = 3
@@ -48,11 +52,6 @@ class ZeroXAdapter:
     @property
     def name(self) -> str:
         return "0x Protocol"
-    
-    @property
-    def supported_chains(self) -> List[int]:
-        """List of supported chain IDs."""
-        return self.SUPPORTED_CHAINS
     
     def is_supported(self, chain_id: int) -> bool:
         """Check if this protocol supports the given chain."""

@@ -7,6 +7,7 @@
     "@chakra-ui/icons": "^2.1.1",
     "@chakra-ui/react": "^2.8.2",
     "@chakra-ui/theme-tools": "^2.2.9",
+    "@crypto.com/facilitator-client": "^1.0.4",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@kaiachain/ethers-ext": "^2.0.9",

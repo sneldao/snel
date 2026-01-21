@@ -24,6 +24,9 @@ try:
 except ImportError:
     aioredis = None
 import os
+from app.config.tokens import COMMON_TOKENS
+from app.config.chains import CHAINS
+from app.config.protocols import PROTOCOLS, ProtocolType as CentralProtocolType
 
 logger = logging.getLogger(__name__)
 
@@ -243,345 +246,51 @@ class ConfigurationManager:
         logger.info(f"Loaded {len(self._tokens)} tokens, {len(self._chains)} chains, {len(self._protocols)} protocols")
 
     async def _load_tokens_from_file(self):
-        """Load token configuration from file."""
-        # USDC - The most important token for Circle integration
-        usdc = TokenConfig(
-            id="usdc",
-            symbol="USDC",
-            name="USD Coin",
-            decimals=6,
-            addresses={
-                1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",      # Ethereum
-                42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",   # Arbitrum
-                137: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",     # Polygon
-                10: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",      # Optimism
-                8453: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",    # Base
-                43114: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",   # Avalanche
-                59144: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff",   # Linea
-                480: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",     # World Chain
-                146: "0x29219dd400f2Bf60E5a23d13Be72B486D4038894",     # Sonic
-            },
-            coingecko_id="usd-coin",
-            verified=True
-        )
-
-        # WETH - Core trading pair
-        weth = TokenConfig(
-            id="weth",
-            symbol="WETH",
-            name="Wrapped Ethereum",
-            decimals=18,
-            addresses={
-                1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",      # Ethereum
-                42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",   # Arbitrum
-                137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",     # Polygon
-                10: "0x4200000000000000000000000000000000000006",      # Optimism
-                8453: "0x4200000000000000000000000000000000000006",    # Base
-                43114: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB",   # Avalanche
-            },
-            coingecko_id="weth",
-            verified=True
-        )
-
-        # ETH (native)
-        eth = TokenConfig(
-            id="eth",
-            symbol="ETH",
-            name="Ethereum",
-            decimals=18,
-            addresses={
-                1: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",      # Native ETH placeholder
-                42161: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-                10: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-                8453: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-            },
-            coingecko_id="ethereum",
-            verified=True
-        )
-
-        self._tokens = {
-            "usdc": usdc,
-            "weth": weth,
-            "eth": eth,
-        }
+        """Load token configuration from central COMMON_TOKENS config."""
+        token_configs = {}
+        for chain_id, tokens in COMMON_TOKENS.items():
+            for symbol, info in tokens.items():
+                token_id = symbol.lower()
+                if token_id not in token_configs:
+                    token_configs[token_id] = TokenConfig(
+                        id=token_id,
+                        symbol=info["symbol"],
+                        name=info["name"],
+                        decimals=info["decimals"],
+                        addresses={},
+                        verified=info.get("verified", False)
+                    )
+                token_configs[token_id].addresses[chain_id] = info["address"]
+        self._tokens = token_configs
 
     async def _load_chains_from_file(self):
-        """Load chain configuration from file."""
-        chains = [
-            ChainConfig(
-                chain_id=1,
-                name="ethereum",
-                display_name="Ethereum",
-                rpc_urls=[
-                    "https://eth.llamarpc.com",
-                    "https://ethereum.publicnode.com",
-                    "https://eth-mainnet.public.blastapi.io"
-                ],
-                explorer_url="https://etherscan.io",
-                native_token="ETH",
-                block_time=12.0,
-                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=8453,
-                name="base",
-                display_name="Base",
-                rpc_urls=[
-                    "https://base.llamarpc.com",
-                    "https://base-mainnet.public.blastapi.io"
-                ],
-                explorer_url="https://basescan.org",
-                native_token="ETH",
-                block_time=2.0,
-                supported_protocols={"0x", "uniswap", "cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=42161,
-                name="arbitrum",
-                display_name="Arbitrum One",
-                rpc_urls=[
-                    "https://arbitrum.llamarpc.com",
-                    "https://arbitrum-one.publicnode.com"
-                ],
-                explorer_url="https://arbiscan.io",
-                native_token="ETH",
-                block_time=0.25,
-                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=137,
-                name="polygon",
-                display_name="Polygon",
-                rpc_urls=[
-                    "https://polygon.llamarpc.com",
-                    "https://polygon-mainnet.public.blastapi.io"
-                ],
-                explorer_url="https://polygonscan.com",
-                native_token="MATIC",
-                block_time=2.0,
-                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=43114,
-                name="avalanche",
-                display_name="Avalanche",
-                rpc_urls=[
-                    "https://api.avax.network/ext/bc/C/rpc",
-                    "https://avalanche.public-rpc.com"
-                ],
-                explorer_url="https://snowtrace.io",
-                native_token="AVAX",
-                block_time=2.0,
-                supported_protocols={"0x", "uniswap", "axelar", "cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=59144,
-                name="linea",
-                display_name="Linea",
-                rpc_urls=[
-                    "https://rpc.linea.build",
-                    "https://linea-mainnet.public.blastapi.io"
-                ],
-                explorer_url="https://lineascan.build",
-                native_token="ETH",
-                block_time=1.0,
-                supported_protocols={"axelar", "cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=480,
-                name="worldchain",
-                display_name="World Chain",
-                rpc_urls=[
-                    "https://worldchain-mainnet.g.alchemy.com/public"
-                ],
-                explorer_url="https://worldscan.org",
-                native_token="ETH",
-                block_time=2.0,
-                supported_protocols={"cctp_v2"}
-            ),
-            ChainConfig(
-                chain_id=146,
-                name="sonic",
-                display_name="Sonic",
-                rpc_urls=[
-                    "https://rpc.soniclabs.com"
-                ],
-                explorer_url="https://sonicscan.org",
-                native_token="S",
-                block_time=1.0,
-                supported_protocols={"cctp_v2"}
-            ),
-        ]
-
-        self._chains = {chain.chain_id: chain for chain in chains}
+        """Load chain configuration from central CHAINS config."""
+        self._chains = {
+            cid: ChainConfig(
+                chain_id=cid,
+                name=cinfo.name.lower().replace(" ", ""),
+                display_name=cinfo.name,
+                rpc_urls=[cinfo.rpc_url] if cinfo.rpc_url else [],
+                explorer_url=cinfo.explorer_url or "",
+                native_token=getattr(cinfo, "native_token", "ETH"), # Handle missing field
+                supported_protocols=set(cinfo.supported_protocols or [])
+            )
+            for cid, cinfo in CHAINS.items()
+        }
 
     async def _load_protocols_from_file(self):
-        """Load protocol configuration from file."""
-        # 0x Protocol
-        zerox = ProtocolConfig(
-            id="0x",
-            name="0x Protocol",
-            type=ProtocolType.AGGREGATOR,
-            supported_chains={1, 137, 42161, 10, 8453, 43114, 59144},
-            api_endpoints={
-                "1": "https://api.0x.org",
-                "137": "https://polygon.api.0x.org",
-                "42161": "https://arbitrum.api.0x.org",
-                "10": "https://optimism.api.0x.org",
-                "8453": "https://base.api.0x.org",
-                "43114": "https://avalanche.api.0x.org",
-                "59144": "https://linea.api.0x.org",
-            },
-            contract_addresses={},  # 0x uses API endpoints, not direct contracts
-            api_keys={"default": os.getenv("ZEROX_API_KEY", "")},
-            rate_limits={"requests_per_minute": 1000}
-        )
-
-        # Uniswap
-        uniswap = ProtocolConfig(
-            id="uniswap",
-            name="Uniswap V3",
-            type=ProtocolType.DEX,
-            supported_chains={1, 137, 42161, 10, 8453},
-            api_endpoints={},  # Uses direct contract calls
-            contract_addresses={
-                1: {
-                    "router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-                    "quoter": "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
-                    "factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
-                },
-                8453: {
-                    "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
-                    "quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-                    "factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD"
-                },
-                42161: {
-                    "router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-                    "quoter": "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
-                    "factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
-                }
-            },
-            rate_limits={"rpc_calls_per_second": 10}
-        )
-
-        # Axelar
-        axelar = ProtocolConfig(
-            id="axelar",
-            name="Axelar Network",
-            type=ProtocolType.BRIDGE,
-            supported_chains={1, 137, 42161, 10, 8453, 43114, 59144},
-            api_endpoints={
-                "mainnet": "https://api.axelar.dev",
-                "lcd": "https://axelar-lcd.quickapi.com"
-            },
-            contract_addresses={
-                # Gateway contracts and Privacy Gateways
-                1: {
-                    "gateway": "0x4F4495243837681061C4743b74B3eEdf548D56A5",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0x0000000000000000000000000000000000000000" # Placeholder for mainnet
-                },
-                42161: {
-                    "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0xPrivacyGatewayArbitrum"
-                },
-                137: {
-                    "gateway": "0x6f015F16De9fC8791b234eF68D486d2bF203FBA8",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0xPrivacyGatewayPolygon"
-                },
-                8453: {
-                    "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0xPrivacyGatewayBase"
-                },
-                10: {
-                    "gateway": "0xe432150cce91c13a887f7D836923d5597adD8E31",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0xPrivacyGatewayOptimism"
-                },
-                43114: {
-                    "gateway": "0x5029C0EFf6C34351a0CEc334542cDb22c7928f78",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0xPrivacyGatewayAvalanche"
-                },
-                56: {
-                    "gateway": "0x304acf330bbE08d1e512eefaa92F6a57871fD895",
-                    "gas_service": "0x2d5d7d31F671F86C782533cc367F14109a082712",
-                    "privacy_gateway": "0xPrivacyGatewayBSC"
-                }
-            },
-            rate_limits={"requests_per_minute": 600}
-        )
-
-        # Circle CCTP V2
-        cctp_v2 = ProtocolConfig(
-            id="cctp_v2",
-            name="Circle CCTP V2",
-            type=ProtocolType.BRIDGE,
-            supported_chains={1, 42161, 8453, 137, 10, 43114, 59144, 480, 146},
-            api_endpoints={
-                "mainnet": os.getenv("CIRCLE_CCTP_API_URL", "https://api.circle.com/v1/w3s"),
-                "attestation": "https://iris-api.circle.com"
-            },
-            contract_addresses={
-                # TokenMessenger contracts for CCTP V2
-                1: {
-                    "token_messenger": "0xBd3fa81B58Ba92a82136038B25aDec7066af3155",
-                    "message_transmitter": "0x0a992d191DEeC32aFe36203Ad87D7d289a738F81",
-                    "usdc": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                },
-                42161: {
-                    "token_messenger": "0x19330d10D9Cc8751218eaf51E8885D058642E08A",
-                    "message_transmitter": "0xC30362313FBBA5cf9163F0bb16a0e01f01A896ca",
-                    "usdc": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
-                },
-                8453: {
-                    "token_messenger": "0x1682Ae6375C4E4A97e4B583BC394c861A46D8962",
-                    "message_transmitter": "0xAD09780d193884d503182aD4588450C416D6F9D4",
-                    "usdc": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
-                },
-                137: {
-                    "token_messenger": "0x9daF8c91AEFAE50b9c0E69629D3F6Ca40cA3B3FE",
-                    "message_transmitter": "0xF3be9355363857F3e001be68856A2f96b4C39Ba9",
-                    "usdc": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-                },
-                10: {
-                    "token_messenger": "0x2B4069517957735bE00ceE0fadAE88a26365528f",
-                    "message_transmitter": "0x4D41f22c5a0e5c74090899E5a8Fb597a8842b3e8",
-                    "usdc": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85"
-                },
-                43114: {
-                    "token_messenger": "0x6B25532e1060CE10cc3B0A99e5683b91BFDe6982",
-                    "message_transmitter": "0x8186359aF5F57FbB40c6b14A588d2A59C0C29880",
-                    "usdc": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"
-                },
-                59144: {
-                    "token_messenger": "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5",
-                    "message_transmitter": "0x4C1A2e70A006C29079c7d4073d8C3c7b8C5D8686",
-                    "usdc": "0x176211869cA2b568f2A7D4EE941E073a821EE1ff"
-                },
-                480: {
-                    "token_messenger": "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5",
-                    "message_transmitter": "0x4C1A2e70A006C29079c7d4073d8C3c7b8C5D8686",
-                    "usdc": "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1"
-                },
-                146: {
-                    "token_messenger": "0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5",
-                    "message_transmitter": "0x4C1A2e70A006C29079c7d4073d8C3c7b8C5D8686",
-                    "usdc": "0x29219dd400f2Bf60E5a23d13Be72B486D4038894"
-                }
-            },
-            api_keys={"default": os.getenv("CIRCLE_API_KEY", "")},
-            rate_limits={"requests_per_minute": 600}
-        )
-
+        """Load protocol configuration from central PROTOCOLS config."""
         self._protocols = {
-            "0x": zerox,
-            "uniswap": uniswap,
-            "axelar": axelar,
-            "cctp_v2": cctp_v2,
+            pid: ProtocolConfig(
+                id=pid,
+                name=pinfo.name,
+                type=ProtocolType(pinfo.type.value),
+                supported_chains=pinfo.supported_chains,
+                api_endpoints=pinfo.api_endpoints,
+                contract_addresses=pinfo.contract_addresses,
+                api_keys={"default": os.getenv(f"{pid.upper()}_API_KEY", "")}
+            )
+            for pid, pinfo in PROTOCOLS.items()
         }
 
     async def _validate_configuration(self):

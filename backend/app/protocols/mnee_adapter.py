@@ -11,6 +11,7 @@ from web3 import Web3
 from eth_account import Account
 from app.models.token import TokenInfo
 from app.services.price_service import price_service
+from app.config.tokens import COMMON_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,9 @@ class MNEEAdapter:
         self.eth_rpc_url = os.getenv("ETH_RPC_URL")
         if not self.eth_rpc_url:
             raise ValueError("ETH_RPC_URL environment variable is required for MNEE Relayer")
-        self.mnee_eth_address = "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"
+        
+        # Get MNEE address from central config (Ethereum chain ID 1)
+        self.mnee_eth_address = COMMON_TOKENS[1]["mnee"]["address"]
         
         # Initialize Web3
         try:

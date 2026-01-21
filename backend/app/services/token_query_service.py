@@ -13,6 +13,7 @@ from web3 import Web3
 from eth_abi import encode as abi_encode
 
 from app.models.token import TokenInfo
+from app.config.chains import CHAINS, get_chain_name
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,10 @@ class TokenQueryService:
     
     def __init__(self):
         """Initialize service with Web3 instances."""
+        # Use centralized chains configuration (DRY principle)
         self.chain_names = {
-            1: "eth-mainnet",
-            8453: "base-mainnet",
-            42161: "arb-mainnet",
-            10: "opt-mainnet",
-            137: "polygon-mainnet",
-            43114: "avalanche-mainnet",
-            56: "bsc-mainnet"
+            cid: cinfo.name.lower().replace(" ", "-") 
+            for cid, cinfo in CHAINS.items()
         }
         self.web3_instances: Dict[int, Web3] = {}
         self._init_web3_instances()
@@ -51,8 +48,16 @@ class TokenQueryService:
     
     def _init_web3_instances(self):
         """Initialize Web3 instances for each supported chain."""
-        for chain_id, chain_name in self.chain_names.items():
-            rpc_url = os.getenv(f"{chain_name.upper()}_RPC_URL")
+        for chain_id, chain_info in CHAINS.items():
+            # Try specific env var first, then chain_info.rpc_url, then generic pattern
+            env_rpc = os.getenv(f"{chain_info.name.upper().replace(' ', '_')}_RPC_URL")
+            rpc_url = env_rpc or chain_info.rpc_url
+            
+            if not rpc_url:
+                # Fallback to the old naming convention for some chains
+                legacy_name = self.chain_names.get(chain_id, "")
+                rpc_url = os.getenv(f"{legacy_name.upper().replace('-', '_')}_RPC_URL")
+                
             if rpc_url:
                 try:
                     self.web3_instances[chain_id] = Web3(Web3.HTTPProvider(rpc_url))

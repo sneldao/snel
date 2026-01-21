@@ -55,6 +55,7 @@ interface UnifiedConfirmationProps {
       route?: string;
       recipient?: string; // Add recipient for payment
       fee_mnee?: string; // Add fee for payment
+      network?: string; // Add network for payment
     };
   };
   transaction?: TransactionData;
@@ -123,9 +124,9 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
     const recipient = content.details?.recipient || "Unknown";
     const fee = content.details?.fee_mnee || "Unknown";
     const network = content.details?.network || "cronos-testnet";
-    const networkName = network === "cronos-testnet" ? "Cronos Testnet" : 
-                        network === "cronos-mainnet" ? "Cronos Mainnet" :
-                        "Ethereum Mainnet";
+    const networkName = network === "cronos-testnet" ? "Cronos Testnet" :
+      network === "cronos-mainnet" ? "Cronos Mainnet" :
+        "Ethereum Mainnet";
 
     return (
       <VStack spacing={3} align="stretch">
@@ -151,15 +152,15 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
             <Text fontWeight="bold">{fee} MNEE</Text>
           </HStack>
         )}
-         <Alert status="info" borderRadius="md" mt={2}>
-            <AlertIcon />
-            <Box flex="1">
-              <AlertTitle fontSize="sm">Action Required</AlertTitle>
-              <AlertDescription display="block" fontSize="xs">
-                Please sign the transaction in your wallet to complete the payment.
-              </AlertDescription>
-            </Box>
-          </Alert>
+        <Alert status="info" borderRadius="md" mt={2}>
+          <AlertIcon />
+          <Box flex="1">
+            <AlertTitle fontSize="sm">Action Required</AlertTitle>
+            <AlertDescription display="block" fontSize="xs">
+              Please sign the transaction in your wallet to complete the payment.
+            </AlertDescription>
+          </Box>
+        </Alert>
       </VStack>
     );
   };
@@ -184,12 +185,11 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
           <Text color="gray.600">Recipient:</Text>
           <Text fontWeight="bold" fontSize="sm">
             {content.details?.resolved_address
-              ? `${
-                  content.details.destination
-                } (${content.details.resolved_address.slice(
-                  0,
-                  6
-                )}...${content.details.resolved_address.slice(-4)})`
+              ? `${content.details.destination
+              } (${content.details.resolved_address.slice(
+                0,
+                6
+              )}...${content.details.resolved_address.slice(-4)})`
               : content.details?.destination}
           </Text>
         </HStack>

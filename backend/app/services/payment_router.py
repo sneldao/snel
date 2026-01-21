@@ -12,9 +12,11 @@ import logging
 from typing import Dict, Any, Optional, Literal
 from pydantic import BaseModel
 
-from app.protocols.x402_adapter import X402Adapter, X402PaymentRequirements, STABLECOIN_CONTRACTS as X402_CONTRACTS
+from app.protocols.x402_adapter import X402Adapter, X402PaymentRequirements
 from app.protocols.mnee_adapter import MNEEAdapter
 from app.protocols.registry import protocol_registry
+from app.config.tokens import COMMON_TOKENS, get_token_info
+from app.config.chains import CHAINS, get_chain_id_by_name
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +96,23 @@ class PaymentRouter:
         
         if route.protocol == "x402":
             adapter = X402Adapter(network)
+            chain_id = adapter.chain_id
+            
+            # Get token decimals from central config
+            token_info = COMMON_TOKENS.get(chain_id, {}).get(token_symbol.lower())
+            if not token_info:
+                raise ValueError(f"Token {token_symbol} not found for chain {chain_id}")
+            
+            decimals = token_info.get("decimals", 6)
+            amount_atomic = str(int(amount * (10 ** decimals)))
             
             # Create requirements
             payment_requirements = X402PaymentRequirements(
                 scheme="exact",
                 network=network,
                 payTo=recipient_address,
-                asset=X402_CONTRACTS[network],
-                maxAmountRequired=str(int(amount * 1_000_000)),
+                asset=token_info["address"],
+                maxAmountRequired=amount_atomic,
                 maxTimeoutSeconds=300
             )
             
@@ -132,9 +143,13 @@ class PaymentRouter:
             
             if not relayer_address:
                 raise ValueError("MNEE Relayer not configured")
-                
+            
+            # Get MNEE info from config
+            mnee_info = COMMON_TOKENS[1]["mnee"]
+            decimals = mnee_info["decimals"] # 5
+            
             allowance_atomic = await adapter.check_allowance(user_address, relayer_address)
-            amount_atomic = int(amount * 100000) # 5 decimals
+            amount_atomic = int(amount * (10 ** decimals))
             
             is_sufficient = allowance_atomic >= amount_atomic
             
@@ -143,7 +158,7 @@ class PaymentRouter:
                 protocol="mnee",
                 relayer_address=relayer_address,
                 amount_atomic=str(amount_atomic),
-                token_address="0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF", # MNEE
+                token_address=mnee_info["address"],
                 allowance_sufficient=is_sufficient,
                 metadata={
                     "network": network,
@@ -203,7 +218,9 @@ class PaymentRouter:
             amount = metadata.get("amount")
             
             adapter = MNEEAdapter()
-            amount_atomic = int(amount * 100000)
+            
+            mnee_info = COMMON_TOKENS[1]["mnee"]
+            amount_atomic = int(amount * (10 ** mnee_info["decimals"]))
             
             tx_hash = await adapter.execute_relayed_transfer(
                 user_address=user_address,

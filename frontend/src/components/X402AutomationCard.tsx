@@ -33,9 +33,9 @@ import {
     SliderTrack,
     SliderFilledTrack,
     SliderThumb,
-    keyframes,
     useDisclosure
 } from '@chakra-ui/react';
+import { keyframes } from '@emotion/react';
 import { FaBolt, FaRobot, FaCheckCircle, FaClock, FaEdit, FaChevronDown, FaChevronUp, FaCog, FaShieldAlt, FaCalculator } from 'react-icons/fa';
 
 interface X402AutomationCardProps {
