@@ -429,7 +429,11 @@ class TokenQueryService:
             data = self.BALANCE_OF_SELECTOR + encoded_address
 
             checksum_token = Web3.to_checksum_address(token_address)
-            result = w3.eth.call({"to": checksum_token, "data": data})
+            formatted_data = '0x' + data if not data.startswith('0x') else data
+            result = w3.eth.call({
+                'to': checksum_token,
+                'data': formatted_data
+            })
 
             balance_wei = int.from_bytes(result, "big")
             balance = Decimal(balance_wei) / Decimal(10**decimals)
@@ -503,9 +507,7 @@ class TokenQueryService:
             transaction = {
                 "to": Web3.to_checksum_address(token_address),
                 "data": transfer_data,
-                "value": "0",
-                "chainId": chain_id,
-                "gasLimit": "100000",
+                "value": 0,
             }
             return transaction
         except Exception as e:
