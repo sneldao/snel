@@ -143,7 +143,7 @@ export const RecurringPaymentsDashboard: React.FC<RecurringPaymentsDashboardProp
                         </Text>
                         <Text fontSize="sm" color="gray.500">•</Text>
                         <Text fontSize="sm" color="gray.500">
-                          {formatFrequency(action.schedule.frequency)}
+                          {formatFrequency(action.schedule?.frequency || 'once')}
                         </Text>
                         <Text fontSize="sm" color="gray.500">•</Text>
                         <Text fontSize="sm" color="gray.500" fontFamily="mono">
@@ -152,7 +152,7 @@ export const RecurringPaymentsDashboard: React.FC<RecurringPaymentsDashboardProp
                       </HStack>
                     </VStack>
                     <HStack>
-                      {getStatusBadge(action.status)}
+                      {getStatusBadge(action.is_enabled ? 'active' : 'paused')}
                       <Tooltip label="Delete">
                         <IconButton
                           aria-label="Delete payment action"
@@ -166,9 +166,9 @@ export const RecurringPaymentsDashboard: React.FC<RecurringPaymentsDashboardProp
                     </HStack>
                   </HStack>
                   
-                  {action.description && (
+                  {action.metadata?.description && (
                     <Text fontSize="sm" color="gray.600" mt={2}>
-                      {action.description}
+                      {action.metadata.description}
                     </Text>
                   )}
                 </Box>

@@ -39,6 +39,7 @@ import {
 } from "react-icons/fa";
 import { PaymentAction, PaymentHistoryService } from "../services/paymentHistoryService";
 import { RecurringPaymentsDashboard } from "./RecurringPaymentsDashboard";
+import { YieldFarmingDashboard } from "./YieldFarmingDashboard";
 import { ApiService } from "../services/apiService";
 
 interface PaymentQuickActionsProps {
@@ -59,6 +60,11 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
     isOpen: isRecurringOpen, 
     onOpen: onRecurringOpen, 
     onClose: onRecurringClose 
+  } = useDisclosure();
+  const { 
+    isOpen: isYieldOpen, 
+    onOpen: onYieldOpen, 
+    onClose: onYieldClose 
   } = useDisclosure();
   const [userActions, setUserActions] = React.useState<PaymentAction[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -92,6 +98,8 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   const handleQuickAction = (command: string) => {
     if (command === "setup recurring payment") {
       onRecurringOpen();
+    } else if (command === "setup automated yield farming") {
+      onYieldOpen();
     } else {
       onCommandSubmit(command);
     }
@@ -406,6 +414,11 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
         <RecurringPaymentsDashboard 
           isOpen={isRecurringOpen} 
           onClose={onRecurringClose} 
+        />
+
+        <YieldFarmingDashboard 
+          isOpen={isYieldOpen} 
+          onClose={onYieldClose} 
         />
         </>
         );

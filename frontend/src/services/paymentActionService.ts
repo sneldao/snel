@@ -23,10 +23,26 @@ interface PaymentActionResponse {
     amount: string;
     token: string;
     recipient_address: string;
+    chain_id: number;
     is_enabled: boolean;
     created_at: string;
     last_used?: string;
     usage_count: number;
+    schedule?: {
+        frequency: string;
+        day_of_week?: number;
+        day_of_month?: number;
+    };
+    recipients?: Array<{
+        address: string;
+        amount?: string;
+        percentage?: number;
+        label?: string;
+    }>;
+    triggers?: string[];
+    is_pinned?: boolean;
+    order?: number;
+    metadata?: Record<string, any>;
 }
 
 class PaymentActionService {
@@ -80,4 +96,5 @@ class PaymentActionService {
 }
 
 export const paymentActionService = new PaymentActionService();
+export { PaymentActionService };
 export type { CreatePaymentActionRequest, PaymentActionResponse };

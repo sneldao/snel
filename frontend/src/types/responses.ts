@@ -279,7 +279,7 @@ export interface PaymentTemplatesContent {
     token: string;
     recipient: string;
     schedule?: {
-      frequency: 'daily' | 'weekly' | 'monthly';
+      frequency: 'hourly' | 'daily' | 'weekly' | 'monthly';
       dayOfWeek?: number;
       dayOfMonth?: number;
     };

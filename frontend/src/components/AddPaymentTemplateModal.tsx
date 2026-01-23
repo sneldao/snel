@@ -45,7 +45,7 @@ export const AddPaymentTemplateModal: React.FC<AddPaymentTemplateModalProps> = (
   const [token, setToken] = React.useState("ETH");
   const [recipient, setRecipient] = React.useState("");
   const [isRecurring, setIsRecurring] = React.useState(false);
-  const [frequency, setFrequency] = React.useState<"daily" | "weekly" | "monthly">("monthly");
+  const [frequency, setFrequency] = React.useState<"hourly" | "daily" | "weekly" | "monthly">("monthly");
   const [dayOfWeek, setDayOfWeek] = React.useState<number>(1); // Monday
   const [dayOfMonth, setDayOfMonth] = React.useState<number>(1);
   const [selectedChainId, setSelectedChainId] = React.useState<string>(chainId?.toString() || "1");
@@ -252,6 +252,7 @@ export const AddPaymentTemplateModal: React.FC<AddPaymentTemplateModalProps> = (
                       value={frequency}
                       onChange={(e) => setFrequency(e.target.value as any)}
                     >
+                      <option value="hourly">Hourly</option>
                       <option value="daily">Daily</option>
                       <option value="weekly">Weekly</option>
                       <option value="monthly">Monthly</option>

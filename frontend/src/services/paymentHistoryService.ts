@@ -11,7 +11,7 @@ export interface PaymentAction {
   token: string;
   chainId: number;
   schedule?: {
-    frequency: 'daily' | 'weekly' | 'monthly';
+    frequency: 'hourly' | 'daily' | 'weekly' | 'monthly';
     dayOfWeek?: number;
     dayOfMonth?: number;
   };
@@ -72,7 +72,7 @@ export interface PaymentTemplate {
   token: string;
   recipient: string;
   schedule?: {
-    frequency: 'daily' | 'weekly' | 'monthly';
+    frequency: 'hourly' | 'daily' | 'weekly' | 'monthly';
     dayOfWeek?: number;
     dayOfMonth?: number;
   };
@@ -198,7 +198,7 @@ export class PaymentHistoryService {
       const response = await this.apiService.get(
         `/api/mnee/transfers/${walletAddress}?chainId=${chainId || 1}&limit=${limit}`
       );
-      
+
       if (response?.transfers) {
         // Convert blockchain logs to PaymentHistoryItem format
         return response.transfers.map((tx: any) => ({
@@ -214,7 +214,7 @@ export class PaymentHistoryService {
           explorerUrl: this.getExplorerUrl(response.chain_id, tx.tx_hash),
         }));
       }
-      
+
       return [];
     } catch (error) {
       console.error("Error fetching payment history from blockchain:", error);
@@ -244,7 +244,7 @@ export class PaymentHistoryService {
     period: 'week' | 'month' | 'year' = 'month'
   ): Promise<SpendingAnalytics> {
     const history = await this.getPaymentHistory(walletAddress, chainId);
-    
+
     if (!history || history.length === 0) {
       return {
         totalSpent: '0',
@@ -259,23 +259,23 @@ export class PaymentHistoryService {
     const categoryMap = new Map<string, number>();
 
     for (const item of history) {
-        // Simple filter by period could be added here
-        const amount = parseFloat(item.amount);
-        if (!isNaN(amount)) {
-            total += amount;
-            const cat = item.category || 'Uncategorized';
-            categoryMap.set(cat, (categoryMap.get(cat) || 0) + amount);
-        }
+      // Simple filter by period could be added here
+      const amount = parseFloat(item.amount);
+      if (!isNaN(amount)) {
+        total += amount;
+        const cat = item.category || 'Uncategorized';
+        categoryMap.set(cat, (categoryMap.get(cat) || 0) + amount);
+      }
     }
 
     // Format categories
     const categories = Array.from(categoryMap.entries())
-        .map(([name, amount]) => ({
-            name,
-            amount: amount.toFixed(4),
-            percentage: total > 0 ? Math.round((amount / total) * 100) : 0
-        }))
-        .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
+      .map(([name, amount]) => ({
+        name,
+        amount: amount.toFixed(4),
+        percentage: total > 0 ? Math.round((amount / total) * 100) : 0
+      }))
+      .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
 
     return {
       totalSpent: total.toFixed(4),
