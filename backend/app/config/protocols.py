@@ -207,5 +207,39 @@ PROTOCOLS: Dict[str, ProtocolConfig] = {
             "website": "https://vvs.finance",
             "type": "uniswap_v2_fork"
         }
+    ),
+    "mm": ProtocolConfig(
+        id="mm",
+        name="MM Finance",
+        type=ProtocolType.DEX,
+        supported_chains={25, 338},  # Cronos mainnet and testnet
+        contract_addresses={
+            25: {
+                "router": "0x145677FC4d9b8F19B5D56d1820c48e0443049a30",  # MM Finance Router (MeerkatRouter)
+                "factory": "0xd590cC180601AEcD6eeADD9B7f2B7611519544f4",  # MM Finance Factory
+                "quoter": "0x145677FC4d9b8F19B5D56d1820c48e0443049a30"   # Same as router for V2
+            },
+            338: {
+                "router": "0x145677FC4d9b8F19B5D56d1820c48e0443049a30",  # MM Finance Router (testnet)
+                "factory": "0xd590cC180601AEcD6eeADD9B7f2B7611519544f4",  # MM Finance Factory (testnet)
+                "quoter": "0x145677FC4d9b8F19B5D56d1820c48e0443049a30"   # Same as router for V2
+            }
+        },
+        metadata={
+            "description": "Cronos DEX specializing in USDC pairs with 60% WCRO/USDC trading volume",
+            "website": "https://mm.finance",
+            "type": "uniswap_v2_fork",
+            "specializes_in": ["USDC", "WCRO"],
+            "token_addresses": {
+                25: {
+                    "USDC": "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                    "WCRO": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23"
+                },
+                338: {
+                    "USDC": "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                    "WCRO": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23"
+                }
+            }
+        }
     )
 }

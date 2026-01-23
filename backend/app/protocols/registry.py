@@ -10,6 +10,8 @@ from .axelar_adapter import AxelarAdapter
 from .uniswap_adapter import UniswapAdapter
 from .circle_cctp_adapter import CircleCCTPAdapter
 from .mnee_adapter import MNEEAdapter
+from .vvs_adapter import VVSAdapter
+from .mm_adapter import MMAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,18 @@ class ProtocolRegistry:
 
     def _initialize_protocols(self):
         """Initialize supported protocols."""
+        try:
+            self.protocols["mm"] = MMAdapter()
+            logger.info("Initialized MM Finance protocol adapter")
+        except Exception as e:
+            logger.error(f"Failed to initialize MM Finance protocol adapter: {e}")
+
+        try:
+            self.protocols["vvs"] = VVSAdapter()
+            logger.info("Initialized VVS Finance protocol adapter")
+        except Exception as e:
+            logger.error(f"Failed to initialize VVS Finance protocol adapter: {e}")
+
         try:
             self.protocols["mnee"] = MNEEAdapter()
             logger.info("Initialized MNEE protocol adapter")
@@ -77,6 +91,12 @@ class ProtocolRegistry:
             axelar = self.get_protocol("axelar")
             if axelar and axelar.is_supported(chain_id):
                 return axelar
+
+        # For Cronos, prefer VVS Finance (dominant DEX with 64.6% volume share)
+        if chain_id in [25, 338]:  # Cronos Mainnet and Testnet
+            vvs = self.get_protocol("vvs")
+            if vvs and vvs.is_supported(chain_id):
+                return vvs
 
         # For same-chain operations, prefer 0x (best rates), then Uniswap (reliable)
         zerox = self.get_protocol("0x")
@@ -194,6 +214,27 @@ class ProtocolRegistry:
                 mnee_adapter = self.get_protocol("mnee")
                 if mnee_adapter and mnee_adapter.is_supported(from_chain):
                     protocols_to_try.append(("mnee", mnee_adapter))
+            
+            # For Cronos, use smart routing based on token pairs
+            if from_chain in [25, 338]:  # Cronos Mainnet and Testnet
+                # For USDC pairs, prioritize MM Finance (60% trading volume for WCRO/USDC)
+                if from_token.upper() == "USDC" or to_token.upper() == "USDC":
+                    mm = self.get_protocol("mm")
+                    if mm and mm.is_supported(from_chain):
+                        protocols_to_try.append(("mm", mm))
+                    # VVS as fallback
+                    vvs = self.get_protocol("vvs")
+                    if vvs and vvs.is_supported(from_chain):
+                        protocols_to_try.append(("vvs", vvs))
+                else:
+                    # For non-USDC pairs, prioritize VVS Finance (64.6% overall volume)
+                    vvs = self.get_protocol("vvs")
+                    if vvs and vvs.is_supported(from_chain):
+                        protocols_to_try.append(("vvs", vvs))
+                    # MM Finance as fallback
+                    mm = self.get_protocol("mm")
+                    if mm and mm.is_supported(from_chain):
+                        protocols_to_try.append(("mm", mm))
             
             # For same-chain, try 0x first (best rates), then Uniswap (reliable)
             zerox = self.get_protocol("0x")

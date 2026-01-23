@@ -98,11 +98,23 @@ class SwapService:
             supported_protocols = self.registry.get_supported_protocols(chain_id)
             if not supported_protocols:
                 logger.error(f"No protocols support chain {chain_id}")
+                
+                # Provide helpful suggestions based on chain
+                chain_name = {
+                    1: "Ethereum", 8453: "Base", 42161: "Arbitrum", 10: "Optimism", 
+                    137: "Polygon", 25: "Cronos", 338: "Cronos Testnet"
+                }.get(chain_id, f"chain {chain_id}")
+                
+                if chain_id in [25, 338]:  # Cronos
+                    suggestion = f"For {chain_name}, try using VVS Finance which is the leading DEX with 64.6% volume share. Make sure you're using supported token pairs like CRO/USDC."
+                else:
+                    suggestion = f"Try using a different blockchain network that has more DEX integrations."
+                
                 return {
-                    "error": f"No supported protocols for chain {chain_id}.",
-                    "technical_details": "No configured protocols support this chain.",
+                    "error": f"No supported swap protocols for {chain_name}.",
+                    "technical_details": f"No configured protocols support chain {chain_id}.",
                     "protocols_tried": tried_protocols,
-                    "suggestion": "Try using a different blockchain network."
+                    "suggestion": suggestion
                 }
 
             # Validate token support upfront (same for all protocols)
@@ -203,11 +215,16 @@ class SwapService:
             # Generate a user-friendly suggestion based on common error patterns
             suggestion = "Please try a different token pair or adjust the amount."
             if any("liquidity" in err.lower() for err in protocol_errors.values()):
-                suggestion = "This token pair may have insufficient liquidity. Try a smaller amount or a different pair."
+                if chain_id in [25, 338]:  # Cronos
+                    suggestion = "This token pair may have insufficient liquidity on Cronos DEXs. Try popular pairs like CRO/USDC or check VVS Finance directly."
+                else:
+                    suggestion = "This token pair may have insufficient liquidity. Try a smaller amount or a different pair."
             elif any("minimum" in err.lower() for err in protocol_errors.values()):
                 suggestion = "The amount may be below the minimum required. Try increasing the amount."
             elif any("slippage" in err.lower() for err in protocol_errors.values()):
                 suggestion = "High price impact detected. Try reducing the amount or try again when market conditions improve."
+            elif chain_id in [25, 338]:  # Cronos specific
+                suggestion = "For Cronos, make sure you're using supported tokens. Popular pairs include CRO/USDC, CRO/USDT. VVS Finance is the main DEX on Cronos."
 
             error_details = [f"{pid}: {err}" for pid, err in protocol_errors.items()]
             

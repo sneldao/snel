@@ -155,10 +155,74 @@ class TokenRegistry:
                     5000: "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9",
                     # Blast USDC
                     81457: "0x4300000000000000000000000000000000000003",
-                    # Cronos USDC.e
-                    25: "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",
-                    # Cronos Testnet devUSDC.e
-                    338: "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
+                    # Cronos USDC (official)
+                    25: "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                    # Cronos Testnet USDC
+                    338: "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                },
+                metadata={
+                    "mm_finance_addresses": {
+                        # MM Finance uses the same official addresses
+                        25: "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                        338: "0xc21223249CA28397B4B6541dfFaEcC539BfF0c59",
+                    },
+                    "legacy_addresses": {
+                        # Legacy USDC.e addresses for reference
+                        25: "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",
+                        338: "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
+                    }
+                }
+            )
+        )
+
+        # WCRO (Wrapped CRO) for Cronos
+        self.register_token(
+            TokenInfo(
+                id="wcro",
+                name="Wrapped CRO",
+                symbol="WCRO",
+                decimals=18,
+                type=TokenType.WRAPPED,
+                verified=True,
+                addresses={
+                    # Standard WCRO (official Cronos addresses)
+                    25: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+                    338: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+                },
+                metadata={
+                    "mm_finance_addresses": {
+                        # MM Finance uses the same official addresses
+                        25: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+                        338: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+                    }
+                }
+            )
+        )
+
+        # USDT on different chains
+        self.register_token(
+            TokenInfo(
+                id="usdt",
+                name="Tether USD",
+                symbol="USDT",
+                decimals=6,
+                type=TokenType.ERC20,
+                verified=True,
+                addresses={
+                    # Ethereum USDT
+                    1: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+                    # Arbitrum USDT
+                    42161: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+                    # Polygon USDT
+                    137: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+                    # BSC USDT
+                    56: "0x55d398326f99059fF775485246999027B3197955",
+                    # Avalanche USDT
+                    43114: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+                    # Cronos USDT
+                    25: "0x66e428c3f67a68878562e79A0234c1F83c208770",
+                    # Cronos Testnet USDT
+                    338: "0x87EFB3ec1576Dec8ED47e58B832bEdCd86eE186e",
                 },
             )
         )

@@ -22,7 +22,7 @@ SNELOrchestrator
 ```
 
 #### DeFi Operations
-- **Token Swaps**: Multi-chain via 0x Protocol
+- **Token Swaps**: Multi-chain via 0x Protocol + Cronos DEX routing (MM Finance, VVS Finance)
 - **Cross-Chain Bridging**: Axelar GMP + LayerZero integration
 - **Privacy Bridging**: Zcash integration for private transactions
 - **X402 Agentic Payments**: AI-triggered payments on Cronos EVM
@@ -30,6 +30,7 @@ SNELOrchestrator
 - **Protocol Research**: AI-powered DeFi protocol analysis
 - **Natural Language Processing**: OpenAI-powered command interpretation
 - **Single Source of Truth Configuration**: Centralized registry for tokens, chains, and protocols
+- **Smart DEX Routing**: Intelligent protocol selection based on token pairs and liquidity
 
 #### Registry System (NEW)
 The system uses a centralized registry to manage all network-specific data, ensuring consistency across adapters and services.
@@ -37,6 +38,37 @@ The system uses a centralized registry to manage all network-specific data, ensu
 - **Chains**: `backend/app/config/chains.py` (RPCs, explorers, capabilities)
 - **Protocols**: `backend/app/config/protocols.py` (Contract addresses, API endpoints)
 - **ConfigurationManager**: Unified service to access and validate these configurations.
+
+#### Cronos DEX Integration (NEW)
+SNEL provides intelligent DEX routing on Cronos with specialized protocol adapters for optimal trading:
+
+##### Smart Routing Architecture
+```
+SwapService → ProtocolRegistry → Smart Router
+├── Token Pair Analysis (USDC vs Non-USDC)
+├── Protocol Selection (MM Finance vs VVS Finance)
+├── Liquidity Assessment (Real-time reserves)
+└── Fallback Handling (Cross-protocol redundancy)
+```
+
+##### Protocol Adapters
+1. **MM Finance Adapter** (`backend/app/protocols/mm_adapter.py`)
+   - **Specialization**: USDC pairs (60% WCRO/USDC volume)
+   - **Router**: `0x145677FC4d9b8F19B5D56d1820c48e0443049a30`
+   - **Factory**: `0xd590cC180601AEcD6eeADD9B7f2B7611519544f4`
+   - **Use Cases**: CRO ↔ USDC swaps for X402 integration
+
+2. **VVS Finance Adapter** (`backend/app/protocols/vvs_adapter.py`)
+   - **Specialization**: General pairs (64.6% overall volume)
+   - **Router**: `0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae`
+   - **Factory**: `0x3B44B2a187a7b3824131F8db5a74194D0a42Fc15`
+   - **Use Cases**: CRO ↔ USDT, other token pairs
+
+##### Routing Logic
+- **USDC Pairs**: MM Finance (specialized liquidity)
+- **Non-USDC Pairs**: VVS Finance (broader market coverage)
+- **Fallback**: Automatic cross-protocol fallback
+- **Error Handling**: Helpful suggestions for unsupported pairs
 
 #### Supported Networks (19+)
 - **Layer 1**: Ethereum, Avalanche, BSC
@@ -230,7 +262,63 @@ spec:
 
 ## Implementation Status & Changelog
 
-### Latest: Bot Query Routing & Natural Language Support (Jan 7, 2026)
+### Latest: MM Finance Integration & Cronos USDC Support (Jan 23, 2026)
+
+#### New Features Added
+
+**1. MM Finance DEX Integration**
+- **Purpose**: Enable USDC swaps on Cronos for X402 integration
+- **Implementation**: Complete MM Finance adapter with official contract addresses
+- **Router**: `0x145677FC4d9b8F19B5D56d1820c48e0443049a30` (MeerkatRouter)
+- **Factory**: `0xd590cC180601AEcD6eeADD9B7f2B7611519544f4`
+- **Status**: ✅ FULLY INTEGRATED AND TESTED
+
+**2. Smart DEX Routing on Cronos**
+- **Logic**: Intelligent protocol selection based on token pairs
+- **USDC Pairs**: Routes to MM Finance (60% WCRO/USDC trading volume)
+- **Other Pairs**: Routes to VVS Finance (64.6% overall volume share)
+- **Fallback**: Automatic cross-protocol redundancy
+- **Status**: ✅ PRODUCTION READY
+
+**3. Official Cronos Token Addresses**
+- **USDC**: Updated to official address `0xc21223249CA28397B4B6541dfFaEcC539BfF0c59`
+- **WCRO**: Updated to official address `0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23`
+- **Source**: Official Cronos documentation
+- **Status**: ✅ VERIFIED AND UPDATED
+
+#### Issues Resolved
+
+**1. Cronos Swap Command Failures**
+- **Problem**: "swap 5 cro to usdc" and "pay 1 usdc" commands failing on Cronos
+- **Root Cause**: 0x Protocol doesn't support Cronos; no native DEX integration
+- **Solution**: Implemented MM Finance and VVS Finance adapters with smart routing
+- **Impact**: USDC swaps now work, enabling X402 payment integration
+- **Status**: ✅ RESOLVED
+
+**2. Missing USDC Support for X402**
+- **Problem**: X402 integration requires USDC support, but swaps were failing
+- **Root Cause**: No DEX integration for Cronos USDC pairs
+- **Solution**: MM Finance specializes in USDC pairs with 60% WCRO/USDC volume
+- **Impact**: X402 payments now fully supported with USDC liquidity
+- **Status**: ✅ RESOLVED
+
+#### Files Modified
+- `backend/app/protocols/mm_adapter.py` (new MM Finance adapter)
+- `backend/app/protocols/registry.py` (added MM Finance integration)
+- `backend/app/config/chains.py` (added MM Finance to Cronos protocols)
+- `backend/app/config/protocols.py` (added MM Finance configuration)
+- `backend/app/models/token.py` (updated with official Cronos addresses)
+
+#### Test Results
+```
+✅ CRO → USDC: MM Finance (rate: 1 CRO = 0.091748 USDC)
+✅ USDC → CRO: MM Finance (rate: 1 USDC = 10.862046 CRO)  
+✅ CRO → USDT: VVS Finance (rate: 1 CRO = 0.091540 USDT)
+✅ Smart routing working correctly
+✅ Fallback mechanisms operational
+```
+
+### Previous: Bot Query Routing & Natural Language Support (Jan 7, 2026)
 
 #### Issues Addressed
 
