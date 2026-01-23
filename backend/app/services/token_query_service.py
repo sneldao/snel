@@ -506,7 +506,26 @@ class TokenQueryService:
             "token_balances": {}
         }
         
-        if tokens:
+        # If no specific tokens provided, get common tokens for the chain
+        if not tokens:
+            from app.config.tokens import COMMON_TOKENS
+            chain_tokens = COMMON_TOKENS.get(chain_id, {})
+            
+            for symbol, token_info in chain_tokens.items():
+                try:
+                    balance = await self.get_token_balance(
+                        wallet_address,
+                        token_info["address"],
+                        chain_id,
+                        token_info["decimals"]
+                    )
+                    if balance is not None and balance > 0:
+                        result["token_balances"][symbol.upper()] = float(balance)
+                except Exception as e:
+                    logger.warning(f"Failed to get balance for {symbol}: {e}")
+                    continue
+        else:
+            # Use provided tokens
             for token in tokens:
                 token_address = token.get_address(chain_id)
                 if token_address:
@@ -516,7 +535,8 @@ class TokenQueryService:
                         chain_id,
                         token.decimals
                     )
-                    result["token_balances"][token.symbol] = balance
+                    if balance is not None:
+                        result["token_balances"][token.symbol] = float(balance)
         
         return result
     

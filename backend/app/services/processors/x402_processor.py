@@ -35,6 +35,9 @@ class X402Processor:
                 return await self._handle_ai_payment(unified_command)
             elif any(keyword in command_lower for keyword in ["settlement", "batch", "multiple payments"]):
                 return await self._handle_settlement(unified_command)
+            elif "pay" in command_lower and ("to" in command_lower or "@" in command_lower or ".eth" in command_lower):
+                # Simple one-time payment - handle as direct X402 payment
+                return await self._handle_simple_payment(unified_command)
             else:
                 # Check for automation keywords first
                 return await self._handle_ai_payment(unified_command)
@@ -707,3 +710,112 @@ class X402Processor:
             return resolved_address
             
         return None
+
+    async def _handle_simple_payment(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+        """Handle simple one-time X402 payments."""
+        try:
+            # Parse payment details from the command
+            if unified_command.details and unified_command.details.amount and unified_command.details.token_in:
+                amount = float(unified_command.details.amount)
+                token = unified_command.details.token_in.symbol.upper()
+                recipient = await self._extract_recipient_from_command(unified_command.command)
+            else:
+                # Fallback parsing
+                payment_details = await self._parse_payment_command(unified_command.command)
+                if not payment_details:
+                    return UnifiedResponse(
+                        content="I couldn't parse the payment details. Please try: `pay 1 USDC to 0x... on cronos`",
+                        agent_type=AgentType.ERROR,
+                        status="error",
+                        metadata={"command_type": CommandType.X402_PAYMENT}
+                    )
+                
+                amount = float(payment_details['amount'])
+                token = payment_details['asset'].upper()
+                recipient = payment_details['recipient']
+            
+            # Validate recipient
+            if not recipient:
+                return UnifiedResponse(
+                    content="I need a recipient address. Please try: `pay 1 USDC to 0x... on cronos`",
+                    agent_type=AgentType.ERROR,
+                    status="error",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
+                )
+            
+            # Resolve recipient address
+            resolved_recipient = await self._resolve_recipient_address(recipient)
+            if not resolved_recipient:
+                return UnifiedResponse(
+                    content=f"I couldn't resolve the recipient address: {recipient}",
+                    agent_type=AgentType.ERROR,
+                    status="error",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
+                )
+            
+            # Determine network
+            if unified_command.chain_id == 25:
+                network = "cronos-mainnet"
+            elif unified_command.chain_id == 338:
+                network = "cronos-testnet"
+            elif unified_command.chain_id == 1:
+                network = "ethereum-mainnet"
+            else:
+                network = "cronos-mainnet"  # Default to Cronos mainnet
+            
+            # Validate token for network
+            if network.startswith("cronos") and token not in ["USDC"]:
+                return UnifiedResponse(
+                    content=f"❌ **Token Not Supported on Cronos**\n\nCronos X402 supports **USDC** only.\nYou specified: {token}",
+                    agent_type=AgentType.ERROR,
+                    status="error",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
+                )
+            elif network == "ethereum-mainnet" and token not in ["MNEE"]:
+                return UnifiedResponse(
+                    content=f"❌ **Token Not Supported on Ethereum**\n\nEthereum X402 supports **MNEE** only.\nYou specified: {token}",
+                    agent_type=AgentType.ERROR,
+                    status="error",
+                    metadata={"command_type": CommandType.X402_PAYMENT}
+                )
+            
+            # Create payment confirmation response
+            return UnifiedResponse(
+                content={
+                    "message": f"💳 **X402 Payment Ready**\n\n"
+                              f"**Payment Details:**\n"
+                              f"• Amount: {amount} {token}\n"
+                              f"• Recipient: {resolved_recipient}\n"
+                              f"• Network: {network.replace('-', ' ').title()}\n\n"
+                              f"This will be executed as a secure X402 payment with EIP-712 signing.",
+                    "type": "x402_payment",
+                    "payment_details": {
+                        "amount": amount,
+                        "token": token,
+                        "recipient": resolved_recipient,
+                        "network": network
+                    },
+                    "requires_transaction": True
+                },
+                agent_type=AgentType.PAYMENT,
+                status="success",
+                awaiting_confirmation=True,
+                metadata={
+                    "command_type": CommandType.X402_PAYMENT,
+                    "payment_type": "simple",
+                    "network": network,
+                    "amount": amount,
+                    "token": token,
+                    "recipient": resolved_recipient
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Simple payment error: {e}")
+            return UnifiedResponse(
+                content=f"I had trouble processing that payment: {str(e)}",
+                agent_type=AgentType.ERROR,
+                status="error",
+                error=str(e),
+                metadata={"command_type": CommandType.X402_PAYMENT}
+            )
