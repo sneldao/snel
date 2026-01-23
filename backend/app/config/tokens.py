@@ -104,17 +104,66 @@ COMMON_TOKENS: Dict[int, Dict[str, Dict[str, Any]]] = {
         }
     },
     25: {  # Cronos Mainnet
+        "cro": {
+            "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # Native token placeholder
+            "name": "Cronos",
+            "symbol": "CRO",
+            "decimals": 18,
+            "verified": True
+        },
+        "wcro": {
+            "address": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",  # Wrapped CRO
+            "name": "Wrapped Cronos",
+            "symbol": "WCRO",
+            "decimals": 18,
+            "verified": True
+        },
         "usdc": {
-            "address": "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",
+            "address": "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",  # USDC.e on Cronos
             "name": "USD Coin",
             "symbol": "USDC",
             "decimals": 6,
             "verified": True
+        },
+        "usdt": {
+            "address": "0x66e428c3f67a68878562e79A0234c1F83c208770",  # USDT on Cronos
+            "name": "Tether USD",
+            "symbol": "USDT",
+            "decimals": 6,
+            "verified": True
+        },
+        "eth": {
+            "address": "0xe44Fd7fCb2b1581822D0c862B68222998a0c299a",  # ETH on Cronos
+            "name": "Ethereum",
+            "symbol": "ETH",
+            "decimals": 18,
+            "verified": True
+        },
+        "weth": {
+            "address": "0xe44Fd7fCb2b1581822D0c862B68222998a0c299a",  # WETH on Cronos
+            "name": "Wrapped Ethereum",
+            "symbol": "WETH",
+            "decimals": 18,
+            "verified": True
         }
     },
     338: {  # Cronos Testnet
+        "cro": {
+            "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",  # Native token placeholder
+            "name": "Cronos",
+            "symbol": "CRO",
+            "decimals": 18,
+            "verified": True
+        },
+        "wcro": {
+            "address": "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",  # Wrapped CRO (testnet)
+            "name": "Wrapped Cronos",
+            "symbol": "WCRO",
+            "decimals": 18,
+            "verified": True
+        },
         "usdc": {
-            "address": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",
+            "address": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",  # devUSDC.e on testnet
             "name": "USD Coin",
             "symbol": "USDC",
             "decimals": 6,
@@ -152,6 +201,8 @@ def get_chain_name(chain_id: int) -> str:
         43114: "Avalanche",
         8453: "Base",
         534352: "Scroll",
+        25: "Cronos",
+        338: "Cronos Testnet",
         236: "1Sat Ordinals",  # 1Sat Ordinals network for MNEE
     }
     return chain_names.get(chain_id, f"Chain {chain_id}") 

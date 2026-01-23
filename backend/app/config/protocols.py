@@ -184,5 +184,28 @@ PROTOCOLS: Dict[str, ProtocolConfig] = {
             "production": "https://proxy-api.mnee.net",
             "sandbox": "https://sandbox-proxy-api.mnee.net"
         }
+    ),
+    "vvs": ProtocolConfig(
+        id="vvs",
+        name="VVS Finance",
+        type=ProtocolType.DEX,
+        supported_chains={25, 338},  # Cronos mainnet and testnet
+        contract_addresses={
+            25: {
+                "router": "0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae",  # VVS Router V2
+                "factory": "0x3B44B2a187a7b3824131F8db5a74194D0a42Fc15",  # VVS Factory V2
+                "quoter": "0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae"   # Same as router for V2
+            },
+            338: {
+                "router": "0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae",  # VVS Router V2 (testnet)
+                "factory": "0x3B44B2a187a7b3824131F8db5a74194D0a42Fc15",  # VVS Factory V2 (testnet)
+                "quoter": "0x145863Eb42Cf62847A6Ca784e6416C1682b1b2Ae"   # Same as router for V2
+            }
+        },
+        metadata={
+            "description": "Leading DEX on Cronos with deep liquidity for CRO pairs",
+            "website": "https://vvs.finance",
+            "type": "uniswap_v2_fork"
+        }
     )
 }

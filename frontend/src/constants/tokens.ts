@@ -416,6 +416,70 @@ export const POPULAR_TOKENS: Token[] = [
     logoURI: 'https://assets.coingecko.com/coins/images/486/small/circle-zcash-color.png',
     coingeckoId: 'zcash',
     isPopular: true
+  },
+
+  // Cronos Tokens
+  {
+    symbol: 'CRO',
+    name: 'Cronos',
+    address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Native token representation
+    chainId: ChainId.CRONOS,
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/7310/small/cro_token_logo.png',
+    coingeckoId: 'crypto-com-chain',
+    isPopular: true
+  },
+  {
+    symbol: 'WCRO',
+    name: 'Wrapped Cronos',
+    address: '0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23',
+    chainId: ChainId.CRONOS,
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/7310/small/cro_token_logo.png',
+    coingeckoId: 'crypto-com-chain',
+    isPopular: true
+  },
+  {
+    symbol: 'USDC',
+    name: 'USD Coin (Cronos)',
+    address: '0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C',
+    chainId: ChainId.CRONOS,
+    decimals: 6,
+    logoURI: 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
+    coingeckoId: 'usd-coin',
+    isPopular: true,
+    isStablecoin: true
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether (Cronos)',
+    address: '0x66e428c3f67a68878562e79A0234c1F83c208770',
+    chainId: ChainId.CRONOS,
+    decimals: 6,
+    logoURI: 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+    coingeckoId: 'tether',
+    isPopular: true,
+    isStablecoin: true
+  },
+  {
+    symbol: 'ETH',
+    name: 'Ethereum (Cronos)',
+    address: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+    chainId: ChainId.CRONOS,
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+    coingeckoId: 'ethereum',
+    isPopular: true
+  },
+  {
+    symbol: 'WETH',
+    name: 'Wrapped Ethereum (Cronos)',
+    address: '0xe44Fd7fCb2b1581822D0c862B68222998a0c299a',
+    chainId: ChainId.CRONOS,
+    decimals: 18,
+    logoURI: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+    coingeckoId: 'weth',
+    isPopular: true
   }
 ];
 

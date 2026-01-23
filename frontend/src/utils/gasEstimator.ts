@@ -43,6 +43,7 @@ const DEFAULT_GAS_PRICES: Record<number, GasPrice> = {
   [ChainId.SCROLL]: { slow: 0.001, average: 0.005, fast: 0.01 },
   [ChainId.AVALANCHE]: { slow: 25, average: 35, fast: 50 },
   [ChainId.BSC]: { slow: 3, average: 5, fast: 7 },
+  [ChainId.CRONOS]: { slow: 5000, average: 7000, fast: 10000 }, // Cronos gas prices in gwei
 };
 
 // Default gas limits by operation type and chain
@@ -58,6 +59,7 @@ const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>
     [ChainId.SCROLL]: 250000,
     [ChainId.AVALANCHE]: 250000,
     [ChainId.BSC]: 200000,
+    [ChainId.CRONOS]: 200000, // Cronos swap gas limit
     default: 200000,
   },
   bridge: {
@@ -69,6 +71,7 @@ const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>
     [ChainId.SCROLL]: 350000,
     [ChainId.AVALANCHE]: 350000,
     [ChainId.BSC]: 300000,
+    [ChainId.CRONOS]: 300000, // Cronos bridge gas limit
     default: 300000,
   },
   send: {
@@ -80,6 +83,7 @@ const DEFAULT_GAS_LIMITS: Record<CommandType, Record<number | 'default', number>
     [ChainId.SCROLL]: 21000,
     [ChainId.AVALANCHE]: 21000,
     [ChainId.BSC]: 21000,
+    [ChainId.CRONOS]: 21000, // Cronos send gas limit
     default: 21000,
   },
   // Default values for other command types
@@ -176,44 +180,44 @@ const TIME_ESTIMATES: Record<string, Record<string, number>> = {
  * @returns Estimated gas cost and time information
  */
 export async function estimateGasCost(
-  command: CommandForGas, 
+  command: CommandForGas,
   chainId: number,
   speedPreference: 'slow' | 'average' | 'fast' = 'average'
 ): Promise<{ cost: string; time: string }> {
   try {
     // Get current gas prices (in production, this would fetch from an API)
     const gasPrice = await getGasPrices(chainId);
-    
+
     // Get gas limit based on command type and chain
     const gasLimit = getGasLimit(command, chainId);
-    
+
     // Skip estimation for read-only operations
     if (gasLimit === 0) {
       return { cost: '0', time: 'Instant' };
     }
-    
+
     // Get selected gas price based on speed preference
     const selectedGasPrice = gasPrice[speedPreference];
-    
+
     // Calculate cost in native token
     const gasCostInEth = (selectedGasPrice * gasLimit) / 1e9; // Convert gwei to ETH
-    
+
     // Get native token symbol
     const nativeTokenSymbol = NATIVE_TOKEN_SYMBOLS[chainId] || 'ETH';
-    
+
     // Format cost string
     const formattedCost = formatGasCost(gasCostInEth, nativeTokenSymbol);
-    
+
     // Calculate USD cost if price data is available
     let usdCost = '';
     if (NATIVE_TOKEN_PRICES[chainId]) {
       const costInUsd = gasCostInEth * NATIVE_TOKEN_PRICES[chainId];
       usdCost = `$${costInUsd.toFixed(2)}`;
     }
-    
+
     // Get time estimate
     const timeEstimate = getTimeEstimate(chainId, speedPreference);
-    
+
     // Return formatted result
     const result = {
       cost: usdCost ? `${formattedCost} (${usdCost})` : formattedCost,
@@ -223,7 +227,7 @@ export async function estimateGasCost(
       nativeTokenSymbol,
       usdCost
     };
-    
+
     // For bridge operations, add destination gas cost
     if (command.type === 'bridge' && command.targetChain) {
       const destinationEstimate = await estimateDestinationGas(command, command.targetChain);
@@ -234,7 +238,7 @@ export async function estimateGasCost(
         };
       }
     }
-    
+
     return {
       cost: result.cost,
       time: result.time
@@ -265,34 +269,34 @@ function getGasLimit(command: CommandForGas, chainId: number): number {
   // Get gas limits for this command type
   const commandType = command.type || 'unknown';
   const gasLimits = DEFAULT_GAS_LIMITS[commandType as keyof typeof DEFAULT_GAS_LIMITS] || DEFAULT_GAS_LIMITS.unknown;
-  
+
   // Use chain-specific limit if available, otherwise use default
   const gasLimit = gasLimits[chainId] || gasLimits.default || 0;
-  
+
   // Apply modifiers based on command parameters
   let modifiedGasLimit = gasLimit;
-  
+
   // Adjust for token type (ERC20 transfers cost more than native token)
-  if (command.type === 'send' && command.sourceToken && command.sourceToken !== 'ETH' && 
-      command.sourceToken !== NATIVE_TOKEN_SYMBOLS[chainId]) {
+  if (command.type === 'send' && command.sourceToken && command.sourceToken !== 'ETH' &&
+    command.sourceToken !== NATIVE_TOKEN_SYMBOLS[chainId]) {
     modifiedGasLimit = 65000; // ERC20 transfer
   }
-  
+
   // Adjust for swap complexity
   if (command.type === 'swap') {
     // Complex swaps (with slippage settings, specific DEX, etc.) cost more
     if (command.slippage !== undefined || command.dex) {
       modifiedGasLimit *= 1.2;
     }
-    
+
     // Token-to-token swaps cost more than ETH-to-token or token-to-ETH
     if (command.sourceToken !== 'ETH' && command.targetToken !== 'ETH' &&
-        command.sourceToken !== NATIVE_TOKEN_SYMBOLS[chainId] && 
-        command.targetToken !== NATIVE_TOKEN_SYMBOLS[chainId]) {
+      command.sourceToken !== NATIVE_TOKEN_SYMBOLS[chainId] &&
+      command.targetToken !== NATIVE_TOKEN_SYMBOLS[chainId]) {
       modifiedGasLimit *= 1.3;
     }
   }
-  
+
   // Adjust for bridge complexity
   if (command.type === 'bridge') {
     // Bridges with message or custom recipient cost more
@@ -300,7 +304,7 @@ function getGasLimit(command: CommandForGas, chainId: number): number {
       modifiedGasLimit *= 1.2;
     }
   }
-  
+
   return Math.round(modifiedGasLimit);
 }
 
@@ -327,7 +331,7 @@ function formatGasCost(cost: number, tokenSymbol: string): string {
 function getTimeEstimate(chainId: number, speedPreference: 'slow' | 'average' | 'fast'): string {
   const chainTimeEstimates = TIME_ESTIMATES[chainId.toString()] || TIME_ESTIMATES.default;
   const seconds = chainTimeEstimates[speedPreference];
-  
+
   if (seconds < 60) {
     return `~${seconds} seconds`;
   } else if (seconds < 3600) {
@@ -348,36 +352,36 @@ async function estimateDestinationGas(
   if (!SUPPORTED_CHAINS[destinationChainId as keyof typeof SUPPORTED_CHAINS]) {
     return null;
   }
-  
+
   // For bridge operations, we need to estimate gas on the destination chain
   // This is typically much lower than source chain gas
   const destinationGasLimit = 100000; // Default destination gas limit
-  
+
   // Get gas price for destination chain
   const gasPrice = await getGasPrices(destinationChainId);
-  
+
   // Use average gas price for destination
   const selectedGasPrice = gasPrice.average;
-  
+
   // Calculate cost in native token
   const gasCostInEth = (selectedGasPrice * destinationGasLimit) / 1e9;
-  
+
   // Get native token symbol for destination chain
   const nativeTokenSymbol = NATIVE_TOKEN_SYMBOLS[destinationChainId] || 'ETH';
-  
+
   // Format cost string
   const formattedCost = formatGasCost(gasCostInEth, nativeTokenSymbol);
-  
+
   // Calculate USD cost if price data is available
   let usdCost = '';
   if (NATIVE_TOKEN_PRICES[destinationChainId]) {
     const costInUsd = gasCostInEth * NATIVE_TOKEN_PRICES[destinationChainId];
     usdCost = `$${costInUsd.toFixed(2)}`;
   }
-  
+
   // Get time estimate for destination chain
   const timeEstimate = getTimeEstimate(destinationChainId, 'average');
-  
+
   return {
     cost: usdCost ? `${formattedCost} (${usdCost})` : formattedCost,
     time: timeEstimate
@@ -395,12 +399,12 @@ export function calculateGasCost(
 ): { nativeCost: number; usdCost: number | null; nativeToken: string } {
   const gasCostInEth = (gasPriceGwei * gasLimit) / 1e9;
   const nativeToken = NATIVE_TOKEN_SYMBOLS[chainId] || 'ETH';
-  
+
   let usdCost = null;
   if (NATIVE_TOKEN_PRICES[chainId]) {
     usdCost = gasCostInEth * NATIVE_TOKEN_PRICES[chainId];
   }
-  
+
   return {
     nativeCost: gasCostInEth,
     usdCost,
@@ -427,17 +431,17 @@ export function formatDetailedGasEstimate(estimate: GasEstimate): {
   timeDisplay: string;
   detailedInfo: string;
 } {
-  const costDisplay = estimate.usdCost 
+  const costDisplay = estimate.usdCost
     ? `${estimate.cost}`
     : estimate.cost;
-  
+
   const timeDisplay = estimate.time;
-  
+
   const detailedInfo = `Gas Limit: ${estimate.gasLimit.toLocaleString()} units
 Gas Price: ${estimate.gasPriceGwei} Gwei
 Estimated Cost: ${estimate.cost}
 Estimated Time: ${estimate.time}`;
-  
+
   return {
     costDisplay,
     timeDisplay,
@@ -455,7 +459,7 @@ export async function getGasPriceTiers(chainId: number): Promise<{
   fast: { price: number; time: string };
 }> {
   const gasPrices = await getGasPrices(chainId);
-  
+
   return {
     slow: {
       price: gasPrices.slow,
@@ -496,33 +500,33 @@ export function estimateBatchingSavings(transactionCount: number, chainId: numbe
   // Get base gas price for the chain
   const baseGasPrices = DEFAULT_GAS_PRICES[chainId] || { slow: 30, average: 50, fast: 80 };
   const gasPriceGwei = baseGasPrices.average;
-  
+
   // Base transfer gas cost varies by chain type
   let baseTransferGas = 21000;
-  
+
   // L2 chains typically have much lower gas costs
   if ([534352, 42161, 10, 8453, 324].includes(chainId)) { // Scroll, Arbitrum, Optimism, Base, zkSync
     baseTransferGas = 5000; // Much lower on L2s
   }
-  
+
   // Individual transaction cost
   const individualGas = BigInt(transactionCount * baseTransferGas);
   const { nativeCost: individualCost } = calculateGasCost(Number(individualGas), gasPriceGwei, chainId);
-  
+
   // Batched transaction cost (simplified model)
   // First transaction pays full cost, subsequent ones pay reduced cost
   const batchOverhead = 25000; // Overhead for batching contract
   const reducedPerTx = 1000; // Reduced cost per additional transaction in batch on L2s
   const batchedGas = batchOverhead + baseTransferGas + ((transactionCount - 1) * reducedPerTx);
   const { nativeCost: batchedCost } = calculateGasCost(batchedGas, gasPriceGwei, chainId);
-  
+
   // Calculate savings
   const savingsNum = individualCost - batchedCost;
   const savingsPercentage = individualCost > 0 ? (savingsNum / individualCost) * 100 : 0;
-  
+
   // Get native token symbol
   const nativeTokenSymbol = NATIVE_TOKEN_SYMBOLS[chainId] || 'ETH';
-  
+
   return {
     individualCost: `${individualCost.toFixed(6)} ${nativeTokenSymbol}`,
     batchedCost: `${batchedCost.toFixed(6)} ${nativeTokenSymbol}`,
