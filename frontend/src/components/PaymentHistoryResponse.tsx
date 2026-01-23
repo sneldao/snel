@@ -4,6 +4,7 @@ import { PaymentHistoryList } from "./PaymentHistoryList";
 import { SpendingAnalyticsView } from "./SpendingAnalyticsView";
 import { RecipientListView } from "./RecipientListView";
 import { PaymentTemplateListView } from "./PaymentTemplateListView";
+import { YieldOpportunitiesResponse } from "./YieldOpportunitiesResponse";
 import { PaymentHistoryItem, SpendingAnalytics, Recipient, PaymentTemplate } from "../services/paymentHistoryService";
 
 interface PaymentHistoryResponseProps {
@@ -14,12 +15,13 @@ interface PaymentHistoryResponseProps {
     analytics?: SpendingAnalytics;
     recipients?: Recipient[];
     templates?: PaymentTemplate[];
+    opportunities?: any[];
   };
   onAddRecipient?: () => void;
   onSelectRecipient?: (recipient: Recipient) => void;
 }
 
-export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({ 
+export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({
   content,
   onAddRecipient,
   onSelectRecipient
@@ -30,9 +32,9 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({
     return (
       <Box borderWidth="1px" borderRadius="lg" p={4} bg="white">
         <Text fontWeight="bold" mb={3}>{content.message}</Text>
-        <PaymentHistoryList 
-          items={content.history} 
-          isLoading={isLoading} 
+        <PaymentHistoryList
+          items={content.history}
+          isLoading={isLoading}
         />
       </Box>
     );
@@ -42,9 +44,9 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({
     return (
       <Box borderWidth="1px" borderRadius="lg" p={4} bg="white">
         <Text fontWeight="bold" mb={3}>{content.message}</Text>
-        <SpendingAnalyticsView 
-          analytics={content.analytics} 
-          isLoading={isLoading} 
+        <SpendingAnalyticsView
+          analytics={content.analytics}
+          isLoading={isLoading}
         />
       </Box>
     );
@@ -54,11 +56,11 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({
     return (
       <Box borderWidth="1px" borderRadius="lg" p={4} bg="white">
         <Text fontWeight="bold" mb={3}>{content.message}</Text>
-        <RecipientListView 
-          recipients={content.recipients} 
+        <RecipientListView
+          recipients={content.recipients}
           isLoading={isLoading}
-          onAddRecipient={onAddRecipient || (() => {})}
-          onSelectRecipient={onSelectRecipient || (() => {})}
+          onAddRecipient={onAddRecipient || (() => { })}
+          onSelectRecipient={onSelectRecipient || (() => { })}
         />
       </Box>
     );
@@ -68,8 +70,8 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({
     return (
       <Box borderWidth="1px" borderRadius="lg" p={4} bg="white">
         <Text fontWeight="bold" mb={3}>{content.message}</Text>
-        <PaymentTemplateListView 
-          templates={content.templates} 
+        <PaymentTemplateListView
+          templates={content.templates}
           isLoading={isLoading}
           onAddTemplate={() => {
             // Trigger the add payment template modal
@@ -90,6 +92,18 @@ export const PaymentHistoryResponse: React.FC<PaymentHistoryResponseProps> = ({
           }}
         />
       </Box>
+    );
+  }
+
+  if (content.type === "yield_opportunities" && content.opportunities) {
+    return (
+      <YieldOpportunitiesResponse
+        content={content}
+        onSetupYield={(protocol, apy) => {
+          // Handle yield setup - could trigger a command or modal
+          console.log(`Setting up yield farming for ${protocol} with ${apy} APY`);
+        }}
+      />
     );
   }
 

@@ -459,6 +459,24 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
         }
     }
 
+    // Research/Yield Opportunities Response
+    if (agentType === 'research' && isObjectContent(content)) {
+        const researchContent = content as any;
+        if (researchContent.type === 'yield_opportunities') {
+            return (
+                <PaymentHistoryResponse
+                    content={researchContent}
+                    onAddRecipient={() => {
+                        // Could trigger yield setup modal or command
+                        if (onActionClick) {
+                            onActionClick({ type: 'setup_yield' });
+                        }
+                    }}
+                />
+            );
+        }
+    }
+
     // Default: return null (parent will handle default rendering)
     return null;
 };

@@ -696,6 +696,81 @@ export default function MainApp(props: MainAppProps) {
 
             setResponses((prev) => [...prev, errorResponse]);
           }
+        } else if (
+          /setup.*automated.*yield.*farming|yield.*farming|yield.*opportunities/i.test(command.toLowerCase())
+        ) {
+          // Handle yield farming command
+          try {
+            // Fetch yield opportunities from the research API
+            const yieldResponse = await apiService.get('/api/v1/research/discover', {
+              params: {
+                query: 'highest yield farming opportunities defi protocols',
+                category: 'yield',
+                max_results: 10
+              }
+            });
+
+            // Mock yield opportunities structure (replace with actual API response)
+            const yieldOpportunities = yieldResponse?.opportunities || [
+              {
+                protocol: "Aave V3",
+                apy: "12.5%",
+                tvl: "$2.1B",
+                chain: "Ethereum",
+                url: "https://aave.com",
+                description: "Supply USDC to earn yield"
+              },
+              {
+                protocol: "Compound V3",
+                apy: "8.7%",
+                tvl: "$1.8B",
+                chain: "Base",
+                url: "https://compound.finance",
+                description: "Lend USDC for competitive rates"
+              },
+              {
+                protocol: "Yearn Finance",
+                apy: "15.2%",
+                tvl: "$890M",
+                chain: "Ethereum",
+                url: "https://yearn.fi",
+                description: "Automated yield farming vault"
+              }
+            ];
+
+            const yieldFarmingResponse: Response = {
+              content: {
+                message: `🌾 Here are the best yield farming opportunities:`,
+                type: "yield_opportunities",
+                opportunities: yieldOpportunities,
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "success" as const,
+              agentType: "research" as const,
+            };
+
+            setResponses((prev) => [...prev, yieldFarmingResponse]);
+          } catch (error) {
+            console.error("Error fetching yield opportunities:", error);
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : "Failed to fetch yield opportunities";
+
+            const errorResponse: Response = {
+              content: {
+                message: errorMessage,
+                type: "error",
+              },
+              timestamp: new Date().toISOString(),
+              isCommand: false,
+              status: "error" as const,
+              agentType: "research" as const,
+            };
+
+            setResponses((prev) => [...prev, errorResponse]);
+          }
         } else {
           // Regular command processing for non-portfolio commands
           const response = await apiService.processCommand(
