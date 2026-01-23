@@ -125,11 +125,19 @@ class UnifiedParser:
             CommandType.X402_PAYMENT: [
                 {
                     "pattern": re.compile(
+                        r"(?:pay|send)\s+(?P<amount>\d+(?:\.\d+)?)\s*(?P<token>[A-Z]{2,5})\s+to\s+(?P<recipient>\S+)\s+(?:hourly|daily|weekly|monthly)\s+for\s+",
+                        re.IGNORECASE
+                    ),
+                    "description": "Recurring payment with duration (pay X TOKEN to ADDRESS FREQUENCY for DURATION)",
+                    "priority": 1
+                },
+                {
+                    "pattern": re.compile(
                         r"(?:setup|create|enable)\s+(?:automated?|monthly|weekly|daily)?\s*(?:portfolio\s+)?(?:rebalancing|rebalance)",
                         re.IGNORECASE
                     ),
                     "description": "Automated portfolio rebalancing setup",
-                    "priority": 1
+                    "priority": 2
                 },
                 {
                     "pattern": re.compile(
@@ -137,7 +145,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "Automated yield farming setup",
-                    "priority": 2
+                    "priority": 3
                 },
                 {
                     "pattern": re.compile(
@@ -145,7 +153,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "Automated cross-chain bridging",
-                    "priority": 3
+                    "priority": 4
                 },
                 {
                     "pattern": re.compile(
@@ -153,7 +161,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "Recurring payment setup (format: payment of X TOKEN)",
-                    "priority": 4
+                    "priority": 5
                 },
                 {
                     "pattern": re.compile(
@@ -161,7 +169,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "Recurring payment setup (format: X TOKEN payment)",
-                    "priority": 3
+                    "priority": 6
                 },
                 {
                     "pattern": re.compile(
@@ -169,7 +177,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "Recurring payment setup (flexible format)",
-                    "priority": 2
+                    "priority": 7
                 },
                 {
                     "pattern": re.compile(
@@ -185,7 +193,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "Conditional payment setup",
-                    "priority": 5
+                    "priority": 9
                 },
                 {
                     "pattern": re.compile(
@@ -193,7 +201,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "AI agent payment (legacy)",
-                    "priority": 6
+                    "priority": 10
                 },
                 {
                     "pattern": re.compile(
@@ -201,7 +209,7 @@ class UnifiedParser:
                         re.IGNORECASE
                     ),
                     "description": "General agentic payment",
-                    "priority": 7
+                    "priority": 11
                 }
             ],
             CommandType.BRIDGE_TO_PRIVACY: [

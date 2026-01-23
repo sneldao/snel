@@ -50,9 +50,17 @@ class X402Processor:
                         "weekly",
                         "monthly",
                         "daily",
+                        "hourly",
                     ]
                 )
-                and "payment" in command_lower
+                and any(
+                    pay_keyword in command_lower
+                    for pay_keyword in ["payment", "pay"]
+                )
+                and any(
+                    duration_keyword in command_lower
+                    for duration_keyword in ["for", "recurring", "schedule"]
+                )
             ):
                 return await self._handle_recurring_payment(unified_command)
             elif any(
@@ -513,12 +521,13 @@ class X402Processor:
 
             # Map frequency and calculate approval cap based on custom duration
             freq_map = {
+                "hourly": (PaymentActionFrequency.HOURLY, 24 * 365),  # Hours in a year
                 "daily": (PaymentActionFrequency.DAILY, 365),
                 "weekly": (PaymentActionFrequency.WEEKLY, 52),
                 "monthly": (PaymentActionFrequency.MONTHLY, 12),
             }
 
-            freq_enum, _ = freq_map.get(
+            freq_enum, default_periods = freq_map.get(
                 payment_details["interval"].lower(),
                 (PaymentActionFrequency.MONTHLY, 12),
             )
@@ -526,16 +535,39 @@ class X402Processor:
 
             single_amount = float(payment_details["amount"])
 
-            # Respect custom budget cap duration from frontend
-            budget_months = int(payment_details.get("budget_cap_months", 12))
+            # Handle limited duration payments
+            if payment_details.get("limited_duration"):
+                duration_count = int(payment_details["duration_count"])
+                duration_unit = payment_details["duration_unit"]
+                
+                # Calculate total payments based on duration
+                if duration_unit == "hours" and frequency == PaymentActionFrequency.HOURLY:
+                    total_payments = duration_count
+                elif duration_unit == "days" and frequency == PaymentActionFrequency.DAILY:
+                    total_payments = duration_count
+                elif duration_unit == "weeks" and frequency == PaymentActionFrequency.WEEKLY:
+                    total_payments = duration_count
+                elif duration_unit == "months" and frequency == PaymentActionFrequency.MONTHLY:
+                    total_payments = duration_count
+                else:
+                    # Default fallback
+                    total_payments = default_periods
+                
+                approval_amount = single_amount * total_payments
+                budget_months = max(1, duration_count // (12 if duration_unit == "months" else 1))
+            else:
+                # Respect custom budget cap duration from frontend
+                budget_months = int(payment_details.get("budget_cap_months", 12))
 
-            # Calculate approval amount based on actual duration
-            if frequency == PaymentActionFrequency.DAILY:
-                approval_amount = single_amount * (365 * budget_months / 12)
-            elif frequency == PaymentActionFrequency.WEEKLY:
-                approval_amount = single_amount * (52 * budget_months / 12)
-            else:  # Monthly
-                approval_amount = single_amount * budget_months
+                # Calculate approval amount based on actual duration
+                if frequency == PaymentActionFrequency.HOURLY:
+                    approval_amount = single_amount * (24 * 365 * budget_months / 12)
+                elif frequency == PaymentActionFrequency.DAILY:
+                    approval_amount = single_amount * (365 * budget_months / 12)
+                elif frequency == PaymentActionFrequency.WEEKLY:
+                    approval_amount = single_amount * (52 * budget_months / 12)
+                else:  # Monthly
+                    approval_amount = single_amount * budget_months
 
             # action_id is not available yet, will be created on confirmation
             action_id = None
@@ -564,9 +596,16 @@ class X402Processor:
                 )
 
             # Format duration display
-            duration_text = (
-                f"{budget_months}-month" if budget_months != 12 else "1-year"
-            )
+            if payment_details.get("limited_duration"):
+                duration_count = payment_details["duration_count"]
+                duration_unit = payment_details["duration_unit"]
+                duration_text = f"{duration_count} {duration_unit}"
+                budget_cap_text = f"{approval_amount} {payment_details['asset']} total"
+            else:
+                duration_text = (
+                    f"{budget_months}-month" if budget_months != 12 else "1-year"
+                )
+                budget_cap_text = f"{duration_text} budget cap ({approval_amount} {payment_details['asset']})"
 
             return UnifiedResponse(
                 content={
@@ -575,9 +614,10 @@ class X402Processor:
                     f"• Frequency: {payment_details['interval'].title()}\n"
                     f"• Amount: {payment_details['amount']} {payment_details['asset']}\n"
                     f"• Recipient: {payment_details['recipient']}\n"
+                    f"• Duration: {duration_text}\n"
                     f"• Network: {network_display}\n\n"
                     f"This will create a **Payment Action** that uses {network_display.split()[0]} X402 for secure settlement.\n\n"
-                    f"🔒 **Security Note**: You will approve a **{duration_text} budget cap** ({approval_amount} {payment_details['asset']}) "
+                    f"🔒 **Security Note**: You will approve a **{budget_cap_text}** "
                     f"rather than unlimited access, ensuring you stay in control.\n\n"
                     f"*The recurring payment will be active once you authorize the Payment Action.*",
                     "type": "x402_automation",
@@ -720,25 +760,63 @@ class X402Processor:
         amount = amount_match.group(1)
         asset = amount_match.group(2)
 
-        # Extract interval
+        # Extract interval with duration support
         interval = "monthly"  # Default
-        if "daily" in command.lower():
+        duration_count = None
+        duration_unit = None
+        
+        # Check for hourly patterns
+        hourly_match = re.search(r"hourly\s+for\s+(\w+)\s+(hours?)", command.lower())
+        if hourly_match:
+            interval = "hourly"
+            duration_text = hourly_match.group(1)
+            duration_unit = "hours"
+            
+            # Convert text numbers to integers
+            text_to_num = {
+                "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10
+            }
+            duration_count = text_to_num.get(duration_text, int(duration_text) if duration_text.isdigit() else None)
+        
+        # Check for other intervals
+        elif "daily" in command.lower():
             interval = "daily"
+            daily_match = re.search(r"daily\s+for\s+(\d+)\s+(days?)", command.lower())
+            if daily_match:
+                duration_count = int(daily_match.group(1))
+                duration_unit = "days"
         elif "weekly" in command.lower():
             interval = "weekly"
+            weekly_match = re.search(r"weekly\s+for\s+(\d+)\s+(weeks?)", command.lower())
+            if weekly_match:
+                duration_count = int(weekly_match.group(1))
+                duration_unit = "weeks"
         elif "monthly" in command.lower():
             interval = "monthly"
+            monthly_match = re.search(r"monthly\s+for\s+(\d+)\s+(months?)", command.lower())
+            if monthly_match:
+                duration_count = int(monthly_match.group(1))
+                duration_unit = "months"
 
         recipient = await self._extract_recipient_from_command(command)
         if not recipient:
             return None
 
-        return {
+        result = {
             "amount": amount,
             "asset": asset,
             "recipient": recipient,
             "interval": interval,
         }
+        
+        # Add duration info if present
+        if duration_count and duration_unit:
+            result["duration_count"] = str(duration_count)
+            result["duration_unit"] = duration_unit
+            result["limited_duration"] = True
+        
+        return result
 
     async def _resolve_recipient_address(self, recipient_input: str) -> str | None:
         """
