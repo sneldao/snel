@@ -231,13 +231,21 @@ export default function MainApp(props: MainAppProps) {
 
   // Initialize or update welcome message based on wallet state
   useEffect(() => {
+    const getWelcomeMessage = () => {
+      if (!isConnected) {
+        return "Good morning! Please connect your wallet to get started with multichain DeFi.";
+      }
+
+      if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
+        return "Please switch to a supported network to continue.";
+      }
+
+      const chainName = SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS];
+      return `Good morning! How can I help you with DeFi today? You're connected to ${chainName}.`;
+    };
+
     const welcomeMessage: ResponseType = {
-      content: isConnected
-        ? chainId && chainId in SUPPORTED_CHAINS
-          ? `Good morning! How can I help you with crypto today? You're connected to ${SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS]
-          }.`
-          : "Please switch to a supported network to continue."
-        : "Good morning! Please connect your wallet to get started.",
+      content: getWelcomeMessage(),
       timestamp: new Date().toISOString(),
       isCommand: false,
       status: "success" as const,
@@ -1069,6 +1077,16 @@ export default function MainApp(props: MainAppProps) {
                     </VStack>
                   </SimpleGrid>
 
+                  {/* Multichain Support Highlight */}
+                  <VStack spacing={2} mt={4} p={3} bg="blue.50" borderRadius="md" border="1px solid" borderColor="blue.200">
+                    <Text fontSize="sm" fontWeight="semibold" color="blue.700" textAlign="center">
+                      🌐 Multichain DeFi Assistant
+                    </Text>
+                    <Text fontSize="xs" color="blue.600" textAlign="center">
+                      19+ networks • AI-powered • Cross-chain bridging • X402 automation
+                    </Text>
+                  </VStack>
+
                   {/* Hint about help modal */}
                   <Text fontSize="xs" color="gray.500" textAlign="center">
                     Click ? above for specific commands <br />
@@ -1085,11 +1103,11 @@ export default function MainApp(props: MainAppProps) {
                       </Text>
                     </HStack>
                     <HStack spacing={4} justify="center">
-                      <Text fontSize="2xs" color="purple.500" textAlign="center">
+                      <Text fontSize="2xs" color="blue.600" textAlign="center">
                         🤖 Try X402: &quot;setup portfolio rebalancing with 50 USDC&quot;
                       </Text>
-                      <Text fontSize="2xs" color="purple.500" textAlign="center">
-                        ⚡ Try Automation: &quot;pay 20 USDC when ETH drops below $3000&quot;
+                      <Text fontSize="2xs" color="blue.600" textAlign="center">
+                        ⚡ Try Swaps: &quot;swap $100 USDC for ETH on Base&quot;
                       </Text>
                     </HStack>
                   </VStack>

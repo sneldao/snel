@@ -18,6 +18,7 @@ import {
   gnosis,
   zkSync,
   taiko,
+  cronos,
   type Chain,
 } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,12 +28,12 @@ import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_KEY;
 const ALCHEMY_SUPPORTED_CHAINS = ALCHEMY_KEY
   ? ({
-      [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-      [base.id]: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-      [optimism.id]: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-      [arbitrum.id]: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-      [polygon.id]: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
-    } as const)
+    [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    [base.id]: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    [optimism.id]: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    [arbitrum.id]: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+    [polygon.id]: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,
+  } as const)
   : {};
 
 const PUBLIC_RPC_URLS = {
@@ -62,6 +63,9 @@ const PUBLIC_RPC_URLS = {
     process.env.NEXT_PUBLIC_ZKSYNC_RPC_URL || "https://mainnet.era.zksync.io",
   [taiko.id]:
     process.env.NEXT_PUBLIC_TAIKO_RPC_URL || "https://rpc.test.taiko.xyz",
+  // Cronos Network
+  [cronos.id]:
+    process.env.NEXT_PUBLIC_CRONOS_RPC_URL || "https://evm.cronos.org",
 } as const;
 
 // Combine all supported chains
@@ -80,6 +84,8 @@ const ALL_SUPPORTED_CHAINS = [
   zkSync,
   mode,
   taiko,
+  // Cronos Network
+  cronos,
   // Other Networks
   avalanche,
   mantle,
