@@ -702,13 +702,12 @@ export default function MainApp(props: MainAppProps) {
           // Handle yield farming command
           try {
             // Fetch yield opportunities from the research API
-            const yieldResponse = await apiService.get('/api/v1/research/discover', {
-              params: {
-                query: 'highest yield farming opportunities defi protocols',
-                category: 'yield',
-                max_results: 10
-              }
+            const queryParams = new URLSearchParams({
+              query: 'highest yield farming opportunities defi protocols',
+              category: 'yield',
+              max_results: '10'
             });
+            const yieldResponse = await apiService.get(`/research/discover?${queryParams.toString()}`);
 
             // Mock yield opportunities structure (replace with actual API response)
             const yieldOpportunities = yieldResponse?.opportunities || [
