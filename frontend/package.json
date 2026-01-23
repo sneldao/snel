@@ -7,10 +7,8 @@
     "@chakra-ui/icons": "^2.1.1",
     "@chakra-ui/react": "^2.8.2",
     "@chakra-ui/theme-tools": "^2.2.9",
-    "@crypto.com/facilitator-client": "^1.0.4",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
-    "@kaiachain/ethers-ext": "^2.0.9",
     "@react-aria/focus": "^3.21.0",
     "@react-aria/overlays": "^3.28.0",
     "@reown/appkit": "^1.8.6",
@@ -24,7 +22,6 @@
     "framer-motion": "^10.18.0",
     "lodash": "^4.17.21",
     "next": "^16.1.1",
-    "pino-pretty": "^13.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.61.1",
@@ -35,8 +32,7 @@
     "react-speech-recognition": "^4.0.1",
     "recharts": "^3.1.0",
     "viem": "^2.44.1",
-    "wagmi": "^2.8.8",
-    "ws": "^8.16.0"
+    "wagmi": "^2.8.8"
   },
   "scripts": {
     "dev": "next dev",
@@ -60,12 +56,11 @@
     "@types/react-dom": "^18.3.7",
     "@types/react-speech-recognition": "^3.9.6",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.1.1",
     "typescript": "5.9",
-    "zod": "^4.3.5"
+    "zod": "^3.25.76"
   }
 }

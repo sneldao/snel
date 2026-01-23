@@ -1,5 +1,5 @@
 // AgnoResponse moved to portfolioService.ts to avoid duplication
-import { WebSocket, MessageEvent, ErrorEvent } from "ws";
+// Using native browser WebSocket instead of ws package
 import { PortfolioAction } from "./portfolioService";
 
 export interface AgentMetadata {

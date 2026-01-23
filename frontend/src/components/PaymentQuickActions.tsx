@@ -23,10 +23,10 @@ import {
   AlertDialogContent,
   AlertDialogOverlay,
 } from "@chakra-ui/react";
-import { 
-  FaPaperPlane, 
-  FaHistory, 
-  FaClock, 
+import {
+  FaPaperPlane,
+  FaHistory,
+  FaClock,
   FaAddressBook,
   FaChartBar,
   FaChevronRight,
@@ -39,7 +39,6 @@ import {
 } from "react-icons/fa";
 import { PaymentAction, PaymentHistoryService } from "../services/paymentHistoryService";
 import { RecurringPaymentsDashboard } from "./RecurringPaymentsDashboard";
-import { YieldFarmingDashboard } from "./YieldFarmingDashboard";
 import { ApiService } from "../services/apiService";
 
 interface PaymentQuickActionsProps {
@@ -56,15 +55,10 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   paymentService,
 }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { 
-    isOpen: isRecurringOpen, 
-    onOpen: onRecurringOpen, 
-    onClose: onRecurringClose 
-  } = useDisclosure();
-  const { 
-    isOpen: isYieldOpen, 
-    onOpen: onYieldOpen, 
-    onClose: onYieldClose 
+  const {
+    isOpen: isRecurringOpen,
+    onOpen: onRecurringOpen,
+    onClose: onRecurringClose
   } = useDisclosure();
   const [userActions, setUserActions] = React.useState<PaymentAction[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -83,7 +77,7 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
 
   const loadUserActions = async () => {
     if (!walletAddress || !paymentService) return;
-    
+
     setIsLoading(true);
     try {
       const actions = await paymentService.getQuickActions(walletAddress);
@@ -98,8 +92,6 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   const handleQuickAction = (command: string) => {
     if (command === "setup recurring payment") {
       onRecurringOpen();
-    } else if (command === "setup automated yield farming") {
-      onYieldOpen();
     } else {
       onCommandSubmit(command);
     }
@@ -109,10 +101,10 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
     setIsDeleting(true);
     try {
       await apiService.delete(`/api/v1/payment-actions/${actionId}?wallet_address=${walletAddress}`);
-      
+
       // Reload actions
       await loadUserActions();
-      
+
       toast({
         title: "Action Deleted",
         description: "Payment action has been removed.",
@@ -138,23 +130,23 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   const handleToggleEnabled = async (action: PaymentAction) => {
     try {
       const newEnabledState = !action.isEnabled;
-      
+
       await apiService.put(`/api/v1/payment-actions/${action.id}?wallet_address=${walletAddress}`, {
         is_enabled: newEnabledState,
       });
-      
+
       // Update local state
-      setUserActions(prev => 
-        prev.map(a => 
-          a.id === action.id 
+      setUserActions(prev =>
+        prev.map(a =>
+          a.id === action.id
             ? { ...a, isEnabled: newEnabledState }
             : a
         )
       );
-      
+
       toast({
         title: newEnabledState ? "Action Enabled" : "Action Disabled",
-        description: newEnabledState 
+        description: newEnabledState
           ? "Payment action is now active."
           : "Payment action has been paused.",
         status: "success",
@@ -309,7 +301,7 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
                           {action.isEnabled ? "Active" : "Paused"}
                         </Text>
                       </HStack>
-                      
+
                       <HStack spacing={2} justify="flex-end">
                         <Button
                           size="sm"
@@ -376,14 +368,14 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
             </VStack>
           </ModalBody>
         </ModalContent>
-        </Modal>
+      </Modal>
 
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
         isOpen={deleteConfirmId !== null}
         leastDestructiveRef={cancelRef}
         onClose={() => setDeleteConfirmId(null)}
-        >
+      >
         <AlertDialogOverlay>
           <AlertDialogContent>
             <AlertDialogHeader fontSize="lg" fontWeight="bold">
@@ -409,17 +401,12 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialogOverlay>
-        </AlertDialog>
+      </AlertDialog>
 
-        <RecurringPaymentsDashboard 
-          isOpen={isRecurringOpen} 
-          onClose={onRecurringClose} 
-        />
-
-        <YieldFarmingDashboard 
-          isOpen={isYieldOpen} 
-          onClose={onYieldClose} 
-        />
-        </>
-        );
-        };
+      <RecurringPaymentsDashboard
+        isOpen={isRecurringOpen}
+        onClose={onRecurringClose}
+      />
+    </>
+  );
+};
