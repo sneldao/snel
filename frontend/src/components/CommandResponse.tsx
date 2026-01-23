@@ -333,6 +333,7 @@ export const CommandResponse: React.FC<CommandResponseProps> = (props) => {
             let finalApprovalAmount = approvalAmount;
             if (metadata.automation_type === 'recurring_payment') {
                 const frequencyMultipliers: Record<string, number> = {
+                    'hourly': 24 * 365,
                     'daily': 365,
                     'weekly': 52,
                     'monthly': 12

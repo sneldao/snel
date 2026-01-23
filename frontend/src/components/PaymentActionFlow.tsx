@@ -324,6 +324,7 @@ export const PaymentActionFlow: React.FC<PaymentActionFlowProps> = ({
                   })
                 }
               >
+                <option value="hourly">Hourly</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>

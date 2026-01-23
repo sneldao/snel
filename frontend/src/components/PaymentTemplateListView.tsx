@@ -29,6 +29,7 @@ const PaymentTemplateItem: React.FC<PaymentTemplateItemProps> = ({ template, onU
     if (!template.schedule) return "One-time";
     
     switch (template.schedule.frequency) {
+      case 'hourly': return "Hourly";
       case 'daily': return "Daily";
       case 'weekly': return `Weekly${template.schedule.dayOfWeek ? ` on ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][template.schedule.dayOfWeek]}` : ''}`;
       case 'monthly': return `Monthly${template.schedule.dayOfMonth ? ` on day ${template.schedule.dayOfMonth}` : ''}`;

@@ -296,6 +296,9 @@ export const X402AutomationCard: React.FC<X402AutomationCardProps> = ({
                                 size="lg"
                                 fontFamily="mono"
                                 fontSize="sm"
+                                overflow="hidden"
+                                textOverflow="ellipsis"
+                                whiteSpace="nowrap"
                                 _focus={{
                                     borderColor: "purple.300",
                                     bg: "white",

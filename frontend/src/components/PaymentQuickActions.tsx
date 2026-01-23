@@ -38,6 +38,7 @@ import {
   FaEye,
 } from "react-icons/fa";
 import { PaymentAction, PaymentHistoryService } from "../services/paymentHistoryService";
+import { RecurringPaymentsDashboard } from "./RecurringPaymentsDashboard";
 import { ApiService } from "../services/apiService";
 
 interface PaymentQuickActionsProps {
@@ -54,6 +55,11 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   paymentService,
 }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { 
+    isOpen: isRecurringOpen, 
+    onOpen: onRecurringOpen, 
+    onClose: onRecurringClose 
+  } = useDisclosure();
   const [userActions, setUserActions] = React.useState<PaymentAction[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | null>(null);
@@ -84,7 +90,11 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
   };
 
   const handleQuickAction = (command: string) => {
-    onCommandSubmit(command);
+    if (command === "setup recurring payment") {
+      onRecurringOpen();
+    } else {
+      onCommandSubmit(command);
+    }
   };
 
   const handleDeleteAction = async (actionId: string) => {
@@ -392,6 +402,11 @@ export const PaymentQuickActions: React.FC<PaymentQuickActionsProps> = ({
           </AlertDialogContent>
         </AlertDialogOverlay>
         </AlertDialog>
+
+        <RecurringPaymentsDashboard 
+          isOpen={isRecurringOpen} 
+          onClose={onRecurringClose} 
+        />
         </>
         );
         };
