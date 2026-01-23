@@ -23,7 +23,8 @@ export type AgentType =
   | "balance"
   | "protocol_research"
   | "settings"
-  | "payment";
+  | "payment"
+  | "research";
 
 export const getAgentInfo = (agentType?: AgentType) => {
   switch (agentType) {
@@ -81,6 +82,12 @@ export const getAgentInfo = (agentType?: AgentType) => {
         handle: "@research",
         avatarSrc: "/icon.png",
       };
+    case "research":
+      return {
+        name: "Research Agent",
+        handle: "@research",
+        avatarSrc: "/icon.png",
+      };
     case "settings":
       return {
         name: "Settings",
@@ -120,6 +127,8 @@ export const getAgentIcon = (agentType?: AgentType) => {
     case "balance":
       return <Icon as={FaWallet} color="blue.500" />;
     case "protocol_research":
+      return <Icon as={FaSearch} color="purple.500" />;
+    case "research":
       return <Icon as={FaSearch} color="purple.500" />;
     case "settings":
       return <Icon as={FaRobot} color="blue.500" />;
