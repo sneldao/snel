@@ -41,6 +41,7 @@ class ProtocolType(Enum):
     DEX = "dex"
     BRIDGE = "bridge"
     AGGREGATOR = "aggregator"
+    PAYMENT = "payment"
 
 
 @dataclass
