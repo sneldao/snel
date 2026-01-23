@@ -288,6 +288,19 @@ export interface PaymentTemplatesContent {
   }>;
 }
 
+export interface YieldOpportunitiesContent {
+  type: 'yield_opportunities';
+  message: string;
+  opportunities: Array<{
+    protocol: string;
+    apy: string;
+    tvl?: string;
+    chain: string;
+    url?: string;
+    description?: string;
+  }>;
+}
+
 export type ResponseContent =
   | string
   | BalanceContent
@@ -310,7 +323,8 @@ export type ResponseContent =
   | PaymentHistoryContent
   | SpendingAnalyticsContent
   | RecipientsContent
-  | PaymentTemplatesContent;
+  | PaymentTemplatesContent
+  | YieldOpportunitiesContent;
 
 // Supporting interfaces
 export interface TokenBalance {
@@ -384,7 +398,7 @@ export type Response = {
   awaitingConfirmation?: boolean;
   confirmation_type?: "token_confirmation" | "quote_selection";
   status?: "pending" | "processing" | "success" | "error";
-  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "transfer" | "agno" | "balance" | "protocol_research" | "portfolio" | "settings" | "payment";
+  agentType?: "default" | "swap" | "dca" | "brian" | "bridge" | "transfer" | "agno" | "balance" | "protocol_research" | "portfolio" | "settings" | "payment" | "research";
   metadata?: ResponseMetadata;
   requires_selection?: boolean;
   all_quotes?: SwapQuote[];

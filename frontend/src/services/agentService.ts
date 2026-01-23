@@ -208,7 +208,7 @@ export class AgentService {
       this.notifyProgressCallbacks(progress);
     };
 
-    this.wsConnection.onerror = (error: ErrorEvent) => {
+    this.wsConnection.onerror = (error: Event) => {
       console.error("WebSocket error:", error);
       // Implement reconnection logic
       setTimeout(() => this.initializeWebSocket(), 5000);
