@@ -25,6 +25,31 @@ from app.config.tokens import COMMON_TOKENS
 
 logger = logging.getLogger(__name__)
 
+# X402 Facilitator Configuration
+FACILITATOR_URLS = {
+    "cronos-mainnet": "https://facilitator.cronoslabs.org/v2/x402",
+    "cronos-testnet": "https://facilitator.cronoslabs.org/v2/x402",
+    "ethereum-mainnet": "https://facilitator.cronoslabs.org/v2/x402"
+}
+
+STABLECOIN_CONTRACTS = {
+    "cronos-mainnet": "0xf951eC28187D9E5Ca673Da8FE6757E6f0Be5F77C",  # USDC.e Mainnet
+    "cronos-testnet": "0xc01efAaF7C5C61bEbFAeb358E1161b537b8bC0e0",   # devUSDC.e Testnet
+    "ethereum-mainnet": "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF"  # MNEE stablecoin
+}
+
+CHAIN_IDS = {
+    "cronos-mainnet": 25,
+    "cronos-testnet": 338,
+    "ethereum-mainnet": 1
+}
+
+STABLECOIN_SYMBOLS = {
+    "cronos-mainnet": "USDC",
+    "cronos-testnet": "USDC",
+    "ethereum-mainnet": "MNEE"
+}
+
 # Default X402 Facilitator URL
 DEFAULT_FACILITATOR_URL = os.getenv("X402_FACILITATOR_URL", "https://facilitator.cronoslabs.org/v2/x402")
 
