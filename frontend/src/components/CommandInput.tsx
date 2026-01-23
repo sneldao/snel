@@ -12,6 +12,7 @@ import {
 } from "@chakra-ui/react";
 import { useAccount, useChainId } from "wagmi";
 import { useUserProfile } from "../hooks/useUserProfile";
+import { SUPPORTED_CHAINS } from "../constants/chains";
 
 type CommandInputProps = {
   onSubmit: (command: string) => Promise<void>;
@@ -19,28 +20,11 @@ type CommandInputProps = {
   isDisabled?: boolean;
 };
 
-const SUPPORTED_CHAINS = {
-  1: "Ethereum",
-  8453: "Base",
-  42161: "Arbitrum",
-  10: "Optimism",
-  137: "Polygon",
-  43114: "Avalanche",
-  534352: "Scroll",
-  56: "BSC",
-  59144: "Linea",
-  5000: "Mantle",
-  81457: "Blast",
-  34443: "Mode",
-  324: "zkSync Era",
-  100: "Gnosis",
-  167004: "Taiko",
-} as const;
-
 const EXAMPLE_COMMANDS = [
+  "pay 1 USDC to 0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5A on cronos",
   "swap 1 usdc for eth",
   "send 5 ETH to @papajams",
-  "bridge 0.1 ETH from Scroll to Base",
+  "bridge 0.1 ETH from Ethereum to Cronos",
   "analyze my portfolio",
   "show my payment history",
   "show my spending analytics",
@@ -231,10 +215,10 @@ export const CommandInput = React.memo(
                   isDisabled
                     ? "Please set your OpenAI API key to start"
                     : !isConnected
-                    ? "Please connect your wallet to start"
-                    : !isChainSupported
-                    ? "Please switch to a supported network"
-                    : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
+                      ? "Please connect your wallet to start"
+                      : !isChainSupported
+                        ? "Please switch to a supported network"
+                        : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
                 }
                 isDisabled={isDisabled || !isConnected || !isChainSupported}
                 size="sm"
