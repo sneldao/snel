@@ -20,12 +20,13 @@ import { useWallet } from '../../hooks/useWallet';
  */
 
 const PrivacySettings = () => {
-  const { chainId, chainName } = useWallet();
+  const { activeChainId, activeChainName } = useWallet();
 
   interface ChainCapability {
     x402: boolean;
     gmp: boolean;
     compliance: boolean;
+    starknet_native?: boolean;
   }
 
   interface PrivacyOption {
@@ -41,7 +42,7 @@ const PrivacySettings = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Mock chain privacy capabilities (in production, fetch from backend)
-  const chainCapabilities: Record<number, ChainCapability> = useMemo(() => ({
+  const chainCapabilities: Record<string | number, ChainCapability> = useMemo(() => ({
     1: { // Ethereum
       x402: true,
       gmp: true,
@@ -61,20 +62,37 @@ const PrivacySettings = () => {
       x402: false,
       gmp: true,
       compliance: false
+    },
+    'SN_MAIN': { // Starknet Mainnet
+      x402: false,
+      gmp: false,
+      compliance: true,
+      starknet_native: true
+    },
+    'SN_SEPOLIA': { // Starknet Sepolia
+      x402: false,
+      gmp: false,
+      compliance: true,
+      starknet_native: true
     }
   }), []);
 
   // Generate privacy options based on current chain
   useEffect(() => {
-    if (!chainId) return;
+    if (!activeChainId) return;
 
-    const capabilities = chainCapabilities[chainId] || { x402: false, gmp: false, compliance: false };
+    const capabilities = chainCapabilities[activeChainId] || { x402: false, gmp: false, compliance: false };
 
     const options = [
       { value: 'public', label: 'Public Transactions', icon: FaGlobe, description: 'Standard transactions on public blockchain' }
     ];
 
-    if (capabilities.x402) {
+    if (capabilities.starknet_native) {
+      options.push(
+        { value: 'private', label: 'Starknet Shielded', icon: FaShieldAlt, description: 'Zero-knowledge shielded transaction on Starknet' },
+        { value: 'compliance', label: 'Shielded with Compliance', icon: FaBalanceScale, description: 'Private transaction with auditability' }
+      );
+    } else if (capabilities.x402) {
       options.push(
         { value: 'private', label: 'Private via x402', icon: FaShieldAlt, description: 'Fast privacy using x402 programmatic payments' },
         { value: 'compliance', label: 'Private with Compliance', icon: FaBalanceScale, description: 'Private transaction with regulatory records' }
@@ -88,7 +106,7 @@ const PrivacySettings = () => {
     setPrivacyOptions(options);
     setIsLoading(false);
 
-  }, [chainId, chainCapabilities]);
+  }, [activeChainId, chainCapabilities]);
 
   const handleSetDefault = (level: string) => {
     setDefaultPrivacy(level);
@@ -127,8 +145,8 @@ const PrivacySettings = () => {
             <Icon as={FaShieldAlt} color="yellow.500" />
             <Text fontWeight="semibold" fontSize="lg">Privacy Settings</Text>
           </HStack>
-          {chainName && (
-            <Text fontSize="sm" color={mutedColor}>{chainName}</Text>
+          {activeChainName && (
+            <Text fontSize="sm" color={mutedColor}>{activeChainName}</Text>
           )}
         </HStack>
 
@@ -177,19 +195,28 @@ const PrivacySettings = () => {
         {/* Chain Capabilities */}
         <Box>
           <Text fontSize="sm" color={mutedColor} mb={2}>Chain Capabilities</Text>
-          {chainId && chainCapabilities[chainId] && (
+          {activeChainId && chainCapabilities[activeChainId] && (
             <VStack spacing={1} align="start">
+              {chainCapabilities[activeChainId].starknet_native ? (
+                <HStack>
+                  <Icon as={FaShieldAlt} color="orange.500" />
+                  <Text fontSize="sm">Starknet ZK-Privacy: ✅ Supported</Text>
+                </HStack>
+              ) : (
+                <>
+                  <HStack>
+                    <Icon as={FaShieldAlt} color={chainCapabilities[activeChainId].x402 ? 'yellow.500' : 'gray.400'} />
+                    <Text fontSize="sm">x402 Privacy: {chainCapabilities[activeChainId].x402 ? '✅ Supported' : '❌ Not available'}</Text>
+                  </HStack>
+                  <HStack>
+                    <Icon as={FaGlobe} color={chainCapabilities[activeChainId].gmp ? 'green.500' : 'gray.400'} />
+                    <Text fontSize="sm">GMP Privacy: {chainCapabilities[activeChainId].gmp ? '✅ Supported' : '❌ Not available'}</Text>
+                  </HStack>
+                </>
+              )}
               <HStack>
-                <Icon as={FaShieldAlt} color={chainCapabilities[chainId].x402 ? 'yellow.500' : 'gray.400'} />
-                <Text fontSize="sm">x402 Privacy: {chainCapabilities[chainId].x402 ? '✅ Supported' : '❌ Not available'}</Text>
-              </HStack>
-              <HStack>
-                <Icon as={FaGlobe} color={chainCapabilities[chainId].gmp ? 'green.500' : 'gray.400'} />
-                <Text fontSize="sm">GMP Privacy: {chainCapabilities[chainId].gmp ? '✅ Supported' : '❌ Not available'}</Text>
-              </HStack>
-              <HStack>
-                <Icon as={FaBalanceScale} color={chainCapabilities[chainId].compliance ? 'blue.500' : 'gray.400'} />
-                <Text fontSize="sm">Compliance: {chainCapabilities[chainId].compliance ? '✅ Supported' : '❌ Not available'}</Text>
+                <Icon as={FaBalanceScale} color={chainCapabilities[activeChainId].compliance ? 'blue.500' : 'gray.400'} />
+                <Text fontSize="sm">Compliance: {chainCapabilities[activeChainId].compliance ? '✅ Supported' : '❌ Not available'}</Text>
               </HStack>
             </VStack>
           )}

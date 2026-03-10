@@ -9,8 +9,9 @@ import { CommandResponse } from './CommandResponse';
 import { useGMPIntegration } from '../hooks/useGMPIntegration';
 import { VStack, Alert, AlertIcon, Text, useColorModeValue, Spinner, Box } from '@chakra-ui/react';
 
-// Lazy load GMP components to reduce initial bundle size
+// Lazy load components to reduce initial bundle size
 const GMPCommandHandler = lazy(() => import('./GMP/GMPCommandHandler').then(m => ({ default: m.GMPCommandHandler })));
+const StarknetCommandHandler = lazy(() => import('./Starknet/StarknetCommandHandler').then(m => ({ default: m.StarknetCommandHandler })));
 import { AgentType } from '../utils/agentInfo'; // Correct import for AgentType
 
 import { ResponseContent, ResponseMetadata, TransactionData } from '../types/responses';
@@ -37,6 +38,15 @@ interface GMPCompatibleCommandResponseProps {
 export const GMPCompatibleCommandResponse: React.FC<GMPCompatibleCommandResponseProps> = memo((props) => {
   const { isLikelyGMPCommand } = useGMPIntegration();
   
+  // Check if this is a Starknet operation
+  const isStarknetOperation = useMemo(() => {
+    if (typeof props.content !== 'object' || props.content === null) return false;
+    const content = props.content as any;
+    return !!content.metadata?.starknet_tx || 
+           content.type?.startsWith('starknet_') ||
+           content.details?.method?.includes('Starknet');
+  }, [props.content]);
+
   // Check if this is a GMP operation
   const isGMPOperation = useMemo(() => {
     // Simple type checks without type predicates
@@ -88,8 +98,26 @@ export const GMPCompatibleCommandResponse: React.FC<GMPCompatibleCommandResponse
       {/* Show GMP hint for likely cross-chain commands */}
       {showGMPHint && <GMPHint />}
 
-      {/* Show GMP handler for confirmed GMP operations */}
-      {isGMPOperation ? (
+      {/* Show Starknet handler if applicable */}
+      {isStarknetOperation ? (
+        <Suspense fallback={
+          <Box textAlign="center" py={4}>
+            <Spinner size="lg" color="orange.500" />
+            <Text mt={2} fontSize="sm" color="gray.600">Loading Starknet interface...</Text>
+          </Box>
+        }>
+          <StarknetCommandHandler
+            response={{
+              content: props.content,
+              message: (props.content as any).message || 'Starknet operation prepared',
+              success: props.status === 'success'
+            }}
+            onExecute={() => props.onExecuteTransaction?.(props.transaction!)}
+            isExecuting={props.isExecuting}
+          />
+        </Suspense>
+      ) : isGMPOperation ? (
+        /* Show GMP handler for confirmed GMP operations */
         <Suspense fallback={
           <Box textAlign="center" py={4}>
             <Spinner size="lg" color="blue.500" />

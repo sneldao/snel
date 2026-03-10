@@ -37,9 +37,10 @@ import {
   useWalletClient,
   useChainId,
 } from "wagmi";
+import { useAccount as useStarknetAccount } from "@starknet-react/core";
 import { CommandInput } from "./CommandInput";
 import { GMPCompatibleCommandResponse as CommandResponse } from "./GMPCompatibleCommandResponse";
-import { WalletButton } from "./WalletButton";
+import { WalletSelector } from "./WalletSelector";
 import { ExternalLinkIcon, SettingsIcon, QuestionIcon } from "@chakra-ui/icons";
 import { LogoModal } from "./LogoModal";
 import { HelpModal } from "./HelpModal";
@@ -110,6 +111,7 @@ interface MainAppProps {
 export default function MainApp(props: MainAppProps) {
   const toast = useToast();
   const { address, isConnected } = useAccount();
+  const { address: starknetAddress, isConnected: isStarknetConnected } = useStarknetAccount();
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
@@ -949,13 +951,13 @@ export default function MainApp(props: MainAppProps) {
                     </Button>
                   )
                 )}
-                <WalletButton />
+                <WalletSelector />
               </HStack>
             </Flex>
           </Box>
 
           <Box flex={1}>
-            {(!isConnected || showLandingScreen) ? (
+            {(!isConnected && !isStarknetConnected || showLandingScreen) ? (
               <VStack spacing={6} align="center" justify="center" py={8}>
                 {/* Logo */}
                 <Box position="relative" width="60px" height="60px">
@@ -995,13 +997,13 @@ export default function MainApp(props: MainAppProps) {
                       borderRadius="md"
                       bg="gray.50"
                     >
-                      <Icon as={FaLink} color="blue.500" boxSize={4} />
+                      <Icon as={FaShieldAlt} color="orange.500" boxSize={4} />
                       <Text
                         fontSize="xs"
                         fontWeight="medium"
                         textAlign="center"
                       >
-                        Cross-Chain Bridging
+                        ZK Privacy
                       </Text>
                     </VStack>
                     <VStack
@@ -1113,17 +1115,17 @@ export default function MainApp(props: MainAppProps) {
                       border="1px solid"
                       borderColor="rgba(244, 183, 40, 0.2)"
                     >
-                      <Icon as={FaShieldAlt} color="yellow.600" boxSize={5} />
+                      <Icon as={SiStarknet} color="orange.500" boxSize={5} />
                       <Text
                         fontSize="xs"
                         fontWeight="semibold"
                         textAlign="center"
                         color="gray.700"
                       >
-                        Privacy Bridge
+                        Starknet ZK
                       </Text>
                       <Text fontSize="2xs" textAlign="center" color="gray.500">
-                        Asset Shielding
+                        Shield & Unshield
                       </Text>
                     </VStack>
 
@@ -1173,7 +1175,7 @@ export default function MainApp(props: MainAppProps) {
                         💰 Try MNEE: &quot;pay $100 MNEE to merchant...&quot;
                       </Text>
                       <Text fontSize="2xs" color="gray.500" textAlign="center">
-                        🛡️ Try Privacy: &quot;bridge 1 ETH to Zcash&quot;
+                        🛡️ Try Privacy: &quot;shield 1 ETH on starknet&quot;
                       </Text>
                     </HStack>
                     <HStack spacing={4} justify="center">

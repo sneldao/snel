@@ -1,44 +1,63 @@
-import { useAccount, useConnect, useDisconnect, useWalletClient } from 'wagmi';
+import { useAccount as useEvmAccount, useConnect as useEvmConnect, useDisconnect as useEvmDisconnect, useWalletClient } from 'wagmi';
 import { injected } from 'wagmi/connectors';
+import { useAccount as useStarknetAccount, useDisconnect as useStarknetDisconnect, useNetwork as useStarknetNetwork } from '@starknet-react/core';
 import { useMemo } from 'react';
 
 export const useWallet = () => {
-  const { address, isConnected, chain } = useAccount();
-  const { connect } = useConnect();
-  const { disconnect } = useDisconnect();
+  const { address: evmAddress, isConnected: isEvmConnected, chain: evmChain } = useEvmAccount();
+  const { address: starknetAddress, isConnected: isStarknetConnected } = useStarknetAccount();
+  const { chain: starknetChain } = useStarknetNetwork();
+  
+  const { connect: connectEvm } = useEvmConnect();
+  const { disconnect: disconnectEvm } = useEvmDisconnect();
+  const { disconnect: disconnectStarknet } = useStarknetDisconnect();
+  
   const { data: wagmiWalletClient } = useWalletClient();
 
   const connectWallet = () => {
-    connect({ connector: injected() });
+    connectEvm({ connector: injected() });
   };
 
-  // Create a standardized wallet client interface
+  const disconnect = () => {
+    if (isEvmConnected) disconnectEvm();
+    if (isStarknetConnected) disconnectStarknet();
+  };
+
+  // Create a standardized wallet client interface for EVM
   const walletClient = useMemo(() => {
-    if (!wagmiWalletClient || !address || !chain) {
+    if (!wagmiWalletClient || !evmAddress || !evmChain) {
       return null;
     }
 
     return {
-      account: { address },
-      chain: { id: chain.id, name: chain.name },
-      getAddress: () => Promise.resolve(address),
+      account: { address: evmAddress },
+      chain: { id: evmChain.id, name: evmChain.name },
+      getAddress: () => Promise.resolve(evmAddress),
       signMessage: (message: string) => wagmiWalletClient.signMessage({ message }),
       signTransaction: (transaction: any) => wagmiWalletClient.signTransaction(transaction),
       sendTransaction: (transaction: any) => wagmiWalletClient.sendTransaction(transaction),
       // For ethers compatibility
       _isSigner: true,
       provider: wagmiWalletClient.transport,
-      chainId: chain.id
+      chainId: evmChain.id
     };
-  }, [wagmiWalletClient, address, chain]);
+  }, [wagmiWalletClient, evmAddress, evmChain]);
 
   return {
-    address,
-    isConnected,
+    address: evmAddress || starknetAddress,
+    evmAddress,
+    starknetAddress,
+    isConnected: isEvmConnected || isStarknetConnected,
+    isEvmConnected,
+    isStarknetConnected,
     connect: connectWallet,
     disconnect,
     walletClient,
-    chainId: chain?.id,
-    chainName: chain?.name,
+    chainId: evmChain?.id,
+    chainName: evmChain?.name,
+    starknetChainId: starknetChain?.id,
+    starknetChainName: starknetChain?.name,
+    activeChainId: evmChain?.id || starknetChain?.id,
+    activeChainName: evmChain?.name || starknetChain?.name,
   };
 };
