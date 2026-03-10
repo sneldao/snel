@@ -5,6 +5,7 @@ Handles questions, greetings, and general DeFi-related queries.
 import logging
 import os
 from openai import AsyncOpenAI
+from app.utils.llm_client import get_llm_client
 
 from app.models.unified_models import (
     UnifiedCommand, UnifiedResponse, AgentType, CommandType
@@ -335,7 +336,11 @@ X402 AGENTIC PAYMENT FEATURES YOU SUPPORT:
                     )
                 # If it IS a crypto query, fall through to AI handling
             
-            client = AsyncOpenAI(api_key=openai_key)
+            # Get LLM client (Venice primary, OpenAI fallback)
+            client, model, provider = get_llm_client(
+                venice_api_key=venice_key,
+                openai_api_key=openai_key
+            )
             
             # Adjust prompt based on question type
             if is_about_assistant:
@@ -373,7 +378,7 @@ Guidelines:
 """
             
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are SNEL, a helpful and conversational DeFi assistant. Keep responses concise and minimal."},
                     {"role": "user", "content": prompt}
