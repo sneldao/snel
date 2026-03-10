@@ -70,10 +70,11 @@ SwapService → ProtocolRegistry → Smart Router
 - **Fallback**: Automatic cross-protocol fallback
 - **Error Handling**: Helpful suggestions for unsupported pairs
 
-#### Supported Networks (19+)
+#### Supported Networks (20+)
 - **Layer 1**: Ethereum, Avalanche, BSC
 - **Layer 2**: Base, Arbitrum, Optimism, Polygon
 - **Cronos EVM**: Cronos Mainnet, Cronos Testnet (x402 support)
+- **Starknet**: Starknet Mainnet, Starknet Sepolia (privacy operations) *(planned)*
 - **Privacy**: Zcash
 - **Emerging**: zkSync, Scroll, Linea, Mantle, Blast, Mode, Taiko
 

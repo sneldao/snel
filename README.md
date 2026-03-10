@@ -4,9 +4,8 @@
 
 SNEL transforms complex DeFi operations into simple natural language commands. Execute swaps, bridge assets, and manage your portfolio across multiple blockchains with the power of AI - no more complex interfaces or manual protocol navigation.
 
-**Active Hackathon**: Cronos x402 Paytech Hackathon ([DoraHacks](https://dorahacks.io/hackathon/cronos-x402/detail))  
-**Deadline**: January 23, 2026  
-**Previous Track**: MNEE Programmable Stablecoin ([Devpost](https://mnee-eth.devpost.com/))
+**Next Hackathon**: Starknet Re{define} Privacy Hackathon ([hackathon.starknet.org](https://hackathon.starknet.org/)) — Privacy Track  
+**Previous Hackathons**: Cronos x402 Paytech ([DoraHacks](https://dorahacks.io/hackathon/cronos-x402/detail)), MNEE Programmable Stablecoin ([Devpost](https://mnee-eth.devpost.com/))
 
 **MNEE Integration**: SNEL supports MNEE (ERC-20 Programmable Stablecoin) as a native currency for AI-driven payments and commerce.
 - **Contract**: `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` (Ethereum Mainnet)
@@ -22,6 +21,7 @@ SNEL transforms complex DeFi operations into simple natural language commands. E
 - **💱 Cross-Chain Protocol Integration**: Integrates with Axelar, 0x, and more for secure and efficient cross-chain operations.
 - **⚙️ Single Source Registry**: Centralized configuration management for 19+ tokens and chains.
 - **🛡️ Privacy Bridging**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP.
+- **🔒 Starknet Privacy** *(coming soon)*: Private swaps, shielded transfers, and confidential payments on Starknet via Cairo contracts.
 - **💰 Smart Amount Conversion**: Automatically converts USD amounts to token amounts using real-time price data from CoinGecko.
 - **🔐 Secure & User-Friendly**: Non-custodial, supports 50+ wallets, and provides transaction simulation.
 
@@ -51,7 +51,7 @@ All project documentation has been consolidated into four main files in the [doc
 - **[MAIN.md](docs/MAIN.md)** - Core architecture and deployment information
 - **[PRIVACY.md](docs/PRIVACY.md)** - Privacy features and Zcash integration
 - **[INTEGRATIONS.md](docs/INTEGRATIONS.md)** - LINE Mini-dApp and WalletConnect integration
-- **[ROADMAP.md](docs/ROADMAP.md)** - Hackathon roadmap and implementation plan
+- **[STARKNET_PRIVACY.md](docs/STARKNET_PRIVACY.md)** - Starknet privacy integration roadmap
 
 See the [docs/README.md](docs/README.md) for a complete overview of the documentation structure.
 

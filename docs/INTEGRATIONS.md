@@ -56,7 +56,7 @@ SNEL acts as a unified "Agentic Layer" that intelligently routes user intent to 
 
 ## Privacy Features
 
-### Privacy Bridging
+### Privacy Bridging (EVM)
 - **Cross-Chain Bridging**: Axelar GMP + LayerZero integration
 - **Privacy Bridging**: Zcash integration for private transactions
 - **Supported Networks**: Multiple layer 1 and layer 2 networks with privacy features
@@ -65,6 +65,17 @@ SNEL acts as a unified "Agentic Layer" that intelligently routes user intent to 
 - **ZEC Support**: Native Zcash integration for private transactions
 - **Bridge Capabilities**: Bridge assets to privacy-preserving chains like Zcash using Axelar GMP
 - **Privacy Features**: Make transactions private through privacy-preserving cross-chain transfers
+
+### Starknet Privacy (Planned)
+SNEL is expanding privacy capabilities to Starknet, leveraging ZK-native privacy primitives via Cairo smart contracts. Target: [Starknet Re{define} Hackathon](https://hackathon.starknet.org/) — Privacy Track.
+
+- **Shielded Transfers**: Commitment-based private transfers on Starknet
+- **Private Swaps**: Dark pool / sealed-amount token swaps
+- **Tongo Integration**: Private payment primitives (pending SDK availability)
+- **Wallet Support**: Argent X and Braavos via `starknet-react`
+- **NL Commands**: `"privately swap 100 USDC for ETH on starknet"`, `"shield my 200 USDC on starknet"`
+
+See [STARKNET_PRIVACY.md](STARKNET_PRIVACY.md) for full roadmap and implementation plan.
 
 ### Security Considerations
 - **No PII Storage**: Wallet addresses only

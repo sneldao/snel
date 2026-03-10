@@ -13,3 +13,6 @@ LINE Mini-DApp integration, WalletConnect setup, privacy features, Zcash integra
 
 ## [DEVELOPMENT.md](DEVELOPMENT.md) - Development & Research
 Protocol research systems, development roadmap, implementation plans, and technical planning documentation.
+
+## [STARKNET_PRIVACY.md](STARKNET_PRIVACY.md) - Starknet Privacy Integration
+Starknet Re{define} Hackathon roadmap, Cairo contract architecture, privacy command design, and implementation phases.
