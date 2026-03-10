@@ -231,11 +231,10 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
             <Box
               p={3}
               bg="purple.50"
-              _dark={{ bg: "purple.900" }}
+              _dark={{ bg: "purple.900", borderColor: "purple.700" }}
               borderRadius="md"
               borderWidth="1px"
               borderColor="purple.200"
-              _dark={{ borderColor: "purple.700" }}
             >
               <VStack align="start" spacing={2}>
                 <HStack justify="space-between" width="100%">
