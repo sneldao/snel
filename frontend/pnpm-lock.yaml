@@ -123,15 +123,33 @@ importers:
       '@types/d3-ease':
         specifier: ^3.0.2
         version: 3.0.2
+      '@types/d3-interpolate':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@types/d3-scale':
         specifier: ^4.0.8
         version: 4.0.9
       '@types/d3-shape':
         specifier: ^3.1.7
         version: 3.1.8
+      '@types/d3-time':
+        specifier: ^3.0.3
+        version: 3.0.4
       '@types/d3-time-format':
         specifier: ^4.0.2
         version: 4.0.3
+      '@types/d3-timer':
+        specifier: ^3.0.2
+        version: 3.0.2
+      '@types/dom-speech-recognition':
+        specifier: ^0.0.4
+        version: 0.0.4
+      '@types/estree':
+        specifier: ^1.0.5
+        version: 1.0.8
+      '@types/hast':
+        specifier: ^3.0.4
+        version: 3.0.4
       '@types/lodash':
         specifier: ^4.17.20
         version: 4.17.24
@@ -144,9 +162,18 @@ importers:
       '@types/lodash.mergewith':
         specifier: ^4.6.9
         version: 4.6.9
+      '@types/long':
+        specifier: ^5.0.0
+        version: 5.0.0
+      '@types/mdast':
+        specifier: ^4.0.3
+        version: 4.0.4
       '@types/node':
         specifier: ^22.18.1
         version: 22.19.15
+      '@types/parse-json':
+        specifier: ^4.0.2
+        version: 4.0.2
       '@types/react':
         specifier: ^18.3.24
         version: 18.3.28
@@ -159,6 +186,12 @@ importers:
       '@types/react-syntax-highlighter':
         specifier: ^15.5.13
         version: 15.5.13
+      '@types/unist':
+        specifier: ^3.0.2
+        version: 3.0.3
+      '@types/use-sync-external-store':
+        specifier: ^0.0.6
+        version: 0.0.6
       '@types/uuid':
         specifier: ^9.0.7
         version: 9.0.8
@@ -1837,8 +1870,8 @@ packages:
   '@types/debug@4.1.12':
     resolution: {integrity: sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==}
 
-  '@types/dom-speech-recognition@0.0.7':
-    resolution: {integrity: sha512-NjiUoJbBlKhyufNsMZLSp+pbPNtPAFnR738RCJvtZy/HVQ2TZjmqpMyaeOSMXgxdfZM60nt8QGbtfmQrJAH2sw==}
+  '@types/dom-speech-recognition@0.0.4':
+    resolution: {integrity: sha512-zf2GwV/G6TdaLwpLDcGTIkHnXf8JEf/viMux+khqKQKDa8/8BAUtXXZS563GnvJ4Fg0PBLGAaFf2GekEVSZ6GQ==}
 
   '@types/estree-jsx@1.0.5':
     resolution: {integrity: sha512-52CcUVNFyfb1A2ALocQw/Dd1BQFNmSdkuC3BkZ6iqhdMfQz7JWOFRuJFloOzjk+6WijU56m9oKXFAXc7o3Towg==}
@@ -1869,6 +1902,10 @@ packages:
 
   '@types/long@4.0.2':
     resolution: {integrity: sha512-MqTGEo5bj5t157U6fA/BiDynNkn0YknVdh48CMPkTSpFTVmvao5UQmm7uEF6xBEo7qIMAlY/JSleYaE6VOdpaA==}
+
+  '@types/long@5.0.0':
+    resolution: {integrity: sha512-eQs9RsucA/LNjnMoJvWG/nXa7Pot/RbBzilF/QRIU/xRl+0ApxrSUFsV5lmf01SvSlqMzJ7Zwxe440wmz2SJGA==}
+    deprecated: This is a stub types definition. long provides its own type definitions, so you do not need this installed.
 
   '@types/mdast@4.0.4':
     resolution: {integrity: sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==}
@@ -8427,7 +8464,7 @@ snapshots:
     dependencies:
       '@types/ms': 2.1.0
 
-  '@types/dom-speech-recognition@0.0.7': {}
+  '@types/dom-speech-recognition@0.0.4': {}
 
   '@types/estree-jsx@1.0.5':
     dependencies:
@@ -8459,6 +8496,10 @@ snapshots:
 
   '@types/long@4.0.2': {}
 
+  '@types/long@5.0.0':
+    dependencies:
+      long: 4.0.0
+
   '@types/mdast@4.0.4':
     dependencies:
       '@types/unist': 3.0.3
@@ -8485,7 +8526,7 @@ snapshots:
 
   '@types/react-speech-recognition@3.9.6':
     dependencies:
-      '@types/dom-speech-recognition': 0.0.7
+      '@types/dom-speech-recognition': 0.0.4
 
   '@types/react-syntax-highlighter@15.5.13':
     dependencies:
