@@ -137,6 +137,7 @@ export default function MainApp(props: MainAppProps) {
   const settingsBorder = useColorModeValue("gray.200", "gray.600");
   const footerBg = useColorModeValue("white", "gray.800");
   const footerColor = useColorModeValue("gray.600", "gray.300");
+  const featureCardTitleColor = useColorModeValue("gray.700", "gray.100");
 
   // Determine primary network (Starknet first if available)
   const primaryNetwork = isStarknetConnected ? 'starknet' : isConnected ? 'evm' : null;
@@ -1164,7 +1165,7 @@ export default function MainApp(props: MainAppProps) {
                         fontSize="xs"
                         fontWeight="semibold"
                         textAlign="center"
-                        color="gray.700"
+                        color={featureCardTitleColor}
                         _dark={{ color: "gray.200" }}
                       >
                         MNEE Commerce
@@ -1189,7 +1190,7 @@ export default function MainApp(props: MainAppProps) {
                         fontSize="xs"
                         fontWeight="semibold"
                         textAlign="center"
-                        color="gray.700"
+                        color={featureCardTitleColor}
                         _dark={{ color: "gray.200" }}
                       >
                         Starknet ZK
@@ -1214,7 +1215,7 @@ export default function MainApp(props: MainAppProps) {
                         fontSize="xs"
                         fontWeight="semibold"
                         textAlign="center"
-                        color="gray.700"
+                        color={featureCardTitleColor}
                         _dark={{ color: "gray.200" }}
                       >
                         X402 Automation
