@@ -428,7 +428,7 @@ export default function MainApp(props: MainAppProps) {
 
       // Route command based on primary network
       const usedAddress = isStarknetPrimary ? starknetAddress : address;
-      const usedChainId = isStarknetPrimary ? 'starknet' : chainId;
+      const chainIdForApi = isStarknetPrimary ? undefined : chainId;
 
       // Check EVM chain is supported (if EVM is being used)
       if (!isStarknetPrimary && chainId && !(chainId in SUPPORTED_CHAINS)) {
@@ -479,7 +479,7 @@ export default function MainApp(props: MainAppProps) {
             const response = await apiService.processCommand(
               command,
               usedAddress, // Use primary network address
-              usedChainId, // Use primary network chain ID
+              chainIdForApi, // Use primary network chain ID
               userProfile?.name,
               undefined, // onProgress handled separately for portfolio
               walletClient, // Pass signer for potential Axelar operations
@@ -793,7 +793,7 @@ export default function MainApp(props: MainAppProps) {
           const response = await apiService.processCommand(
             command,
             usedAddress,
-            usedChainId,
+            chainIdForApi,
             userProfile?.name,
             undefined, // onProgress
             walletClient, // Pass signer for potential Axelar operations
