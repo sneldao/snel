@@ -40,10 +40,14 @@ class ProcessorRegistry:
             CommandType.TRANSFER: TransferProcessor(**self.dependencies),
             CommandType.CROSS_CHAIN_SWAP: SwapProcessor(**self.dependencies),
             
-            # Privacy processors
+            # Privacy processors (Starknet-first for privacy commands)
             CommandType.SET_PRIVACY_DEFAULT: PrivacyProcessor(**self.dependencies),
             CommandType.OVERRIDE_PRIVACY: PrivacyProcessor(**self.dependencies),
             CommandType.X402_PRIVACY: PrivacyProcessor(**self.dependencies),
+            
+            # Starknet-specific commands
+            CommandType.SHIELD: PrivacyProcessor(**self.dependencies),
+            CommandType.UNSHIELD: PrivacyProcessor(**self.dependencies),
             
             # X402 agentic payment processors
             CommandType.X402_PAYMENT: X402Processor(**self.dependencies),
@@ -61,19 +65,18 @@ class ProcessorRegistry:
             CommandType.CONTEXTUAL_QUESTION: ContextualProcessor(**self.dependencies),
         }
     
-    def get_processor(self, command_type: CommandType) -> BaseProcessor:
-        """
-        Get processor for command type.
+    def get_processor(self, command_type: CommandType, starknet_connected: bool = False) -> BaseProcessor:
+        """Get processor for command type, prioritizing Starknet privacy when available."""
+        # Route privacy-related commands to PrivacyProcessor when Starknet is available
+        if starknet_connected and command_type in [
+            CommandType.SHIELD,
+            CommandType.UNSHIELD,
+            CommandType.X402_PRIVACY,
+            CommandType.SET_PRIVACY_DEFAULT,
+            CommandType.OVERRIDE_PRIVACY,
+        ]:
+            return PrivacyProcessor(**self.dependencies)
         
-        Args:
-            command_type: The type of command to process
-            
-        Returns:
-            Processor instance for the command type
-            
-        Raises:
-            KeyError: If no processor exists for the command type
-        """
         processor = self._processors.get(command_type)
         if not processor:
             raise KeyError(f"No processor registered for {command_type}")

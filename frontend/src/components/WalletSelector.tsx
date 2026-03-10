@@ -37,10 +37,8 @@ export function WalletSelector() {
 
   return (
     <HStack spacing={2}>
-      {/* EVM Wallet */}
-      <ConnectKitButton />
-
-      {/* Starknet Wallet */}
+      {/* Starknet Wallet - Primary Position */}
+      {/* Starknet Wallet (Privacy-First) */}
       {isStarknetConnected ? (
         <Menu>
           <MenuButton as={Button} size="sm" variant="outline" rightIcon={<FaChevronDown />}>
@@ -73,10 +71,13 @@ export function WalletSelector() {
         </Button>
       )}
 
+      {/* EVM Wallet */}
+      <ConnectKitButton />
+
       <Modal isOpen={isOpen} onClose={onClose} size="xs" isCentered>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader fontSize="md">Connect Starknet Wallet</ModalHeader>
+          <ModalHeader fontSize="md">🔐 Connect Starknet (Private)</ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <VStack spacing={3}>

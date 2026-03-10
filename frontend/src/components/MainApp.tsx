@@ -117,6 +117,11 @@ export default function MainApp(props: MainAppProps) {
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
 
+  // Determine primary network (Starknet first if available)
+  const primaryNetwork = isStarknetConnected ? 'starknet' : isConnected ? 'evm' : null;
+  const isStarknetPrimary = primaryNetwork === 'starknet';
+  const networkLabel = isStarknetPrimary ? 'Starknet (Privacy)' : 'EVM';
+
   // Destructure LINE props with defaults
   const {
     platform,
@@ -235,8 +240,12 @@ export default function MainApp(props: MainAppProps) {
   // Initialize or update welcome message based on wallet state
   useEffect(() => {
     const getWelcomeMessage = () => {
+      if (isStarknetConnected) {
+        return "🔐 Welcome to Starknet Privacy! You can now shield assets, perform private swaps, and access zero-knowledge DeFi.";
+      }
+
       if (!isConnected) {
-        return "Good morning! Please connect your wallet to get started with multichain DeFi.";
+        return "Good morning! Connect Starknet for privacy, or EVM for standard DeFi.";
       }
 
       if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
@@ -261,7 +270,7 @@ export default function MainApp(props: MainAppProps) {
           ? [welcomeMessage, ...prev]
           : prev.map((r, i) => (i === 0 ? welcomeMessage : r))
     );
-  }, [isConnected, chainId]);
+  }, [isConnected, isStarknetConnected, chainId]);
 
   // Fetch user profile when address changes
   useEffect(() => {
@@ -405,11 +414,11 @@ export default function MainApp(props: MainAppProps) {
     async (command: string | undefined, isRetry: boolean = false) => {
       if (!command) return;
 
-      // Check if wallet is connected
-      if (!isConnected) {
+      // Check if wallet is connected (either EVM or Starknet)
+      if (!isConnected && !isStarknetConnected) {
         toast({
           title: "Wallet Not Connected",
-          description: "Please connect your wallet to use Snel.",
+          description: "Please connect Starknet (for privacy) or EVM (for standard DeFi).",
           status: "warning",
           duration: 5000,
           isClosable: true,
@@ -417,17 +426,23 @@ export default function MainApp(props: MainAppProps) {
         return;
       }
 
-      // Check if chain is supported
-      if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
+      // Route command based on primary network
+      const usedAddress = isStarknetPrimary ? starknetAddress : address;
+      const usedChainId = isStarknetPrimary ? 'starknet' : chainId;
+
+      // Check EVM chain is supported (if EVM is being used)
+      if (!isStarknetPrimary && chainId && !(chainId in SUPPORTED_CHAINS)) {
         toast({
-          title: "Wrong Network",
-          description: "Please connect to a supported network.",
+          title: "Unsupported EVM Network",
+          description: "Please switch to a supported network.",
           status: "error",
           duration: 5000,
           isClosable: true,
         });
         return;
       }
+
+
 
       setIsLoading(true);
       try {
@@ -463,8 +478,8 @@ export default function MainApp(props: MainAppProps) {
           try {
             const response = await apiService.processCommand(
               command,
-              address, // Use actual connected wallet address
-              chainId, // Use actual connected chain ID
+              usedAddress, // Use primary network address
+              usedChainId, // Use primary network chain ID
               userProfile?.name,
               undefined, // onProgress handled separately for portfolio
               walletClient, // Pass signer for potential Axelar operations
@@ -777,8 +792,8 @@ export default function MainApp(props: MainAppProps) {
           // Regular command processing for non-portfolio commands
           const response = await apiService.processCommand(
             command,
-            address,
-            chainId,
+            usedAddress,
+            usedChainId,
             userProfile?.name,
             undefined, // onProgress
             walletClient, // Pass signer for potential Axelar operations
@@ -850,6 +865,12 @@ export default function MainApp(props: MainAppProps) {
     },
     "handleCommand"
   );
+
+  // Display primary network in UI
+  const getNetworkBadgeColor = () => {
+    if (isStarknetPrimary) return 'purple';
+    return 'blue';
+  };
 
   // Wrapper function for components that expect (command: string) => Promise<void>
   const handleCommandWrapper = async (command: string) => {
