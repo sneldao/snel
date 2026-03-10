@@ -81,10 +81,12 @@ class ContextualProcessor(BaseProcessor):
     async def _generate_greeting_response(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Generate greeting response using AI."""
         try:
+            venice_key = unified_command.venice_api_key or os.getenv("VENICE_API_KEY")
             openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
-            if not openai_key:
+            
+            if not (venice_key or openai_key):
                 return self._create_error_response(
-                    "OpenAI API key not available",
+                    "LLM provider not available",
                     AgentType.DEFAULT
                 )
             
@@ -95,7 +97,11 @@ class ContextualProcessor(BaseProcessor):
                 num_messages=5
             )
             
-            client = AsyncOpenAI(api_key=openai_key)
+            # Get LLM client (Venice primary, OpenAI fallback)
+            client, model, provider = get_llm_client(
+                venice_api_key=venice_key,
+                openai_api_key=openai_key
+            )
             
             prompt = f"""
 You are SNEL, a friendly DeFi assistant. The user has greeted you.
@@ -110,7 +116,7 @@ Keep your response brief (1-2 sentences) and friendly.
 """
             
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {"role": "system", "content": "You are SNEL, a friendly DeFi assistant. Respond naturally to greetings."},
                     {"role": "user", "content": prompt}
