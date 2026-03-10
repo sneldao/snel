@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from openai import AsyncOpenAI
+from app.utils.llm_client import get_llm_client
 
 from ..config.settings import Settings
 from ..core.exceptions import (
@@ -120,8 +121,10 @@ class CommandProcessor:
         """Use AI to classify ambiguous commands based on context."""
         import os
 
+        venice_key = unified_command.venice_api_key or os.getenv("VENICE_API_KEY")
         openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
-        if not openai_key:
+        
+        if not (venice_key or openai_key):
             return CommandType.UNKNOWN
 
         try:
@@ -132,7 +135,11 @@ class CommandProcessor:
                 num_messages=5,
             )
 
-            client = AsyncOpenAI(api_key=openai_key)
+            # Get LLM client (Venice primary, OpenAI fallback)
+            client, model, provider = get_llm_client(
+                venice_api_key=venice_key,
+                openai_api_key=openai_key,
+            )
 
             prompt = f"""
 You are a DeFi assistant analyzing user commands. Based on the conversation context and the current command, classify the command type.
@@ -174,7 +181,7 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
 """
 
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {
                         "role": "system",

@@ -20,9 +20,13 @@ class APISettings:
 @dataclass
 class ExternalServiceSettings:
     """External service configuration."""
-    # Brian API
-    brian_api_url: str = field(default_factory=lambda: os.getenv("BRIAN_API_URL", "https://api.brian.ai"))
-    brian_api_key: str = field(default_factory=lambda: os.getenv("BRIAN_API_KEY", ""))
+    # LLM Services - Venice AI (primary) with OpenAI fallback
+    venice_api_key: str = field(default_factory=lambda: os.getenv("VENICE_API_KEY", ""))
+    venice_model: str = field(default_factory=lambda: os.getenv("VENICE_MODEL", "mistral-31-24b"))
+    
+    # OpenAI API (fallback)
+    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    openai_model: str = field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4o"))
     
     # Exa API
     exa_api_url: str = field(default_factory=lambda: os.getenv("EXA_API_URL", "https://api.exa.ai"))
@@ -32,8 +36,10 @@ class ExternalServiceSettings:
     firecrawl_api_url: str = field(default_factory=lambda: os.getenv("FIRECRAWL_API_URL", "https://api.firecrawl.dev"))
     firecrawl_api_key: str = field(default_factory=lambda: os.getenv("FIRECRAWL_API_KEY", ""))
     
-    # OpenAI API
-    openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
+    # Brian API - DEPRECATED (no longer maintained)
+    # Kept for backward compatibility during migration only
+    brian_api_url: str = field(default_factory=lambda: os.getenv("BRIAN_API_URL", ""))
+    brian_api_key: str = field(default_factory=lambda: os.getenv("BRIAN_API_KEY", ""))
 
 
 @dataclass(frozen=True)

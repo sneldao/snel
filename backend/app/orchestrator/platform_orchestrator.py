@@ -22,7 +22,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.portfolio.portfolio_service import Web3Helper
 from config.settings import Settings
-from openai import AsyncOpenAI
+from app.utils.llm_client import get_llm_client_from_settings
 # Payment imports
 from app.domains.payment_actions.models import CreatePaymentActionRequest, PaymentActionType
 from app.domains.payment_actions.service import get_payment_action_service
@@ -76,12 +76,15 @@ class SNELOrchestrator:
         # ENHANCEMENT: Initialize services with graceful error handling
         self._service_pool = {}
         
-        # Initialize OpenAI if API key available
-        if os.getenv("OPENAI_API_KEY"):
-            self._service_pool['openai'] = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        else:
-            logger.warning("OpenAI API key not found - AI features will be limited")
-            self._service_pool['openai'] = None
+        # Initialize LLM client (Venice AI primary, OpenAI fallback)
+        try:
+            llm_client, llm_model, llm_provider = get_llm_client_from_settings(self._settings)
+            self._service_pool['llm'] = llm_client
+            self._service_pool['llm_model'] = llm_model
+            self._service_pool['llm_provider'] = llm_provider
+            logger.info(f"LLM provider initialized: {llm_provider} (model: {llm_model})")
+        except ValueError as e:
+            logger.warning(f"LLM initialization failed: {e} - AI features will be limited")
         
         # Initialize Web3Helper (doesn't require API key)
         self._service_pool['web3_helper'] = Web3Helper(self._settings.chains.supported_chains)
