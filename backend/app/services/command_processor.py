@@ -212,15 +212,21 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         Process a command by routing to appropriate processor.
 
         Flow:
-        1. Classify command if needed (using AI for ambiguous cases)
-        2. Validate wallet/chain requirements
-        3. Route to domain-specific processor
+        1. Detect simple greetings (fast path)
+        2. Classify command if needed (using AI for ambiguous cases)
+        3. Validate wallet/chain requirements
+        4. Route to domain-specific processor
         """
         try:
             if status_callback: await status_callback("Parsing your intent and classifying command...", 10)
             
+            # Step 0: Fast path for simple greetings (before AI classification)
+            cmd_lower = unified_command.command.lower().strip()
+            if cmd_lower in ["gm", "gn", "gnight", "good morning", "good night", "hello", "hi", "hey", "yo", "sup", "howdy"]:
+                unified_command.command_type = CommandType.GREETING
+                logger.info(f"Fast-tracked '{cmd_lower}' as GREETING")
             # Step 1: Classification if UNKNOWN
-            if unified_command.command_type == CommandType.UNKNOWN:
+            elif unified_command.command_type == CommandType.UNKNOWN:
                 ai_type = await self._classify_with_ai(unified_command)
                 if ai_type != CommandType.UNKNOWN:
                     unified_command.command_type = ai_type

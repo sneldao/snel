@@ -1,8 +1,9 @@
-"""Protocol analysis using OpenAI."""
+"""Protocol analysis using AI (Venice primary, OpenAI fallback)."""
 import logging
 import os
 from typing import Dict, Any, Optional
 from openai import AsyncOpenAI
+from app.utils.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -10,11 +11,12 @@ logger = logging.getLogger(__name__)
 class ProtocolAnalyzer:
     """Single source of truth for all protocol AI analysis."""
     
-    def __init__(self, openai_api_key: Optional[str] = None):
-        """Initialize with OpenAI API key."""
+    def __init__(self, openai_api_key: Optional[str] = None, venice_api_key: Optional[str] = None):
+        """Initialize with API keys (Venice primary, OpenAI fallback)."""
+        self.venice_key = venice_api_key or os.getenv("VENICE_API_KEY")
         self.openai_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        if not self.openai_key:
-            raise ValueError("OpenAI API key not configured")
+        if not (self.venice_key or self.openai_key):
+            raise ValueError("No LLM API keys configured (VENICE_API_KEY or OPENAI_API_KEY)")
     
     async def analyze_scraped_content(
         self,
@@ -42,7 +44,11 @@ class ProtocolAnalyzer:
             }
         
         try:
-            client = AsyncOpenAI(api_key=self.openai_key)
+            # Get LLM client (Venice primary, OpenAI fallback)
+            client, model, provider = get_llm_client(
+                venice_api_key=self.venice_key,
+                openai_api_key=self.openai_key
+            )
             
             prompt = f"""
 You are a DeFi expert analyzing protocol documentation. Extract and summarize the following information about {protocol_name}:
@@ -61,7 +67,7 @@ Keep the response concise and factual.
 """
             
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -105,7 +111,11 @@ Keep the response concise and factual.
             Dictionary with ai_summary from general knowledge
         """
         try:
-            client = AsyncOpenAI(api_key=self.openai_key)
+            # Get LLM client (Venice primary, OpenAI fallback)
+            client, model, provider = get_llm_client(
+                venice_api_key=self.venice_key,
+                openai_api_key=self.openai_key
+            )
             
             prompt = f"""
 You are SNEL, a DeFi expert. The user asked about {protocol_name}.
@@ -120,7 +130,7 @@ Keep it concise and accurate. If you don't have reliable information, say so cle
 """
             
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -168,7 +178,11 @@ Keep it concise and accurate. If you don't have reliable information, say so cle
             Dictionary with answer
         """
         try:
-            client = AsyncOpenAI(api_key=self.openai_key)
+            # Get LLM client (Venice primary, OpenAI fallback)
+            client, model, provider = get_llm_client(
+                venice_api_key=self.venice_key,
+                openai_api_key=self.openai_key
+            )
             
             if raw_content and len(raw_content.strip()) >= 50:
                 # Use content-based answer
@@ -192,7 +206,7 @@ Provide a clear, accurate answer (2-4 sentences) based on your knowledge of DeFi
 """
             
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model,
                 messages=[
                     {
                         "role": "system",
