@@ -41,6 +41,8 @@ import {
   FaDollarSign,
   FaStar,
   FaRegStickyNote,
+  FaDatabase,
+  FaFingerprint,
 } from "react-icons/fa";
 
 interface ProtocolResearchResultProps {
@@ -104,6 +106,10 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
   const recommendedWallets = parsed.recommended_wallets || [];
   const useCases = parsed.use_cases || [];
   const fromKnowledgeBase = parsed.from_knowledge_base || false;
+
+  // PL Genesis: Sovereign Infrastructure Metadata
+  const ipfsCid = parsed.ipfs_cid || parsed.ipfs_proof || (content.metadata?.research_details?.ipfs_cid) || null;
+  const isAutonomeVerified = !!(content.metadata?.research_details?.autonome_verified || ipfsCid);
 
   // Get protocol color scheme based on type
   const getProtocolColor = (type: string) => {
@@ -193,14 +199,77 @@ export const ProtocolResearchResult: React.FC<ProtocolResearchResultProps> = ({
         <VStack spacing={4} align="stretch">
           {/* Header */}
           <HStack justify="space-between">
-            <Text fontWeight="bold" fontSize="lg">{protocolName.toUpperCase()}</Text>
+            <VStack align="start" spacing={1}>
+              <Text fontWeight="bold" fontSize="lg">
+                {protocolName.toUpperCase()}
+              </Text>
+              <HStack spacing={2}>
+                {fromKnowledgeBase && (
+                  <Badge colorScheme="blue" variant="subtle" fontSize="2xs">
+                    Verified KB
+                  </Badge>
+                )}
+                {ipfsCid && (
+                  <Badge colorScheme="purple" variant="solid" fontSize="2xs">
+                    Sovereign Proof
+                  </Badge>
+                )}
+              </HStack>
+            </VStack>
             <HStack>
               <Badge colorScheme={protocolColor}>{protocolType}</Badge>
-              {analysisQuality && <Badge colorScheme="green">{analysisQuality}</Badge>}
-              {fromKnowledgeBase && <Badge colorScheme="blue">Verified</Badge>}
+              {analysisQuality && (
+                <Badge colorScheme="green">{analysisQuality}</Badge>
+              )}
             </HStack>
           </HStack>
+          
           <Divider my={2} />
+
+          {/* PL Genesis: Sovereign Infrastructure Card */}
+          {ipfsCid && (
+            <Box
+              p={3}
+              bg="purple.50"
+              _dark={{ bg: "purple.900" }}
+              borderRadius="md"
+              borderWidth="1px"
+              borderColor="purple.200"
+              _dark={{ borderColor: "purple.700" }}
+            >
+              <VStack align="start" spacing={2}>
+                <HStack justify="space-between" width="100%">
+                  <HStack spacing={2}>
+                    <Icon as={FaDatabase} color="purple.500" />
+                    <Text fontSize="xs" fontWeight="bold" color="purple.700" _dark={{ color: "purple.200" }}>
+                      DECENTRALIZED MEMORY (IPFS)
+                    </Text>
+                  </HStack>
+                  <Link
+                    href={`https://gateway.ipfs.io/ipfs/${ipfsCid}`}
+                    isExternal
+                    fontSize="2xs"
+                    color="purple.500"
+                    textDecoration="underline"
+                  >
+                    Verify on Gateway
+                  </Link>
+                </HStack>
+                <Text fontSize="2xs" fontFamily="mono" color="purple.600" _dark={{ color: "purple.300" }} isTruncated maxWidth="100%">
+                  CID: {ipfsCid}
+                </Text>
+                
+                <Divider borderColor="purple.200" _dark={{ borderColor: "purple.700" }} />
+                
+                <HStack spacing={2}>
+                  <Icon as={FaFingerprint} color="green.500" />
+                  <Text fontSize="xs" fontWeight="bold" color="green.700" _dark={{ color: "green.200" }}>
+                    AUTONOME PROOF-OF-RESEARCH: VERIFIED
+                  </Text>
+                </HStack>
+              </VStack>
+            </Box>
+          )}
 
 
 

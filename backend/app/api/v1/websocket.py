@@ -3,11 +3,13 @@ from typing import Dict, Any, Optional, List, Callable, Awaitable
 import logging
 import time
 import asyncio
+import os
 from datetime import datetime
 
 # Import services
 from app.services.portfolio.portfolio_service import Web3Helper
 from app.services.external.exa_service import discover_defi_protocols
+from app.models.unified_models import UnifiedCommand, CommandType, AgentType
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -75,6 +77,101 @@ manager = ConnectionManager()
 
 # Progress callback type
 ProgressCallback = Callable[[str, int, str], Awaitable[None]]
+
+@router.websocket("/chat/{wallet_address}")
+async def chat_websocket(
+    websocket: WebSocket,
+    wallet_address: str,
+    user_name: Optional[str] = Query(None)
+):
+    """
+    Unified chat WebSocket for real-time command processing with status updates.
+    Inspired by AG-UI agent interaction protocol for 'Thinking...', 'IPFS Uploading...', etc.
+    """
+    try:
+        await manager.connect(wallet_address, websocket)
+        
+        from app.core.dependencies import get_service_container
+        from app.config.settings import get_settings
+        
+        # Initialize command processor via container
+        container = get_service_container(get_settings())
+        command_processor = container.command_processor
+
+        while True:
+            try:
+                # Receive command from client
+                data = await websocket.receive_json()
+                logger.info(f"WebSocket command received for {wallet_address}: {data.get('command')}")
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.error(f"Error receiving WebSocket message: {e}")
+                await manager.send_error(wallet_address, "Invalid message format - expected JSON.")
+                continue
+
+            command_text = data.get("command")
+            if not command_text and data.get("type") != "transaction_step_complete":
+                await manager.send_error(wallet_address, "Empty command received.")
+                continue
+
+            # Create unified command using the new parser architecture
+            unified_command = command_processor.create_unified_command(
+                command=command_text or "complete_transaction_step",
+                wallet_address=wallet_address,
+                chain_id=data.get("chain_id"),
+                user_name=data.get("user_name", user_name),
+                openai_api_key=data.get("openai_api_key")
+            )
+            
+            # Handle specialized command types (e.g. multi-step transactions)
+            if data.get("type") == "transaction_step_complete":
+                unified_command.command_type = CommandType.TRANSACTION_STEP_COMPLETE
+                unified_command.details = data.get("details", {})
+            
+            # Set research mode if provided
+            if "research_mode" in data:
+                unified_command.research_mode = data["research_mode"]
+
+            # Define status callback for real-time Sovereign Agent updates
+            async def status_callback(message: str, progress: int):
+                await manager.send_progress(
+                    wallet_address, 
+                    stage=message, 
+                    completion=progress, 
+                    type="agent_status"
+                )
+
+            # Process command with real-time feedback
+            try:
+                response = await command_processor.process_command(
+                    unified_command, 
+                    status_callback=status_callback
+                )
+                
+                # Format final response consistently with REST API
+                if hasattr(response, "model_dump"):
+                    response_data = response.model_dump()
+                else:
+                    response_data = response.dict()
+                
+                # Ensure agent_type is string for JSON
+                if isinstance(response_data.get("agent_type"), AgentType):
+                    response_data["agent_type"] = response_data["agent_type"].value
+                
+                # Send result
+                await manager.send_data(wallet_address, response_data, data_type="agent_response")
+                
+            except Exception as e:
+                logger.exception(f"Error processing command in WebSocket: {e}")
+                await manager.send_error(wallet_address, f"Processing failed: {str(e)}")
+
+    except WebSocketDisconnect:
+        logger.info(f"Chat WebSocket disconnected: {wallet_address}")
+        manager.disconnect(wallet_address)
+    except Exception as e:
+        logger.exception(f"Error in chat WebSocket for {wallet_address}: {e}")
+        manager.disconnect(wallet_address)
 
 @router.websocket("/portfolio/{wallet_address}")
 async def portfolio_websocket(

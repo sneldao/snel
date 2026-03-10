@@ -6,7 +6,7 @@ Follows ENHANCEMENT FIRST principle: uses existing contextual processor knowledg
 import logging
 import re
 import os
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, Dict
 
 from app.models.unified_models import (
     UnifiedCommand, UnifiedResponse, AgentType, CommandType
@@ -21,6 +21,7 @@ from app.services.research.research_logger import research_logger
 from app.services.knowledge_base import get_protocol_kb, ProtocolMetrics
 from app.services.analysis import ProtocolAnalyzer
 from app.services.protocol import ProtocolResponseBuilder
+from app.services.ipfs_service import ipfs_service
 from .base_processor import BaseProcessor
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,21 @@ class ProtocolProcessor(BaseProcessor):
         super().__init__(**kwargs)
         self.router = ResearchRouter()
     
-    async def process(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+    async def _upload_to_ipfs(self, protocol_name: str, content: Dict[str, Any]) -> Optional[str]:
+        """
+        Helper to upload research content to IPFS for Proof-of-Research.
+        """
+        try:
+            filename = f"research_{protocol_name.lower().replace(' ', '_')}.json"
+            cid = await ipfs_service.upload_json(content, filename=filename)
+            if cid:
+                logger.info(f"Proof-of-Research uploaded to IPFS: {cid}")
+            return cid
+        except Exception as e:
+            logger.error(f"Failed to upload research to IPFS: {e}")
+            return None
+
+    async def process(self, unified_command: UnifiedCommand, status_callback: Optional[callable] = None) -> UnifiedResponse:
         """
         Process protocol research command with intelligent routing.
         
@@ -51,17 +66,19 @@ class ProtocolProcessor(BaseProcessor):
         try:
             logger.info(f"Processing protocol research: {unified_command.command}")
             
+            if status_callback: await status_callback("Classifying research intent and identifying protocols...", 30)
+            
             # Classify intent and get routing decision
             routing_decision = self.router.classify_intent(unified_command.command)
             self.router.log_routing_decision(routing_decision)
             
             # Route based on intent
             if routing_decision.intent == "concept":
-                return await self._handle_concept_query(routing_decision, unified_command)
+                return await self._handle_concept_query(routing_decision, unified_command, status_callback=status_callback)
             elif routing_decision.intent == "depth":
-                return await self._handle_depth_query(routing_decision, unified_command)
+                return await self._handle_depth_query(routing_decision, unified_command, status_callback=status_callback)
             elif routing_decision.intent == "discovery":
-                return await self._handle_discovery_query(routing_decision, unified_command)
+                return await self._handle_discovery_query(routing_decision, unified_command, status_callback=status_callback)
             else:
                 # Fallback
                 return self._create_error_response(
@@ -81,12 +98,15 @@ class ProtocolProcessor(BaseProcessor):
     async def _handle_concept_query(
         self,
         routing_decision,
-        unified_command: UnifiedCommand
+        unified_command: UnifiedCommand,
+        status_callback: Optional[callable] = None
     ) -> UnifiedResponse:
         """Handle concept/educational queries (knowledge base first)."""
         try:
             concept_name = self.router.transform_query_for_tool(routing_decision)
             logger.info(f"Handling concept query: {concept_name}")
+            
+            if status_callback: await status_callback(f"Looking up {concept_name} in SNEL knowledge base...", 50)
             
             # Check knowledge base
             kb_result = await self._lookup_kb(concept_name)
@@ -94,6 +114,14 @@ class ProtocolProcessor(BaseProcessor):
                 matched_key, entry = kb_result
                 logger.info(f"Found '{concept_name}' in knowledge base as '{matched_key}'")
                 content = ProtocolResponseBuilder.from_knowledge_base(matched_key, entry)
+                
+                if status_callback: await status_callback(f"Generating report and pinning to IPFS...", 80)
+                
+                # Proof-of-Research: Upload to IPFS
+                cid = await self._upload_to_ipfs(matched_key, content)
+                
+                if status_callback: await status_callback(f"Research complete. CID: {cid}", 100)
+                
                 return self._create_success_response(
                     content=content,
                     agent_type=AgentType.PROTOCOL_RESEARCH,
@@ -101,9 +129,11 @@ class ProtocolProcessor(BaseProcessor):
                         "source": "knowledge_base",
                         "protocol": matched_key,
                         "knowledge_base_match": True,
+                        "ipfs_proof": cid,
                         "research_details": {
                             "source": "snel_built_in_knowledge_base",
                             "guaranteed_accuracy": True,
+                            "ipfs_cid": cid,
                         }
                     }
                 )
@@ -128,7 +158,8 @@ class ProtocolProcessor(BaseProcessor):
     async def _handle_depth_query(
         self,
         routing_decision,
-        unified_command: UnifiedCommand
+        unified_command: UnifiedCommand,
+        status_callback: Optional[callable] = None
     ) -> UnifiedResponse:
         """Handle depth queries (specific protocol research)."""
         # Determine research mode: quick (KB + AI) or deep (KB + Firecrawl + AI)
@@ -143,11 +174,16 @@ class ProtocolProcessor(BaseProcessor):
             protocol_name = routing_decision.extracted_entity or self.router.transform_query_for_tool(routing_decision)
             logger.info(f"Handling depth query: {protocol_name} (mode: {research_mode}, extracted: {routing_decision.extracted_entity})")
             
+            if status_callback: await status_callback(f"Analyzing {protocol_name} in SNEL knowledge base...", 20)
+            
             # Try knowledge base first with the extracted entity name (both modes)
             kb_result = await self._lookup_kb(protocol_name)
             if kb_result:
                 matched_key, entry = kb_result
                 logger.info(f"Found '{protocol_name}' in knowledge base as '{matched_key}'")
+                
+                if status_callback: await status_callback(f"Fetching real-time on-chain metrics for {matched_key}...", 40)
+                
                 metrics = self._get_protocol_metrics(matched_key)
                 content = ProtocolResponseBuilder.from_knowledge_base(matched_key, entry, metrics)
                 
@@ -162,6 +198,13 @@ class ProtocolProcessor(BaseProcessor):
                     success=True,
                 )
                 
+                if status_callback: await status_callback(f"Compiling verified report to IPFS memory...", 80)
+                
+                # Proof-of-Research: Upload to IPFS
+                cid = await self._upload_to_ipfs(matched_key, content)
+                
+                if status_callback: await status_callback(f"Research complete. CID: {cid}", 100)
+                
                 return self._create_success_response(
                     content=content,
                     agent_type=AgentType.PROTOCOL_RESEARCH,
@@ -170,10 +213,12 @@ class ProtocolProcessor(BaseProcessor):
                         "protocol": matched_key,
                         "research_mode": research_mode,
                         "knowledge_base_match": True,
+                        "ipfs_proof": cid,
                         "research_details": {
                             "source": "snel_built_in_knowledge_base",
                             "guaranteed_accuracy": True,
                             "duration_ms": duration_ms,
+                            "ipfs_cid": cid,
                         }
                     }
                 )
@@ -182,20 +227,24 @@ class ProtocolProcessor(BaseProcessor):
             if research_mode == "quick":
                 # Quick mode: KB failed, fall back to AI general knowledge
                 logger.info(f"Quick research: KB not found, using AI fallback for {protocol_name}")
+                if status_callback: await status_callback(f"KB missed. Falling back to AI analyst for {protocol_name}...", 40)
                 return await self._handle_research_error(
                     protocol_name,
                     unified_command.openai_api_key,
                     "quick",
                     user_id=unified_command.user_name,
-                    start_time=start_time
+                    start_time=start_time,
+                    status_callback=status_callback
                 )
             else:
                 # Deep mode: Use Firecrawl for detailed research
+                if status_callback: await status_callback(f"Initiating deep web search for {protocol_name} (Firecrawl)...", 40)
                 return await self._handle_deep_research(
                     protocol_name,
                     unified_command.openai_api_key,
                     user_id=unified_command.user_name,
-                    start_time=start_time
+                    start_time=start_time,
+                    status_callback=status_callback
                 )
                 
         except Exception as e:
@@ -216,6 +265,7 @@ class ProtocolProcessor(BaseProcessor):
         openai_key: Optional[str],
         user_id: Optional[str] = None,
         start_time: Optional[float] = None,
+        status_callback: Optional[callable] = None
     ) -> UnifiedResponse:
         """
         Perform deep research using Firecrawl Search+Scrape + AI analysis.
@@ -223,6 +273,9 @@ class ProtocolProcessor(BaseProcessor):
         """
         try:
             logger.info(f"Starting deep research for {protocol_name} via Firecrawl")
+            
+            if status_callback: await status_callback(f"Scraping official documentation and community forums for {protocol_name}...", 60)
+            
             from app.core.dependencies import get_service_container
             from app.config.settings import get_settings
             
@@ -239,6 +292,8 @@ class ProtocolProcessor(BaseProcessor):
                 # Analyze scraped content with AI
                 openai_key = openai_key or os.getenv("OPENAI_API_KEY")
                 logger.info(f"Starting AI analysis for {protocol_name}")
+                
+                if status_callback: await status_callback(f"Analyzing {len(scrape_result.get('raw_content', ''))} bytes of data with AI...", 80)
                 
                 analyzer = ProtocolAnalyzer(openai_key)
                 ai_result = await analyzer.analyze_scraped_content(
@@ -266,6 +321,13 @@ class ProtocolProcessor(BaseProcessor):
                     success=True,
                 )
                 
+                if status_callback: await status_callback(f"Finalizing deep research and pinning to IPFS...", 95)
+                
+                # Proof-of-Research: Upload to IPFS
+                cid = await self._upload_to_ipfs(protocol_name, content)
+                
+                if status_callback: await status_callback(f"Deep research complete. CID: {cid}", 100)
+                
                 return self._create_success_response(
                     content=content,
                     agent_type=AgentType.PROTOCOL_RESEARCH,
@@ -274,12 +336,14 @@ class ProtocolProcessor(BaseProcessor):
                             "protocol": protocol_name,
                             "command_type": "protocol_research"
                         },
+                        "ipfs_proof": cid,
                         "research_details": {
                             "scraping_success": True,
                             "source": "firecrawl",
                             "research_mode": "deep",
                             "duration_ms": duration_ms,
                             "firecrawl_cost": firecrawl_cost,
+                            "ipfs_cid": cid,
                         }
                     }
                 )
@@ -294,18 +358,24 @@ class ProtocolProcessor(BaseProcessor):
                 protocol_name,
                 openai_key,
                 "deep",
-                error=e
+                user_id=user_id,
+                start_time=start_time,
+                error=e,
+                status_callback=status_callback
             )
     
     async def _handle_discovery_query(
         self,
         routing_decision,
-        unified_command: UnifiedCommand
+        unified_command: UnifiedCommand,
+        status_callback: Optional[callable] = None
     ) -> UnifiedResponse:
         """Handle discovery queries (opportunity finding with Exa)."""
         try:
             query = self.router.transform_query_for_tool(routing_decision)
             logger.info(f"Handling discovery query: {query}")
+            
+            if status_callback: await status_callback(f"Broadcasting discovery query to Exa DeFi index...", 60)
             
             # Get Exa client with optional caching
             from app.core.dependencies import get_service_container
@@ -321,6 +391,8 @@ class ProtocolProcessor(BaseProcessor):
                 cache=True,
             )
             
+            if status_callback: await status_callback(f"Filtering and ranking yield opportunities...", 90)
+            
             if exa_result.get("search_success", False) and exa_result.get("protocols"):
                 protocols = exa_result.get("protocols", [])
                 
@@ -335,6 +407,8 @@ class ProtocolProcessor(BaseProcessor):
                     },
                     "requires_transaction": False,
                 }
+                
+                if status_callback: await status_callback(f"Discovery complete. Found {len(protocols)} protocols.", 100)
                 
                 return self._create_success_response(
                     content=content,
@@ -403,6 +477,7 @@ class ProtocolProcessor(BaseProcessor):
         user_id: Optional[str] = None,
         start_time: Optional[float] = None,
         error: Optional[Exception] = None,
+        status_callback: Optional[callable] = None
     ) -> UnifiedResponse:
         """
         Centralized error handling for research queries.
@@ -415,11 +490,14 @@ class ProtocolProcessor(BaseProcessor):
             user_id: Optional user ID for logging
             start_time: Optional start time for duration calculation
             error: Optional exception that triggered the fallback
+            status_callback: Optional callback for status updates
             
         Returns:
             UnifiedResponse with AI fallback or error message
         """
         try:
+            if status_callback: await status_callback(f"Searching internal intelligence for {protocol_name}...", 70)
+            
             openai_key = openai_key or os.getenv("OPENAI_API_KEY")
             if not openai_key:
                 # Log failed research
@@ -445,6 +523,8 @@ class ProtocolProcessor(BaseProcessor):
             ai_result = await analyzer.generate_fallback_summary(protocol_name)
             
             if ai_result.get("analysis_success"):
+                if status_callback: await status_callback(f"Synthesizing fallback report for {protocol_name}...", 85)
+                
                 content = ProtocolResponseBuilder.from_ai_fallback(protocol_name, ai_result)
                 
                 # Log successful AI fallback
@@ -458,6 +538,13 @@ class ProtocolProcessor(BaseProcessor):
                     success=True,
                 )
                 
+                if status_callback: await status_callback(f"Finalizing report and pinning CID to IPFS...", 95)
+                
+                # Proof-of-Research: Upload to IPFS
+                cid = await self._upload_to_ipfs(protocol_name, content)
+                
+                if status_callback: await status_callback(f"Fallback research complete. CID: {cid}", 100)
+                
                 return self._create_success_response(
                     content=content,
                     agent_type=AgentType.PROTOCOL_RESEARCH,
@@ -466,7 +553,11 @@ class ProtocolProcessor(BaseProcessor):
                         "protocol": protocol_name,
                         "query_type": query_type,
                         "duration_ms": duration_ms,
-                        "note": "Using AI general knowledge (KB and web research unavailable)"
+                        "ipfs_proof": cid,
+                        "note": "Using AI general knowledge (KB and web research unavailable)",
+                        "research_details": {
+                            "ipfs_cid": cid,
+                        }
                     }
                 )
             else:

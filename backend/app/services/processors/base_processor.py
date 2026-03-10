@@ -55,12 +55,13 @@ class BaseProcessor(ABC):
         self.transaction_flow_service = transaction_flow_service
 
     @abstractmethod
-    async def process(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+    async def process(self, unified_command: UnifiedCommand, status_callback: Optional[callable] = None) -> UnifiedResponse:
         """
         Process the command and return a unified response.
 
         Args:
             unified_command: The command to process
+            status_callback: Optional callback for streaming status updates (AG-UI style)
 
         Returns:
             UnifiedResponse with the result

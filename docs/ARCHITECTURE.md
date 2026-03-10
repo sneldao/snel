@@ -89,7 +89,46 @@ CoralEnvironment → SNELCoralMCPAdapter → SNELOrchestrator
 └── Health Monitoring & SLA
 ```
 
-#### Agent Capabilities
+### Sovereign DeFAI Agent Architecture (PL Genesis Hackathon)
+
+SNEL has been enhanced with a decentralized, verifiable infrastructure stack to become a **Sovereign DeFAI Agent**.
+
+#### Decentralized Infrastructure Stack
+1. **Verifiable AI Memory (IPFS)**
+   - **Service**: `IPFSService` (`backend/app/services/ipfs_service.py`)
+   - **Function**: AI-generated research logs are pinned to IPFS, providing a permanent, decentralized "Proof-of-Research".
+   - **Integration**: `ProtocolProcessor` automatically uploads research results and returns the CID in the metadata.
+
+2. **Proof-of-Action (Autonome)**
+   - **Service**: `CoralProtocolClient` (`backend/app/agents/coral_protocol_client.py`)
+   - **Function**: Agent actions (swaps, bridges, payments) are registered with the **Autonome DeFAI platform**.
+   - **Verification**: Each action is submitted with an associated proof (IPFS CID or On-chain Tx Hash) to ensure auditability.
+
+3. **P2P Agent Coordination (Libp2p)**
+   - **Service**: `SNELCoralAdapter` (`backend/app/agents/snel_agent_adapter.py`)
+   - **Function**: A decentralized communication layer using **Libp2p** for resilient agent-to-agent coordination and tool discovery.
+
+4. **ZK-Privacy Layer (Starknet)**
+   - **Contracts**: Cairo-based `privacy_pool`, `shielded_transfer`, and `private_swap`.
+   - **Function**: Zero-knowledge shielded transactions on Starknet Sepolia/Mainnet, providing financial sovereignty for users and agents.
+
+#### Sovereign Agent Workflow
+```
+User Command: "privately swap 1 ETH for USDC on Starknet"
+    ↓
+Natural language parsing (Starknet Privacy Patterns)
+    ↓
+Execute Shielded Swap (Cairo Contracts)
+    ↓
+Generate Proof-of-Action
+    ↓
+Upload Research/Receipt to IPFS (CID: Qm...)
+    ↓
+Register Action with Autonome (Verifiable Audit Trail)
+```
+
+## Deployment Guide
+
 1. **execute_swap** - Multi-chain token swaps ($0.10-$0.20)
 2. **execute_bridge** - Cross-chain operations ($0.15-$0.30)
 3. **execute_x402_payment** - AI-triggered payments on Cronos ($0.05-$0.15)
@@ -263,7 +302,40 @@ spec:
 
 ## Implementation Status & Changelog
 
-### Latest: MM Finance Integration & Cronos USDC Support (Jan 23, 2026)
+### Latest: Sovereign DeFAI Agent & PL Genesis Integration (March 10, 2026)
+
+#### New Features Added
+
+**1. Verifiable AI Memory (IPFS)**
+- **Purpose**: Decentralized storage for AI research logs ("Proof-of-Research").
+- **Implementation**: `IPFSService` integration in `ProtocolProcessor`.
+- **Status**: ✅ PRODUCTION READY
+
+**2. Proof-of-Action (Autonome)**
+- **Purpose**: Verifiable and auditable agent actions on the Autonome DeFAI platform.
+- **Implementation**: Updated `CoralProtocolClient` and `SNELCoralAdapter` with action submission.
+- **Status**: ✅ PRODUCTION READY
+
+**3. Decentralized Coordination (Libp2p)**
+- **Purpose**: Resilient P2P agent-to-agent communication for tool discovery.
+- **Implementation**: Libp2p transport layer integration in `SNELCoralAdapter`.
+- **Status**: ✅ PROTOTYPE COMPLETE
+
+**4. Starknet ZK-Privacy Upgrades**
+- **Purpose**: Financial sovereignty via zero-knowledge shielded transactions.
+- **Implementation**: Enhanced `privacy_pool`, `shielded_transfer`, and `private_swap` Cairo contracts.
+- **Status**: ✅ CONTRACTS UPGRADED & READY FOR DEPLOYMENT
+
+#### Files Modified
+- `backend/app/services/ipfs_service.py` (new)
+- `backend/app/services/processors/protocol_processor.py` (IPFS integration)
+- `backend/app/agents/coral_protocol_client.py` (Autonome integration)
+- `backend/app/agents/snel_agent_adapter.py` (Libp2p & Autonome integration)
+- `contracts/src/shielded_transfer.cairo` (upgraded)
+- `contracts/src/privacy_pool.cairo` (upgraded)
+- `contracts/src/private_swap.cairo` (upgraded)
+
+### Previous: MM Finance Integration & Cronos USDC Support (Jan 23, 2026)
 
 #### New Features Added
 

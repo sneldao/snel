@@ -4,7 +4,11 @@
 
 SNEL transforms complex DeFi operations into simple natural language commands. Execute swaps, bridge assets, and manage your portfolio across multiple blockchains with the power of AI - no more complex interfaces or manual protocol navigation.
 
-**Next Hackathon**: Starknet Re{define} Privacy Hackathon ([hackathon.starknet.org](https://hackathon.starknet.org/)) — Privacy Track  
+**Next Hackathons**: 
+- **PL Genesis: Frontiers of Collaboration** ([plgenesis.com](https://plgenesis.com/)) — DeFAI & Sovereign Infrastructure (Existing Code Track)
+- **Starknet Re{define} Privacy Hackathon** ([hackathon.starknet.org](https://hackathon.starknet.org/)) — Privacy Track
+
+**Integration Plans**: [PL Genesis Plan](docs/PL_GENESIS_PLAN.md) | [Starknet Privacy Roadmap](docs/STARKNET_PRIVACY.md)
 **Previous Hackathons**: Cronos x402 Paytech ([DoraHacks](https://dorahacks.io/hackathon/cronos-x402/detail)), MNEE Programmable Stablecoin ([Devpost](https://mnee-eth.devpost.com/))
 
 **MNEE Integration**: SNEL supports MNEE (ERC-20 Programmable Stablecoin) as a native currency for AI-driven payments and commerce.

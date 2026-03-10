@@ -36,9 +36,9 @@ export class WebSocketService {
   }
 
   /**
-   * Connect to the WebSocket server for portfolio analysis
+   * Connect to the WebSocket server
    */
-  connect(walletAddress: string, chainId?: number, callbacks?: WebSocketCallbacks): Promise<void> {
+  connect(walletAddress: string, chainId?: number, callbacks?: WebSocketCallbacks, type: 'portfolio' | 'chat' = 'portfolio'): Promise<void> {
     // Store callbacks
     this.callbacks = callbacks || {};
 
@@ -46,36 +46,25 @@ export class WebSocketService {
     this.connectPromise = new Promise((resolve, reject) => {
       this.connectResolve = resolve;
       this.connectReject = reject;
-      
+
       // Add timeout to reject the promise after 10 seconds
       setTimeout(() => {
-        if (this.socket?.readyState !== WebSocket.OPEN) {
-          console.log('WebSocket connection timeout');
-          if (this.connectReject) {
-            this.connectReject(new Error('Connection timeout'));
-          }
-          
-          if (this.callbacks.onError) {
-            this.callbacks.onError({
-              message: 'Connection timeout after 10 seconds',
-              code: 'CONNECTION_TIMEOUT'
-            });
-          }
-          
-          // Ensure socket is closed
+        if (this.socket?.readyState !== WebSocket.OPEN && this.connectReject) {
+          console.log(`WebSocket connection timeout (${type})`);
+          this.connectReject(new Error('Connection timeout'));
           this.disconnect();
         }
       }, 10000);
     });
 
     // Build URL with query parameters
-    let url = `${this.baseUrl}/portfolio/${walletAddress}`;
+    let url = `${this.baseUrl}/${type}/${walletAddress}`;
     if (chainId) {
       url += `?chain_id=${chainId}`;
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('Attempting WebSocket connection to:', url);
+      console.log(`Attempting ${type} WebSocket connection to:`, url);
     }
 
     // Close existing connection if any
@@ -86,20 +75,35 @@ export class WebSocketService {
       this.socket = new WebSocket(url);
       this.setupEventHandlers();
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
+      console.error(`Failed to create ${type} WebSocket:`, error);
       if (this.connectReject) {
         this.connectReject(error);
-      }
-      
-      if (this.callbacks.onError) {
-        this.callbacks.onError({
-          message: 'Failed to create WebSocket connection',
-          error
-        });
       }
     }
 
     return this.connectPromise;
+  }
+
+  /**
+   * Keep for backward compatibility or explicit chat connection
+   */
+  connectChat(walletAddress: string, chainId?: number, callbacks?: WebSocketCallbacks): Promise<void> {
+    return this.connect(walletAddress, chainId, callbacks, 'chat');
+  }
+
+  /**
+   * Send a command message over the WebSocket
+   */
+  async sendCommand(command: string, options: { chain_id?: number, user_name?: string, openai_api_key?: string, research_mode?: string } = {}) {
+    if (!this.isConnected()) {
+      throw new Error('WebSocket is not connected');
+    }
+
+    this.socket?.send(JSON.stringify({
+      command,
+      type: 'command',
+      ...options
+    }));
   }
 
   /**
@@ -113,7 +117,7 @@ export class WebSocketService {
         console.log('WebSocket connection established');
       }
       this.retryCount = 0;
-      
+
       if (this.callbacks.onOpen) {
         this.callbacks.onOpen();
       }
@@ -121,57 +125,53 @@ export class WebSocketService {
       if (this.connectResolve) {
         this.connectResolve();
       }
-      
-      // Send a ping immediately to test the connection
-      try {
-        this.socket?.send(JSON.stringify({ type: 'ping' }));
-      } catch (e) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('Failed to send initial ping');
-        }
-      }
     };
 
     this.socket.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        
+
         switch (message.type) {
           case 'progress':
+          case 'agent_status': // Unified agent status update
             if (this.callbacks.onProgress) {
               this.callbacks.onProgress(message.data);
             }
             break;
-          
+
           case 'result':
+          case 'agent_response': // Unified final result
             if (this.callbacks.onResult) {
               this.callbacks.onResult(message.data);
             }
             break;
-          
+
           case 'error':
             if (this.callbacks.onError) {
               this.callbacks.onError(message.data);
             }
             break;
-          
+
+          case 'pong':
+            // Heartbeat response
+            break;
+
           default:
-            console.warn('Unknown message type:', message.type);
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn('Unknown message type:', message.type);
+            }
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
-        if (this.callbacks.onError) {
-          this.callbacks.onError({ message: 'Invalid server response', error });
-        }
       }
     };
 
     this.socket.onclose = (event) => {
       // Don't retry if it was a normal closure
       const isAbnormalClosure = !event.wasClean;
-      
+
       console.log(`WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}, Abnormal: ${isAbnormalClosure}`);
-      
+
       if (this.callbacks.onClose) {
         this.callbacks.onClose();
       }
@@ -180,9 +180,9 @@ export class WebSocketService {
       if (isAbnormalClosure && this.retryCount < this.maxRetries) {
         this.retryCount++;
         const delay = this.retryDelay * this.retryCount;
-        
+
         console.log(`Retrying connection in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
-        
+
         if (this.callbacks.onProgress) {
           this.callbacks.onProgress({
             stage: `Connection lost. Retrying in ${delay / 1000} seconds...`,
@@ -190,7 +190,7 @@ export class WebSocketService {
             type: 'error'
           });
         }
-        
+
         setTimeout(() => {
           if (this.socket?.url) {
             this.socket = new WebSocket(this.socket.url);
@@ -202,7 +202,7 @@ export class WebSocketService {
         if (this.connectReject) {
           this.connectReject(new Error('Max connection retries reached'));
         }
-        
+
         if (this.callbacks.onError) {
           this.callbacks.onError({
             message: 'Connection failed after multiple retries',
@@ -214,7 +214,7 @@ export class WebSocketService {
 
     this.socket.onerror = (error) => {
       console.error('WebSocket error:', error);
-      
+
       if (this.callbacks.onError) {
         this.callbacks.onError({
           message: 'WebSocket connection error - the backend service may be unavailable',
@@ -230,7 +230,7 @@ export class WebSocketService {
         this.connectResolve = null;
         this.connectReject = null;
       }
-      
+
       // Try an alternative method if WebSocket fails
       if (this.callbacks.onProgress) {
         this.callbacks.onProgress({
@@ -255,7 +255,7 @@ export class WebSocketService {
         console.warn('Error while closing WebSocket:', e);
       } finally {
         this.socket = null;
-        
+
         // Clear any pending connection promises
         this.connectResolve = null;
         this.connectReject = null;
@@ -275,7 +275,7 @@ export class WebSocketService {
    */
   getState(): string {
     if (!this.socket) return 'CLOSED';
-    
+
     switch (this.socket.readyState) {
       case WebSocket.CONNECTING:
         return 'CONNECTING';

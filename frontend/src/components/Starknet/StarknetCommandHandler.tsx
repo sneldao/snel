@@ -11,8 +11,7 @@ import {
   useColorModeValue,
   Spinner,
 } from "@chakra-ui/react";
-import { SiStarknet } from "react-icons/si";
-import { FaShieldAlt, FaUnlockAlt, FaExchangeAlt } from "react-icons/fa";
+import { FaShieldAlt, FaUnlockAlt, FaExchangeAlt, FaEthereum } from "react-icons/fa";
 import { useStarknetIntegration } from "../../hooks/useStarknetIntegration";
 
 interface StarknetCommandHandlerProps {
@@ -49,6 +48,7 @@ export function StarknetCommandHandler({ response, onExecute, isExecuting }: Sta
       );
       if (result?.transaction_hash) {
         setTxHash(result.transaction_hash);
+        onExecute?.();
       }
     } catch (error) {
       console.error("Starknet execution error:", error);
@@ -77,7 +77,7 @@ export function StarknetCommandHandler({ response, onExecute, isExecuting }: Sta
       <VStack align="start" spacing={3}>
         <HStack w="full" justify="space-between">
           <HStack>
-            <Icon as={SiStarknet} color="orange.400" w={5} h={5} />
+            <Icon as={FaEthereum} color="orange.400" w={5} h={5} />
             <Text fontWeight="bold" fontSize="sm">Starknet Privacy Operation</Text>
           </HStack>
           <Badge colorScheme="orange">ZK-Powered</Badge>
@@ -125,7 +125,7 @@ export function StarknetCommandHandler({ response, onExecute, isExecuting }: Sta
             onClick={handleExecute}
             isLoading={isPending || isExecuting}
             isDisabled={!isConnected}
-            leftIcon={<Icon as={SiStarknet} />}
+            leftIcon={<Icon as={FaEthereum} />}
           >
             {isConnected ? "Confirm & Execute on Starknet" : "Connect Starknet Wallet to Proceed"}
           </Button>

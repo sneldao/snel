@@ -14,9 +14,18 @@ import {
   Circle,
   Icon,
   useColorModeValue,
+  Spinner,
 } from "@chakra-ui/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckIcon } from "@chakra-ui/icons";
+import {
+  FaCheckCircle,
+  FaSpinner,
+  FaDatabase,
+  FaFingerprint,
+  FaShieldAlt,
+  FaRobot,
+} from "react-icons/fa";
 
 const MotionBox = motion(Box);
 const MotionVStack = motion(VStack);
@@ -318,6 +327,52 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
     );
   };
 
+  const renderAgentSteps = () => {
+    const isPrivate = (content as any)?.is_private || (content as any)?.method === "starknet_privacy";
+    const ipfsCid = (content as any)?.ipfs_proof || (content as any)?.metadata?.research_details?.ipfs_cid;
+
+    const steps = [
+      { name: "Analyzing Intent", status: "completed", icon: FaRobot, color: "blue.500" },
+      { name: "IPFS Proof-of-Research", status: ipfsCid ? "completed" : "pending", icon: FaDatabase, color: "purple.500" },
+      { name: "Starknet Privacy Layer", status: isPrivate ? "active" : "skipped", icon: FaShieldAlt, color: "cyan.500" },
+      { name: "Autonome Proof-of-Action", status: isLoading ? "active" : "pending", icon: FaFingerprint, color: "green.500" },
+    ];
+
+    return (
+      <VStack spacing={2} align="stretch" mt={4} mb={2}>
+        <Text fontSize="xs" fontWeight="bold" color="gray.500" letterSpacing="widest">
+          SOVEREIGN AGENT WORKFLOW
+        </Text>
+        {steps.map((step, idx) => (
+          <HStack key={idx} spacing={3} p={2} bg="blackAlpha.50" borderRadius="md" opacity={step.status === "skipped" ? 0.4 : 1}>
+            <Icon 
+              as={step.status === "active" ? FaSpinner : step.icon} 
+              color={step.status === "completed" ? "green.500" : step.color}
+              className={step.status === "active" ? "spin" : ""}
+            />
+            <Text fontSize="xs" fontWeight="medium" flex={1}>
+              {step.name}
+            </Text>
+            {step.status === "completed" ? (
+              <Icon as={FaCheckCircle} color="green.500" />
+            ) : step.status === "active" ? (
+              <Spinner size="xs" color="blue.500" />
+            ) : null}
+          </HStack>
+        ))}
+        
+        {ipfsCid && (
+          <Box p={2} bg="purple.50" _dark={{ bg: "purple.900" }} borderRadius="md" borderWidth="1px" borderColor="purple.200">
+             <HStack justify="space-between">
+                <Text fontSize="2xs" fontWeight="bold" color="purple.700" _dark={{ color: "purple.200" }}>IPFS PROOF</Text>
+                <Text fontSize="2xs" fontFamily="mono" isTruncated maxW="150px">{ipfsCid}</Text>
+             </HStack>
+          </Box>
+        )}
+      </VStack>
+    );
+  };
+
   const renderDetails = () => {
     if (isSuccess) {
       return (
@@ -466,6 +521,9 @@ export const UnifiedConfirmation: React.FC<UnifiedConfirmationProps> = ({
               )}
             </Box>
           )}
+
+          {/* Sovereign Agent Workflow Steps */}
+          {!isSuccess && renderAgentSteps()}
 
           {/* Action Buttons */}
           {!isSuccess && (

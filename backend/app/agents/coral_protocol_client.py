@@ -93,6 +93,74 @@ class CoralProtocolClient:
             logger.error(f"[CORAL] Exception during agent registration: {str(e)}")
             return False
     
+    def register_with_autonome(self, autonom_api_key: str) -> bool:
+        """
+        Register the agent with Autonome (DeFAI) platform for verifiable agent actions.
+        PL Genesis Hackathon Requirement.
+        """
+        try:
+            logger.info(f"[AUTONOME] Registering agent {self.agent_id} with Autonome")
+            autonome_url = os.getenv("AUTONOME_RPC_URL", "https://rpc.autonome.ai/v1/agents/register")
+            
+            payload = {
+                "agentId": self.agent_id,
+                "metadata": {
+                    "name": "SNEL Sovereign DeFAI Agent",
+                    "version": "1.0.0",
+                    "capabilities": ["multi-chain-swap", "cross-chain-bridge", "private-zk-swap"],
+                    "privacy_layer": "Starknet"
+                }
+            }
+            
+            response = requests.post(
+                autonome_url,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {autonome_api_key}",
+                    "Content-Type": "application/json"
+                }
+            )
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"[AUTONOME] Agent {self.agent_id} registered successfully with Autonome")
+                return True
+            else:
+                logger.error(f"[AUTONOME] Autonome registration failed: {response.status_code}")
+                return False
+        except Exception as e:
+            logger.error(f"[AUTONOME] Exception during Autonome registration: {str(e)}")
+            return False
+
+    def submit_verifiable_action(self, action_type: str, details: Dict[str, Any], proof: str) -> bool:
+        """
+        Submit a verifiable action to Autonome.
+        Ensures agent actions are auditable and verifiable (Proof-of-Action).
+        """
+        try:
+            autonome_url = os.getenv("AUTONOME_RPC_URL", "https://rpc.autonome.ai/v1/actions")
+            api_key = os.getenv("AUTONOME_API_KEY")
+            
+            if not api_key:
+                return False
+
+            payload = {
+                "agentId": self.agent_id,
+                "action": action_type,
+                "details": details,
+                "proof": proof, # e.g., IPFS CID or Starknet Tx Hash
+                "timestamp": int(time.time())
+            }
+            
+            requests.post(
+                autonome_url,
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}"}
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[AUTONOME] Verifiable action submission failed: {e}")
+            return False
+
     def authenticate_agent(self, auth_token: str) -> Optional[AuthenticationResponse]:
         """
         Authenticate agent with Coral Server

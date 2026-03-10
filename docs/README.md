@@ -16,3 +16,6 @@ Protocol research systems, development roadmap, implementation plans, and techni
 
 ## [STARKNET_PRIVACY.md](STARKNET_PRIVACY.md) - Starknet Privacy Integration
 Starknet Re{define} Hackathon roadmap, Cairo contract architecture, privacy command design, and implementation phases.
+
+## [PL_GENESIS_PLAN.md](PL_GENESIS_PLAN.md) - PL Genesis Integration Plan
+Integration plan for IPFS, Filecoin, Libp2p, and FVM for the PL Genesis: Frontiers of Collaboration Hackathon.

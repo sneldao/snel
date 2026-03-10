@@ -26,6 +26,7 @@ import {
   AnalysisProgress,
 } from "../services/portfolioService";
 import { ApiService } from "../services/apiService";
+import { websocketService } from "../services/websocketService";
 import { TerminalProgress } from "./shared/TerminalProgress";
 import { PortfolioSummary } from "./PortfolioSummary";
 import { UnifiedConfirmation } from "./UnifiedConfirmation";
@@ -340,6 +341,74 @@ export const Chat: React.FC<ChatProps> = ({
     }
   };
 
+  const handleAgentStatus = (status: AnalysisProgress) => {
+    console.log("Agent status update:", status);
+
+    // update currentWorkflow state for the Sovereign Agent visualization
+    setCurrentWorkflow(prev => {
+      const stageId = status.stage.toLowerCase().includes("scanning") || status.stage.toLowerCase().includes("portfolio")
+        ? "portfolio"
+        : (status.stage.toLowerCase().includes("analyzing") || status.stage.toLowerCase().includes("market")
+          ? "market"
+          : "strategy");
+
+      return prev.map(s => {
+        if (s.id === stageId) {
+          return {
+            ...s,
+            status: status.completion === 100 ? "completed" : "active",
+            progress: status.completion,
+          };
+        } else if (status.completion === 100 && s.id === "portfolio" && stageId === "market") {
+          return { ...s, status: "completed", progress: 100 };
+        } else if (status.completion === 100 && s.id === "market" && stageId === "strategy") {
+          return { ...s, status: "completed", progress: 100 };
+        }
+        return s;
+      });
+    });
+
+    // Use the existing handleProgress logic but tailored for agent status
+    // Add to progress steps for terminal display
+    setProgressSteps((prev) => [...prev, status]);
+
+    setMessages((msgs) => {
+      const progressIndex = msgs.findIndex((msg) => msg.type === "progress");
+
+      if (progressIndex >= 0) {
+        const updatedMsgs = [...msgs];
+        const currentSteps = updatedMsgs[progressIndex].metadata?.steps || [];
+
+        updatedMsgs[progressIndex] = {
+          ...updatedMsgs[progressIndex],
+          content: status.stage,
+          metadata: {
+            stage: status.stage,
+            progress: status.completion,
+            reasoning: status.details ? [status.details] : undefined,
+            steps: [...currentSteps, status],
+          },
+        };
+
+        return updatedMsgs;
+      } else {
+        const progressMessage: Message = {
+          id: `progress-${Date.now()}`,
+          type: "progress",
+          content: status.stage,
+          timestamp: new Date(),
+          metadata: {
+            stage: status.stage,
+            progress: status.completion,
+            reasoning: status.details ? [status.details] : undefined,
+            steps: [status],
+          },
+        };
+        return [...msgs, progressMessage];
+      }
+    });
+  };
+
   const handleSubmit = async () => {
     if (!input.trim()) return;
 
@@ -354,6 +423,9 @@ export const Chat: React.FC<ChatProps> = ({
     const command = input;
     setInput("");
     setIsAnalyzing(true);
+
+    // Reset workflow status for new analysis
+    setCurrentWorkflow(prev => prev.map(s => ({ ...s, status: "pending", progress: 0 })));
 
     // Proactive Zero-State Check: No Wallet
     if (!address) {
@@ -372,84 +444,135 @@ export const Chat: React.FC<ChatProps> = ({
     }
 
     try {
-      // Check for portfolio commands first
-      if (
-        /portfolio|allocation|holdings|assets|analyze/i.test(command.toLowerCase())
-      ) {
+      // Check for portfolio commands
+      if (/portfolio|allocation|holdings|assets|analyze/i.test(command.toLowerCase())) {
         await handlePortfolioAnalysis(command);
       } else {
-        // Process regular commands via API
-        const response = await apiService.processCommand(
-          command,
-          address,
-          chainId
-        );
+        // Use WebSocket for real-time Sovereign Agent updates (AG-UI style)
+        let responseReceived = false;
 
-        // Handle payment responses
-        if (response.agent_type === "payment" || response.content?.type === "payment") {
-          setPendingPayment({
-            ...response.content?.details,
-            message: response.content?.message || "Confirm payment",
-          });
+        await websocketService.connectChat(address, chainId, {
+          onProgress: (status: AnalysisProgress) => {
+            handleAgentStatus(status);
+          },
+          onResult: (response: any) => {
+            responseReceived = true;
 
-          // Add response message to chat
-          const paymentMessage: Message = {
-            id: `assistant-${Date.now()}`,
-            type: "assistant",
-            content: response.content?.message || "Ready for payment confirmation",
-            timestamp: new Date(),
-            metadata: {
-              stage: "payment_confirmation",
-              progress: 0,
-              reasoning: ["Payment confirmation required"],
-            },
-          };
-          setMessages((msgs) => [...msgs, paymentMessage]);
-        } else {
-          // Add other responses to chat
-          const responseMessage: Message = {
-            id: `assistant-${Date.now()}`,
-            type: "assistant",
-            content: response.content?.message || JSON.stringify(response.content),
-            timestamp: new Date(),
-            metadata: {
-              stage: response.content?.type || "response",
-              progress: 100,
-            },
-          };
-          setMessages((msgs) => [...msgs, responseMessage]);
-        }
+            // Remove the progress message and add the final response
+            setMessages((msgs) => {
+              const filteredMsgs = msgs.filter((msg) => msg.type !== "progress");
+
+              const assistantMessage: Message = {
+                id: `assistant-${Date.now()}`,
+                type: "assistant",
+                content: response.content?.message || JSON.stringify(response.content),
+                timestamp: new Date(),
+                metadata: {
+                  stage: response.content?.type || "response",
+                  progress: 100,
+                  ...response.metadata // Pass through CID and other meta for UnifiedConfirmation
+                },
+              };
+
+              // Handle special response types (e.g. payment)
+              if (response.agent_type === "payment" || response.content?.type === "payment") {
+                setPendingPayment({
+                  ...response.content?.details,
+                  message: response.content?.message || "Confirm payment",
+                });
+                assistantMessage.metadata!.stage = "payment_confirmation";
+              }
+
+              return [...filteredMsgs, assistantMessage];
+            });
+
+            // Complete the workflow
+            setCurrentWorkflow(prev => prev.map(s => ({ ...s, status: "completed", progress: 100 })));
+
+            setIsAnalyzing(false);
+            websocketService.disconnect();
+          },
+          onError: (error) => {
+            console.error("Chat WebSocket error:", error);
+            // Fallback to traditional API if WebSocket fails
+            if (!responseReceived) {
+              handleCommandFallback(command);
+            }
+          }
+        });
+
+        // Send the command via WebSocket
+        await websocketService.sendCommand(command, {
+          chain_id: chainId,
+          user_name: address
+        });
+
+        // Set a timeout for the response
+        setTimeout(() => {
+          if (!responseReceived && isAnalyzing) {
+            console.warn("WebSocket response timeout, falling back to HTTP");
+            handleCommandFallback(command);
+          }
+        }, 30000);
       }
     } catch (error) {
-      const errorMsg =
-        error instanceof Error ? error.message : "Failed to process command";
       console.error("Command processing error:", error);
+      handleCommandError(error);
+    }
+  };
 
+  const handleCommandFallback = async (command: string) => {
+    try {
+      const response = await apiService.processCommand(command, address, chainId);
 
-      // Agentic Error Guidance
-      let guidance = errorMsg;
-      if (errorMsg.includes("insufficient funds") || errorMsg.includes("low balance")) {
-        guidance = `It looks like you have insufficient funds for this transaction. If you're on Cronos Testnet, you can get free TCRO and USDC from the Official Faucets: https://cronos.org/faucet and https://faucet.cronos.org`;
-      } else if (errorMsg.includes("user rejected")) {
-        guidance = "Transaction was cancelled. No worries! If you're ready to try again, just let me know.";
-      }
+      setMessages((msgs) => {
+        const filteredMsgs = msgs.filter((msg) => msg.type !== "progress");
 
-      setMessages((msgs) => [
-        ...msgs,
-        {
-          id: `error-${Date.now()}`,
-          type: "assistant", // Use assistant for guidance
-          content: guidance,
+        const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          type: "assistant",
+          content: response.content?.message || JSON.stringify(response.content),
           timestamp: new Date(),
           metadata: {
-            stage: "error_guidance",
-            reasoning: [errorMsg]
-          }
-        },
-      ]);
+            stage: response.content?.type || "response",
+            progress: 100,
+          },
+        };
+
+        return [...filteredMsgs, assistantMessage];
+      });
+    } catch (error) {
+      handleCommandError(error);
     } finally {
       setIsAnalyzing(false);
+      websocketService.disconnect();
     }
+  };
+
+  const handleCommandError = (error: any) => {
+    const errorMsg = error instanceof Error ? error.message : "Failed to process command";
+    let guidance = errorMsg;
+
+    if (errorMsg.includes("insufficient funds") || errorMsg.includes("low balance")) {
+      guidance = `It looks like you have insufficient funds for this transaction. If you're on Cronos Testnet, you can get free TCRO and USDC from the Official Faucets: https://cronos.org/faucet and https://faucet.cronos.org`;
+    } else if (errorMsg.includes("user rejected")) {
+      guidance = "Transaction was cancelled. No worries! If you're ready to try again, just let me know.";
+    }
+
+    setMessages((msgs) => [
+      ...msgs.filter(m => m.type !== "progress"),
+      {
+        id: `error-${Date.now()}`,
+        type: "assistant",
+        content: guidance,
+        timestamp: new Date(),
+        metadata: {
+          stage: "error_guidance",
+          reasoning: [errorMsg]
+        }
+      },
+    ]);
+    setIsAnalyzing(false);
   };
 
   const handlePortfolioAnalysis = async (input: string) => {
@@ -903,7 +1026,7 @@ export const Chat: React.FC<ChatProps> = ({
         >
           <Input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
             placeholder={
               portfolioMode
                 ? "Ask me more about your portfolio..."
@@ -912,7 +1035,7 @@ export const Chat: React.FC<ChatProps> = ({
             mr={{ base: 0, sm: 2 }}
             mb={{ base: 2, sm: 0 }}
             disabled={isAnalyzing}
-            onKeyPress={(e) => e.key === "Enter" && handleSubmit()}
+            onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && handleSubmit()}
           />
           <Button
             onClick={handleSubmit}

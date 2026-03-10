@@ -30,6 +30,7 @@ import {
   FaSearch,
   FaShieldAlt,
   FaBolt,
+  FaEthereum,
 } from "react-icons/fa";
 import {
   useAccount,
@@ -1115,7 +1116,7 @@ export default function MainApp(props: MainAppProps) {
                       border="1px solid"
                       borderColor="rgba(244, 183, 40, 0.2)"
                     >
-                      <Icon as={SiStarknet} color="orange.500" boxSize={5} />
+                      <Icon as={FaEthereum} color="orange.500" boxSize={5} />
                       <Text
                         fontSize="xs"
                         fontWeight="semibold"

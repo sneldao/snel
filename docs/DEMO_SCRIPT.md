@@ -37,9 +37,28 @@
 **Audio**:
 "And just like that, the payment is settled on-chain. The X402 facilitator verified my signature and executed the transaction. Fast, secure, and completely agentic."
 
-## Scene 5: Scheduled/Recurring Capability (2:30 - 3:00)
-**Visual**: Quickly type `setup weekly payment of 50 USDC to supplier.eth`. Show the confirmation card (don't need to execute).
+## Scene 5: Sovereign Agent Workflow & Real-Time Status (2:30 - 3:00)
+**Visual**: Show the new Chat WebSocket in action. Type: `Research Aave protocol and secure it to IPFS`
+**Action**:
+1. Show real-time streaming status: "Scanning blockchain...", "Analyzing risk...", "Securing research to decentralized memory (IPFS)..."
+2. Show the **Sovereign Agent Workflow** visualization in `UnifiedConfirmation.tsx`.
 **Audio**:
-"SNEL isn't just for one-time payments. It supports recurring and conditional payments, all managed by the same agentic framework, making it a powerful tool for automated paytech."
+"SNEL has evolved into a fully Sovereign DeFAI Agent. Notice the real-time status streaming—this isn't just a loading spinner. The agent is providing granular updates on its reasoning and infrastructure tasks."
 
-"Thank you for watching."
+## Scene 6: Decentralized Proof-of-Research (3:00 - 3:30)
+**Visual**: Show the research result with the "Sovereign Proof" badge and IPFS CID.
+**Action**:
+1. Click "Verify on Gateway" to show the research JSON on a public IPFS gateway.
+2. Highlight the "AUTONOME PROOF-OF-RESEARCH: VERIFIED" badge.
+**Audio**:
+"Unlike centralized AI, SNEL's research is permanent and verifiable. Every report is pinned to IPFS, creating a decentralised memory for the agent. This research is also registered with the Autonome platform, satisfying the Sovereign Infrastructure requirements of the PL Genesis hackathon."
+
+## Scene 7: Private Starknet Swaps (3:30 - 4:00)
+**Visual**: Type: `Private swap 0.1 ETH to USDC on Starknet`
+**Action**:
+1. Show the "Privacy Shield" active.
+2. Execute the swap and show the Starknet explorer.
+**Audio**:
+"Finally, for users who value privacy, SNEL integrates with Starknet for private ZK-swaps. This ensures my trade activity remains confidential while leveraging the security of Ethereum."
+
+"SNEL: The first truly Sovereign, Agentic, and Private DeFi Assistant. Thank you for watching."

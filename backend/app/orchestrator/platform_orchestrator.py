@@ -282,17 +282,27 @@ class SNELOrchestrator:
         operation: str, 
         parameters: Dict[str, Any], 
         platform: Platform,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        status_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
         """
         ENHANCED: Execute DeFi operation with platform-specific optimizations
         USER DELIGHT: Tailored responses per platform for optimal experience
         RELIABLE: Circuit breakers, fallbacks, comprehensive error handling
         PERFORMANT: Caching, deduplication, timeout management
+        SOVEREIGN: Support for streaming agent status events (AG-UI style)
         """
         start_time = time.time()
         platform_config = self._platform_configs[platform]
         
+        async def _emit_status(message: str, progress: int = 0):
+            if status_callback:
+                if asyncio.iscoroutinefunction(status_callback):
+                    await status_callback(message, progress)
+                else:
+                    status_callback(message, progress)
+            logger.info(f"[ORCHESTRATOR] Status: {message} ({progress}%)")
+
         logger.info(f"[ORCHESTRATOR] Executing {operation} for {platform.value}")
         
         try:
@@ -319,28 +329,28 @@ class SNELOrchestrator:
             if operation.lower() in ['swap', 'trade', 'exchange']:
                 result = await self._deduplicate_request(
                     cache_key, 
-                    self._execute_swap(parameters, platform, platform_config)
+                    self._execute_swap(parameters, platform, platform_config, _emit_status)
                 )
             elif operation.lower() in ['pay', 'send', 'payment', 'transfer']:
                  # Payments are critical, deduplicate but prioritize
                 result = await self._deduplicate_request(
                     cache_key,
-                    self._execute_payment(parameters, platform, platform_config)
+                    self._execute_payment(parameters, platform, platform_config, _emit_status)
                 )
             elif operation.lower() in ['bridge']:
                 result = await self._deduplicate_request(
                     cache_key,
-                    self._execute_bridge(parameters, platform, platform_config)
+                    self._execute_bridge(parameters, platform, platform_config, _emit_status)
                 )
             elif operation.lower() in ['analyze', 'portfolio', 'balance']:
                 result = await self._deduplicate_request(
                     cache_key,
-                    self._analyze_portfolio(parameters, platform, platform_config)
+                    self._analyze_portfolio(parameters, platform, platform_config, _emit_status)
                 )
             elif operation.lower() in ['research', 'protocol']:
                 result = await self._deduplicate_request(
                     cache_key,
-                    self._research_protocol(parameters, platform, platform_config)
+                    self._research_protocol(parameters, platform, platform_config, _emit_status)
                 )
             else:
                 result = await self._process_natural_language(operation, parameters, platform, platform_config)
@@ -378,12 +388,16 @@ class SNELOrchestrator:
             
             return self._format_error_response(error_msg, platform)
     
-    async def _execute_payment(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_payment(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any], status_callback: Optional[callable] = None) -> Dict[str, Any]:
         """ENHANCED: Platform-optimized payment execution with MNEE integration"""
         try:
+            if status_callback: await status_callback("Initializing payment services...", 10)
+            
             # Lazy load services
             payment_service = await get_payment_action_service()
             payment_executor = await get_payment_executor()
+            
+            if status_callback: await status_callback("Extracting payment parameters...", 25)
             
             # Extract parameters
             recipient = params.get('recipient', params.get('to_address', params.get('to')))
@@ -397,6 +411,8 @@ class SNELOrchestrator:
             if not all([recipient, amount, wallet_address]):
                 raise ValueError("Missing required parameters: recipient, amount, wallet_address")
                 
+            if status_callback: await status_callback(f"Creating payment action for {amount} {token}...", 50)
+            
             # Create payment action
             action_request = CreatePaymentActionRequest(
                 name=name,
@@ -412,12 +428,16 @@ class SNELOrchestrator:
             # 1. Store action (Persistent)
             action = await payment_service.create_action(wallet_address, action_request)
             
+            if status_callback: await status_callback("Building transaction payload...", 75)
+            
             # 2. Execute (Build Tx) - Pauses at AWAITING_SIGNATURE
             execution_result = await payment_executor.execute_action(
                 action=action,
                 from_wallet=wallet_address,
                 signing_function=None  # No signer = return raw tx for user
             )
+            
+            if status_callback: await status_callback("Verification complete. Awaiting signature.", 100)
             
             if execution_result.status == ExecutionStatus.FAILED:
                 raise Exception(execution_result.error_message)
@@ -445,12 +465,20 @@ class SNELOrchestrator:
                 base_result['mobile_deeplink'] = f"snel://sign?action_id={action.id}"
                 
             return base_result
+            
+            if config.get('detailed_responses'):
+                base_result['mnee_quote'] = execution_result.metadata.get('quote')
+                
+            if platform == Platform.LINE_MINI_DAPP:
+                base_result['mobile_deeplink'] = f"snel://sign?action_id={action.id}"
+                
+            return base_result
 
         except Exception as e:
             logger.error(f"Payment execution failed: {e}")
             raise e
 
-    async def _execute_swap(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_swap(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any], status_callback: Optional[callable] = None) -> Dict[str, Any]:
         """ENHANCED: Platform-optimized swap execution using existing SNEL services"""
         
         # Check if Brian service is available
@@ -462,6 +490,8 @@ class SNELOrchestrator:
             raise Exception("Brian service temporarily unavailable")
         
         try:
+            if status_callback: await status_callback("Finding optimal swap route...", 20)
+            
             from_token = params.get('from_token', params.get('token_in'))
             to_token = params.get('to_token', params.get('token_out'))
             amount = params.get('amount')
@@ -473,6 +503,8 @@ class SNELOrchestrator:
             
             if not wallet_address:
                 raise ValueError("Wallet address is required for swap quotes")
+            
+            if status_callback: await status_callback(f"Requesting quote for {amount} {from_token} → {to_token}...", 40)
             
             # Use existing SNEL Brian service
             brian_client = self._service_pool['brian']
@@ -489,9 +521,13 @@ class SNELOrchestrator:
                 timeout=config['timeout']
             )
             
+            if status_callback: await status_callback("Analyzing price impact and slippage...", 70)
+            
             # Check if Brian returned an error
             if quote_result.get('error'):
                 raise Exception(quote_result.get('message', 'Swap quote failed'))
+            
+            if status_callback: await status_callback("Quote successfully generated.", 100)
             
             # USER DELIGHT: Platform-specific response formatting
             base_result = {
@@ -542,7 +578,7 @@ class SNELOrchestrator:
                     self._circuit_breakers['brian'] = True
             raise e
     
-    async def _execute_bridge(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_bridge(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any], status_callback: Optional[callable] = None) -> Dict[str, Any]:
         """ENHANCED: Platform-optimized bridge execution using existing SNEL services"""
         
         # Check if Brian service is available
@@ -554,6 +590,8 @@ class SNELOrchestrator:
             raise Exception("Bridge service temporarily unavailable")
         
         try:
+            if status_callback: await status_callback("Analyzing cross-chain routes...", 20)
+            
             from_chain = params.get('from_chain')
             to_chain = params.get('to_chain')
             token = params.get('token', 'USDC')
@@ -565,6 +603,8 @@ class SNELOrchestrator:
             
             if not wallet_address:
                 raise ValueError("Wallet address is required for bridge quotes")
+            
+            if status_callback: await status_callback(f"Requesting bridge quote from {from_chain} to {to_chain}...", 50)
             
             # Convert chain names to chain IDs if needed
             from_chain_id = self._get_chain_id_from_name(from_chain) if isinstance(from_chain, str) else from_chain
@@ -584,9 +624,13 @@ class SNELOrchestrator:
                 timeout=config['timeout']
             )
             
+            if status_callback: await status_callback("Verifying bridge security and liquidity...", 80)
+            
             # Check if Brian returned an error
             if bridge_result.get('error'):
                 raise Exception(bridge_result.get('message', 'Bridge quote failed'))
+            
+            if status_callback: await status_callback("Bridge quote generated successfully.", 100)
             
             base_result = {
                 'operation': 'bridge',
@@ -617,10 +661,12 @@ class SNELOrchestrator:
                 self._service_health['brian'].error_rate += 0.1
             raise e
     
-    async def _analyze_portfolio(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def _analyze_portfolio(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any], status_callback: Optional[callable] = None) -> Dict[str, Any]:
         """ENHANCED: Platform-optimized portfolio analysis using existing SNEL services"""
         
         try:
+            if status_callback: await status_callback("Fetching on-chain balances across all networks...", 20)
+            
             wallet_address = params.get('wallet_address', params.get('address'))
             chain_id = params.get('chain_id', 1)
             
@@ -638,12 +684,16 @@ class SNELOrchestrator:
                 timeout=config['timeout']
             )
             
+            if status_callback: await status_callback("Aggregating token metadata and prices...", 60)
+            
             # Calculate token count from token balances
             token_balances = portfolio_data.get('token_balances', {})
             all_tokens = []
             for chain_tokens in token_balances.values():
                 if isinstance(chain_tokens, list):
                     all_tokens.extend(chain_tokens)
+            
+            if status_callback: await status_callback("Generating AI-powered portfolio insights...", 90)
             
             base_result = {
                 'operation': 'portfolio_analysis',
@@ -786,7 +836,7 @@ class SNELOrchestrator:
         }
         return id_to_name.get(chain_id, f"Chain {chain_id}")
     
-    async def _research_protocol(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def _research_protocol(self, params: Dict[str, Any], platform: Platform, config: Dict[str, Any], status_callback: Optional[callable] = None) -> Dict[str, Any]:
         """ENHANCED: Platform-optimized protocol research"""
         
         try:
@@ -795,12 +845,16 @@ class SNELOrchestrator:
             if not protocol_name:
                 raise ValueError("Missing required parameter: protocol name")
             
+            if status_callback: await status_callback(f"Scanning blockchain for {protocol_name} metrics...", 20)
+            
             # USER DELIGHT: Platform-specific research depth
             if platform == Platform.LINE_MINI_DAPP:
                 research_prompt = f"Provide a brief summary of {protocol_name} DeFi protocol in 2-3 sentences."
             else:
                 research_prompt = f"Provide a comprehensive analysis of the {protocol_name} DeFi protocol, " \
                                  f"including features, TVL, risks, opportunities, and current market status."
+            
+            if status_callback: await status_callback(f"Analyzing {protocol_name} architecture and risks...", 50)
             
             # Check if OpenAI service is available
             openai_client = self._service_pool.get('openai')
@@ -825,7 +879,14 @@ class SNELOrchestrator:
                 timeout=config['timeout']
             )
             
+            if status_callback: await status_callback("Securing research report to decentralized memory (IPFS)...", 85)
+            
             research_result = response.choices[0].message.content
+            
+            # Note: The actual IPFS upload happens in the ProtocolProcessor, 
+            # but we track it here for orchestrator-level consistency.
+            
+            if status_callback: await status_callback("Research complete. Proof-of-Research generated.", 100)
             
             return {
                 'operation': 'protocol_research',

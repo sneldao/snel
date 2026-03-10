@@ -200,7 +200,7 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             logger.error(f"AI classification failed: {str(e)}")
             return CommandType.UNKNOWN
 
-    async def process_command(self, unified_command: UnifiedCommand) -> UnifiedResponse:
+    async def process_command(self, unified_command: UnifiedCommand, status_callback: Optional[callable] = None) -> UnifiedResponse:
         """
         Process a command by routing to appropriate processor.
 
@@ -210,6 +210,8 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
         3. Route to domain-specific processor
         """
         try:
+            if status_callback: await status_callback("Parsing your intent and classifying command...", 10)
+            
             # Step 1: Classification if UNKNOWN
             if unified_command.command_type == CommandType.UNKNOWN:
                 ai_type = await self._classify_with_ai(unified_command)
@@ -259,10 +261,12 @@ Respond with ONLY the command type name (e.g., "CROSS_CHAIN_SWAP").
             # Try to get a processor for this command type
             if self.processor_registry.has_processor(command_type):
                 processor = self.processor_registry.get_processor(command_type)
-                return await processor.process(unified_command)
+                if status_callback: await status_callback(f"Delegating to {command_type.value} specialist...", 20)
+                return await processor.process(unified_command, status_callback=status_callback)
 
             # Handle GMP and special operations
             if command_type == CommandType.GMP_OPERATION:
+                if status_callback: await status_callback("Initializing cross-chain GMP operation...", 25)
                 return await self._process_gmp_operation(unified_command)
             elif command_type == CommandType.TRANSACTION_STEP_COMPLETE:
                 return await self._process_transaction_step_complete(unified_command)

@@ -26,8 +26,7 @@ import {
   VStack,
   Icon,
 } from "@chakra-ui/react";
-import { FaChevronDown, FaWallet } from "react-icons/fa";
-import { SiStarknet } from "react-icons/si";
+import { FaChevronDown, FaWallet, FaEthereum } from "react-icons/fa";
 
 export function WalletSelector() {
   const { isConnected: isEvmConnected } = useEvmAccount();
@@ -46,7 +45,7 @@ export function WalletSelector() {
         <Menu>
           <MenuButton as={Button} size="sm" variant="outline" rightIcon={<FaChevronDown />}>
             <HStack spacing={2}>
-              <Icon as={SiStarknet} color="orange.400" />
+              <Icon as={FaEthereum} color="orange.400" />
               <Text fontSize="xs" fontWeight="medium">
                 {starknetAddress ? `${starknetAddress.slice(0, 6)}...${starknetAddress.slice(-4)}` : "Starknet"}
               </Text>
@@ -68,7 +67,7 @@ export function WalletSelector() {
           colorScheme="orange" 
           variant="outline"
           onClick={onOpen} 
-          leftIcon={<Icon as={SiStarknet} />}
+          leftIcon={<Icon as={FaEthereum} />}
         >
           Connect Starknet
         </Button>
@@ -81,22 +80,22 @@ export function WalletSelector() {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <VStack spacing={3}>
-              {connectors.map((connector) => (
+              {connectors?.map((connector) => (
                 <Button
-                  key={connector.id}
+                  key={connector?.id}
                   w="full"
                   variant="outline"
                   onClick={() => {
                     connect({ connector });
                     onClose();
                   }}
-                  isDisabled={!connector.available()}
+                  isDisabled={!connector?.available?.()}
                   justifyContent="space-between"
-                  rightIcon={!connector.available() ? <Text fontSize="2xs" color="gray.500">Not Installed</Text> : undefined}
+                  rightIcon={!connector?.available?.() ? <Text fontSize="2xs" color="gray.500">Not Installed</Text> : undefined}
                 >
                   <HStack>
                     <Icon as={FaWallet} />
-                    <Text>{connector.name}</Text>
+                    <Text>{connector?.name || 'Starknet Wallet'}</Text>
                   </HStack>
                 </Button>
               ))}

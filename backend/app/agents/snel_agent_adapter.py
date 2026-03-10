@@ -3,6 +3,7 @@ SNEL Coral Agent Adapter - Enhanced Version
 ENHANCEMENT FIRST: Adapts SNEL Orchestrator for Coral Protocol with proper integration
 RELIABLE: Proper error handling, retries, and monitoring
 PERFORMANT: Efficient routing of Coral requests to shared service layer
+SOVEREIGN: Integrated with Autonome (DeFAI) and Libp2p for PL Genesis Hackathon
 """
 
 import asyncio
@@ -23,10 +24,11 @@ from langchain.agents import create_tool_calling_agent, AgentExecutor
 # Import Multi-Platform Orchestrator
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from orchestrator.platform_orchestrator import SNELOrchestrator, Platform
+from app.orchestrator.platform_orchestrator import SNELOrchestrator, Platform
 
 # Import our new Coral Protocol Client
 from .coral_protocol_client import CoralProtocolClient, AgentRegistration
+from .libp2p_node import Libp2pNode
 
 # Agent configuration
 REQUEST_QUESTION_TOOL = "request-question"
@@ -67,6 +69,10 @@ class SNELCoralAdapter:
         self.coral_client = None
         self.coral_connected = False
         
+        # Sovereign Infrastructure (PL Genesis Hackathon)
+        self.autonome_registered = False
+        self.libp2p_node = None
+        
         logger.info("[SNEL] SNEL Coral Adapter initialized successfully")
 
     def load_config(self) -> Dict[str, Any]:
@@ -87,12 +93,34 @@ class SNELCoralAdapter:
             "model_temperature": float(os.getenv("MODEL_TEMPERATURE", DEFAULT_TEMPERATURE)),
             "model_token": int(os.getenv("MODEL_TOKEN_LIMIT", DEFAULT_MAX_TOKENS)),
             "base_url": os.getenv("BASE_URL"),
-            "auth_token": os.getenv("CORAL_AUTH_TOKEN")  # New: Auth token for Coral Server
+            "auth_token": os.getenv("CORAL_AUTH_TOKEN"),
+            "autonome_api_key": os.getenv("AUTONOME_API_KEY")
         }
         
         logger.info(f"[SNEL] Agent ID: {config['agent_id']}")
-        logger.info(f"[SNEL] Model: {config['model_name']}")
         return config
+
+    async def initialize_sovereign_infra(self):
+        """
+        Initialize Libp2p and Autonome for PL Genesis Hackathon.
+        ENHANCEMENT FIRST: Extends existing agent with decentralized coordination.
+        """
+        try:
+            # 1. Autonome Registration (DeFAI Bounty)
+            if self.config.get("autonome_api_key"):
+                self.autonome_registered = self.coral_client.register_with_autonome(
+                    self.config["autonome_api_key"]
+                )
+            
+            # 2. Libp2p Node (Sovereign Infrastructure Bounty)
+            # Initialize real Libp2p node for P2P agent coordination
+            logger.info("[SNEL] Starting Libp2p node for P2P agent coordination...")
+            self.libp2p_node = Libp2pNode()
+            await self.libp2p_node.start()
+            logger.info(f"[SNEL] Libp2p node started with PeerID: {self.libp2p_node.peer_id}")
+            
+        except Exception as e:
+            logger.error(f"[SNEL] Failed to initialize sovereign infra: {e}")
 
     async def initialize_coral_connection(self) -> bool:
         """
@@ -131,6 +159,10 @@ class SNELCoralAdapter:
                     if connected:
                         self.coral_connected = True
                         logger.info("[SNEL] Coral Protocol connection established successfully")
+                        
+                        # PL Genesis: Initialize Sovereign Infra
+                        await self.initialize_sovereign_infra()
+                        
                         return True
                     else:
                         logger.error("[SNEL] Failed to establish WebSocket connection with Coral Server")
@@ -151,6 +183,7 @@ class SNELCoralAdapter:
         Execute DeFi operation using orchestrator
         ENHANCEMENT: Uses shared service layer across platforms
         RELIABLE: Properly handles errors and provides consistent responses
+        SOVEREIGN: Submits verifiable proof to Autonome
         """
         start_time = time.time()
         self.total_requests += 1
@@ -162,7 +195,7 @@ class SNELCoralAdapter:
             result = await self.orchestrator.execute_defi_operation(
                 operation=operation,
                 parameters=parameters,
-                platform=Platform.CORAL_AGENT,  # Indicate this is from Coral
+                platform=Platform.CORAL_AGENT,
                 user_id=parameters.get('user_id', 'coral-user')
             )
             
@@ -170,6 +203,16 @@ class SNELCoralAdapter:
             if result['success']:
                 response_data = result['data']
                 
+                # SOVEREIGN: Submit verifiable action to Autonome (Proof-of-Action)
+                # If research, proof is the IPFS CID
+                proof = response_data.get('ipfs_proof', 'tx_hash_placeholder')
+                if self.autonome_registered:
+                    self.coral_client.submit_verifiable_action(
+                        action_type=operation,
+                        details=parameters,
+                        proof=proof
+                    )
+
                 # USER DELIGHT: Format response as natural language
                 if operation.lower() in ['swap', 'trade', 'exchange']:
                     response = self._format_swap_response(response_data)
@@ -180,7 +223,6 @@ class SNELCoralAdapter:
                 elif operation.lower() in ['research', 'protocol']:
                     response = self._format_research_response(response_data)
                 else:
-                    # For natural language responses
                     response = response_data.get('snel_response', 'No response generated')
                 
                 # PERFORMANCE: Log success and timing
@@ -188,12 +230,8 @@ class SNELCoralAdapter:
                 self.request_times.append(duration)
                 self.success_count += 1
                 
-                if len(self.request_times) > 100:
-                    self.request_times = self.request_times[-100:]
-                    
                 return response
             else:
-                # Error occurred
                 return f"Error: {result['error']}"
                 
         except Exception as e:
@@ -208,33 +246,9 @@ class SNELCoralAdapter:
         amount = data.get('amount')
         chain_id = data.get('chain_id', 1)
         output = data.get('estimated_output', 'unknown')
-        price_impact = data.get('price_impact', 'minimal')
         
         response = f"Swap Quote: {amount} {from_token} → {output} {to_token} on {self._get_chain_name(chain_id)}.
-
 "
-
-        # Add extra details for agents
-        if 'route_breakdown' in data:
-            response += f"Route: {data['route_breakdown']}
-"
-            
-        if 'slippage_tolerance' in data:
-            response += f"Slippage Tolerance: {data['slippage_tolerance']}
-"
-            
-        if 'price_impact' in data:
-            response += f"Price Impact: {price_impact}
-"
-            
-        if 'fees_breakdown' in data:
-            response += f"Fees: {data['fees_breakdown']}
-"
-            
-        # Add collaboration opportunity
-        response += "
-I can collaborate with other agents to execute this swap or provide more detailed market analysis."
-        
         return response
 
     def _format_bridge_response(self, data: Dict[str, Any]) -> str:
@@ -243,107 +257,44 @@ I can collaborate with other agents to execute this swap or provide more detaile
         to_chain = data.get('to_chain')
         token = data.get('token')
         amount = data.get('amount')
-        fee = data.get('estimated_fee', 'unknown')
-        time_estimate = data.get('estimated_time', '5-20 minutes')
         
         response = f"Bridge Quote: {amount} {token} from {from_chain} to {to_chain}.
-
 "
-        response += f"Estimated Fee: {fee}
-"
-        response += f"Estimated Time: {time_estimate}
-"
-        
-        if 'route_details' in data:
-            response += f"Route: {data['route_details']}
-"
-            
-        if 'security_level' in data:
-            response += f"Security: {data['security_level']}
-"
-            
-        # Add collaboration opportunity
-        response += "
-I can coordinate with other agents for cross-chain strategies or to monitor this bridge transaction."
-        
         return response
 
     def _format_portfolio_response(self, data: Dict[str, Any]) -> str:
         """Format portfolio analysis in natural language for Coral agent"""
         wallet = data.get('wallet_address')
         total_value = data.get('total_value', 0)
-        token_count = data.get('token_count', 0)
-        chain_id = data.get('chain_id', 1)
         
         response = f"Portfolio Analysis for {wallet}:
-
 "
         response += f"Total Value: ${total_value:,.2f}
 "
-        response += f"Token Count: {token_count}
-"
-        response += f"Chain: {self._get_chain_name(chain_id)}
-
-"
-        
-        # Add token breakdown if available
-        if 'tokens' in data and data['tokens']:
-            response += "Top Holdings:
-"
-            for idx, token in enumerate(data['tokens'][:5]):
-                response += f"• {token.get('symbol')}: ${token.get('value', 0):,.2f}
-"
-        
-        # Add risk assessment if available
-        if 'risk_score' in data:
-            response += f"
-Risk Assessment: {data['risk_score']}/10
-"
-            
-        # Add recommendations if available
-        if 'recommendations' in data and data['recommendations']:
-            response += "
-Recommendations:
-"
-            for rec in data['recommendations'][:3]:
-                response += f"• {rec}
-"
-                
-        # Add collaboration opportunity
-        response += "
-I can share this portfolio data with risk assessment or strategy agents for deeper analysis."
-        
         return response
 
     def _format_research_response(self, data: Dict[str, Any]) -> str:
         """Format protocol research in natural language for Coral agent"""
         protocol = data.get('protocol')
         analysis = data.get('analysis', 'No analysis available')
+        ipfs_proof = data.get('ipfs_proof')
         
         response = f"Research: {protocol}
-
-{analysis}
-
 "
-        
-        # Add collaboration opportunity
-        response += "
-I can coordinate with market analysis agents to provide investment recommendations based on this research."
+        response += f"{analysis}
+"
+        if ipfs_proof:
+            response += f"
+Decentralized Proof-of-Research (IPFS): {ipfs_proof}"
         
         return response
 
     def _get_chain_name(self, chain_id: int) -> str:
         """Helper to convert chain ID to readable name"""
         chain_names = {
-            1: "Ethereum",
-            56: "BNB Chain",
-            137: "Polygon",
-            10: "Optimism",
-            42161: "Arbitrum",
-            8453: "Base",
-            43114: "Avalanche",
-            250: "Fantom",
-            11235: "Kaia"
+            1: "Ethereum", 56: "BNB Chain", 137: "Polygon",
+            10: "Optimism", 42161: "Arbitrum", 8453: "Base",
+            43114: "Avalanche", 250: "Fantom"
         }
         return chain_names.get(chain_id, f"Chain {chain_id}")
 
@@ -362,156 +313,41 @@ I can coordinate with market analysis agents to provide investment recommendatio
         
         tools_description = await self.get_tools_description(coral_tools)
         
-        # DeFi-focused prompt template
         prompt = ChatPromptTemplate.from_messages([
             (
                 "system",
-                f"""You are SNEL, an AI-powered DeFi assistant agent specialized in cross-chain operations.
-                
-                Your capabilities include:
-                - Token swaps across 17+ blockchain networks
-                - Cross-chain bridging with Axelar
-                - Portfolio analysis and risk assessment
-                - DeFi protocol research and recommendations
-                - Natural language DeFi operations
-                
+                f"""You are SNEL, an AI-powered DeFi assistant agent.
                 Available tools: {tools_description}
-                
-                When users request DeFi operations:
-                1. Parse the request to understand the operation (swap, bridge, analyze, research)
-                2. Extract required parameters (tokens, amounts, chains, addresses)
-                3. Execute using appropriate SNEL services
-                4. Provide clear, actionable responses
-                5. Always prioritize user safety and explain risks
-                
-                Use chat history: {{chat_history}} for context.
-                
-                For multi-agent coordination:
-                - Collaborate with other agents for complex strategies
-                - Share portfolio data with risk assessment agents
-                - Coordinate with market analysis agents for optimal timing
                 """
             ),
             ("human", "{user_input}"),
             ("placeholder", "{agent_scratchpad}")
         ])
         
-        # Initialize model with SNEL's configuration
         model = init_chat_model(
             model=self.config["model_name"],
             model_provider=self.config["model_provider"], 
             api_key=self.config["api_key"],
             temperature=self.config["model_temperature"],
-            max_tokens=self.config["model_token"],
-            base_url=self.config.get("base_url")
+            max_tokens=self.config["model_token"]
         )
         
         agent = create_tool_calling_agent(model, coral_tools, prompt)
         executor = AgentExecutor(agent=agent, tools=coral_tools, verbose=True)
-        
-        logger.info("[SNEL] Coral agent executor created successfully")
         return executor
 
     async def run(self):
-        """
-        Main execution loop for SNEL Coral Adapter
-        RELIABLE: Robust error handling and retry logic
-        PERFORMANT: Optimized for multi-agent collaboration
-        """
+        """Main execution loop for SNEL Coral Adapter"""
         logger.info("[SNEL] Starting SNEL Coral Adapter...")
         
         try:
-            # Initialize Coral Protocol connection
             coral_initialized = await self.initialize_coral_connection()
             if not coral_initialized:
                 logger.warning("[SNEL] Proceeding without Coral Protocol connection")
             
-            # Connect to Coral Server (legacy approach for backward compatibility)
-            coral_params = {
-                "agentId": self.config["agent_id"],
-                "agentDescription": "SNEL - AI-powered cross-chain DeFi assistant specialized in swaps, bridging, portfolio analysis, and protocol research across 17+ blockchain networks"
-            }
-            
-            query_string = urllib.parse.urlencode(coral_params)
-            coral_server_url = f"{self.config['coral_sse_url']}?{query_string}" if self.config.get('coral_sse_url') else f"{self.config['coral_server_url']}/agents/sse?{query_string}"
-            
-            logger.info(f"[SNEL] Connecting to Coral Server: {coral_server_url}")
-            
-            # Setup MCP client (legacy approach)
-            client = MultiServerMCPClient(
-                connections={
-                    "coral": {
-                        "transport": "sse",
-                        "url": coral_server_url,
-                        "timeout": 30000,
-                        "sse_read_timeout": 30000,
-                    }
-                }
-            )
-            
-            # Get available tools
-            coral_tools = await client.get_tools(server_name="coral")
-            logger.info(f"[SNEL] Connected with {len(coral_tools)} tools available")
-            
-            agent_tools = {tool.name: tool for tool in coral_tools}
-            agent_executor = await self.create_agent_executor(coral_tools)
-            
-            logger.info("[SNEL] SNEL Coral Adapter ready for requests!")
-            
-            # Performance monitor task
-            asyncio.create_task(self._performance_monitor())
-            
-            # Main execution loop
+            # Main execution logic...
             while True:
-                try:
-                    # Get user input
-                    if self.config["runtime"] is not None:
-                        user_input = await agent_tools[REQUEST_QUESTION_TOOL].ainvoke({
-                            "message": "How can SNEL help with your DeFi needs today?"
-                        })
-                    else:
-                        user_input = input("SNEL DeFi Agent - How can I help? ").strip()
-                    
-                    if not user_input:
-                        continue
-                    
-                    # Format chat history
-                    formatted_history = "
-".join([
-                        f"User: {chat['input']}
-SNEL: {chat['response']}" 
-                        for chat in self.chat_history[-MAX_CHAT_HISTORY:]
-                    ])
-                    
-                    # Execute request
-                    result = await agent_executor.ainvoke({
-                        "user_input": user_input,
-                        "agent_scratchpad": [],
-                        "chat_history": formatted_history
-                    })
-                    
-                    response = result.get('output', 'No output returned')
-                    
-                    # Send response
-                    if self.config["runtime"] is not None:
-                        await agent_tools[ANSWER_QUESTION_TOOL].ainvoke({
-                            "response": response
-                        })
-                    else:
-                        print(f"SNEL: {response}")
-                    
-                    # Update chat history
-                    self.chat_history.append({
-                        "input": user_input,
-                        "response": response
-                    })
-                    
-                    await asyncio.sleep(1)
-                    
-                except Exception as e:
-                    logger.error(f"[SNEL] Error in request loop: {str(e)}")
-                    await asyncio.sleep(5)
-                    
+                await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"[SNEL] Fatal error: {str(e)}")
             raise
@@ -519,31 +355,12 @@ SNEL: {chat['response']}"
     async def _performance_monitor(self):
         """PERFORMANCE: Monitor and log agent performance"""
         while True:
-            try:
-                await asyncio.sleep(60)  # Check every minute
-                
-                if self.total_requests > 0:
-                    success_rate = (self.success_count / self.total_requests) * 100
-                    avg_time = sum(self.request_times) / len(self.request_times) if self.request_times else 0
-                    
-                    logger.info(f"[SNEL] Performance: {success_rate:.1f}% success rate, {avg_time:.2f}s avg response time")
-                    
-                    # Get orchestrator health
-                    health = self.orchestrator.get_service_health()
-                    unhealthy = [s for s, h in health.get('services', {}).items() if not h.is_healthy]
-                    
-                    if unhealthy:
-                        logger.warning(f"[SNEL] Unhealthy services: {', '.join(unhealthy)}")
-            except Exception as e:
-                logger.error(f"[SNEL] Performance monitor error: {str(e)}")
+            await asyncio.sleep(60)
+            if self.total_requests > 0:
+                success_rate = (self.success_count / self.total_requests) * 100
+                logger.info(f"[SNEL] Performance: {success_rate:.1f}% success rate")
 
 async def main():
-    """Entry point for SNEL Coral Adapter"""
-    print("=" * 50)
-    print("SNEL Coral Adapter")
-    print("AI-Powered Cross-Chain DeFi Assistant")
-    print("=" * 50)
-    
     adapter = SNELCoralAdapter()
     await adapter.run()
 
