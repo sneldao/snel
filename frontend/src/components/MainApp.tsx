@@ -11,6 +11,7 @@ import {
   Heading,
   Text,
   useToast,
+  useColorMode,
   Alert,
   AlertIcon,
   AlertTitle,
@@ -31,6 +32,8 @@ import {
   FaShieldAlt,
   FaBolt,
   FaEthereum,
+  FaSun,
+  FaMoon,
 } from "react-icons/fa";
 import {
   useAccount,
@@ -111,6 +114,7 @@ interface MainAppProps {
 
 export default function MainApp(props: MainAppProps) {
   const toast = useToast();
+  const { colorMode, toggleColorMode } = useColorMode();
   const { address, isConnected } = useAccount();
   const { address: starknetAddress, isConnected: isStarknetConnected } = useStarknetAccount();
   const chainId = useChainId();
@@ -240,12 +244,12 @@ export default function MainApp(props: MainAppProps) {
   // Initialize or update welcome message based on wallet state
   useEffect(() => {
     const getWelcomeMessage = () => {
-      if (isStarknetConnected) {
-        return "🔐 Welcome to Starknet Private Mode! You now have access to shielded transfers, confidential swaps, and zero-knowledge DeFi. Build your stable future, one private transaction at a time.";
+      if (!isConnected && !isStarknetConnected) {
+        return "👋 Hello! Connect your wallet to explore secure, intelligent DeFi. Let's build stability together.";
       }
 
-      if (!isConnected) {
-        return "👋 Hello! Connect Starknet to explore secure, private finance. Or connect EVM to access traditional DeFi. Let's build stability together.";
+      if (!chainId && isStarknetConnected) {
+        return "🔗 Connected to Starknet. How can I help you grow your portfolio steadily today?";
       }
 
       if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
@@ -253,7 +257,7 @@ export default function MainApp(props: MainAppProps) {
       }
 
       const chainName = SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS];
-      return `👋 Hello! You're now on ${chainName}. How can I help you grow your portfolio steadily today?`;
+      return `👋 Hello! You're on ${chainName}. How can I help you grow your portfolio steadily today?`;
     };
 
     const welcomeMessage: ResponseType = {
@@ -924,7 +928,7 @@ export default function MainApp(props: MainAppProps) {
   };
 
   return (
-    <Box minH="100vh" bg="gray.50">
+    <Box minH="100vh" bg="white" _dark={{ bg: "gray.900" }}>
       <Container maxW="container.xl" py={4}>
         <VStack spacing={8} align="stretch">
           <Box>
@@ -945,6 +949,14 @@ export default function MainApp(props: MainAppProps) {
               </Heading>
 
               <HStack spacing={4}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={toggleColorMode}
+                  title={colorMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+                >
+                  <Icon as={colorMode === 'light' ? FaMoon : FaSun} />
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
