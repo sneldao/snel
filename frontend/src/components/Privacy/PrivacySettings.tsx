@@ -81,7 +81,7 @@ const PrivacySettings = () => {
   useEffect(() => {
     if (!activeChainId) return;
 
-    const capabilities = chainCapabilities[activeChainId] || { x402: false, gmp: false, compliance: false };
+    const capabilities = chainCapabilities[activeChainId.toString()] || { x402: false, gmp: false, compliance: false };
 
     const options = [
       { value: 'public', label: 'Public Transactions', icon: FaGlobe, description: 'Standard transactions on public blockchain' }
@@ -195,9 +195,9 @@ const PrivacySettings = () => {
         {/* Chain Capabilities */}
         <Box>
           <Text fontSize="sm" color={mutedColor} mb={2}>Chain Capabilities</Text>
-          {activeChainId && chainCapabilities[activeChainId] && (
+          {activeChainId && chainCapabilities[activeChainId.toString()] && (
             <VStack spacing={1} align="start">
-              {chainCapabilities[activeChainId].starknet_native ? (
+              {chainCapabilities[activeChainId.toString()].starknet_native ? (
                 <HStack>
                   <Icon as={FaShieldAlt} color="orange.500" />
                   <Text fontSize="sm">Starknet ZK-Privacy: ✅ Supported</Text>
@@ -205,18 +205,18 @@ const PrivacySettings = () => {
               ) : (
                 <>
                   <HStack>
-                    <Icon as={FaShieldAlt} color={chainCapabilities[activeChainId].x402 ? 'yellow.500' : 'gray.400'} />
-                    <Text fontSize="sm">x402 Privacy: {chainCapabilities[activeChainId].x402 ? '✅ Supported' : '❌ Not available'}</Text>
+                    <Icon as={FaShieldAlt} color={chainCapabilities[activeChainId.toString()].x402 ? 'yellow.500' : 'gray.400'} />
+                    <Text fontSize="sm">x402 Privacy: {chainCapabilities[activeChainId.toString()].x402 ? '✅ Supported' : '❌ Not available'}</Text>
                   </HStack>
                   <HStack>
-                    <Icon as={FaGlobe} color={chainCapabilities[activeChainId].gmp ? 'green.500' : 'gray.400'} />
-                    <Text fontSize="sm">GMP Privacy: {chainCapabilities[activeChainId].gmp ? '✅ Supported' : '❌ Not available'}</Text>
+                    <Icon as={FaGlobe} color={chainCapabilities[activeChainId.toString()].gmp ? 'green.500' : 'gray.400'} />
+                    <Text fontSize="sm">GMP Privacy: {chainCapabilities[activeChainId.toString()].gmp ? '✅ Supported' : '❌ Not available'}</Text>
                   </HStack>
                 </>
               )}
               <HStack>
-                <Icon as={FaBalanceScale} color={chainCapabilities[activeChainId].compliance ? 'blue.500' : 'gray.400'} />
-                <Text fontSize="sm">Compliance: {chainCapabilities[activeChainId].compliance ? '✅ Supported' : '❌ Not available'}</Text>
+                <Icon as={FaBalanceScale} color={chainCapabilities[activeChainId.toString()].compliance ? 'blue.500' : 'gray.400'} />
+                <Text fontSize="sm">Compliance: {chainCapabilities[activeChainId.toString()].compliance ? '✅ Supported' : '❌ Not available'}</Text>
               </HStack>
             </VStack>
           )}
