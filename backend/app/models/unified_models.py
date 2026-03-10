@@ -30,6 +30,8 @@ class CommandType(Enum):
     BRIDGE_TO_PRIVACY = "bridge_to_privacy"  # Bridge to privacy chain (Zcash)
     SET_PRIVACY_DEFAULT = "set_privacy_default"  # Set default privacy level
     OVERRIDE_PRIVACY = "override_privacy"  # Override privacy for specific transaction
+    SHIELD = "shield"  # Starknet privacy shielding
+    UNSHIELD = "unshield"  # Starknet privacy unshielding
     X402_PRIVACY = "x402_privacy"  # x402 programmatic privacy transaction
     X402_PAYMENT = "x402_payment"  # x402 agentic payment operations
     PAYMENT_ACTION = (
