@@ -11,8 +11,9 @@ import os
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.config.chains import CHAINS
+from app.config.chains import CHAINS, ChainType
 from app.models.token import TokenInfo
+from app.services.starknet_service import starknet_service
 from eth_abi.abi import encode as abi_encode
 from web3 import Web3
 
@@ -26,7 +27,7 @@ class TokenQueryService:
     """
     Unified service for token balance queries and transfer transaction building.
 
-    Uses Web3 instances for each supported chain.
+    Uses Web3 instances for each supported EVM chain and StarknetService for Starknet.
     Provides single source of truth for all token operations.
     """
 
@@ -40,15 +41,18 @@ class TokenQueryService:
         self.chain_names = {
             cid: cinfo.name.lower().replace(" ", "-") for cid, cinfo in CHAINS.items()
         }
-        self.web3_instances: dict[int, Web3] = {}
+        self.web3_instances: dict[int | str, Web3] = {}
         self._init_web3_instances()
 
         # Alchemy for token balance queries (from env)
         self.alchemy_api_key = os.getenv("ALCHEMY_API_KEY") or os.getenv("ALCHEMY_KEY")
 
     def _init_web3_instances(self) -> None:
-        """Initialize Web3 instances for each supported chain."""
+        """Initialize Web3 instances for each supported EVM chain."""
         for chain_id, chain_info in CHAINS.items():
+            if chain_info.type != ChainType.EVM:
+                continue
+                
             # Try specific env var first, then chain_info.rpc_url
             env_rpc = os.getenv(f"{chain_info.name.upper().replace(' ', '_')}_RPC_URL")
             rpc_url = env_rpc or chain_info.rpc_url
@@ -69,12 +73,6 @@ class TokenQueryService:
     async def _resolve_ens_web3bio(self, ens_name: str) -> str | None:
         """
         Fallback ENS resolution using Web3.bio API.
-
-        Args:
-            ens_name: ENS name or Ethereum address
-
-        Returns:
-            Checksum address or None if resolution fails
         """
         try:
             import aiohttp
@@ -102,12 +100,6 @@ class TokenQueryService:
     async def _resolve_ens_ensdata(self, ens_name: str) -> str | None:
         """
         Fallback ENS resolution using ensdata.net API.
-
-        Args:
-            ens_name: ENS name or Ethereum address
-
-        Returns:
-            Checksum address or None if resolution fails
         """
         try:
             import aiohttp
@@ -128,17 +120,10 @@ class TokenQueryService:
         return None
 
     async def resolve_address_async(
-        self, address_or_ens: str, chain_id: int = 1
+        self, address_or_ens: str, chain_id: int | str = 1
     ) -> Tuple[Optional[str], Optional[str]]:
         """
         Async version of resolve_address with multiple fallbacks.
-
-        Args:
-            address_or_ens: Ethereum address (0x...) or ENS name (name.eth)
-            chain_id: Chain ID for context
-
-        Returns:
-            Tuple of (resolved_address, display_name)
         """
         # Try sync version first
         result = self.resolve_address(address_or_ens, chain_id)
@@ -168,22 +153,15 @@ class TokenQueryService:
         return None, None
 
     def resolve_address(
-        self, address_or_ens: str, chain_id: int = 1
+        self, address_or_ens: str, chain_id: int | str = 1
     ) -> Tuple[Optional[str], Optional[str]]:
         """
         Resolve an address or ENS name to a checksum address.
-
-        Args:
-            address_or_ens: Ethereum address (0x...) or ENS name (name.eth)
-            chain_id: Chain ID for context
-
-        Returns:
-            Tuple of (resolved_address, display_name)
         """
         if not address_or_ens:
             return None, None
 
-        # Check if it's already a valid address
+        # Check if it's already a valid address (EVM or Starknet)
         if Web3.is_address(address_or_ens):
             try:
                 checksum_addr = Web3.to_checksum_address(address_or_ens)
@@ -191,6 +169,10 @@ class TokenQueryService:
             except Exception as e:
                 logger.warning(f"Failed to checksum address {address_or_ens}: {e}")
                 return None, None
+        
+        # Starknet address check (very loose check)
+        if address_or_ens.startswith("0x") and len(address_or_ens) > 42:
+            return address_or_ens, address_or_ens
 
         # Check if it looks like an ENS name
         if not address_or_ens.endswith(".eth"):
@@ -231,17 +213,25 @@ class TokenQueryService:
             _ens_cache[address_or_ens] = None
             return None, None
 
-    def is_valid_address(self, address: str) -> bool:
-        """Check if a string is a valid Ethereum address (0x...)."""
+    def is_valid_address(self, address: str, chain_id: int | str = 1) -> bool:
+        """Check if a string is a valid address for the given chain."""
+        chain_info = CHAINS.get(chain_id)
+        if chain_info and chain_info.type == ChainType.STARKNET:
+            # Starknet address: 0x followed by up to 64 hex chars
+            return address.startswith("0x") and len(address) <= 66
         return Web3.is_address(address)
 
     async def get_mnee_transfers(
-        self, wallet_address: str, chain_id: int, limit: int = 20
+        self, wallet_address: str, chain_id: int | str, limit: int = 20
     ) -> dict[str, Any]:
         """
         Fetch MNEE transfer history via Alchemy Asset Transfers API.
         """
         try:
+            if not isinstance(chain_id, int):
+                # Currently only supports EVM chains for Alchemy history
+                return {"transfers": [], "chain_id": chain_id, "source": "unsupported"}
+
             if not self.alchemy_api_key:
                 logger.warning(
                     "Alchemy API key not configured - cannot fetch transfers"
@@ -354,12 +344,21 @@ class TokenQueryService:
             return {"transfers": [], "chain_id": chain_id, "source": "error"}
 
     def estimate_gas(
-        self, chain_id: int, transaction_type: str = "erc20_transfer"
+        self, chain_id: int | str, transaction_type: str = "erc20_transfer"
     ) -> Dict[str, Any]:
         """
         Estimate gas for a transaction.
         """
         try:
+            chain_info = CHAINS.get(chain_id)
+            if chain_info and chain_info.type == ChainType.STARKNET:
+                # Starknet doesn't use gas in the same way, return placeholder
+                return {
+                    "gas_limit": "2000", # Starknet uses steps/gas but differently
+                    "gas_price_gwei": "0.1",
+                    "estimated": False,
+                }
+
             w3 = self.web3_instances.get(chain_id)
             if not w3 or not w3.is_connected():
                 return {
@@ -394,12 +393,16 @@ class TokenQueryService:
             return {"gas_limit": "100000", "gas_price_gwei": "0", "estimated": False}
 
     async def get_native_balance(
-        self, wallet_address: str, chain_id: int
+        self, wallet_address: str, chain_id: int | str
     ) -> float | None:
         """
-        Get native token balance (ETH, MATIC, etc).
+        Get native token balance.
         """
         try:
+            chain_info = CHAINS.get(chain_id)
+            if chain_info and chain_info.type == ChainType.STARKNET:
+                return await starknet_service.get_native_balance(wallet_address, chain_id)
+
             w3 = self.web3_instances.get(chain_id)
             if not w3 or not w3.is_connected():
                 return None
@@ -414,12 +417,17 @@ class TokenQueryService:
             return None
 
     async def get_token_balance(
-        self, wallet_address: str, token_address: str, chain_id: int, decimals: int = 18
+        self, wallet_address: str, token_address: str, chain_id: int | str, decimals: int = 18
     ) -> Decimal | None:
         """
-        Get ERC20 token balance via RPC call to balanceOf.
+        Get token balance.
         """
         try:
+            chain_info = CHAINS.get(chain_id)
+            if chain_info and chain_info.type == ChainType.STARKNET:
+                val = await starknet_service.get_token_balance(wallet_address, token_address, chain_id)
+                return Decimal(str(val))
+
             w3 = self.web3_instances.get(chain_id)
             if not w3 or not w3.is_connected():
                 return None
@@ -446,7 +454,7 @@ class TokenQueryService:
     async def get_balances(
         self,
         wallet_address: str,
-        chain_id: int,
+        chain_id: int | str,
         tokens: list[TokenInfo] | None = None,
     ) -> dict[str, Any]:
         """
@@ -491,12 +499,23 @@ class TokenQueryService:
         to_address: str,
         amount: Decimal,
         decimals: int = 18,
-        chain_id: int = 1,
+        chain_id: int | str = 1,
     ) -> dict[str, Any]:
         """
-        Build an ERC20 transfer transaction.
+        Build a transfer transaction.
         """
         try:
+            chain_info = CHAINS.get(chain_id)
+            if chain_info and chain_info.type == ChainType.STARKNET:
+                # For Starknet, we'll need to return a different structure or use a Starknet-specific builder
+                # For now, return a placeholder that the frontend/starknet-react can use
+                return {
+                    "contractAddress": token_address,
+                    "entrypoint": "transfer",
+                    "calldata": [to_address, str(int(amount * Decimal(10**decimals))), "0"],
+                    "type": "starknet_call"
+                }
+
             amount_wei = int(amount * Decimal(10**decimals))
             checksum_to = Web3.to_checksum_address(to_address)
             encoded_params = abi_encode(
@@ -515,24 +534,20 @@ class TokenQueryService:
             raise ValueError(f"Could not build transfer transaction: {str(e)}")
 
     def validate_transfer(
-        self, wallet_address: str, token_address: str, to_address: str, amount: Decimal
+        self, wallet_address: str, token_address: str, to_address: str, amount: Decimal, chain_id: int | str = 1
     ) -> tuple[bool, str | None]:
         """
         Validate transfer parameters.
         """
-        if not Web3.is_address(wallet_address):
+        if not self.is_valid_address(wallet_address, chain_id):
             return False, f"Invalid sender address: {wallet_address}"
-        if not Web3.is_address(token_address):
+        if not self.is_valid_address(token_address, chain_id):
             return False, f"Invalid token address: {token_address}"
-        if not Web3.is_address(to_address):
+        if not self.is_valid_address(to_address, chain_id):
             return False, f"Invalid recipient address: {to_address}"
         if amount <= 0:
             return False, "Amount must be greater than 0"
-        if Web3.to_checksum_address(wallet_address) == Web3.to_checksum_address(
-            to_address
-        ):
-            return False, "Cannot transfer to your own address"
-
+            
         return True, None
 
 

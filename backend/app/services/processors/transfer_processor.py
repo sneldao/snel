@@ -155,6 +155,23 @@ class TransferProcessor(BaseProcessor):
             ) = await token_query_service.resolve_address_async(
                 details.destination, chain_id
             )
+            
+            # Privacy routing for Starknet
+            additional_params = details.additional_params or {}
+            if additional_params.get("is_private") and chain_id in ["SN_MAIN", "SN_SEPOLIA"]:
+                 return self._create_success_response(
+                    content={
+                        "message": f"I see you want to send {details.amount} {details.token_in.symbol} privately on Starknet.",
+                        "type": "privacy_suggestion",
+                        "suggestions": [
+                            f"shield {details.amount} {details.token_in.symbol}",
+                            "check my shielded balance"
+                        ]
+                    },
+                    agent_type=AgentType.TRANSFER,
+                    metadata={"privacy_intent": True}
+                )
+
             if not resolved_address:
                 return self._create_guided_error_response(
                     command_type=CommandType.TRANSFER,

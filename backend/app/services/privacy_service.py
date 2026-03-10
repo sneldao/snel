@@ -23,20 +23,12 @@ class PrivacyService:
         
     async def get_optimal_privacy_route(
         self,
-        source_chain_id: int,
+        source_chain_id: int | str,
         destination: str,
         privacy_level: PrivacyLevel
     ) -> ChainPrivacyRoute:
         """
         Get the optimal privacy route based on chain capabilities.
-        
-        Args:
-            source_chain_id: Source chain ID
-            destination: Destination (address or chain name)
-            privacy_level: Desired privacy level
-            
-        Returns:
-            ChainPrivacyRoute with optimal path and capabilities
         """
         # Determine if destination is Zcash (direct privacy)
         is_zcash_destination = destination.startswith(('zcash:', 'zcash:', 'u1', 't1', 't3'))
@@ -68,6 +60,18 @@ class PrivacyService:
                     }
                 )
         else:
+            # Starknet-native ZK privacy
+            if capabilities.starknet_privacy:
+                return ChainPrivacyRoute(
+                    method="starknet_privacy",
+                    privacy_level=privacy_level,
+                    estimated_latency="<1min",
+                    capabilities={
+                        "compliance": capabilities.compliance_support,
+                        "fallback": False,
+                        "starknet_native": True
+                    }
+                )
             # Cross-chain privacy route
             if capabilities.x402_support and privacy_level != PrivacyLevel.COMPLIANCE:
                 return ChainPrivacyRoute(
@@ -96,7 +100,7 @@ class PrivacyService:
             f"for privacy level {privacy_level}"
         )
     
-    async def get_chain_privacy_options(self, chain_id: int) -> List[Dict[str, str]]:
+    async def get_chain_privacy_options(self, chain_id: int | str) -> List[Dict[str, str]]:
         """Get available privacy options for a specific chain."""
         capabilities = get_privacy_capabilities(chain_id)
         
@@ -107,6 +111,13 @@ class PrivacyService:
                 "description": "Standard transaction on public blockchain"
             }
         ]
+        
+        if capabilities.starknet_privacy:
+            options.append({
+                "value": "private",
+                "label": "Starknet Shielded",
+                "description": "Zero-knowledge shielded transaction on Starknet"
+            })
         
         if capabilities.x402_support:
             options.append({
@@ -131,7 +142,7 @@ class PrivacyService:
     
     async def validate_privacy_request(
         self,
-        chain_id: int,
+        chain_id: int | str,
         privacy_level: PrivacyLevel
     ) -> bool:
         """Validate if a privacy request is possible on a specific chain."""
@@ -140,9 +151,9 @@ class PrivacyService:
         if privacy_level == PrivacyLevel.PUBLIC:
             return True
         elif privacy_level == PrivacyLevel.PRIVATE:
-            return capabilities.x402_support or capabilities.gmp_privacy
+            return capabilities.x402_support or capabilities.gmp_privacy or capabilities.starknet_privacy
         elif privacy_level == PrivacyLevel.COMPLIANCE:
-            return capabilities.compliance_support and (capabilities.x402_support or capabilities.gmp_privacy)
+            return capabilities.compliance_support and (capabilities.x402_support or capabilities.gmp_privacy or capabilities.starknet_privacy)
         
         return False
 

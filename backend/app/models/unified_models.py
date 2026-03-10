@@ -110,7 +110,7 @@ class TransactionData(BaseModel):
     gasPrice: str | None = Field(
         default=None, alias="gas_price", description="Gas price"
     )
-    chainId: int = Field(alias="chain_id", description="Chain ID")
+    chainId: int | str = Field(alias="chain_id", description="Chain ID")
     from_address: str | None = Field(default=None, description="Sender address")
 
     class Config:
@@ -140,7 +140,7 @@ class CommandDetails(BaseModel):
     # Multi-step/Transaction completion fields
     wallet_address: str | None = Field(default=None, description="Wallet address")
     tx_hash: str | None = Field(default=None, description="Transaction hash")
-    chain_id: int | None = Field(default=None, description="Chain ID")
+    chain_id: int | str | None = Field(default=None, description="Chain ID")
     success: bool | None = Field(default=True, description="Transaction success status")
     additional_params: dict[str, Any] | None = Field(
         default_factory=dict, description="Additional parameters"
@@ -153,7 +153,7 @@ class UnifiedCommand(BaseModel):
     command: str = Field(description="Original command string")
     command_type: CommandType = Field(description="Detected command type")
     wallet_address: str | None = Field(default=None, description="User wallet address")
-    chain_id: int | None = Field(default=None, description="Current chain ID")
+    chain_id: int | str | None = Field(default=None, description="Current chain ID")
     user_name: str | None = Field(default=None, description="User name")
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
     details: CommandDetails | None = Field(
@@ -240,7 +240,7 @@ class ChatCommand(BaseModel):
 
     command: str = Field(description="Chat command string")
     wallet_address: str | None = Field(default=None, description="User wallet address")
-    chain_id: int | None = Field(default=None, description="Current chain ID")
+    chain_id: int | str | None = Field(default=None, description="Current chain ID")
     user_name: str | None = Field(default=None, description="User name")
     openai_api_key: str | None = Field(
         default=None, description="User-supplied OpenAI API key"
@@ -251,7 +251,7 @@ class TransactionStepCompletion(BaseModel):
     """Model for transaction step completion data."""
 
     wallet_address: str = Field(description="User wallet address")
-    chain_id: int = Field(description="Current chain ID")
+    chain_id: int | str = Field(description="Current chain ID")
     tx_hash: str = Field(description="Transaction hash")
     success: bool = Field(
         default=True, description="Whether the transaction was successful"

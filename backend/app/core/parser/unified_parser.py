@@ -215,6 +215,22 @@ class UnifiedParser:
             CommandType.BRIDGE_TO_PRIVACY: [
                 {
                     "pattern": re.compile(
+                        r"(?:shield|make private)\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)(?:\s+on\s+(?P<chain>[\w-]+))?",
+                        re.IGNORECASE
+                    ),
+                    "description": "Shield assets (Starknet native)",
+                    "priority": 0
+                },
+                {
+                    "pattern": re.compile(
+                        r"(?:unshield|withdraw private)\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)(?:\s+on\s+(?P<chain>[\w-]+))?",
+                        re.IGNORECASE
+                    ),
+                    "description": "Unshield assets (Starknet native)",
+                    "priority": 0
+                },
+                {
+                    "pattern": re.compile(
                         r"bridge\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<dest_chain>zcash|privacy)",
                         re.IGNORECASE
                     ),
@@ -247,6 +263,15 @@ class UnifiedParser:
                 }
             ],
             CommandType.SWAP: [
+                {
+                    "pattern": re.compile(
+                        r"(?:privately\s+)?swap\s+(?P<amount>[\d\.]+)\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)(?:\s+privately)?",
+                        re.IGNORECASE
+                    ),
+                    "amount_type": AmountType.TOKEN_AMOUNT,
+                    "description": "Private or standard token swap",
+                    "priority": 0
+                },
                 {
                     "pattern": re.compile(
                         r"swap\s+\$(?P<amount>[\d\.]+)\s+worth\s+of\s+(?P<token_in>\w+)\s+(?:to|for)\s+(?P<token_out>\w+)",
@@ -313,6 +338,14 @@ class UnifiedParser:
             CommandType.TRANSFER: [
                 {
                     "pattern": re.compile(
+                        r"(?:privately\s+)?(?:transfer|send)\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<destination>\S+)(?:\s+privately)?",
+                        re.IGNORECASE
+                    ),
+                    "description": "Private or standard token transfer",
+                    "priority": 0
+                },
+                {
+                    "pattern": re.compile(
                         r"(?:transfer|send)\s+(?P<amount>[\d\.]+)\s+(?P<token>\w+)\s+to\s+(?P<destination>\S+)",
                         re.IGNORECASE
                     ),
@@ -372,6 +405,14 @@ class UnifiedParser:
                 }
             ],
             CommandType.BALANCE: [
+                {
+                    "pattern": re.compile(
+                        r"(?:balance|check balance)(?:\s+(?P<token>\w+))?\s+on\s+(?P<chain>[\w-]+)",
+                        re.IGNORECASE
+                    ),
+                    "description": "Check token balance on specific chain",
+                    "priority": 0
+                },
                 {
                     "pattern": re.compile(
                         r"(?:balance|check balance)(?:\s+(?P<token>\w+))?",
@@ -513,6 +554,8 @@ class UnifiedParser:
                 original_text=f"{token_amount} {groups['token_in']}"
             )
 
+        is_private = "privately" in match.string.lower()
+
         return CommandDetails(
             amount=float(parsed_amount.value),
             token_in=TokenInfo(symbol=parsed_amount.token_symbol),
@@ -521,7 +564,8 @@ class UnifiedParser:
             additional_params={
                 "parsed_amount": parsed_amount.to_dict(),
                 "amount_type": parsed_amount.amount_type.value,
-                "original_command": match.string
+                "original_command": match.string,
+                "is_private": is_private
             }
         )
 
@@ -551,18 +595,33 @@ class UnifiedParser:
         
         if "amount" in groups and groups["amount"]:
             try:
-                amount = self._parse_decimal(groups["amount"])
+                amount = float(self._parse_decimal(groups["amount"]))
             except (ValueError, KeyError):
                 pass
         
         if "token" in groups and groups["token"]:
             token = groups["token"].upper()
         
+        # Detect Starknet-native operations
+        is_shield = "shield" in match.string.lower() or "make private" in match.string.lower()
+        is_unshield = "unshield" in match.string.lower() or "withdraw private" in match.string.lower()
+        
+        chain_name = groups.get("chain")
+        chain_id = None
+        if chain_name:
+            from app.config.chains import get_chain_id_by_name
+            chain_id = get_chain_id_by_name(chain_name)
+
         return CommandDetails(
-            amount=float(amount) if amount else None,
+            amount=amount,
             token_in=TokenInfo(symbol=token) if token else None,
-            destination_chain="Zcash",
-            additional_params={"is_privacy": True}
+            destination_chain="Zcash" if not (is_shield or is_unshield) else chain_name,
+            chain_id=chain_id,
+            additional_params={
+                "is_privacy": True,
+                "is_shield": is_shield,
+                "is_unshield": is_unshield
+            }
         )
 
     def _extract_x402_payment_details(self, match: re.Match) -> CommandDetails:
@@ -593,21 +652,33 @@ class UnifiedParser:
         """Extract transfer details."""
         groups = match.groupdict()
         amount = self._parse_decimal(groups["amount"])
+        is_private = "privately" in match.string.lower()
 
         return CommandDetails(
             amount=float(amount),
             token_in=TokenInfo(symbol=groups["token"].upper()),
-            destination=groups["destination"]
+            destination=groups["destination"],
+            additional_params={"is_private": is_private}
         )
 
     def _extract_balance_details(self, match: re.Match) -> CommandDetails:
         """Extract balance details."""
         groups = match.groupdict()
         token = groups.get("token")
+        chain_name = groups.get("chain")
 
+        details = CommandDetails()
         if token:
-            return CommandDetails(token_in=TokenInfo(symbol=token.upper()))
-        return CommandDetails()
+            details.token_in = TokenInfo(symbol=token.upper())
+        
+        if chain_name:
+            from app.config.chains import get_chain_id_by_name
+            cid = get_chain_id_by_name(chain_name)
+            if cid:
+                details.chain_id = cid
+            details.destination_chain = chain_name # Keep original name for display
+            
+        return details
 
     def _extract_research_details(self, match: re.Match, pattern_info: Dict[str, Any]) -> CommandDetails:
          """Extract protocol research details including research mode."""
@@ -696,7 +767,7 @@ class UnifiedParser:
         self,
         command: str,
         wallet_address: Optional[str] = None,
-        chain_id: Optional[int] = None,
+        chain_id: Optional[int | str] = None,
         user_name: Optional[str] = None,
         openai_api_key: Optional[str] = None
     ) -> UnifiedCommand:

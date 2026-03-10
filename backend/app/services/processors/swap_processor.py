@@ -85,8 +85,29 @@ class SwapProcessor(BaseProcessor):
                     }
                     logger.info(f"KB match for {token_out}: {kb_key}")
             
-            if not amount:
-                missing_params.append("amount")
+            # convert chain_id to int if possible, keep as str for Starknet
+            try:
+                if isinstance(chain_id, str) and chain_id.isdigit():
+                    chain_id = int(chain_id)
+            except (ValueError, TypeError):
+                pass
+
+            # Privacy routing for Starknet
+            additional_params = details.additional_params or {}
+            if additional_params.get("is_private") and chain_id in ["SN_MAIN", "SN_SEPOLIA"]:
+                 return self._create_success_response(
+                    content={
+                        "message": f"I see you want to swap {details.amount} {token_in} for {token_out} privately on Starknet.",
+                        "type": "privacy_suggestion",
+                        "suggestions": [
+                            f"shield {details.amount} {token_in}",
+                            "check my shielded balance"
+                        ]
+                    },
+                    agent_type=AgentType.SWAP,
+                    metadata={"privacy_intent": True}
+                )
+
             if not chain_id:
                 missing_params.append("chain")
             

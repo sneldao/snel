@@ -55,11 +55,27 @@ class BalanceProcessor(BaseProcessor):
 
             # Get balances via TokenQueryService (consolidates Web3 operations)
             from ..token_query_service import token_query_service
+            from ..starknet_service import starknet_service
+            from ...config.chains import get_privacy_capabilities
 
             balances: dict[str, Any] = await token_query_service.get_balances(
                 wallet_address=unified_command.wallet_address,
                 chain_id=chain_id,
             )
+
+            # Check for shielded balances if Starknet privacy is supported
+            shielded_balances = {}
+            capabilities = get_privacy_capabilities(chain_id)
+            if capabilities.starknet_privacy:
+                try:
+                    # In a real app, we'd check multiple tokens, but for demo we check ETH/STRK
+                    shielded_eth = await starknet_service.get_shielded_balance(
+                        unified_command.wallet_address, "ETH", chain_id
+                    )
+                    if shielded_eth > 0:
+                        shielded_balances["ETH"] = shielded_eth
+                except Exception as e:
+                    logger.debug(f"Failed to fetch shielded balances: {e}")
 
             # Determine display token and balance data for frontend
             display_token = token if token else "All tokens"
@@ -75,6 +91,10 @@ class BalanceProcessor(BaseProcessor):
                     # Check if it's the native token
                     native_bal = balances.get("native_balance", 0)
                     balance_data = f"{native_bal} {token_upper}"
+                
+                # Add shielded info if exists for this token
+                if token_upper in shielded_balances:
+                    balance_data += f"\n(Shielded: {shielded_balances[token_upper]} {token_upper})"
             else:
                 # Summary for all tokens
                 from ...config.tokens import COMMON_TOKENS
@@ -92,12 +112,19 @@ class BalanceProcessor(BaseProcessor):
 
                 native_bal = balances.get("native_balance", 0)
                 summary_parts = [f"{native_bal} {native_symbol}"]
+                
+                # Add shielded native balance if exists
+                if native_symbol in shielded_balances:
+                    summary_parts[0] += f" (Shielded: {shielded_balances[native_symbol]} {native_symbol})"
 
                 # Add other non-zero balances
                 token_balances: dict[str, float] = balances.get("token_balances", {})
                 for sym, bal in token_balances.items():
                     if bal > 0 and sym.upper() != native_symbol:
-                        summary_parts.append(f"{bal} {sym.upper()}")
+                        line = f"{bal} {sym.upper()}"
+                        if sym.upper() in shielded_balances:
+                            line += f" (Shielded: {shielded_balances[sym.upper()]} {sym.upper()})"
+                        summary_parts.append(line)
 
                 balance_data = "\n".join(summary_parts)
 
@@ -111,6 +138,7 @@ class BalanceProcessor(BaseProcessor):
                 "balance_data": balance_data,
                 "native_balance": balances.get("native_balance"),
                 "token_balances": balances.get("token_balances"),
+                "shielded_balances": shielded_balances,
                 "requires_transaction": False,
             }
 
