@@ -36,7 +36,8 @@
     "@starknet-react/core": "^3.6.0",
     "@starknet-react/chains": "^3.0.0",
     "viem": "^2.44.1",
-    "wagmi": "^2.8.8"
+    "wagmi": "^2.8.8",
+    "long": "^5.2.3"
   },
   "scripts": {
     "dev": "next dev",
@@ -64,7 +65,6 @@
     "@types/estree": "^1.0.5",
     "@types/estree-jsx": "^1.0.3",
     "@types/hast": "^3.0.4",
-    "@types/long": "^5.0.0",
     "@types/mdast": "^4.0.3",
     "@types/parse-json": "^4.0.2",
     "@types/unist": "^3.0.2",

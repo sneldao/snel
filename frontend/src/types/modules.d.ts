@@ -1,3 +1,5 @@
+/// <reference types="estree-jsx" />
+/// <reference types="long" />
 declare module "./ChatMessage";
 declare module "./WorkflowProgress";
 declare module "./CrossChainAnalytics";
