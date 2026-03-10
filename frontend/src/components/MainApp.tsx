@@ -12,6 +12,7 @@ import {
   Text,
   useToast,
   useColorMode,
+  useColorModeValue,
   Alert,
   AlertIcon,
   AlertTitle,
@@ -120,6 +121,12 @@ export default function MainApp(props: MainAppProps) {
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+
+  // Theme-aware colors
+  const multichainBorderColor = useColorModeValue("blue.200", "blue.700");
+  const multichainBg = useColorModeValue("blue.50", "blue.900");
+  const multichainTextColor = useColorModeValue("blue.700", "blue.200");
+  const multichainSubtextColor = useColorModeValue("blue.600", "blue.300");
 
   // Determine primary network (Starknet first if available)
   const primaryNetwork = isStarknetConnected ? 'starknet' : isConnected ? 'evm' : null;
@@ -1014,6 +1021,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="gray.50"
+                      _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaExchangeAlt} color="blue.500" boxSize={4} />
                       <Text
@@ -1030,6 +1038,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="gray.50"
+                      _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaShieldAlt} color="orange.500" boxSize={4} />
                       <Text
@@ -1046,6 +1055,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="gray.50"
+                      _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaWallet} color="blue.500" boxSize={4} />
                       <Text
@@ -1062,6 +1072,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="gray.50"
+                      _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaCoins} color="blue.500" boxSize={4} />
                       <Text
@@ -1078,6 +1089,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="gray.50"
+                      _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaChartPie} color="blue.500" boxSize={4} />
                       <Text
@@ -1094,6 +1106,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="gray.50"
+                      _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaSearch} color="blue.500" boxSize={4} />
                       <Text
@@ -1115,6 +1128,7 @@ export default function MainApp(props: MainAppProps) {
                     pt={4}
                     borderTopWidth="1px"
                     borderTopColor="gray.200"
+                    _dark={{ borderTopColor: "gray.600" }}
                     width="100%"
                   >
                     <VStack
@@ -1123,6 +1137,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="linear-gradient(135deg, rgba(244, 183, 40, 0.05) 0%, rgba(244, 183, 40, 0.02) 100%)"
+                      _dark={{ bg: "linear-gradient(135deg, rgba(244, 183, 40, 0.1) 0%, rgba(244, 183, 40, 0.05) 100%)" }}
                       border="1px solid"
                       borderColor="rgba(244, 183, 40, 0.2)"
                     >
@@ -1132,6 +1147,7 @@ export default function MainApp(props: MainAppProps) {
                         fontWeight="semibold"
                         textAlign="center"
                         color="gray.700"
+                        _dark={{ color: "gray.200" }}
                       >
                         MNEE Commerce
                       </Text>
@@ -1146,6 +1162,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="linear-gradient(135deg, rgba(244, 183, 40, 0.05) 0%, rgba(244, 183, 40, 0.02) 100%)"
+                      _dark={{ bg: "linear-gradient(135deg, rgba(244, 183, 40, 0.1) 0%, rgba(244, 183, 40, 0.05) 100%)" }}
                       border="1px solid"
                       borderColor="rgba(244, 183, 40, 0.2)"
                     >
@@ -1155,6 +1172,7 @@ export default function MainApp(props: MainAppProps) {
                         fontWeight="semibold"
                         textAlign="center"
                         color="gray.700"
+                        _dark={{ color: "gray.200" }}
                       >
                         Starknet ZK
                       </Text>
@@ -1169,6 +1187,7 @@ export default function MainApp(props: MainAppProps) {
                       p={3}
                       borderRadius="md"
                       bg="linear-gradient(135deg, rgba(138, 43, 226, 0.05) 0%, rgba(138, 43, 226, 0.02) 100%)"
+                      _dark={{ bg: "linear-gradient(135deg, rgba(138, 43, 226, 0.1) 0%, rgba(138, 43, 226, 0.05) 100%)" }}
                       border="1px solid"
                       borderColor="rgba(138, 43, 226, 0.2)"
                     >
@@ -1178,6 +1197,7 @@ export default function MainApp(props: MainAppProps) {
                         fontWeight="semibold"
                         textAlign="center"
                         color="gray.700"
+                        _dark={{ color: "gray.200" }}
                       >
                         X402 Automation
                       </Text>
@@ -1188,11 +1208,11 @@ export default function MainApp(props: MainAppProps) {
                   </SimpleGrid>
 
                   {/* Multichain Support Highlight */}
-                  <VStack spacing={2} mt={4} p={3} bg="blue.50" borderRadius="md" border="1px solid" borderColor="blue.200">
-                    <Text fontSize="sm" fontWeight="semibold" color="blue.700" textAlign="center">
+                  <VStack spacing={2} mt={4} p={3} bg={multichainBg} borderRadius="md" border="1px solid" borderColor={multichainBorderColor}>
+                    <Text fontSize="sm" fontWeight="semibold" color={multichainTextColor} textAlign="center">
                       🌐 Multichain DeFi Assistant
                     </Text>
-                    <Text fontSize="xs" color="blue.600" textAlign="center">
+                    <Text fontSize="xs" color={multichainSubtextColor} textAlign="center">
                       19+ networks • AI-powered • Cross-chain bridging • X402 automation
                     </Text>
                   </VStack>

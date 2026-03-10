@@ -148,6 +148,7 @@ export const CommandInput = React.memo(
         borderRadius="lg"
         p={4}
         bg="white"
+        _dark={{ bg: "gray.800", borderColor: "gray.600" }}
         opacity={isDisabled ? 0.6 : 1}
       >
         <VStack spacing={4} align="stretch">
@@ -184,7 +185,7 @@ export const CommandInput = React.memo(
           </HStack>
 
           {showExamples && (
-            <Box p={4} bg="gray.50" borderRadius="md">
+            <Box p={4} bg="gray.50" _dark={{ bg: "gray.700" }} borderRadius="md">
               <Text fontWeight="bold" mb={2}>
                 Example commands:
               </Text>
@@ -200,6 +201,7 @@ export const CommandInput = React.memo(
                       textDecoration: isDisabled ? undefined : "underline",
                     }}
                     color="gray.600"
+                    _dark={{ color: "gray.300" }}
                   >
                     • {example}
                   </Text>

@@ -28,6 +28,12 @@ export const Footer = () => {
       backdropFilter="blur(10px)"
       backgroundColor="rgba(255, 255, 255, 0.9)"
       zIndex="banner"
+      _dark={{
+        bg: "gray.900",
+        borderColor: "gray.700",
+        color: "gray.400",
+        backgroundColor: "rgba(26, 32, 44, 0.9)"
+      }}
     >
       <HStack spacing={4} justify="center" wrap="wrap">
         <ChakraLink
