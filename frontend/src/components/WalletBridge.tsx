@@ -77,7 +77,7 @@ export default function WalletBridge() {
 
       // Create a message to sign
       const message = `Connect wallet to ${
-        botName || "Pointless"
+        botName || "SNEL"
       } Bot\nConnection ID: ${uid}\nAddress: ${address}\nTime: ${new Date().toISOString()}`;
 
       // Sign the message
@@ -314,7 +314,7 @@ export default function WalletBridge() {
     >
       <VStack spacing={6}>
         <Heading size="md">
-          Connect Wallet to {botName || "Pointless"} Bot
+          Connect Wallet to {botName || "SNEL"} Bot
         </Heading>
         <Text>Connect your Ethereum wallet to use with the bot.</Text>
 

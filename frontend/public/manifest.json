@@ -1,7 +1,7 @@
 {
     "name": "SNEL",
     "short_name": "SNEL",
-    "description": "super pointless lazy agents",
+    "description": "Build stability with private, intelligent DeFi powered by Starknet",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#ffffff",

@@ -11,6 +11,7 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import { useAccount, useChainId } from "wagmi";
+import { useAccount as useStarknetAccount } from "@starknet-react/core";
 import { useUserProfile } from "../hooks/useUserProfile";
 import { SUPPORTED_CHAINS } from "../constants/chains";
 
@@ -21,17 +22,17 @@ type CommandInputProps = {
 };
 
 const EXAMPLE_COMMANDS = [
+  "shield 1 USDC on Starknet (private)",
+  "perform a private swap: 1 USDC for ETH",
+  "analyze my portfolio",
+  "what's my USDC balance?",
   "pay 1 USDC to 0x742d35Cc6634C0532925a3b8D4C9db96C4b5Da5A on cronos",
   "swap 1 usdc for eth",
   "send 5 ETH to @papajams",
   "bridge 0.1 ETH from Ethereum to Cronos",
-  "analyze my portfolio",
   "show my payment history",
   "show my spending analytics",
-  "show my saved recipients",
-  "show my payment templates",
   "tell me about Aave",
-  "what's my USDC balance?",
 ];
 
 export const CommandInput = React.memo(
@@ -41,7 +42,10 @@ export const CommandInput = React.memo(
     const toast = useToast();
     const chainId = useChainId();
     const { isConnected } = useAccount();
+    const { address: starknetAddress } = useStarknetAccount();
     const { profile, getUserDisplayName } = useUserProfile();
+    const isStarknetConnected = !!starknetAddress;
+    const isAnyWalletConnected = isConnected || isStarknetConnected;
 
     const isChainSupported = React.useMemo(
       () => chainId && chainId in SUPPORTED_CHAINS,
@@ -149,9 +153,14 @@ export const CommandInput = React.memo(
         <VStack spacing={4} align="stretch">
           <HStack>
             <Text fontSize="lg" fontWeight="bold">
-              Ask something pointless on
+              What would you like to do?
             </Text>
-            {chainId && (
+            {isStarknetConnected && (
+              <Badge colorScheme="purple" variant="subtle" fontSize="sm">
+                🔐 Starknet Private
+              </Badge>
+            )}
+            {chainId && isConnected && (
               <Badge
                 colorScheme={isChainSupported ? "green" : "red"}
                 variant="subtle"
@@ -160,9 +169,9 @@ export const CommandInput = React.memo(
                 {isChainSupported ? currentChainName : "Unsupported Network"}
               </Badge>
             )}
-            {!isConnected && (
+            {!isAnyWalletConnected && (
               <Badge colorScheme="yellow" variant="subtle" fontSize="sm">
-                Wallet Not Connected
+                👛 Connect Wallet
               </Badge>
             )}
             <Button
@@ -214,13 +223,15 @@ export const CommandInput = React.memo(
                 placeholder={
                   isDisabled
                     ? "Please set your OpenAI API key to start"
-                    : !isConnected
-                      ? "Please connect your wallet to start"
-                      : !isChainSupported
+                    : !isAnyWalletConnected
+                      ? "Connect wallet to begin..."
+                      : !isChainSupported && isConnected
                         ? "Please switch to a supported network"
-                        : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
+                        : isStarknetConnected && !isConnected
+                          ? "Type a command (Starknet private mode)"
+                          : `Type a command or question (e.g., 'swap 1 usdc for eth') on ${currentChainName}`
                 }
-                isDisabled={isDisabled || !isConnected || !isChainSupported}
+                isDisabled={isDisabled || !isAnyWalletConnected || (!isChainSupported && isConnected)}
                 size="sm"
                 rows={1}
                 resize="none"

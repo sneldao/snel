@@ -241,19 +241,19 @@ export default function MainApp(props: MainAppProps) {
   useEffect(() => {
     const getWelcomeMessage = () => {
       if (isStarknetConnected) {
-        return "🔐 Welcome to Starknet Privacy! You can now shield assets, perform private swaps, and access zero-knowledge DeFi.";
+        return "🔐 Welcome to Starknet Private Mode! You now have access to shielded transfers, confidential swaps, and zero-knowledge DeFi. Build your stable future, one private transaction at a time.";
       }
 
       if (!isConnected) {
-        return "Good morning! Connect Starknet for privacy, or EVM for standard DeFi.";
+        return "👋 Hello! Connect Starknet to explore secure, private finance. Or connect EVM to access traditional DeFi. Let's build stability together.";
       }
 
       if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
-        return "Please switch to a supported network to continue.";
+        return "🌐 Please switch to a supported network to get started.";
       }
 
       const chainName = SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS];
-      return `Good morning! How can I help you with DeFi today? You're connected to ${chainName}.`;
+      return `👋 Hello! You're now on ${chainName}. How can I help you grow your portfolio steadily today?`;
     };
 
     const welcomeMessage: ResponseType = {
