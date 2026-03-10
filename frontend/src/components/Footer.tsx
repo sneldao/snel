@@ -6,11 +6,15 @@ import {
   Divider,
   Icon,
   Tooltip,
+  useColorModeValue,
 } from "@chakra-ui/react";
 import NextLink from "next/link";
 import { FaTelegram } from "react-icons/fa";
 
 export const Footer = () => {
+  const footerLinkColor = useColorModeValue("blue.500", "blue.400");
+  const footerLinkHoverColor = useColorModeValue("blue.600", "blue.300");
+
   return (
     <Box
       as="footer"
@@ -39,8 +43,8 @@ export const Footer = () => {
         <ChakraLink
           href="https://hey.xyz/u/papajams"
           isExternal
-          color="blue.500"
-          _hover={{ textDecoration: "none", color: "blue.600" }}
+          color={footerLinkColor}
+          _hover={{ textDecoration: "none", color: footerLinkHoverColor }}
         >
           papa
         </ChakraLink>
@@ -49,8 +53,8 @@ export const Footer = () => {
           <ChakraLink
             href="https://t.me/stablesnelbot"
             isExternal
-            color="blue.500"
-            _hover={{ textDecoration: "none", color: "blue.600" }}
+            color={footerLinkColor}
+            _hover={{ textDecoration: "none", color: footerLinkHoverColor }}
             display="flex"
             alignItems="center"
           >
@@ -62,8 +66,8 @@ export const Footer = () => {
         <ChakraLink
           as={NextLink}
           href="/terms"
-          color="blue.500"
-          _hover={{ textDecoration: "none", color: "blue.600" }}
+          color={footerLinkColor}
+          _hover={{ textDecoration: "none", color: footerLinkHoverColor }}
         >
           terms
         </ChakraLink>

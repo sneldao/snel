@@ -128,6 +128,16 @@ export default function MainApp(props: MainAppProps) {
   const multichainTextColor = useColorModeValue("blue.700", "blue.200");
   const multichainSubtextColor = useColorModeValue("blue.600", "blue.300");
 
+  // Feature card text colors for contrast
+  const featureTitleColor = useColorModeValue("gray.700", "gray.100");
+  const featureSubtitleColor = useColorModeValue("gray.500", "gray.400");
+  const hintTextColor = useColorModeValue("gray.500", "gray.400");
+  const actionTextColor = useColorModeValue("blue.600", "blue.300");
+  const settingsBg = useColorModeValue("gray.50", "gray.800");
+  const settingsBorder = useColorModeValue("gray.200", "gray.600");
+  const footerBg = useColorModeValue("white", "gray.800");
+  const footerColor = useColorModeValue("gray.600", "gray.300");
+
   // Determine primary network (Starknet first if available)
   const primaryNetwork = isStarknetConnected ? 'starknet' : isConnected ? 'evm' : null;
   const isStarknetPrimary = primaryNetwork === 'starknet';
@@ -251,20 +261,28 @@ export default function MainApp(props: MainAppProps) {
   // Initialize or update welcome message based on wallet state
   useEffect(() => {
     const getWelcomeMessage = () => {
+      // If neither wallet connected
       if (!isConnected && !isStarknetConnected) {
         return "👋 Hello! Connect your wallet to explore secure, intelligent DeFi. Let's build stability together.";
       }
 
-      if (!chainId && isStarknetConnected) {
+      // If only Starknet connected (and EVM is not)
+      if (isStarknetConnected && !isConnected) {
         return "🔗 Connected to Starknet. How can I help you grow your portfolio steadily today?";
       }
 
-      if (!chainId || !(chainId in SUPPORTED_CHAINS)) {
+      // If EVM connected without valid chain
+      if (isConnected && (!chainId || !(chainId in SUPPORTED_CHAINS))) {
         return "🌐 Please switch to a supported network to get started.";
       }
 
-      const chainName = SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS];
-      return `👋 Hello! You're on ${chainName}. How can I help you grow your portfolio steadily today?`;
+      // If EVM connected with valid chain
+      if (isConnected && chainId && chainId in SUPPORTED_CHAINS) {
+        const chainName = SUPPORTED_CHAINS[chainId as keyof typeof SUPPORTED_CHAINS];
+        return `👋 Hello! You're on ${chainName}. How can I help you grow your portfolio steadily today?`;
+      }
+
+      return "👋 Hello! How can I help you grow your portfolio steadily today?";
     };
 
     const welcomeMessage: ResponseType = {
@@ -1020,7 +1038,7 @@ export default function MainApp(props: MainAppProps) {
                       align="center"
                       p={3}
                       borderRadius="md"
-                      bg="gray.50"
+                      bg={settingsBg}
                       _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaExchangeAlt} color="blue.500" boxSize={4} />
@@ -1037,7 +1055,7 @@ export default function MainApp(props: MainAppProps) {
                       align="center"
                       p={3}
                       borderRadius="md"
-                      bg="gray.50"
+                      bg={settingsBg}
                       _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaShieldAlt} color="orange.500" boxSize={4} />
@@ -1054,7 +1072,7 @@ export default function MainApp(props: MainAppProps) {
                       align="center"
                       p={3}
                       borderRadius="md"
-                      bg="gray.50"
+                      bg={settingsBg}
                       _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaWallet} color="blue.500" boxSize={4} />
@@ -1071,7 +1089,7 @@ export default function MainApp(props: MainAppProps) {
                       align="center"
                       p={3}
                       borderRadius="md"
-                      bg="gray.50"
+                      bg={settingsBg}
                       _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaCoins} color="blue.500" boxSize={4} />
@@ -1088,7 +1106,7 @@ export default function MainApp(props: MainAppProps) {
                       align="center"
                       p={3}
                       borderRadius="md"
-                      bg="gray.50"
+                      bg={settingsBg}
                       _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaChartPie} color="blue.500" boxSize={4} />
@@ -1105,7 +1123,7 @@ export default function MainApp(props: MainAppProps) {
                       align="center"
                       p={3}
                       borderRadius="md"
-                      bg="gray.50"
+                      bg={settingsBg}
                       _dark={{ bg: "gray.800" }}
                     >
                       <Icon as={FaSearch} color="blue.500" boxSize={4} />
@@ -1151,7 +1169,7 @@ export default function MainApp(props: MainAppProps) {
                       >
                         MNEE Commerce
                       </Text>
-                      <Text fontSize="2xs" textAlign="center" color="gray.500">
+                      <Text fontSize="2xs" textAlign="center" color={featureSubtitleColor}>
                         Invoices & Payments
                       </Text>
                     </VStack>
@@ -1176,7 +1194,7 @@ export default function MainApp(props: MainAppProps) {
                       >
                         Starknet ZK
                       </Text>
-                      <Text fontSize="2xs" textAlign="center" color="gray.500">
+                      <Text fontSize="2xs" textAlign="center" color={featureSubtitleColor}>
                         Shield & Unshield
                       </Text>
                     </VStack>
@@ -1201,7 +1219,7 @@ export default function MainApp(props: MainAppProps) {
                       >
                         X402 Automation
                       </Text>
-                      <Text fontSize="2xs" textAlign="center" color="gray.500">
+                      <Text fontSize="2xs" textAlign="center" color={featureSubtitleColor}>
                         AI-Triggered Payments
                       </Text>
                     </VStack>
@@ -1218,25 +1236,25 @@ export default function MainApp(props: MainAppProps) {
                   </VStack>
 
                   {/* Hint about help modal */}
-                  <Text fontSize="xs" color="gray.500" textAlign="center">
+                  <Text fontSize="xs" color={featureSubtitleColor} textAlign="center">
                     Click ? above for specific commands <br />
                     Click ⚙️ above to configure API keys
                   </Text>
                   {/* Features Hint */}
                   <VStack spacing={2} mt={2}>
                     <HStack spacing={4} justify="center">
-                      <Text fontSize="2xs" color="gray.500" textAlign="center">
+                      <Text fontSize="2xs" color={featureSubtitleColor} textAlign="center">
                         💰 Try MNEE: &quot;pay $100 MNEE to merchant...&quot;
                       </Text>
-                      <Text fontSize="2xs" color="gray.500" textAlign="center">
+                      <Text fontSize="2xs" color={featureSubtitleColor} textAlign="center">
                         🛡️ Try Privacy: &quot;shield 1 ETH on starknet&quot;
                       </Text>
                     </HStack>
                     <HStack spacing={4} justify="center">
-                      <Text fontSize="2xs" color="blue.600" textAlign="center">
+                      <Text fontSize="2xs" color={actionTextColor} textAlign="center">
                         🤖 Try X402: &quot;setup portfolio rebalancing with 50 USDC&quot;
                       </Text>
-                      <Text fontSize="2xs" color="blue.600" textAlign="center">
+                      <Text fontSize="2xs" color={actionTextColor} textAlign="center">
                         ⚡ Try Swaps: &quot;swap $100 USDC for ETH on Base&quot;
                       </Text>
                     </HStack>
@@ -1304,17 +1322,17 @@ export default function MainApp(props: MainAppProps) {
                   {/* Portfolio Settings - Simple Toggle */}
                   <Box
                     p={3}
-                    bg="gray.50"
+                    bg={settingsBg}
                     borderRadius="md"
                     border="1px solid"
-                    borderColor="gray.200"
+                    borderColor={settingsBorder}
                   >
                     <HStack justify="space-between">
                       <VStack align="flex-start" spacing={0}>
                         <Text fontSize="sm" fontWeight="medium">
                           Portfolio Analysis
                         </Text>
-                        <Text fontSize="xs" color="gray.500">
+                        <Text fontSize="xs" color={featureSubtitleColor}>
                           {portfolioSettings.enabled
                             ? "Enabled - Analysis cached for 5min"
                             : "Disabled for faster performance"}
