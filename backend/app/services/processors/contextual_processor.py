@@ -139,6 +139,27 @@ Keep your response brief (1-2 sentences) and friendly.
     async def _handle_contextual_question(self, unified_command: UnifiedCommand) -> UnifiedResponse:
         """Handle contextual questions using AI and conversation history."""
         try:
+            # First check if this is actually a greeting that wasn't classified properly
+            cmd_lower = unified_command.command.lower().strip()
+            simple_greetings = {
+                "gm": "Good morning! Ready to help you grow your portfolio. What would you like to do?",
+                "good morning": "Good morning! How can I help you with crypto today?",
+                "gn": "Good night! Safe travels!",
+                "gnight": "Good night! Sleep well!",
+                "good night": "Good night! Talk soon!",
+                "yo": "Yo! What can I help you with?",
+                "sup": "Sup! What's up?"
+            }
+            
+            if cmd_lower in simple_greetings:
+                return self._create_success_response(
+                    content={
+                        "message": simple_greetings[cmd_lower],
+                        "type": "greeting"
+                    },
+                    agent_type=AgentType.DEFAULT
+                )
+            
             openai_key = unified_command.openai_api_key or os.getenv("OPENAI_API_KEY")
             if not openai_key:
                 return self._create_error_response(
@@ -300,12 +321,14 @@ X402 AGENTIC PAYMENT FEATURES YOU SUPPORT:
                     
                     return self._create_success_response(
                         content={
-                            "message": "I don't have enough context to answer that question. Could you be more specific about what you're interested in?",
+                            "message": "I'm here to help with your DeFi needs! Try asking me about portfolio analysis, token swaps, cross-chain bridges, privacy transactions, or recurring payments.",
                             "type": "contextual_response",
                             "suggestions": [
-                                "Try asking 'what can I do on Cronos?'",
-                                "Ask about a specific DeFi protocol",
-                                "Be more specific about what you want to know"
+                                "Try: 'analyze my portfolio'",
+                                "Try: 'swap 1 USDC for ETH'",
+                                "Try: 'bridge 100 USDC to Polygon'",
+                                "Try: 'what can I do with privacy?'",
+                                "Try: 'setup monthly 100 USDC payment'"
                             ]
                         },
                         agent_type=AgentType.DEFAULT
