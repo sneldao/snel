@@ -56,7 +56,7 @@ class DatabaseSettings:
 @dataclass(frozen=True)
 class ChainSettings:
     """Blockchain configuration."""
-    supported_chains: Dict[int, str] = field(default_factory=lambda: {
+    supported_chains: Dict[int | str, str] = field(default_factory=lambda: {
         1: "ethereum",
         8453: "base", 
         42161: "arbitrum",
@@ -73,18 +73,22 @@ class ChainSettings:
         100: "gnosis",
         167000: "taiko",
         25: "cronos",          # Cronos Mainnet
-        338: "cronos-testnet"  # Cronos Testnet
+        338: "cronos-testnet", # Cronos Testnet
+        "SN_MAIN": "starknet", # Starknet Mainnet
+        "SN_SEPOLIA": "starknet-sepolia" # Starknet Sepolia
     })
     
-    default_chain_id: int = field(default_factory=lambda: int(os.getenv("DEFAULT_CHAIN_ID", "1")))
+    default_chain_id: int | str = field(default_factory=lambda: os.getenv("DEFAULT_CHAIN_ID", "1"))
     
     # RPC URLs
-    rpc_urls: Dict[int, str] = field(default_factory=lambda: {
+    rpc_urls: Dict[int | str, str] = field(default_factory=lambda: {
         1: os.getenv("ETHEREUM_RPC_URL", ""),
         8453: os.getenv("BASE_RPC_URL", ""),
         42161: os.getenv("ARBITRUM_RPC_URL", ""),
         10: os.getenv("OPTIMISM_RPC_URL", ""),
         137: os.getenv("POLYGON_RPC_URL", ""),
+        "SN_MAIN": os.getenv("SN_MAIN_RPC_URL", "https://starknet-mainnet.public.blastapi.io"),
+        "SN_SEPOLIA": os.getenv("SN_SEPOLIA_RPC_URL", "https://starknet-sepolia.public.blastapi.io"),
     })
 
 

@@ -24,13 +24,14 @@ class PrivacyCapabilities:
     gmp_privacy: bool = False  # Supports GMP-based privacy bridging
     compliance_support: bool = False  # Supports compliance-ready privacy
     direct_zcash: bool = False  # Supports direct Zcash transactions
+    starknet_privacy: bool = False  # Supports Starknet-native ZK privacy
 
 
 @dataclass
 class ChainInfo:
     """Information about a blockchain network."""
 
-    id: int  # Chain ID
+    id: int | str  # Chain ID
     name: str  # Human readable name
     type: ChainType  # Chain type (EVM, Starknet, etc.)
     rpc_url: str | None = None  # Default RPC URL if any
@@ -44,7 +45,7 @@ class ChainInfo:
 
 
 # Define supported chains with their capabilities
-CHAINS: dict[int, ChainInfo] = {
+CHAINS: dict[int | str, ChainInfo] = {
     # Layer 1
     1: ChainInfo(
         id=1,
@@ -215,12 +216,23 @@ CHAINS: dict[int, ChainInfo] = {
         ),
     ),
     # Starknet
-    1101: ChainInfo(
-        id=1101,
-        name="Starknet",
+    "SN_MAIN": ChainInfo(
+        id="SN_MAIN",
+        name="starknet",
         type=ChainType.STARKNET,
+        rpc_url="https://starknet-mainnet.public.blastapi.io",
         explorer_url="https://starkscan.co/tx/",
-        supported_protocols={"brian"},
+        supported_protocols={"brian", "jediswap", "avnu", "tongo"},
+        privacy=PrivacyCapabilities(starknet_privacy=True, compliance_support=True)
+    ),
+    "SN_SEPOLIA": ChainInfo(
+        id="SN_SEPOLIA",
+        name="starknet-sepolia",
+        type=ChainType.STARKNET,
+        rpc_url="https://starknet-sepolia.public.blastapi.io",
+        explorer_url="https://sepolia.starkscan.co/tx/",
+        supported_protocols={"brian", "jediswap", "avnu", "tongo"},
+        privacy=PrivacyCapabilities(starknet_privacy=True, compliance_support=True)
     ),
 }
 
@@ -235,18 +247,18 @@ def get_chains_by_protocol(protocol: str) -> list[ChainInfo]:
     return [chain for chain in CHAINS.values() if protocol in chain.supported_protocols]
 
 
-def is_protocol_supported(chain_id: int, protocol: str) -> bool:
+def is_protocol_supported(chain_id: int | str, protocol: str) -> bool:
     """Check if a specific protocol is supported on a chain."""
     chain = CHAINS.get(chain_id)
     return chain is not None and protocol in chain.supported_protocols
 
 
-def get_chain_info(chain_id: int) -> ChainInfo | None:
+def get_chain_info(chain_id: int | str) -> ChainInfo | None:
     """Get information about a specific chain."""
     return CHAINS.get(chain_id)
 
 
-def get_chain_id_by_name(chain_name: str) -> int | None:
+def get_chain_id_by_name(chain_name: str) -> int | str | None:
     """Get chain ID by chain name (case-insensitive)."""
     chain_name_lower = chain_name.lower()
     for chain_id, chain_info in CHAINS.items():
@@ -255,28 +267,28 @@ def get_chain_id_by_name(chain_name: str) -> int | None:
     return None
 
 
-def get_chain_name(chain_id: int) -> str:
+def get_chain_name(chain_id: int | str) -> str:
     """Get chain name by chain ID."""
     chain = CHAINS.get(chain_id)
     return chain.name if chain else f"Chain {chain_id}"
 
 
-def get_privacy_capabilities(chain_id: int) -> PrivacyCapabilities:
+def get_privacy_capabilities(chain_id: int | str) -> PrivacyCapabilities:
     """Get privacy capabilities for a specific chain."""
     chain = CHAINS.get(chain_id)
     return chain.privacy if chain else PrivacyCapabilities()
 
 
-def is_x402_privacy_supported(chain_id: int) -> bool:
+def is_x402_privacy_supported(chain_id: int | str) -> bool:
     """Check if x402 privacy is supported on a chain."""
     return get_privacy_capabilities(chain_id).x402_support
 
 
-def is_gmp_privacy_supported(chain_id: int) -> bool:
+def is_gmp_privacy_supported(chain_id: int | str) -> bool:
     """Check if GMP privacy is supported on a chain."""
     return get_privacy_capabilities(chain_id).gmp_privacy
 
 
-def is_compliance_supported(chain_id: int) -> bool:
+def is_compliance_supported(chain_id: int | str) -> bool:
     """Check if compliance-ready privacy is supported on a chain."""
     return get_privacy_capabilities(chain_id).compliance_support

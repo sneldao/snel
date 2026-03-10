@@ -1,0 +1,10 @@
+[package]
+name = "snel_privacy"
+version = "0.1.0"
+edition = "2023_11"
+
+[dependencies]
+starknet = ">=2.4.0"
+
+[[target.starknet-contract]]
+casm = true

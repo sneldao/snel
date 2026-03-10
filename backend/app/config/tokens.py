@@ -173,10 +173,49 @@ COMMON_TOKENS: dict[int, dict[str, dict[str, Any]]] = {
             "verified": True,
         },
     },
+    "SN_MAIN": {  # Starknet Mainnet
+        "eth": {
+            "address": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+            "name": "Ether",
+            "symbol": "ETH",
+            "decimals": 18,
+            "verified": True,
+        },
+        "strk": {
+            "address": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+            "name": "Starknet Token",
+            "symbol": "STRK",
+            "decimals": 18,
+            "verified": True,
+        },
+        "usdc": {
+            "address": "0x053cde129739bb3f2fd765873a7c6495d4ed794d2f0724a87a6d80d21092e071",
+            "name": "USD Coin",
+            "symbol": "USDC",
+            "decimals": 6,
+            "verified": True,
+        },
+    },
+    "SN_SEPOLIA": {  # Starknet Sepolia
+        "eth": {
+            "address": "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+            "name": "Ether",
+            "symbol": "ETH",
+            "decimals": 18,
+            "verified": True,
+        },
+        "strk": {
+            "address": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+            "name": "Starknet Token",
+            "symbol": "STRK",
+            "decimals": 18,
+            "verified": True,
+        },
+    },
 }
 
 
-def get_token_info(chain_id: int, symbol: str) -> dict[str, Any] | None:
+def get_token_info(chain_id: int | str, symbol: str) -> dict[str, Any] | None:
     """Get token information for a given chain and symbol."""
     chain_tokens = COMMON_TOKENS.get(chain_id, {})
     token_info = chain_tokens.get(symbol.lower(), None)
@@ -195,7 +234,7 @@ def get_token_info(chain_id: int, symbol: str) -> dict[str, Any] | None:
     return None
 
 
-def get_chain_name(chain_id: int) -> str:
+def get_chain_name(chain_id: int | str) -> str:
     """Get the name of a chain from its ID."""
     chain_names = {
         1: "Ethereum",
@@ -209,5 +248,7 @@ def get_chain_name(chain_id: int) -> str:
         25: "Cronos",
         338: "Cronos Testnet",
         236: "1Sat Ordinals",  # 1Sat Ordinals network for MNEE
+        "SN_MAIN": "Starknet",
+        "SN_SEPOLIA": "Starknet Sepolia",
     }
     return chain_names.get(chain_id, f"Chain {chain_id}")
